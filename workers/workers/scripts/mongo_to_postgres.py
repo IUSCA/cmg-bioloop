@@ -1,8 +1,6 @@
 import pymongo
 import psycopg2
-from datetime import datetime
-import json
-import html
+from psycopg2 import sql
 
 
 class MongoToPostgresConversionManager:
@@ -11,6 +9,8 @@ class MongoToPostgresConversionManager:
         self.mongo_client = pymongo.MongoClient(mongo_conn_string)
         self.mongo_db = self.mongo_client["cmg_database"]
 
+        # Postgres connection
+        self.postgres_conn = psycopg2.connect(**self.parse_conn_string(pg_conn_string))
         # Postgres connection
         self.postgres_conn = psycopg2.connect(**self.parse_conn_string(pg_conn_string))
 
@@ -28,6 +28,19 @@ class MongoToPostgresConversionManager:
             "host": host,
             "port": port
         }
+
+    def get_scauser_id(self, cur):
+        cur.execute(
+            """
+            SELECT id FROM "user" WHERE username = 'scauser'
+            """
+        )
+        sca_user_id = cur.fetchone()
+
+        if sca_user_id is None:
+            raise ValueError("User 'scauser' not found in the PostgreSQL database")
+
+        return sca_user_id[0]
 
     def convert_users(self):
         with self.postgres_conn.cursor() as cur:
@@ -75,6 +88,8 @@ class MongoToPostgresConversionManager:
 
     def convert_datasets(self):
         with self.postgres_conn.cursor() as cur:
+            sca_user_id = self.get_scauser_id(cur)
+
             mongo_datasets = self.mongo_db.dataset.find()
             for mongo_dataset in mongo_datasets:
                 cur.execute(
@@ -103,6 +118,23 @@ class MongoToPostgresConversionManager:
                 )
                 raw_data_dataset_id = cur.fetchone()[0]
 
+                # Insert dataset_audit records if events exist
+                events = mongo_dataset.get("events", [])
+                if len(events) > 0:
+                    for event in events:
+                        cur.execute(
+                            """
+                            INSERT INTO dataset_audit (action, timestamp, dataset_id, user_id)
+                            VALUES (%s, %s, %s, %s)
+                            """,
+                            (
+                                event.get("description"),
+                                event.get("stamp", datetime.utcnow()),
+                                raw_data_dataset_id,
+                                sca_user_id,
+                            )
+                        )
+
                 for checksum in mongo_dataset.get("checksums", []):
                     pg_raw_data_file = self.mongo_file_to_pg_file(checksum)
                     cur.execute(
@@ -121,6 +153,8 @@ class MongoToPostgresConversionManager:
 
     def convert_data_products(self):
         with self.postgres_conn.cursor() as cur:
+            sca_user_id = self.get_scauser_id(cur)
+
             mongo_data_products = self.mongo_db.dataproduct.find()
             for mongo_data_product in mongo_data_products:
                 cur.execute(
@@ -144,6 +178,23 @@ class MongoToPostgresConversionManager:
                     )
                 )
                 data_product_dataset_id = cur.fetchone()[0]
+
+                # Insert dataset_audit records if events exist
+                events = mongo_data_product.get("events", [])
+                if len(events) > 0:
+                    for event in events:
+                        cur.execute(
+                            """
+                            INSERT INTO dataset_audit (action, timestamp, dataset_id, user_id)
+                            VALUES (%s, %s, %s, %s)
+                            """,
+                            (
+                                event.get("description"),
+                                event.get("stamp", datetime.utcnow()),
+                                data_product_dataset_id,
+                                sca_user_id,
+                            )
+                        )
 
                 for file in mongo_data_product.get("files", []):
                     pg_data_product_file = self.mongo_file_to_pg_file(file)
