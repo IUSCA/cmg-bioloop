@@ -161,6 +161,47 @@ class MongoToPostgresConversionManager:
                         )
                     )
 
+    import html
+
+    def convert_content_to_about(self):
+        with self.postgres_conn.cursor() as cur:
+            # First, fetch the user ID for 'scauser'
+            cur.execute(
+                """
+                SELECT id FROM "user" WHERE username = 'scauser'
+                """
+            )
+            sca_user_id = cur.fetchone()
+
+            if sca_user_id is None:
+                raise ValueError("User 'scauser' not found in the PostgreSQL database")
+
+            sca_user_id = sca_user_id[0]
+
+            contents = self.mongo_db.content.find()
+            for content in contents:
+                # Get the details string
+                details = content.get("details", "")
+
+                # Escape HTML special characters
+                escaped_details = html.escape(details)
+
+                # Split the string into paragraphs and wrap each in <p> tags
+                paragraphs = escaped_details.split('\n\n')
+                html_content = ''.join(f'<p>{p.strip()}</p>' for p in paragraphs if p.strip())
+
+                cur.execute(
+                    """
+                    INSERT INTO about (html, last_updated_by_id)
+                    VALUES (%s, %s)
+                    """,
+                    (
+                        html_content,
+                        sca_user_id,
+                    )
+                )
+
+
     def convert_all(self):
         try:
             # Start transaction
@@ -170,6 +211,7 @@ class MongoToPostgresConversionManager:
             self.convert_projects()
             self.convert_datasets()
             self.convert_data_products()
+            self.convert_content_to_about()
 
             # Commit the transaction if everything succeeds
             self.postgres_conn.commit()
