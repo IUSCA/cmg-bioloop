@@ -14,8 +14,6 @@ class MongoToPostgresConversionManager:
 
         # Postgres connection
         self.postgres_conn = psycopg2.connect(**self.parse_conn_string(pg_conn_string))
-        # Postgres connection
-        self.postgres_conn = psycopg2.connect(**self.parse_conn_string(pg_conn_string))
 
     @staticmethod
     def parse_conn_string(conn_string):
@@ -63,7 +61,6 @@ class MongoToPostgresConversionManager:
                 )
 
             print(f"Inserted or updated {len(roles)} roles.")
-
 
     def convert_users(self):
         with self.postgres_conn.cursor() as cur:
@@ -135,8 +132,8 @@ class MongoToPostgresConversionManager:
                         mongo_dataset.get("updatedAt", datetime.utcnow()),
                         mongo_dataset.get("paths", {}).get("origin"),
                         mongo_dataset.get("paths", {}).get("archive"),
-                        mongo_dataset.get("staged", False),
                         mongo_dataset.get("visible", False),
+                        mongo_dataset.get("staged", False),
                         json.dumps(mongo_dataset),
                     )
                 )
@@ -153,7 +150,7 @@ class MongoToPostgresConversionManager:
                             """,
                             (
                                 event.get("description"),
-                                event.get("stamp", datetime.utcnow()),
+                                event.get("createdAt"),
                                 raw_data_dataset_id,
                                 sca_user_id,
                             )
@@ -215,7 +212,7 @@ class MongoToPostgresConversionManager:
                             """,
                             (
                                 event.get("description"),
-                                event.get("stamp", datetime.utcnow()),
+                                event.get("createdAt"),
                                 data_product_dataset_id,
                                 sca_user_id,
                             )
@@ -274,6 +271,77 @@ class MongoToPostgresConversionManager:
                         sca_user_id,
                     )
                 )
+
+    def events_to_audit_logs(self):
+        with self.postgres_conn.cursor() as cur:
+            sca_user_id = self.get_scauser_id(cur)
+
+            events = self.mongo_db.events.find({
+                "$or": [
+                    {"dataproduct": {"$ne": None}},
+                    {"dataset": {"$ne": None}}
+                ]
+            })
+
+            for event in events:
+                dataset_name = None
+                dataset_type = None
+                is_deleted = False
+
+                if event.get("dataproduct"):
+                    dataproduct = self.mongo_db.dataproducts.find_one({"_id": event["dataproduct"]})
+                    if dataproduct:
+                        dataset_name = dataproduct.get("name")
+                        dataset_type = "DATA_PRODUCT"
+                        is_deleted = dataproduct.get("visible", False)
+                elif event.get("dataset"):
+                    dataset = self.mongo_db.datasets.find_one({"_id": event["dataset"]})
+                    if dataset:
+                        dataset_name = dataset.get("name")
+                        dataset_type = "RAW_DATA"
+                        is_deleted = dataset.get("visible", False)
+
+                if dataset_name and dataset_type:
+                    cur.execute(
+                        """
+                        SELECT id FROM dataset 
+                        WHERE name = %s AND type = %s AND is_deleted = %s
+                        """,
+                        (dataset_name, dataset_type, is_deleted)
+                    )
+                    result = cur.fetchone()
+
+                    if result:
+                        dataset_id = result[0]
+                        action = event.get("action") + " - " + event.get("details")
+                        timestamp = event.get("createdAt")
+                        mongo_user_id = event.get("user")
+
+                        # Try to fetch the corresponding PostgreSQL user
+                        cur.execute(
+                            """
+                            SELECT id FROM "user" 
+                            WHERE cas_id = %s
+                            """,
+                            (str(mongo_user_id),)
+                        )
+                        pg_user_result = cur.fetchone()
+
+                        if pg_user_result:
+                            user_id = pg_user_result[0]
+                        else:
+                            # If no matching user found, use scauser
+                            user_id = sca_user_id
+
+                        cur.execute(
+                            """
+                            INSERT INTO dataset_audit (action, timestamp, user_id, dataset_id)
+                            VALUES (%s, %s, %s, %s)
+                            """,
+                            (action, timestamp, user_id, dataset_id)
+                        )
+
+            self.postgres_conn.commit()
 
     def convert_all(self):
         try:
