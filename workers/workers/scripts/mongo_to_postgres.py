@@ -2,6 +2,7 @@ import pymongo
 import psycopg2
 from datetime import datetime
 import json
+import html
 
 
 class MongoToPostgresConversionManager:
@@ -12,7 +13,6 @@ class MongoToPostgresConversionManager:
 
         # Postgres connection
         self.postgres_conn = psycopg2.connect(**self.parse_conn_string(pg_conn_string))
-
 
     @staticmethod
     def parse_conn_string(conn_string):
@@ -161,8 +161,6 @@ class MongoToPostgresConversionManager:
                         )
                     )
 
-    import html
-
     def convert_content_to_about(self):
         with self.postgres_conn.cursor() as cur:
             # First, fetch the user ID for 'scauser'
@@ -200,7 +198,6 @@ class MongoToPostgresConversionManager:
                         sca_user_id,
                     )
                 )
-
 
     def convert_all(self):
         try:
