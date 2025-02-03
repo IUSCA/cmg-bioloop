@@ -1,5 +1,6 @@
 import html
 import json
+from datetime import datetime
 
 import pymongo
 import psycopg2
@@ -282,8 +283,8 @@ class MongoToPostgresConversionManager:
 
 
 if __name__ == "__main__":
-    mongo_conn_string = ""
-    pg_conn_string = ""
+    mongo_connection_string = ""
+    pg_connection_string = ""
 
-    converter = MongoToPostgresConversionManager(mongo_conn_string, pg_conn_string)
+    converter = MongoToPostgresConversionManager(mongo_connection_string, pg_connection_string)
     converter.convert_all()
