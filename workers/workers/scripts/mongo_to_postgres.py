@@ -45,6 +45,26 @@ class MongoToPostgresConversionManager:
 
         return sca_user_id[0]
 
+    def create_roles(self):
+        with self.postgres_conn.cursor() as cur:
+            roles = [
+                {'name': 'admin', 'description': 'Access to the Admin Panel'},
+                {'name': 'operator', 'description': 'Operator level access'},
+                {'name': 'user', 'description': 'User level access'}
+            ]
+
+            for role in roles:
+                cur.execute(
+                    """
+                    INSERT INTO role (name, description)
+                    VALUES (%s, %s)
+                    """,
+                    (role['name'], role['description'])
+                )
+
+            print(f"Inserted or updated {len(roles)} roles.")
+
+
     def convert_users(self):
         with self.postgres_conn.cursor() as cur:
             users = self.mongo_db.users.find()
@@ -260,6 +280,7 @@ class MongoToPostgresConversionManager:
             # Start transaction
             self.postgres_conn.cursor().execute("BEGIN")
 
+            self.create_roles()
             self.convert_users()
             self.convert_projects()
             self.convert_datasets()
