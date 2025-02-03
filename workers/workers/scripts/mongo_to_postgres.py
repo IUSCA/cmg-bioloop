@@ -98,8 +98,8 @@ class MongoToPostgresConversionManager:
                     """
                     INSERT INTO dataset (name, type, description, num_directories, num_files, 
                                          du_size, size, created_at, updated_at, origin_path, 
-                                         archive_path, is_staged, metadata)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                                         archive_path, id_deleted, is_staged, metadata)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     RETURNING id
                     """,
                     (
@@ -115,6 +115,7 @@ class MongoToPostgresConversionManager:
                         mongo_dataset.get("paths", {}).get("origin"),
                         mongo_dataset.get("paths", {}).get("archive"),
                         mongo_dataset.get("staged", False),
+                        mongo_dataset.get("visible", False),
                         json.dumps(mongo_dataset),
                     )
                 )
@@ -162,8 +163,8 @@ class MongoToPostgresConversionManager:
                 cur.execute(
                     """
                     INSERT INTO dataset (name, type, description, num_files, size, created_at, 
-                                         updated_at, archive_path, is_staged, metadata)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                                         updated_at, archive_path, is_staged, is_deleted, metadata)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     RETURNING id
                     """,
                     (
@@ -176,6 +177,7 @@ class MongoToPostgresConversionManager:
                         mongo_data_product.get("updatedAt", datetime.utcnow()),
                         mongo_data_product.get("paths", {}).get("archive"),
                         mongo_data_product.get("staged", False),
+                        mongo_data_product.get("visible", False),
                         json.dumps(mongo_data_product),
                     )
                 )
