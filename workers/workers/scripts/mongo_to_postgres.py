@@ -1,6 +1,8 @@
+import html
+import json
+
 import pymongo
 import psycopg2
-from psycopg2 import sql
 
 
 class MongoToPostgresConversionManager:
