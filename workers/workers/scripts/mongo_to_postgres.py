@@ -84,10 +84,12 @@ class MongoToPostgresConversionManager:
         with self.postgres_conn.cursor() as cur:
             projects = self.mongo_db.projects.find()
             for project in projects:
+                # Insert project
                 cur.execute(
                     """
                     INSERT INTO project (name, slug, description, browser_enabled)
                     VALUES (%s, %s, %s, %s)
+                    RETURNING id
                     """,
                     (
                         project.get("name"),
@@ -96,6 +98,41 @@ class MongoToPostgresConversionManager:
                         project.get("browser_enabled", False),
                     )
                 )
+                project_id = cur.fetchone()[0]
+
+                # Process dataproducts
+                for dataproduct_id in project.get("dataproducts", []):
+                    # Fetch the dataproduct from MongoDB
+                    mongo_dataproduct = self.mongo_db.dataproduct.find_one({"_id": dataproduct_id})
+
+                    if mongo_dataproduct:
+                        dataproduct_name = mongo_dataproduct.get("name")
+                        is_deleted = mongo_dataproduct.get("visible")
+
+                        # Find the corresponding dataset in Postgres
+                        cur.execute(
+                            """
+                            SELECT id FROM dataset
+                            WHERE name = %s AND is_deleted = %s AND type = 'DATA_PRODUCT'
+                            """,
+                            (dataproduct_name, is_deleted)
+                        )
+                        dataset_result = cur.fetchone()
+
+                        if dataset_result:
+                            dataset_id = dataset_result[0]
+                            # Create project_dataset association
+                            cur.execute(
+                                """
+                                INSERT INTO project_dataset (project_id, dataset_id)
+                                VALUES (%s, %s)
+                                """,
+                                (project_id, dataset_id)
+                            )
+                        else:
+                            print(f"Warning: Dataset not found for dataproduct name: {dataproduct_name}")
+                    else:
+                        print(f"Warning: Dataproduct not found in MongoDB for id: {dataproduct_id}")
 
     @staticmethod
     def mongo_file_to_pg_file(file: dict) -> dict:
