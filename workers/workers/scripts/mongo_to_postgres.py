@@ -30,6 +30,13 @@ class MongoToPostgresConversionManager:
             "port": port
         }
 
+    def get_parent_path(self, path):
+        parts = path.split('/')
+        if len(parts) > 1:
+            parts.pop()  # Remove the last part (file or directory name)
+            return ''.join(parts)
+        return ''  # Return empty string if there's no parent (top-level file)
+
     def get_scauser_id(self, cur):
         cur.execute(
             """
@@ -229,6 +236,7 @@ class MongoToPostgresConversionManager:
                         """
                         INSERT INTO dataset_file (name, path, md5, size, dataset_id)
                         VALUES (%s, %s, %s, %s, %s)
+                        RETURNING id
                         """,
                         (
                             pg_raw_data_file["name"],
@@ -238,6 +246,28 @@ class MongoToPostgresConversionManager:
                             raw_data_dataset_id,
                         )
                     )
+                    file_id = cur.fetchone()[0]
+
+                    # Create dataset_file_hierarchy
+                    parent_path = self.get_parent_path(pg_raw_data_file["path"])
+                    if parent_path:
+                        cur.execute(
+                            """
+                            SELECT id FROM dataset_file
+                            WHERE path = %s AND dataset_id = %s
+                            """,
+                            (parent_path, raw_data_dataset_id)
+                        )
+                        parent_result = cur.fetchone()
+                        if parent_result:
+                            parent_id = parent_result[0]
+                            cur.execute(
+                                """
+                                INSERT INTO dataset_file_hierarchy (parent_id, child_id)
+                                VALUES (%s, %s)
+                                """,
+                                (parent_id, file_id)
+                            )
 
     def convert_data_products(self):
         with self.postgres_conn.cursor() as cur:
@@ -315,6 +345,7 @@ class MongoToPostgresConversionManager:
                         """
                         INSERT INTO dataset_file (name, path, md5, size, dataset_id)
                         VALUES (%s, %s, %s, %s, %s)
+                        RETURNING id
                         """,
                         (
                             pg_data_product_file["name"],
@@ -324,6 +355,28 @@ class MongoToPostgresConversionManager:
                             data_product_dataset_id,
                         )
                     )
+                    file_id = cur.fetchone()[0]
+
+                    # Create dataset_file_hierarchy
+                    parent_path = self.get_parent_path(pg_data_product_file["path"])
+                    if parent_path:
+                        cur.execute(
+                            """
+                            SELECT id FROM dataset_file
+                            WHERE path = %s AND dataset_id = %s
+                            """,
+                            (parent_path, data_product_dataset_id)
+                        )
+                        parent_result = cur.fetchone()
+                        if parent_result:
+                            parent_id = parent_result[0]
+                            cur.execute(
+                                """
+                                INSERT INTO dataset_file_hierarchy (parent_id, child_id)
+                                VALUES (%s, %s)
+                                """,
+                                (parent_id, file_id)
+                            )
 
     def convert_content_to_about(self):
         with self.postgres_conn.cursor() as cur:
