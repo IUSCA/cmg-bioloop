@@ -66,18 +66,48 @@ class MongoToPostgresConversionManager:
         with self.postgres_conn.cursor() as cur:
             users = self.mongo_db.users.find()
             for user in users:
+                self.convert_user(user, cur)
+
+    def convert_user(self, mongo_user, cur):
+        # Create user in Postgres
+        cur.execute(
+            """
+            INSERT INTO "user" (username, email, name, cas_id, is_deleted)
+            VALUES (%s, %s, %s, %s, %s)
+            RETURNING id
+            """,
+            (
+                mongo_user.get("username"),
+                mongo_user.get("email"),
+                mongo_user.get("fullname"),
+                mongo_user.get("cas_id"),
+                not mongo_user.get("active", False),
+            )
+        )
+        user_id = cur.fetchone()[0]
+
+        # Mongo roles to Postgres roles
+        role_mapping = {
+            'admin': 'admin',
+            'god': 'admin',
+            'user': 'operator',
+            'guest': 'user'
+        }
+
+        # Fetch all roles from Postgres - admin, operator, user
+        cur.execute("SELECT id, name FROM role")
+        postgres_roles = {row[1]: row[0] for row in cur.fetchall()}
+
+        # Create user_role associations
+        for mongo_role in mongo_user.get('roles', []):
+            postgres_role_name = role_mapping.get(mongo_role)
+            if postgres_role_name and postgres_role_name in postgres_roles:
                 cur.execute(
                     """
-                    INSERT INTO "user" (username, email, "name", cas_id, is_deleted)
-                    VALUES (%s, %s, %s, %s, %s)
+                    INSERT INTO user_role (user_id, role_id, assigned_at)
+                    VALUES (%s, %s, %s)
                     """,
-                    (
-                        user.get("username"),
-                        user.get("email"),
-                        user.get("fullname"),
-                        user.get("cas_id"),
-                        not user.get("active", True),
-                    )
+                    (user_id, postgres_roles[postgres_role_name])
                 )
 
     def convert_projects(self):
