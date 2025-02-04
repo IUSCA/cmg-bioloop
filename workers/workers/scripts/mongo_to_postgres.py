@@ -268,6 +268,30 @@ class MongoToPostgresConversionManager:
                 )
                 data_product_dataset_id = cur.fetchone()[0]
 
+                # Create dataset hierarchies
+                if "dataset" in mongo_data_product:
+                    # Fetch the corresponding RAW_DATA dataset id from postgres
+                    cur.execute(
+                        """
+                        SELECT id FROM dataset
+                        WHERE name = %s AND is_deleted = %s AND type = 'RAW_DATA'
+                        """,
+                        (mongo_data_product["dataset"], mongo_data_product["visible"])
+                    )
+                    raw_data_result = cur.fetchone()
+                    if raw_data_result:
+                        raw_data_dataset_id = raw_data_result[0]
+                        # Create dataset hierarchy
+                        cur.execute(
+                            """
+                            INSERT INTO dataset_hierarchy (source_id, derived_id)
+                            VALUES (%s, %s)
+                            """,
+                            (raw_data_dataset_id, data_product_dataset_id)
+                        )
+                    else:
+                        print(f"Warning: RAW_DATA dataset not found for {mongo_data_product['dataset']}")
+
                 # Insert dataset_audit records if events exist
                 events = mongo_data_product.get("events", [])
                 if len(events) > 0:
