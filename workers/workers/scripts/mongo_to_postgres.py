@@ -30,12 +30,77 @@ class MongoToPostgresConversionManager:
             "port": port
         }
 
+    def extract_directories(self, file_path):
+        parts = file_path.split('/')
+        directories = parts[:-1]  # All parts except the last one (which is the file name)
+        return directories
+
     def get_parent_path(self, path):
         parts = path.split('/')
         if len(parts) > 1:
             parts.pop()  # Remove the last part (file or directory name)
             return ''.join(parts)
         return ''  # Return empty string if there's no parent (top-level file)
+
+    def create_file_and_directories(self, cur, file, dataset_id):
+        pg_file = self.mongo_file_to_pg_file(file)
+        directories = self.extract_directories(pg_file["path"])
+
+        # Insert directories
+        parent_id = None
+        current_path = ""
+        for dir_name in directories:
+            current_path += dir_name + "/"
+            cur.execute(
+                """
+                INSERT INTO dataset_file (name, path, dataset_id, filetype)
+                VALUES (%s, %s, %s, 'directory')
+                ON CONFLICT (path, dataset_id) DO NOTHING
+                RETURNING id
+                """,
+                (dir_name, current_path.rstrip('/'), dataset_id)
+            )
+            dir_id = cur.fetchone()[0]
+
+            if parent_id:
+                cur.execute(
+                    """
+                    INSERT INTO dataset_file_hierarchy (parent_id, child_id)
+                    VALUES (%s, %s)
+                    ON CONFLICT DO NOTHING
+                    """,
+                    (parent_id, dir_id)
+                )
+            parent_id = dir_id
+
+        # Insert file
+        cur.execute(
+            """
+            INSERT INTO dataset_file (name, path, md5, size, dataset_id, filetype)
+            VALUES (%s, %s, %s, %s, %s, 'file')
+            RETURNING id
+            """,
+            (
+                pg_file["name"],
+                pg_file["path"],
+                pg_file["md5"],
+                pg_file["size"],
+                dataset_id,
+            )
+        )
+        file_id = cur.fetchone()[0]
+
+        # Link file to its parent directory
+        if parent_id:
+            cur.execute(
+                """
+                INSERT INTO dataset_file_hierarchy (parent_id, child_id)
+                VALUES (%s, %s)
+                """,
+                (parent_id, file_id)
+            )
+
+        return file_id
 
     def get_scauser_id(self, cur):
         cur.execute(
@@ -231,43 +296,7 @@ class MongoToPostgresConversionManager:
                         )
 
                 for checksum in mongo_dataset.get("checksums", []):
-                    pg_raw_data_file = self.mongo_file_to_pg_file(checksum)
-                    cur.execute(
-                        """
-                        INSERT INTO dataset_file (name, path, md5, size, dataset_id)
-                        VALUES (%s, %s, %s, %s, %s)
-                        RETURNING id
-                        """,
-                        (
-                            pg_raw_data_file["name"],
-                            pg_raw_data_file["path"],
-                            pg_raw_data_file["md5"],
-                            pg_raw_data_file["size"],
-                            raw_data_dataset_id,
-                        )
-                    )
-                    file_id = cur.fetchone()[0]
-
-                    # Create dataset_file_hierarchy
-                    parent_path = self.get_parent_path(pg_raw_data_file["path"])
-                    if parent_path:
-                        cur.execute(
-                            """
-                            SELECT id FROM dataset_file
-                            WHERE path = %s AND dataset_id = %s
-                            """,
-                            (parent_path, raw_data_dataset_id)
-                        )
-                        parent_result = cur.fetchone()
-                        if parent_result:
-                            parent_id = parent_result[0]
-                            cur.execute(
-                                """
-                                INSERT INTO dataset_file_hierarchy (parent_id, child_id)
-                                VALUES (%s, %s)
-                                """,
-                                (parent_id, file_id)
-                            )
+                    self.create_file_and_directories(cur, checksum, raw_data_dataset_id)
 
     def convert_data_products(self):
         with self.postgres_conn.cursor() as cur:
@@ -340,43 +369,7 @@ class MongoToPostgresConversionManager:
                         )
 
                 for file in mongo_data_product.get("files", []):
-                    pg_data_product_file = self.mongo_file_to_pg_file(file)
-                    cur.execute(
-                        """
-                        INSERT INTO dataset_file (name, path, md5, size, dataset_id)
-                        VALUES (%s, %s, %s, %s, %s)
-                        RETURNING id
-                        """,
-                        (
-                            pg_data_product_file["name"],
-                            pg_data_product_file["path"],
-                            pg_data_product_file["md5"],
-                            pg_data_product_file["size"],
-                            data_product_dataset_id,
-                        )
-                    )
-                    file_id = cur.fetchone()[0]
-
-                    # Create dataset_file_hierarchy
-                    parent_path = self.get_parent_path(pg_data_product_file["path"])
-                    if parent_path:
-                        cur.execute(
-                            """
-                            SELECT id FROM dataset_file
-                            WHERE path = %s AND dataset_id = %s
-                            """,
-                            (parent_path, data_product_dataset_id)
-                        )
-                        parent_result = cur.fetchone()
-                        if parent_result:
-                            parent_id = parent_result[0]
-                            cur.execute(
-                                """
-                                INSERT INTO dataset_file_hierarchy (parent_id, child_id)
-                                VALUES (%s, %s)
-                                """,
-                                (parent_id, file_id)
-                            )
+                    self.create_file_and_directories(cur, file, data_product_dataset_id)
 
     def convert_content_to_about(self):
         with self.postgres_conn.cursor() as cur:
