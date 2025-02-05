@@ -30,6 +30,22 @@ class MongoToPostgresConversionManager:
             "port": port
         }
 
+    def create_enums(self, cur):
+        enum_definitions = [
+            ("ACCESS_TYPE", ["BROWSER", "SLATE_SCRATCH"]),
+            ("NOTIFICATION_STATUS", ["CREATED", "ACKNOWLEDGED", "RESOLVED"]),
+            ("UPLOAD_STATUS",
+             ["UPLOADING", "UPLOAD_FAILED", "UPLOADED", "PROCESSING", "PROCESSING_FAILED", "COMPLETE", "FAILED"]),
+            ("UPLOAD_TYPE", ["DATASET"])
+        ]
+
+        for enum_name, enum_values in enum_definitions:
+            values_string = ", ".join(f"'{value}'" for value in enum_values)
+            cur.execute(f"""
+                        CREATE TYPE {enum_name} AS ENUM ({values_string});
+                        """)
+            print(f"Enum '{enum_name}' created")
+
     def extract_directories(self, file_path):
         parts = file_path.split('/')
         directories = parts[:-1]  # All parts except the last one (which is the file name)
@@ -460,6 +476,7 @@ class MongoToPostgresConversionManager:
             # Start transaction
             self.postgres_conn.cursor().execute("BEGIN")
 
+            self.create_enums()
             self.create_roles()
             self.convert_users()
             self.convert_projects()
