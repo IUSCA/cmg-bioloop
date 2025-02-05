@@ -410,8 +410,8 @@ class MongoToPostgresConversionManager:
             if postgres_role_name and postgres_role_name in postgres_roles:
                 cur.execute(
                     """
-                    INSERT INTO user_role (user_id, role_id, assigned_at)
-                    VALUES (%s, %s, %s)
+                    INSERT INTO user_role (user_id, role_id)
+                    VALUES (%s, %s)
                     """,
                     (user_id, postgres_roles[postgres_role_name])
                 )
