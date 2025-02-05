@@ -12,7 +12,7 @@ class MongoToPostgresConversionManager:
         self.mongo_client = pymongo.MongoClient(mongo_conn_string)
         self.mongo_db = self.mongo_client["cmg_database"]
 
-        # Postgres connection
+        #  connection
         self.postgres_conn = psycopg2.connect(**self.parse_conn_string(pg_conn_string))
 
     @staticmethod
@@ -141,7 +141,7 @@ class MongoToPostgresConversionManager:
                 self.convert_user(user, cur)
 
     def convert_user(self, mongo_user, cur):
-        # Create user in Postgres
+        # Create user in
         cur.execute(
             """
             INSERT INTO "user" (username, email, name, cas_id, is_deleted)
@@ -279,21 +279,7 @@ class MongoToPostgresConversionManager:
                 raw_data_dataset_id = cur.fetchone()[0]
 
                 # Insert dataset_audit records if events exist
-                events = mongo_dataset.get("events", [])
-                if len(events) > 0:
-                    for event in events:
-                        cur.execute(
-                            """
-                            INSERT INTO dataset_audit (action, timestamp, dataset_id, user_id)
-                            VALUES (%s, %s, %s, %s)
-                            """,
-                            (
-                                event.get("description"),
-                                event.get("createdAt"),
-                                raw_data_dataset_id,
-                                sca_user_id,
-                            )
-                        )
+                self.create_audit_logs_from_dataset_events(cur, mongo_dataset, raw_data_dataset_id, sca_user_id)
 
                 for checksum in mongo_dataset.get("checksums", []):
                     self.create_file_and_directories(cur, checksum, raw_data_dataset_id)
@@ -352,49 +338,22 @@ class MongoToPostgresConversionManager:
                         print(f"Warning: RAW_DATA dataset not found for {mongo_data_product['dataset']}")
 
                 # Insert dataset_audit records if events exist
-                events = mongo_data_product.get("events", [])
-                if len(events) > 0:
-                    for event in events:
-                        cur.execute(
-                            """
-                            INSERT INTO dataset_audit (action, timestamp, dataset_id, user_id)
-                            VALUES (%s, %s, %s, %s)
-                            """,
-                            (
-                                event.get("description"),
-                                event.get("createdAt"),
-                                data_product_dataset_id,
-                                sca_user_id,
-                            )
-                        )
+                self.create_audit_logs_from_dataset_events(cur, mongo_data_product, data_product_dataset_id, sca_user_id)
 
                 for file in mongo_data_product.get("files", []):
                     self.create_file_and_directories(cur, file, data_product_dataset_id)
 
     def convert_content_to_about(self):
         with self.postgres_conn.cursor() as cur:
-            # First, fetch the user ID for 'scauser'
-            cur.execute(
-                """
-                SELECT id FROM "user" WHERE username = 'scauser'
-                """
-            )
-            sca_user_id = cur.fetchone()
-
-            if sca_user_id is None:
-                raise ValueError("User 'scauser' not found in the PostgreSQL database")
-
-            sca_user_id = sca_user_id[0]
+            sca_user_id = self.get_scauser_id(cur)
 
             contents = self.mongo_db.content.find()
             for content in contents:
-                # Get the details string
+                # Get the details
                 details = content.get("details", "")
-
                 # Escape HTML special characters
                 escaped_details = html.escape(details)
-
-                # Split the string into paragraphs and wrap each in <p> tags
+                # Split the string into paragraphs, and wrap each in <p> elements
                 paragraphs = escaped_details.split('\n\n')
                 html_content = ''.join(f'<p>{p.strip()}</p>' for p in paragraphs if p.strip())
 
@@ -409,76 +368,92 @@ class MongoToPostgresConversionManager:
                     )
                 )
 
-    def events_to_audit_logs(self):
-        with self.postgres_conn.cursor() as cur:
-            sca_user_id = self.get_scauser_id(cur)
+    # This shouldn't be necessary. No `event` documents have been created in CMG since 2021.
+    # def events_to_audit_logs(self):
+    #     with self.postgres_conn.cursor() as cur:
+    #         sca_user_id = self.get_scauser_id(cur)
+    #
+    #         events = self.mongo_db.events.find({
+    #             "$or": [
+    #                 {"dataproduct": {"$ne": None}},
+    #                 {"dataset": {"$ne": None}}
+    #             ]
+    #         })
+    #
+    #         for event in events:
+    #             dataset_name = None
+    #             dataset_type = None
+    #             is_deleted = False
+    #
+    #             if event.get("dataproduct"):
+    #                 dataproduct = self.mongo_db.dataproducts.find_one({"_id": event["dataproduct"]})
+    #                 if dataproduct:
+    #                     dataset_name = dataproduct.get("name")
+    #                     dataset_type = "DATA_PRODUCT"
+    #                     is_deleted = dataproduct.get("visible", False)
+    #             elif event.get("dataset"):
+    #                 dataset = self.mongo_db.datasets.find_one({"_id": event["dataset"]})
+    #                 if dataset:
+    #                     dataset_name = dataset.get("name")
+    #                     dataset_type = "RAW_DATA"
+    #                     is_deleted = dataset.get("visible", False)
+    #
+    #             if dataset_name and dataset_type:
+    #                 cur.execute(
+    #                     """
+    #                     SELECT id FROM dataset
+    #                     WHERE name = %s AND type = %s AND is_deleted = %s
+    #                     """,
+    #                     (dataset_name, dataset_type, is_deleted)
+    #                 )
+    #                 result = cur.fetchone()
+    #
+    #                 if result:
+    #                     dataset_id = result[0]
+    #                     action = event.get("action") + " - " + event.get("details")
+    #                     timestamp = event.get("createdAt")
+    #                     mongo_user_id = event.get("user")
+    #
+    #                     # Try to fetch the corresponding Postgres user
+    #                     cur.execute(
+    #                         """
+    #                         SELECT id FROM "user"
+    #                         WHERE cas_id = %s
+    #                         """,
+    #                         (str(mongo_user_id),)
+    #                     )
+    #                     pg_user_result = cur.fetchone()
+    #
+    #                     if pg_user_result:
+    #                         user_id = pg_user_result[0]
+    #                     else:
+    #                         # if no matching user found, use scauser
+    #                         user_id = sca_user_id
+    #
+    #                     cur.execute(
+    #                         """
+    #                         INSERT INTO dataset_audit (action, timestamp, user_id, dataset_id)
+    #                         VALUES (%s, %s, %s, %s)
+    #                         """,
+    #                         (action, timestamp, user_id, dataset_id)
+    #                     )
 
-            events = self.mongo_db.events.find({
-                "$or": [
-                    {"dataproduct": {"$ne": None}},
-                    {"dataset": {"$ne": None}}
-                ]
-            })
-
+    def create_audit_logs_from_dataset_events(self, cur, mongo_dataset, postgres_dataset_id, user_id):
+        events = mongo_dataset.get("events", [])
+        if len(events) > 0:
             for event in events:
-                dataset_name = None
-                dataset_type = None
-                is_deleted = False
-
-                if event.get("dataproduct"):
-                    dataproduct = self.mongo_db.dataproducts.find_one({"_id": event["dataproduct"]})
-                    if dataproduct:
-                        dataset_name = dataproduct.get("name")
-                        dataset_type = "DATA_PRODUCT"
-                        is_deleted = dataproduct.get("visible", False)
-                elif event.get("dataset"):
-                    dataset = self.mongo_db.datasets.find_one({"_id": event["dataset"]})
-                    if dataset:
-                        dataset_name = dataset.get("name")
-                        dataset_type = "RAW_DATA"
-                        is_deleted = dataset.get("visible", False)
-
-                if dataset_name and dataset_type:
-                    cur.execute(
-                        """
-                        SELECT id FROM dataset 
-                        WHERE name = %s AND type = %s AND is_deleted = %s
-                        """,
-                        (dataset_name, dataset_type, is_deleted)
+                cur.execute(
+                    """
+                    INSERT INTO dataset_audit (action, timestamp, dataset_id, user_id)
+                    VALUES (%s, %s, %s, %s)
+                    """,
+                    (
+                        event.get("description"),
+                        event.get("createdAt"),
+                        postgres_dataset_id,
+                        user_id,
                     )
-                    result = cur.fetchone()
-
-                    if result:
-                        dataset_id = result[0]
-                        action = event.get("action") + " - " + event.get("details")
-                        timestamp = event.get("createdAt")
-                        mongo_user_id = event.get("user")
-
-                        # Try to fetch the corresponding PostgreSQL user
-                        cur.execute(
-                            """
-                            SELECT id FROM "user" 
-                            WHERE cas_id = %s
-                            """,
-                            (str(mongo_user_id),)
-                        )
-                        pg_user_result = cur.fetchone()
-
-                        if pg_user_result:
-                            user_id = pg_user_result[0]
-                        else:
-                            # If no matching user found, use scauser
-                            user_id = sca_user_id
-
-                        cur.execute(
-                            """
-                            INSERT INTO dataset_audit (action, timestamp, user_id, dataset_id)
-                            VALUES (%s, %s, %s, %s)
-                            """,
-                            (action, timestamp, user_id, dataset_id)
-                        )
-
-            self.postgres_conn.commit()
+                )
 
     def convert_all(self):
         try:
@@ -496,7 +471,7 @@ class MongoToPostgresConversionManager:
             self.postgres_conn.commit()
             print("Data conversion completed successfully.")
         except Exception as e:
-            # Rollback the transaction if an error occurs
+            # Rollback if an error occurs
             self.postgres_conn.rollback()
             print(f"An error occurred during conversion: {e}")
             raise
