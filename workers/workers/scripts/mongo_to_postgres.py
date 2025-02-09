@@ -394,9 +394,9 @@ class MongoToPostgresConversionManager:
 
         # Mongo roles to Postgres roles
         role_mapping = {
-            'admin': 'admin',
+            'admin': 'operator',
             'god': 'admin',
-            'user': 'operator',
+            'user': 'user',
             'guest': 'user'
         }
 
@@ -697,9 +697,9 @@ class MongoToPostgresConversionManager:
             self.create_tables()
             self.create_roles()
             self.convert_users()
-            self.convert_projects()
             self.convert_datasets()
             self.convert_data_products()
+            self.convert_projects()
             self.convert_content_to_about()
 
             # Commit the transaction if everything succeeds
