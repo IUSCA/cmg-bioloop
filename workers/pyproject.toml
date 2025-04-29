@@ -15,9 +15,12 @@ urllib3 = "<2"           # because of ssl conflicts
 glom = "^23.5.0"
 python-slugify = "^8.0.1"
 tzdata = "^2023.4"
+# a test edit to force rebuild
 fire = "^0.5.0"
 psycopg2 = "^2.9.6"
 pymongo = "^4.11.0"
+paramiko = "^3.3.1"      # Added for SSH tunneling
+sshtunnel = "^0.4.0"     # Added for SSH tunneling
 
 [tool.poetry.group.dev.dependencies]
 jupyterlab = "^4.2.5"

@@ -1,273 +1,326 @@
 import html
 import json
 from datetime import datetime
-
 import pymongo
 import psycopg2
+from dotenv import load_dotenv
+import os
+import fire
+# needed for SSH tunneling to connect to MongoDB running on a remote server
+import paramiko
+from sshtunnel import SSHTunnelForwarder
 
 
 class MongoToPostgresConversionManager:
-    def __init__(self, mongo_conn_string, pg_conn_string):
+
+    def __init__(self,
+                 # ssh_config,
+                 mongo_config,
+                 pg_conn_env_vars):
+
         # MongoDB connection
-        self.mongo_client = pymongo.MongoClient(mongo_conn_string)
-        self.mongo_db = self.mongo_client["cmg_database"]
+        # Set up SSH tunnel to connect to MongoDB running on a remote server
+        # self.tunnel = SSHTunnelForwarder(
+        #     (ssh_config['hostname'], 22),
+        #     ssh_username=ssh_config['username'],
+        #     ssh_pkey=ssh_config['private_key_path'],
+        #     remote_bind_address=('localhost', mongo_config['port']),
+        #     local_bind_address=('localhost', 27017)
+        # )
+        # self.tunnel.start()
+        # self.mongo_client = pymongo.MongoClient(mongo_conn_string)
+        # self.mongo_db = self.mongo_client["cmg_database"]
 
-        #  connection
-        self.postgres_conn = psycopg2.connect(**self.parse_conn_string(pg_conn_string))
+        # Initiate MongoDB connection
+        mongo_uri = f"mongodb://{mongo_config['username']}:{mongo_config['password']}@{mongo_config['host']}:{mongo_config['port']}/{mongo_config['database']}?authSource={mongo_config['authSource']}"
+        self.mongo_client = pymongo.MongoClient(mongo_uri)
+        self.mongo_db = self.mongo_client[mongo_config['database']]
 
-    @staticmethod
-    def parse_conn_string(conn_string):
-        parts = conn_string.split('//')[1].split('@')
-        user_pass, host_port_db = parts[0], parts[1]
-        username, password = user_pass.split(':')
-        host, port_db = host_port_db.split(':')
-        port, dbname = port_db.split('/')
-        return {
-            "dbname": dbname,
-            "user": username,
-            "password": password,
-            "host": host,
-            "port": port
-        }
+        #  Initiate PostgreSQL connection
+        self.postgres_conn = psycopg2.connect(
+            host=pg_conn_env_vars['PG_HOST'],
+            port=pg_conn_env_vars['PG_PORT'],
+            database=pg_conn_env_vars['PG_DATABASE'],
+            user=pg_conn_env_vars['PG_USER'],
+            password=pg_conn_env_vars['PG_PASSWORD']
+        )
+        # disable transaction's rollback for seeing actual errors instead of
+        # generic error 'psycopg2.errors.InFailedSqlTransaction: current transaction is aborted,
+        # commands ignored until end of transaction block'
+        self.postgres_conn.set_session(autocommit=True)
 
-    def create_tables(self, cur):
-        cur.execute("""
-        -- Create enum types
-            CREATE TYPE access_type AS ENUM ('BROWSER', 'SLATE_SCRATCH');
-            CREATE TYPE NOTIFICATION_STATUS AS ENUM ('CREATED', 'ACKNOWLEDGED', 'RESOLVED');
-            CREATE TYPE upload_status AS ENUM ('UPLOADING', 'UPLOAD_FAILED', 'UPLOADED', 'PROCESSING', 'PROCESSING_FAILED', 'COMPLETE', 'FAILED');
-            
-            -- Create tables
-            CREATE TABLE "dataset" (
-              "id" SERIAL PRIMARY KEY,
-              "name" TEXT NOT NULL,
-              "type" TEXT NOT NULL,
-              "num_directories" INTEGER,
-              "num_files" INTEGER,
-              "du_size" BIGINT,
-              "size" BIGINT,
-              "bundle_size" BIGINT,
-              "description" TEXT,
-              "created_at" TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-              "updated_at" TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-              "origin_path" TEXT,
-              "archive_path" TEXT,
-              "staged_path" TEXT,
-              "is_deleted" BOOLEAN NOT NULL DEFAULT false,
-              "is_staged" BOOLEAN NOT NULL DEFAULT false,
-              "metadata" JSONB,
-              UNIQUE ("name", "type", "is_deleted")
-            );
-            
-            CREATE TABLE "dataset_hierarchy" (
-              "source_id" INTEGER NOT NULL,
-              "derived_id" INTEGER NOT NULL,
-              "assigned_at" TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-              PRIMARY KEY ("source_id", "derived_id"),
-              FOREIGN KEY ("source_id") REFERENCES "dataset"("id") ON DELETE CASCADE,
-              FOREIGN KEY ("derived_id") REFERENCES "dataset"("id") ON DELETE CASCADE
-            );
-            
-            CREATE TABLE "dataset_file" (
-              "id" SERIAL PRIMARY KEY,
-              "name" TEXT,
-              "path" TEXT NOT NULL,
-              "md5" TEXT,
-              "size" BIGINT,
-              "filetype" TEXT,
-              "metadata" JSONB,
-              "status" TEXT,
-              "dataset_id" INTEGER NOT NULL,
-              FOREIGN KEY ("dataset_id") REFERENCES "dataset"("id") ON DELETE CASCADE,
-              UNIQUE ("path", "dataset_id")
-            );
-            
-            CREATE INDEX ON "dataset_file" ("dataset_id");
-            
-            CREATE TABLE "dataset_file_hierarchy" (
-              "parent_id" INTEGER NOT NULL,
-              "child_id" INTEGER NOT NULL,
-              PRIMARY KEY ("parent_id", "child_id"),
-              FOREIGN KEY ("parent_id") REFERENCES "dataset_file"("id") ON DELETE CASCADE,
-              FOREIGN KEY ("child_id") REFERENCES "dataset_file"("id") ON DELETE CASCADE
-            );
-            
-            CREATE INDEX ON "dataset_file_hierarchy" ("child_id");
-            
-            CREATE TABLE "upload_log" (
-              "id" SERIAL PRIMARY KEY,
-              "status" upload_status NOT NULL,
-              "initiated_at" TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-              "updated_at" TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-              "user_id" INTEGER NOT NULL,
-              FOREIGN KEY ("user_id") REFERENCES "user"("id")
-            );
-            
-            CREATE TABLE "dataset_upload_log" (
-              "id" SERIAL PRIMARY KEY,
-              "dataset_id" INTEGER UNIQUE NOT NULL,
-              "upload_log_id" INTEGER UNIQUE NOT NULL,
-              FOREIGN KEY ("dataset_id") REFERENCES "dataset"("id") ON DELETE CASCADE,
-              FOREIGN KEY ("upload_log_id") REFERENCES "upload_log"("id") ON DELETE CASCADE
-            );
-            
-            CREATE TABLE "file_upload_log" (
-              "id" SERIAL PRIMARY KEY,
-              "name" TEXT NOT NULL,
-              "md5" TEXT NOT NULL,
-              "num_chunks" INTEGER NOT NULL,
-              "status" upload_status NOT NULL,
-              "path" TEXT,
-              "upload_log_id" INTEGER,
-              FOREIGN KEY ("upload_log_id") REFERENCES "upload_log"("id") ON DELETE CASCADE
-            );
-            
-            CREATE TABLE "dataset_audit" (
-              "id" SERIAL PRIMARY KEY,
-              "action" TEXT NOT NULL,
-              "timestamp" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-              "old_data" JSONB,
-              "new_data" JSONB,
-              "user_id" INTEGER,
-              "dataset_id" INTEGER,
-              FOREIGN KEY ("user_id") REFERENCES "user"("id") ON DELETE CASCADE,
-              FOREIGN KEY ("dataset_id") REFERENCES "dataset"("id") ON DELETE CASCADE
-            );
-            
-            CREATE TABLE "dataset_state" (
-              "state" TEXT NOT NULL,
-              "timestamp" TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-              "metadata" JSONB,
-              "dataset_id" INTEGER NOT NULL,
-              PRIMARY KEY ("timestamp", "dataset_id", "state"),
-              FOREIGN KEY ("dataset_id") REFERENCES "dataset"("id") ON DELETE CASCADE
-            );
-            
-            CREATE TABLE "bundle" (
-              "id" SERIAL PRIMARY KEY,
-              "created_at" TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-              "name" TEXT NOT NULL,
-              "size" BIGINT,
-              "md5" TEXT NOT NULL,
-              "dataset_id" INTEGER UNIQUE NOT NULL,
-              FOREIGN KEY ("dataset_id") REFERENCES "dataset"("id") ON DELETE CASCADE
-            );
-            
-            CREATE TABLE "data_access_log" (
-              "id" SERIAL PRIMARY KEY,
-              "timestamp" TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-              "access_type" access_type NOT NULL,
-              "file_id" INTEGER,
-              "dataset_id" INTEGER,
-              "user_id" INTEGER NOT NULL,
-              FOREIGN KEY ("file_id") REFERENCES "dataset_file"("id"),
-              FOREIGN KEY ("dataset_id") REFERENCES "dataset"("id"),
-              FOREIGN KEY ("user_id") REFERENCES "user"("id")
-            );
-            
-            CREATE TABLE "stage_request_log" (
-              "id" SERIAL PRIMARY KEY,
-              "timestamp" TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-              "dataset_id" INTEGER,
-              "user_id" INTEGER NOT NULL,
-              FOREIGN KEY ("dataset_id") REFERENCES "dataset"("id"),
-              FOREIGN KEY ("user_id") REFERENCES "user"("id")
-            );
-            
-            CREATE TABLE "user" (
-              "id" SERIAL PRIMARY KEY,
-              "username" VARCHAR(100) UNIQUE NOT NULL,
-              "name" VARCHAR(100),
-              "email" VARCHAR(100) UNIQUE NOT NULL,
-              "cas_id" VARCHAR(100) UNIQUE,
-              "notes" TEXT,
-              "created_at" TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-              "updated_at" TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-              "is_deleted" BOOLEAN NOT NULL DEFAULT false
-            );
-            
-            CREATE TABLE "user_password" (
-              "id" SERIAL PRIMARY KEY,
-              "password" VARCHAR(100) NOT NULL,
-              "created_at" TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-              "updated_at" TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-              "user_id" INTEGER UNIQUE NOT NULL,
-              FOREIGN KEY ("user_id") REFERENCES "user"("id") ON DELETE CASCADE
-            );
-            
-            CREATE TABLE "user_login" (
-              "id" SERIAL PRIMARY KEY,
-              "last_login" TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-              "method" TEXT NOT NULL,
-              "user_id" INTEGER UNIQUE NOT NULL,
-              FOREIGN KEY ("user_id") REFERENCES "user"("id") ON DELETE CASCADE
-            );
-            
-            CREATE TABLE "user_settings" (
-              "id" SERIAL PRIMARY KEY,
-              "user_id" INTEGER UNIQUE NOT NULL,
-              "settings" JSONB NOT NULL,
-              FOREIGN KEY ("user_id") REFERENCES "user"("id") ON DELETE CASCADE
-            );
-            
-            CREATE TABLE "notification" (
-              "id" SERIAL PRIMARY KEY,
-              "created_at" TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-              "label" TEXT NOT NULL,
-              "text" TEXT,
-              "status" NOTIFICATION_STATUS NOT NULL DEFAULT 'CREATED',
-              "acknowledged_by_id" INTEGER,
-              FOREIGN KEY ("acknowledged_by_id") REFERENCES "user"("id")
-            );
-            
-            CREATE TABLE "role_notification" (
-              "id" SERIAL PRIMARY KEY,
-              "role_id" INTEGER NOT NULL,
-              "notification_id" INTEGER NOT NULL,
-              UNIQUE ("notification_id", "role_id"),
-              FOREIGN KEY ("role_id") REFERENCES "role"("id"),
-              FOREIGN KEY ("notification_id") REFERENCES "notification"("id") ON DELETE CASCADE
-            );
-            
-            CREATE TABLE "user_notification" (
-              "id" SERIAL PRIMARY KEY,
-              "user_id" INTEGER NOT NULL,
-              "notification_id" INTEGER NOT NULL,
-              UNIQUE ("notification_id", "user_id"),
-              FOREIGN KEY ("user_id") REFERENCES "user"("id"),
-              FOREIGN KEY ("notification_id") REFERENCES "notification"("id") ON DELETE CASCADE
-            );
-            
-            CREATE TABLE "contact" (
-              "id" SERIAL PRIMARY KEY,
-              "type" TEXT NOT NULL,
-              "value" TEXT NOT NULL,
-              "description" TEXT,
-              "user_id" INTEGER,
-              UNIQUE ("type", "value"),
-              FOREIGN KEY ("user_id") REFERENCES "user"("id") ON DELETE CASCADE
-            );
-            
-            CREATE TABLE "role" (
-              "id" SERIAL PRIMARY KEY,
-              "name" VARCHAR(50) NOT NULL,
-              "description" VARCHAR(255) NOT NULL DEFAULT ''
-            );
-            
-            CREATE TABLE "user_role" (
-              "user_id" INTEGER NOT NULL,
-              "role_id" INTEGER NOT NULL,
-              "assigned_at" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-              PRIMARY KEY ("user_id", "role_id"),
-              FOREIGN KEY ("user_id") REFERENCES "user"("id") ON DELETE CASCADE,
-              FOREIGN KEY ("role_id") REFERENCES "role"("id") ON DELETE CASCADE
-            );
-        """)
+    # @staticmethod
+    # def parse_postgres_conn_string(conn_string):
+    #     parts = conn_string.split('//')[1].split('@')
+    #     user_pass, host_port_db = parts[0], parts[1]
+    #     username, password = user_pass.split(':')
+    #     host, port_db = host_port_db.split(':')
+    #     port, dbname = port_db.split('/')
+    #     return {
+    #         "dbname": dbname,
+    #         "user": username,
+    #         "password": password,
+    #         "host": host,
+    #         "port": port
+    #     }
+
+
+    def drop_all_tables(self):
+        with self.postgres_conn.cursor() as cur:
+            cur.execute("""
+                DROP TABLE IF EXISTS 
+                dataset_file_hierarchy, upload_log, dataset_upload_log, file_upload_log,
+                dataset_audit, dataset_state, bundle, data_access_log, stage_request_log,
+                user_password, user_login, user_settings, notification, role_notification,
+                user_notification, contact, user_role, dataset_file, dataset_hierarchy,
+                project_dataset, project_user, project_contact, project, workflow, metric,
+                dataset, "user", role
+                CASCADE;
+            """)
+        self.postgres_conn.commit()
+
+
+    def create_tables(self):
+        with self.postgres_conn.cursor() as cur:
+            cur.execute("""
+            -- Create enum types
+                CREATE TYPE access_type AS ENUM ('BROWSER', 'SLATE_SCRATCH');
+                CREATE TYPE NOTIFICATION_STATUS AS ENUM ('CREATED', 'ACKNOWLEDGED', 'RESOLVED');
+                CREATE TYPE upload_status AS ENUM ('UPLOADING', 'UPLOAD_FAILED', 'UPLOADED', 'PROCESSING', 'PROCESSING_FAILED', 'COMPLETE', 'FAILED');
+                
+                CREATE TABLE "user" (
+                  "id" SERIAL PRIMARY KEY,
+                  "username" VARCHAR(100) UNIQUE NOT NULL,
+                  "name" VARCHAR(100),
+                  "email" VARCHAR(100) UNIQUE NOT NULL,
+                  "cas_id" VARCHAR(100) UNIQUE,
+                  "notes" TEXT,
+                  "created_at" TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                  "updated_at" TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                  "is_deleted" BOOLEAN NOT NULL DEFAULT false
+                );
+                
+                CREATE TABLE "role" (
+                  "id" SERIAL PRIMARY KEY,
+                  "name" VARCHAR(50) NOT NULL,
+                  "description" VARCHAR(255) NOT NULL DEFAULT ''
+                );
+                
+                -- Create tables
+                CREATE TABLE "dataset" (
+                  "id" SERIAL PRIMARY KEY,
+                  "name" TEXT NOT NULL,
+                  "type" TEXT NOT NULL,
+                  "num_directories" INTEGER,
+                  "num_files" INTEGER,
+                  "du_size" BIGINT,
+                  "size" BIGINT,
+                  "bundle_size" BIGINT,
+                  "description" TEXT,
+                  "created_at" TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                  "updated_at" TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                  "origin_path" TEXT,
+                  "archive_path" TEXT,
+                  "staged_path" TEXT,
+                  "is_deleted" BOOLEAN NOT NULL DEFAULT false,
+                  "is_staged" BOOLEAN NOT NULL DEFAULT false,
+                  "metadata" JSONB,
+                  UNIQUE ("name", "type", "is_deleted")
+                );
+                
+                CREATE TABLE "dataset_hierarchy" (
+                  "source_id" INTEGER NOT NULL,
+                  "derived_id" INTEGER NOT NULL,
+                  "assigned_at" TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                  PRIMARY KEY ("source_id", "derived_id"),
+                  FOREIGN KEY ("source_id") REFERENCES "dataset"("id") ON DELETE CASCADE,
+                  FOREIGN KEY ("derived_id") REFERENCES "dataset"("id") ON DELETE CASCADE
+                );
+                
+                CREATE TABLE "dataset_file" (
+                  "id" SERIAL PRIMARY KEY,
+                  "name" TEXT,
+                  "path" TEXT NOT NULL,
+                  "md5" TEXT,
+                  "size" BIGINT,
+                  "filetype" TEXT,
+                  "metadata" JSONB,
+                  "status" TEXT,
+                  "dataset_id" INTEGER NOT NULL,
+                  FOREIGN KEY ("dataset_id") REFERENCES "dataset"("id") ON DELETE CASCADE,
+                  UNIQUE ("path", "dataset_id")
+                );
+                
+                CREATE INDEX ON "dataset_file" ("dataset_id");
+                
+                CREATE TABLE "dataset_file_hierarchy" (
+                  "parent_id" INTEGER NOT NULL,
+                  "child_id" INTEGER NOT NULL,
+                  PRIMARY KEY ("parent_id", "child_id"),
+                  FOREIGN KEY ("parent_id") REFERENCES "dataset_file"("id") ON DELETE CASCADE,
+                  FOREIGN KEY ("child_id") REFERENCES "dataset_file"("id") ON DELETE CASCADE
+                );
+                
+                CREATE INDEX ON "dataset_file_hierarchy" ("child_id");
+                
+                CREATE TABLE "upload_log" (
+                  "id" SERIAL PRIMARY KEY,
+                  "status" upload_status NOT NULL,
+                  "initiated_at" TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                  "updated_at" TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                  "user_id" INTEGER NOT NULL,
+                  FOREIGN KEY ("user_id") REFERENCES "user"("id")
+                );
+                
+                CREATE TABLE "dataset_upload_log" (
+                  "id" SERIAL PRIMARY KEY,
+                  "dataset_id" INTEGER UNIQUE NOT NULL,
+                  "upload_log_id" INTEGER UNIQUE NOT NULL,
+                  FOREIGN KEY ("dataset_id") REFERENCES "dataset"("id") ON DELETE CASCADE,
+                  FOREIGN KEY ("upload_log_id") REFERENCES "upload_log"("id") ON DELETE CASCADE
+                );
+                
+                CREATE TABLE "file_upload_log" (
+                  "id" SERIAL PRIMARY KEY,
+                  "name" TEXT NOT NULL,
+                  "md5" TEXT NOT NULL,
+                  "num_chunks" INTEGER NOT NULL,
+                  "status" upload_status NOT NULL,
+                  "path" TEXT,
+                  "upload_log_id" INTEGER,
+                  FOREIGN KEY ("upload_log_id") REFERENCES "upload_log"("id") ON DELETE CASCADE
+                );
+                
+                CREATE TABLE "dataset_audit" (
+                  "id" SERIAL PRIMARY KEY,
+                  "action" TEXT NOT NULL,
+                  "timestamp" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                  "old_data" JSONB,
+                  "new_data" JSONB,
+                  "user_id" INTEGER,
+                  "dataset_id" INTEGER,
+                  FOREIGN KEY ("user_id") REFERENCES "user"("id") ON DELETE CASCADE,
+                  FOREIGN KEY ("dataset_id") REFERENCES "dataset"("id") ON DELETE CASCADE
+                );
+                
+                CREATE TABLE "dataset_state" (
+                  "state" TEXT NOT NULL,
+                  "timestamp" TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                  "metadata" JSONB,
+                  "dataset_id" INTEGER NOT NULL,
+                  PRIMARY KEY ("timestamp", "dataset_id", "state"),
+                  FOREIGN KEY ("dataset_id") REFERENCES "dataset"("id") ON DELETE CASCADE
+                );
+                
+                CREATE TABLE "bundle" (
+                  "id" SERIAL PRIMARY KEY,
+                  "created_at" TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                  "name" TEXT NOT NULL,
+                  "size" BIGINT,
+                  "md5" TEXT NOT NULL,
+                  "dataset_id" INTEGER UNIQUE NOT NULL,
+                  FOREIGN KEY ("dataset_id") REFERENCES "dataset"("id") ON DELETE CASCADE
+                );
+                
+                CREATE TABLE "data_access_log" (
+                  "id" SERIAL PRIMARY KEY,
+                  "timestamp" TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                  "access_type" access_type NOT NULL,
+                  "file_id" INTEGER,
+                  "dataset_id" INTEGER,
+                  "user_id" INTEGER NOT NULL,
+                  FOREIGN KEY ("file_id") REFERENCES "dataset_file"("id"),
+                  FOREIGN KEY ("dataset_id") REFERENCES "dataset"("id"),
+                  FOREIGN KEY ("user_id") REFERENCES "user"("id")
+                );
+                
+                CREATE TABLE "stage_request_log" (
+                  "id" SERIAL PRIMARY KEY,
+                  "timestamp" TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                  "dataset_id" INTEGER,
+                  "user_id" INTEGER NOT NULL,
+                  FOREIGN KEY ("dataset_id") REFERENCES "dataset"("id"),
+                  FOREIGN KEY ("user_id") REFERENCES "user"("id")
+                );
+                
+                CREATE TABLE "user_password" (
+                  "id" SERIAL PRIMARY KEY,
+                  "password" VARCHAR(100) NOT NULL,
+                  "created_at" TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                  "updated_at" TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                  "user_id" INTEGER UNIQUE NOT NULL,
+                  FOREIGN KEY ("user_id") REFERENCES "user"("id") ON DELETE CASCADE
+                );
+                
+                CREATE TABLE "user_login" (
+                  "id" SERIAL PRIMARY KEY,
+                  "last_login" TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                  "method" TEXT NOT NULL,
+                  "user_id" INTEGER UNIQUE NOT NULL,
+                  FOREIGN KEY ("user_id") REFERENCES "user"("id") ON DELETE CASCADE
+                );
+                
+                CREATE TABLE "user_settings" (
+                  "id" SERIAL PRIMARY KEY,
+                  "user_id" INTEGER UNIQUE NOT NULL,
+                  "settings" JSONB NOT NULL,
+                  FOREIGN KEY ("user_id") REFERENCES "user"("id") ON DELETE CASCADE
+                );
+                
+                CREATE TABLE "notification" (
+                  "id" SERIAL PRIMARY KEY,
+                  "created_at" TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                  "label" TEXT NOT NULL,
+                  "text" TEXT,
+                  "status" NOTIFICATION_STATUS NOT NULL DEFAULT 'CREATED',
+                  "acknowledged_by_id" INTEGER,
+                  FOREIGN KEY ("acknowledged_by_id") REFERENCES "user"("id")
+                );
+                
+                CREATE TABLE "role_notification" (
+                  "id" SERIAL PRIMARY KEY,
+                  "role_id" INTEGER NOT NULL,
+                  "notification_id" INTEGER NOT NULL,
+                  UNIQUE ("notification_id", "role_id"),
+                  FOREIGN KEY ("role_id") REFERENCES "role"("id"),
+                  FOREIGN KEY ("notification_id") REFERENCES "notification"("id") ON DELETE CASCADE
+                );
+                
+                CREATE TABLE "user_notification" (
+                  "id" SERIAL PRIMARY KEY,
+                  "user_id" INTEGER NOT NULL,
+                  "notification_id" INTEGER NOT NULL,
+                  UNIQUE ("notification_id", "user_id"),
+                  FOREIGN KEY ("user_id") REFERENCES "user"("id"),
+                  FOREIGN KEY ("notification_id") REFERENCES "notification"("id") ON DELETE CASCADE
+                );
+                
+                CREATE TABLE "contact" (
+                  "id" SERIAL PRIMARY KEY,
+                  "type" TEXT NOT NULL,
+                  "value" TEXT NOT NULL,
+                  "description" TEXT,
+                  "user_id" INTEGER,
+                  UNIQUE ("type", "value"),
+                  FOREIGN KEY ("user_id") REFERENCES "user"("id") ON DELETE CASCADE
+                );
+                
+                CREATE TABLE "user_role" (
+                  "user_id" INTEGER NOT NULL,
+                  "role_id" INTEGER NOT NULL,
+                  "assigned_at" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                  PRIMARY KEY ("user_id", "role_id"),
+                  FOREIGN KEY ("user_id") REFERENCES "user"("id") ON DELETE CASCADE,
+                  FOREIGN KEY ("role_id") REFERENCES "role"("id") ON DELETE CASCADE
+                );
+            """)
+
 
     def extract_directories(self, file_path):
         parts = file_path.split('/')
         directories = parts[:-1]  # All parts except the last one (which is the file name)
         return directories
+
 
     def get_parent_path(self, path):
         parts = path.split('/')
@@ -275,6 +328,7 @@ class MongoToPostgresConversionManager:
             parts.pop()  # Remove the last part (file or directory name)
             return ''.join(parts)
         return ''  # Return empty string if there's no parent (top-level file)
+
 
     def create_file_and_directories(self, cur, file, dataset_id):
         pg_file = self.mongo_file_to_pg_file(file)
@@ -336,18 +390,21 @@ class MongoToPostgresConversionManager:
 
         return file_id
 
-    def get_scauser_id(self, cur):
+
+    def get_cmguser_id(self, cur):
         cur.execute(
             """
-            SELECT id FROM "user" WHERE username = 'scauser'
+            SELECT id FROM "user" WHERE username = 'cmguser'
             """
         )
-        sca_user_id = cur.fetchone()
+        cmg_user_id = cur.fetchone()
+        print(f"Found cmguser_id: {cmg_user_id}")
 
-        if sca_user_id is None:
-            raise ValueError("User 'scauser' not found in the PostgreSQL database")
+        if cmg_user_id is None:
+            raise ValueError("User 'cmguser' not found in the PostgreSQL database")
 
-        return sca_user_id[0]
+        return cmg_user_id[0]
+
 
     def create_roles(self):
         with self.postgres_conn.cursor() as cur:
@@ -368,31 +425,60 @@ class MongoToPostgresConversionManager:
 
             print(f"Inserted or updated {len(roles)} roles.")
 
+
     def convert_users(self):
+        cmguser = {
+            'username': 'cmguser',
+            'name': 'CMG User',
+            'email': 'cmguser@sca.iu.edu',
+            'cas_id': 'cmguser',
+        }
         with self.postgres_conn.cursor() as cur:
-            users = self.mongo_db.users.find()
-            for user in users:
-                self.convert_user(user, cur)
+            users = list(self.mongo_db.users.find())
+            print(f"users[0]: {users[0]}")
+            users.append(cmguser)
+            with open('./cmg_users', 'w') as f:
+                for user in users:
+                    email = user.get('email', 'No email')
+                    name = user.get('cas_id', 'No cas_id')
+                    username = user.get('username', 'No username')
+                    f.write(f"Converting user: {email} - {name} - {username}\n")
+                    # print(f"Converting user: {email} - {name} - {username}")
+                    self.convert_user(user, cur)
+
 
     def convert_user(self, mongo_user, cur):
-        # Create user in
-        cur.execute(
-            """
-            INSERT INTO "user" (username, email, name, cas_id, is_deleted)
-            VALUES (%s, %s, %s, %s, %s)
-            RETURNING id
-            """,
-            (
-                mongo_user.get("username"),
-                mongo_user.get("email"),
-                mongo_user.get("fullname"),
-                mongo_user.get("cas_id"),
-                not mongo_user.get("active", False),
+        user_id = None
+        # Create user
+        try:
+            # Attempt to insert the user
+            cur.execute(
+                """
+                INSERT INTO "user" (username, email, name, cas_id, is_deleted)
+                VALUES (%s, %s, %s, %s, %s)
+                RETURNING id
+                """,
+                (
+                    mongo_user.get("username"),
+                    mongo_user.get("email"),
+                    mongo_user.get("fullname"),
+                    mongo_user.get("cas_id"),
+                    not mongo_user.get("active", False),
+                )
             )
-        )
-        user_id = cur.fetchone()[0]
+            user_id = cur.fetchone()[0]
+        except Exception:
+            pass
+            # If a unique constraint is violated, rollback the transaction and print the user
+            #  print(f"Duplicate user not inserted: {mongo_user}")
 
-        # Mongo roles to Postgres roles
+        # Assign role to user
+        if user_id is not None:
+            self.assign_user_roles(mongo_user, user_id, cur)
+
+
+    def assign_user_roles(self, mongo_user, user_id, cur):
+        # Mongo (CMG) roles to Postgres (Bioloop) roles
         role_mapping = {
             'admin': 'operator',
             'god': 'admin',
@@ -415,6 +501,7 @@ class MongoToPostgresConversionManager:
                     """,
                     (user_id, postgres_roles[postgres_role_name])
                 )
+
 
     def convert_projects(self):
         with self.postgres_conn.cursor() as cur:
@@ -470,6 +557,7 @@ class MongoToPostgresConversionManager:
                     else:
                         print(f"Warning: Dataproduct not found in MongoDB for id: {dataproduct_id}")
 
+
     @staticmethod
     def mongo_file_to_pg_file(file: dict) -> dict:
         return {
@@ -479,9 +567,10 @@ class MongoToPostgresConversionManager:
             "size": file.get("size"),
         }
 
+
     def convert_datasets(self):
         with self.postgres_conn.cursor() as cur:
-            sca_user_id = self.get_scauser_id(cur)
+            cmg_user_id = self.get_cmguser_id(cur)
 
             mongo_datasets = self.mongo_db.dataset.find()
             for mongo_dataset in mongo_datasets:
@@ -513,14 +602,15 @@ class MongoToPostgresConversionManager:
                 raw_data_dataset_id = cur.fetchone()[0]
 
                 # Insert dataset_audit records if events exist
-                self.create_audit_logs_from_dataset_events(cur, mongo_dataset, raw_data_dataset_id, sca_user_id)
+                self.create_audit_logs_from_dataset_events(cur, mongo_dataset, raw_data_dataset_id, cmg_user_id)
 
                 for checksum in mongo_dataset.get("checksums", []):
                     self.create_file_and_directories(cur, checksum, raw_data_dataset_id)
 
+
     def convert_data_products(self):
         with self.postgres_conn.cursor() as cur:
-            sca_user_id = self.get_scauser_id(cur)
+            cmg_user_id = self.get_cmguser_id(cur)
 
             mongo_data_products = self.mongo_db.dataproduct.find()
             for mongo_data_product in mongo_data_products:
@@ -572,14 +662,15 @@ class MongoToPostgresConversionManager:
                         print(f"Warning: RAW_DATA dataset not found for {mongo_data_product['dataset']}")
 
                 # Insert dataset_audit records if events exist
-                self.create_audit_logs_from_dataset_events(cur, mongo_data_product, data_product_dataset_id, sca_user_id)
+                self.create_audit_logs_from_dataset_events(cur, mongo_data_product, data_product_dataset_id, cmg_user_id)
 
                 for file in mongo_data_product.get("files", []):
                     self.create_file_and_directories(cur, file, data_product_dataset_id)
 
+
     def convert_content_to_about(self):
         with self.postgres_conn.cursor() as cur:
-            sca_user_id = self.get_scauser_id(cur)
+            cmg_user_id = self.get_cmguser_id(cur)
 
             contents = self.mongo_db.content.find()
             for content in contents:
@@ -598,14 +689,14 @@ class MongoToPostgresConversionManager:
                     """,
                     (
                         html_content,
-                        sca_user_id,
+                        cmg_user_id,
                     )
                 )
 
     # This shouldn't be necessary. No `event` documents have been created in CMG since 2021.
     # def events_to_audit_logs(self):
     #     with self.postgres_conn.cursor() as cur:
-    #         sca_user_id = self.get_scauser_id(cur)
+    #         cmg_user_id = self.get_cmguser_id(cur)
     #
     #         events = self.mongo_db.events.find({
     #             "$or": [
@@ -661,8 +752,8 @@ class MongoToPostgresConversionManager:
     #                     if pg_user_result:
     #                         user_id = pg_user_result[0]
     #                     else:
-    #                         # if no matching user found, use scauser
-    #                         user_id = sca_user_id
+    #                         # if no matching user found, use cmguser
+    #                         user_id = cmg_user_id
     #
     #                     cur.execute(
     #                         """
@@ -671,6 +762,7 @@ class MongoToPostgresConversionManager:
     #                         """,
     #                         (action, timestamp, user_id, dataset_id)
     #                     )
+
 
     def create_audit_logs_from_dataset_events(self, cur, mongo_dataset, postgres_dataset_id, user_id):
         events = mongo_dataset.get("events", [])
@@ -689,11 +781,10 @@ class MongoToPostgresConversionManager:
                     )
                 )
 
-    def convert_all(self):
-        try:
-            # Start transaction
-            self.postgres_conn.cursor().execute("BEGIN")
 
+    def convert_mongo_to_postres(self):
+        try:
+            self.drop_all_tables()
             self.create_tables()
             self.create_roles()
             self.convert_users()
@@ -701,8 +792,7 @@ class MongoToPostgresConversionManager:
             self.convert_data_products()
             self.convert_projects()
             self.convert_content_to_about()
-
-            # Commit the transaction if everything succeeds
+            # Commit the transaction
             self.postgres_conn.commit()
             print("Data conversion completed successfully.")
         except Exception as e:
@@ -713,14 +803,96 @@ class MongoToPostgresConversionManager:
         finally:
             self.close_connections()
 
+
     def close_connections(self):
         self.mongo_client.close()
         self.postgres_conn.close()
+        # self.tunnel.stop()
 
+
+def main():
+    """
+    Main function to run the MongoDB to PostgreSQL conversion.
+
+    Usage:
+        To run the conversion:
+        $ python mongo_to_postgres.py
+
+    Environment Variables:
+        The following environment variables must be set:
+        - MONGO_CONNECTION_STRING: MongoDB connection string
+        - PG_DATABASE: PostgreSQL database name
+        - PG_USER: PostgreSQL username
+        - PG_PASSWORD: PostgreSQL password
+        - PG_HOST: PostgreSQL host
+        - PG_PORT: PostgreSQL port
+
+    Returns:
+        None
+    """
+    load_dotenv()  # Load environment variables from .env file if it exists
+
+    # mongo_conn_string = os.getenv('MONGO_CONNECTION_STRING')
+    # if not mongo_conn_string:
+    #     raise ValueError("MongoDB connection string not found in environment variables")
+
+    # ssh_config = {
+    #     'hostname': os.getenv('SSH_HOSTNAME'),
+    #     'username': os.getenv('SSH_USERNAME'),
+    #     'private_key_path': os.getenv('SSH_PRIVATE_KEY_PATH')
+    # }
+
+    print("Starting MongoDB to PostgreSQL conversion...")
+    print(f"os.getenv('MONGO_USERNAME'): {os.getenv('MONGO_USERNAME')}")
+    print(f"os.getenv('MONGO_PORT'): {os.getenv('MONGO_PORT')}")
+
+    # todo - throw error if mongo env vars are missing
+    mongo_config = {
+        'host': os.getenv('MONGO_HOST'),
+        'port': int(os.getenv('MONGO_PORT', 27017)),
+        'database': os.getenv('MONGO_DB'),
+        'authSource': os.getenv('MONGO_AUTH_SOURCE'),
+        'username': os.getenv('MONGO_USERNAME'),
+        'password': os.getenv('MONGO_PASSWORD'),
+    }
+
+    postgres_db = os.getenv('PG_DATABASE')
+    pg_user = os.getenv('PG_USER')
+    pg_password = os.getenv('PG_PASSWORD')
+    pg_host = os.getenv('PG_HOST')
+    pg_port = os.getenv('PG_PORT')
+
+    pg_env_vars = {
+        'PG_DATABASE': postgres_db,
+        'PG_USER': pg_user,
+        'PG_PASSWORD': pg_password,
+        'PG_HOST': pg_host,
+        'PG_PORT': pg_port
+    }
+    missing_pg_env_vars = [var for var, value in pg_env_vars.items() if not value]
+
+    if missing_pg_env_vars:
+        print("Following environment variables that are expected to connect to the PostgreSQL database are missing:")
+        for var in missing_pg_env_vars:
+            print(f"env variable {var} not provided")
+        raise ValueError("Missing required environment variables for connecting to PostgreSQL")
+
+    try:
+        # Initialize the conversion manager (this will establish connections)
+        manager = MongoToPostgresConversionManager(mongo_config, pg_env_vars)
+    except Exception as e:
+        print(f"Error connecting to databases: {e}")
+        raise
+
+    try:
+        # Begin the conversion process
+        manager.convert_mongo_to_postres()
+    except Exception as e:
+        print(f"Error during conversion: {e}")
+        raise
+    finally:
+        if manager:
+            manager.close_connections()
 
 if __name__ == "__main__":
-    mongo_connection_string = ""
-    pg_connection_string = ""
-
-    converter = MongoToPostgresConversionManager(mongo_connection_string, pg_connection_string)
-    converter.convert_all()
+    fire.Fire(main)
