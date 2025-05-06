@@ -1,3 +1,5 @@
+# move Dockerfile to a context-specific location
+
 FROM python:3.10
 
 WORKDIR /opt/sca/workers
@@ -10,6 +12,7 @@ RUN apt-get update && apt-get install -y \
 # Copy the script and requirements
 COPY workers/workers/scripts/mongo_to_postgres.py workers/scripts/
 COPY workers/workers/scripts/requirements.txt workers/scripts/
+COPY workers/workers/scripts/.env /opt/sca/workers/workers/scripts/.env
 
 # Install Python dependencies
 RUN pip install --no-cache-dir -r workers/scripts/requirements.txt

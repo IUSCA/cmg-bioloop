@@ -104,3 +104,4 @@ workers/config/production.py
 
 #cmg_users
 workers/workers/scripts/cmg_users
+workers/workers/scripts/.env

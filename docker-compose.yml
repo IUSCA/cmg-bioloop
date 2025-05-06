@@ -88,13 +88,15 @@ services:
     volumes:
       - ./workers:/opt/sca/workers
     working_dir: /opt/sca/workers
+#    env_file: ./workers/workers/scripts/.env
     environment:
+#      - todo - read env vars from .env file instead of defaults
       - MONGO_HOST=${MONGO_HOST:-host.docker.internal}
       - MONGO_PORT=${MONGO_PORT:-27017}
       - MONGO_DB=${MONGO_DB:-cmg}
-      - MONGO_AUTH_SOURCE=${MONGO_AUTH_SOURCE}
-      - MONGO_USERNAME=${MONGO_USERNAME}
-      - MONGO_PASSWORD=${MONGO_PASSWORD}
+      - MONGO_AUTH_SOURCE=${MONGO_AUTH_SOURCE:-cmg}
+      - MONGO_USERNAME=${MONGO_USERNAME:-appuser}
+      - MONGO_PASSWORD=${MONGO_PASSWORD:-example}
       - PG_HOST=${PG_HOST:-postgres}
       - PG_PORT=${PG_PORT:-5432}
       - PG_DATABASE=${PG_DATABASE:-app}

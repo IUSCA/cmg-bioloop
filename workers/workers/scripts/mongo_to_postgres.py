@@ -830,7 +830,27 @@ def main():
     Returns:
         None
     """
-    load_dotenv()  # Load environment variables from .env file if it exists
+
+    load_dotenv()
+
+    # Get the directory of the current script
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    # Construct the path to the .env file
+    env_path = os.path.join(script_dir, '.env')
+    # Load the .env file
+    # load_dotenv(env_path)
+
+    print(f"Current working directory: {os.getcwd()}")
+    print(f"Script directory: {script_dir}")
+    print(f"Env file path: {env_path}")
+    print(f"Env file exists: {os.path.exists(env_path)}")
+    for key in ['MONGO_HOST', 'MONGO_PORT', 'MONGO_DB', 'MONGO_AUTH_SOURCE', 'MONGO_USERNAME', 'MONGO_PASSWORD',
+                'PG_HOST', 'PG_PORT', 'PG_DATABASE', 'PG_USER', 'PG_PASSWORD']:
+        print(f"{key}: {os.getenv(key)}")
+
+
+    # load_dotenv('/opt/sca/workers/workers/scripts/.env')
+    # load_dotenv()  # Load environment variables from .env file if it exists
 
     # mongo_conn_string = os.getenv('MONGO_CONNECTION_STRING')
     # if not mongo_conn_string:
@@ -855,6 +875,8 @@ def main():
         'username': os.getenv('MONGO_USERNAME'),
         'password': os.getenv('MONGO_PASSWORD'),
     }
+
+    print(f"mongo_config: {mongo_config}")
 
     postgres_db = os.getenv('PG_DATABASE')
     pg_user = os.getenv('PG_USER')
