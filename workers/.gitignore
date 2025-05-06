@@ -97,7 +97,10 @@ celery_worker.pid
 
 # poetry
 # generated with "poetry export --without-hashes --format=requirements.txt > requirements.txt"
-requirements.txt
+workers/scripts/requirements.txt
 
 workers/scripts/get_size.py
 workers/config/production.py
+
+#cmg_users
+workers/workers/scripts/cmg_users

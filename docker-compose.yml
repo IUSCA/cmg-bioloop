@@ -82,36 +82,26 @@ services:
 
 
   mongo_to_postgres:
-    image: python:3.10
+    build:
+      context: .
+      dockerfile: Dockerfile.mongo_to_postgres
     volumes:
       - ./workers:/opt/sca/workers
-      # use poetry cache to speed up dependency installation on subsequent restarts
-      #      - poetry_cache:/root/.cache/pypoetry
     working_dir: /opt/sca/workers
     environment:
-      - MONGO_HOST=host.docker.internal
-      - MONGO_PORT=27017
-      - MONGO_DB=cmg
-      - MONGO_USER=
-      - MONGO_PASS=
-      - PG_HOST=postgres
-      - PG_PORT=5432
-      - PG_DATABASE=app
-      - PG_USER=appuser
-      - PG_PASSWORD=example
+      - MONGO_HOST=${MONGO_HOST:-host.docker.internal}
+      - MONGO_PORT=${MONGO_PORT:-27017}
+      - MONGO_DB=${MONGO_DB:-cmg}
+      - MONGO_AUTH_SOURCE=${MONGO_AUTH_SOURCE}
+      - MONGO_USERNAME=${MONGO_USERNAME}
+      - MONGO_PASSWORD=${MONGO_PASSWORD}
+      - PG_HOST=${PG_HOST:-postgres}
+      - PG_PORT=${PG_PORT:-5432}
+      - PG_DATABASE=${PG_DATABASE:-app}
+      - PG_USER=${PG_USER:-appuser}
+      - PG_PASSWORD=${PG_PASSWORD:-example}
+#    command: python -m workers.scripts.mongo_to_postgres
     entrypoint: [ "tail", "-f", "/dev/null" ]
-#    entrypoint:
-#      - sh
-#      - -c
-#      # todo: install requirements via a Dockerfile to avoid installing dependencies on each container restart
-#      - |
-#        pip install --upgrade pip
-#        pip install --upgrade poetry
-#        pip install poetry
-#        poetry config virtualenvs.create false
-#        poetry lock
-#        poetry install
-#        python -m workers.scripts.mongo_to_postgres
     depends_on:
       - postgres
     extra_hosts:
