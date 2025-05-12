@@ -11,6 +11,9 @@ from ..entity import *
 from ..operations import *
 
 
+# python -um src.convert.scripts.convert
+
+
 class MongoToPostgresConversionManager:
 
   def __init__(self,
@@ -32,8 +35,14 @@ class MongoToPostgresConversionManager:
     # self.mongo_db = self.mongo_client["cmg_database"]
 
     # Initiate MongoDB connection
-    mongo_uri = f"mongodb://{mongo_config['username']}:{mongo_config['password']}@{mongo_config['host']}:{mongo_config['port']}/{mongo_config['database']}?authSource={mongo_config['authSource']}"
+    # mongo_uri = f"mongodb://{mongo_config['username']}:{mongo_config['password']}@{mongo_config['host']}:{mongo_config['port']}/{mongo_config['database']}?authSource={mongo_config['authSource']}"
+    mongo_uri = f'mongodb://{mongo_config["host"]}:{mongo_config["port"]}'
+    print(f"Connecting to MongoDB with URI: {mongo_uri}")
     self.mongo_client = pymongo.MongoClient(mongo_uri)
+
+    # if not self.test_mongo_connection():
+    #   raise ConnectionError("Failed to connect to MongoDB")
+
     self.mongo_db = self.mongo_client[mongo_config['database']]
 
     #  Initiate PostgreSQL connection
@@ -48,7 +57,6 @@ class MongoToPostgresConversionManager:
     # generic error '... psycopg2.errors.InFailedSqlTransaction: current transaction is aborted,
     # commands ignored until end of transaction block ...'
     # self.postgres_conn.set_session(autocommit=True)
-
     self.pg_cursor = self.postgres_conn.cursor()
 
   def convert_mongo_to_postres(self):
@@ -65,10 +73,10 @@ class MongoToPostgresConversionManager:
         # Convert CMG data (Mongo) to Bioloop data (Postgres)
         create_roles(cursor)
         convert_users(cursor, self.mongo_db)
-        convert_datasets(cursor, self.mongo_db)
-        convert_data_products(cursor, self.mongo_db)
-        convert_projects(cursor, self.mongo_db)
-        convert_content_to_about(cursor, self.mongo_db)
+        # convert_datasets(cursor, self.mongo_db)
+        # convert_data_products(cursor, self.mongo_db)
+        # convert_projects(cursor, self.mongo_db)
+        # convert_content_to_about(cursor, self.mongo_db)
 
       # Commit the transaction
       self.postgres_conn.commit()
@@ -85,6 +93,23 @@ class MongoToPostgresConversionManager:
     self.mongo_client.close()
     self.postgres_conn.close()
     # self.tunnel.stop()
+
+  # def test_mongo_connection(self):
+  #   print("Testing MongoDB connection...")
+  #   try:
+  #     info = self.mongo_client.server_info()
+  #     print("MongoDB connection successful.")
+  #     print(f"MongoDB version: {info['version']}")
+  #     print(f"MongoDB host: {self.mongo_client.address[0]}")
+  #     print(f"MongoDB port: {self.mongo_client.address[1]}")
+  #     print(f"MongoDB database: {self.mongo_db.name}")
+  #     return True
+  #   except pymongo.errors.ConnectionFailure as e:
+  #     print(f"MongoDB connection failed: {e}")
+  #     return False
+  #   except Exception as e:
+  #     print(f"Unexpected error when connecting to MongoDB: {e}")
+  #     return False
 
 
 def main():

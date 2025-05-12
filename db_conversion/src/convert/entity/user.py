@@ -1,3 +1,5 @@
+import os
+
 from ..constants.bioloop import bioloop_roles
 from ..constants.cmg import cmguser
 from ..constants.common import role_mapping
@@ -40,8 +42,14 @@ def convert_users(pg_cursor, mongo_db):
   users = list(mongo_db.users.find())
   print(f"users[0]: {users[0]}")
   users.append(cmguser)
+
+  output_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..', 'output'))
+  os.makedirs(output_dir, exist_ok=True)
+
+  output_file = os.path.join(output_dir, 'cmg_users')
+
   # todo - remove temporary file
-  with open('../../../output/cmg_users', 'w') as f:
+  with open(output_file, 'w') as f:
     for user in users:
       email = user.get('email', 'No email')
       name = user.get('cas_id', 'No cas_id')
