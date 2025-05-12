@@ -12,4 +12,13 @@ def get_parent_path(path):
   return ''  # Return empty string if there's no parent (top-level file)
 
 
-__all__ = ['extract_directories', 'get_parent_path']
+def mongo_file_to_pg_file(file: dict) -> dict:
+  return {
+    "name": file.get("path", "").split("/")[-1],
+    "path": file.get("path"),
+    "md5": file.get("md5"),
+    "size": file.get("size"),
+  }
+
+
+__all__ = ['extract_directories', 'get_parent_path', 'mongo_file_to_pg_file']

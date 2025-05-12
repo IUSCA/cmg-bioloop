@@ -7,9 +7,6 @@ import fire
 import paramiko
 from sshtunnel import SSHTunnelForwarder
 
-from ..pg_queries import queries
-from ..utils import extract_directories
-from ..constants import *
 from ..entity import *
 from ..operations import *
 
@@ -56,21 +53,22 @@ class MongoToPostgresConversionManager:
 
   def convert_mongo_to_postres(self):
     try:
-      # Drop existing Postgres tables, enums
-      drop_all_enums(self.pg_cursor)
-      drop_all_tables(self.pg_cursor)
+      with self.postgres_conn.cursor() as cursor:
+        # Drop existing Postgres tables, enums
+        drop_all_enums(cursor)
+        drop_all_tables(cursor)
 
-      # Re-create tables, enums
-      create_all_enums(self.pg_cursor)
-      create_all_tables(self.pg_cursor)
+        # Re-create tables, enums
+        create_all_enums(cursor)
+        create_all_tables(cursor)
 
-      # Convert CMG data (Mongo) to Bioloop data (Postgres)
-      create_roles(self.pg_cursor)
-      convert_users(self.pg_cursor, self.mongo_db)
-      convert_datasets(self.pg_cursor, self.mongo_db)
-      convert_data_products(self.pg_cursor, self.mongo_db)
-      convert_projects(self.pg_cursor, self.mongo_db)
-      convert_content_to_about(self.pg_cursor, self.mongo_db)
+        # Convert CMG data (Mongo) to Bioloop data (Postgres)
+        create_roles(cursor)
+        convert_users(cursor, self.mongo_db)
+        convert_datasets(cursor, self.mongo_db)
+        convert_data_products(cursor, self.mongo_db)
+        convert_projects(cursor, self.mongo_db)
+        convert_content_to_about(cursor, self.mongo_db)
 
       # Commit the transaction
       self.postgres_conn.commit()

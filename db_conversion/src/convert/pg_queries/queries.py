@@ -1,8 +1,8 @@
 drop_all_enums = """
             -- Drop enum types
-                DROP TYPE IF EXISTS ACCESS_TYPE;
-                DROP TYPE IF EXISTS NOTIFICATION_STATUS;
-                DROP TYPE IF EXISTS UPLOAD_STATUS;
+                DROP TYPE IF EXISTS ACCESS_TYPE CASCADE;
+                DROP TYPE IF EXISTS NOTIFICATION_STATUS CASCADE;
+                DROP TYPE IF EXISTS UPLOAD_STATUS CASCADE;
 """
 
 drop_all_tables = """

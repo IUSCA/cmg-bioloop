@@ -1,3 +1,9 @@
-from queries import *
+from .queries import *
 
-__all__ = ['create_all_enums', 'create_all_tables', 'drop_all_tables', 'drop_all_enums']
+__all__ = []
+
+for module in [queries]:
+  if hasattr(module, '__all__'):
+    __all__.extend(module.__all__)
+  else:
+    __all__.extend([name for name in dir(module) if not name.startswith('_')])

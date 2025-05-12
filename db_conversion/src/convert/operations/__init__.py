@@ -1,5 +1,5 @@
-from ddl import *
-from dml import *
+from .ddl import *
+from .dml import *
 
 __all__ = []
 

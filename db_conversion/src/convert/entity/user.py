@@ -22,15 +22,14 @@ def get_cmguser_id(pg_cursor):
 
 def create_roles(pg_cursor):
   print("create_roles")
-  with pg_cursor:
-    for role in bioloop_roles:
-      pg_cursor.execute(
-        """
-        INSERT INTO role (name, description)
-        VALUES (%s, %s)
-        """,
-        (role['name'], role['description'])
-      )
+  for role in bioloop_roles:
+    pg_cursor.execute(
+      """
+      INSERT INTO role (name, description)
+      VALUES (%s, %s)
+      """,
+      (role['name'], role['description'])
+    )
 
   print(f"Inserted or updated {len(bioloop_roles)} roles.")
   print("create_roles successful.")
@@ -38,19 +37,18 @@ def create_roles(pg_cursor):
 
 def convert_users(pg_cursor, mongo_db):
   print("convert_users")
-  with pg_cursor:
-    users = list(mongo_db.users.find())
-    print(f"users[0]: {users[0]}")
-    users.append(cmguser)
-    # todo - remove temporary file
-    with open('../../../output/cmg_users', 'w') as f:
-      for user in users:
-        email = user.get('email', 'No email')
-        name = user.get('cas_id', 'No cas_id')
-        username = user.get('username', 'No username')
-        f.write(f"Converting user: {email} - {name} - {username}\n")
-        print(f"Converting user: {email} - {name} - {username}")
-        convert_user(user, pg_cursor)
+  users = list(mongo_db.users.find())
+  print(f"users[0]: {users[0]}")
+  users.append(cmguser)
+  # todo - remove temporary file
+  with open('../../../output/cmg_users', 'w') as f:
+    for user in users:
+      email = user.get('email', 'No email')
+      name = user.get('cas_id', 'No cas_id')
+      username = user.get('username', 'No username')
+      f.write(f"Converting user: {email} - {name} - {username}\n")
+      print(f"Converting user: {email} - {name} - {username}")
+      convert_user(user, pg_cursor)
   print("convert_users successful.")
 
 

@@ -5,7 +5,6 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    # TODO: use built image instead of volume in Prod
     volumes:
       - ./:/opt/sca/app
     #    working_dir: /opt/sca/app

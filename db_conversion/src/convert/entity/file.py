@@ -1,13 +1,4 @@
-from ..utils import extract_directories
-
-
-def mongo_file_to_pg_file(file: dict) -> dict:
-  return {
-    "name": file.get("path", "").split("/")[-1],
-    "path": file.get("path"),
-    "md5": file.get("md5"),
-    "size": file.get("size"),
-  }
+from ..utils import extract_directories, mongo_file_to_pg_file
 
 
 def create_file_and_directories(pg_cursor, file, dataset_id):

@@ -1,9 +1,9 @@
-from about import *
-from user import *
-from dataset import *
-from audit_log import *
-from project import *
-from file import *
+from .about import *
+from .user import *
+from .dataset import *
+from .audit_log import *
+from .project import *
+from .file import *
 
 __all__ = []
 
