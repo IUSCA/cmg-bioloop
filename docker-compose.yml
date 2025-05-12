@@ -81,33 +81,31 @@ services:
       - "host.docker.internal:host-gateway" # for connecting to services running on localhost of the host network
 
 
-  mongo_to_postgres:
+  db_conversion:
     build:
-      context: .
-      dockerfile: Dockerfile.mongo_to_postgres
-    volumes:
-      - ./workers:/opt/sca/workers
-    working_dir: /opt/sca/workers
-#    env_file: ./workers/workers/scripts/.env
-    environment:
-#      - todo - read env vars from .env file instead of defaults
-      - MONGO_HOST=${MONGO_HOST:-host.docker.internal}
-      - MONGO_PORT=${MONGO_PORT:-27017}
-      - MONGO_DB=${MONGO_DB:-cmg}
-      - MONGO_AUTH_SOURCE=${MONGO_AUTH_SOURCE:-cmg}
-      - MONGO_USERNAME=${MONGO_USERNAME:-appuser}
-      - MONGO_PASSWORD=${MONGO_PASSWORD:-example}
-      - PG_HOST=${PG_HOST:-postgres}
-      - PG_PORT=${PG_PORT:-5432}
-      - PG_DATABASE=${PG_DATABASE:-app}
-      - PG_USER=${PG_USER:-appuser}
-      - PG_PASSWORD=${PG_PASSWORD:-example}
-#    command: python -m workers.scripts.mongo_to_postgres
+      context: ./db_conversion
+      dockerfile: Dockerfile
+#    working_dir: /opt/sca/app
+#    env_file: ./workers/workers/convert/.env
+#    environment:
+##      - todo - read env vars from .env file instead of defaults
+#      - MONGO_HOST=${MONGO_HOST:-host.docker.internal}
+#      - MONGO_PORT=${MONGO_PORT:-27017}
+#      - MONGO_DB=${MONGO_DB:-cmg}
+#      - MONGO_AUTH_SOURCE=${MONGO_AUTH_SOURCE:-cmg}
+#      - MONGO_USERNAME=${MONGO_USERNAME:-appuser}
+#      - MONGO_PASSWORD=${MONGO_PASSWORD:-example}
+#      - PG_HOST=${PG_HOST:-postgres}
+#      - PG_PORT=${PG_PORT:-5432}
+#      - PG_DATABASE=${PG_DATABASE:-app}
+#      - PG_USER=${PG_USER:-appuser}
+#      - PG_PASSWORD=${PG_PASSWORD:-example}
+##    command: python -m workers.convert.db_conversion
     entrypoint: [ "tail", "-f", "/dev/null" ]
-    depends_on:
-      - postgres
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
+#    depends_on:
+#      - postgres
+#    extra_hosts:
+#      - "host.docker.internal:host-gateway"
 
 
 volumes:
@@ -116,6 +114,3 @@ volumes:
 
   api_modules:
     external: false
-
-  #  persist the Poetry cache between container restarts. Used in mongo_to_postgres servicew
-  #  poetry_cache:

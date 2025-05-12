@@ -1,4 +1,4 @@
-docker-compose stop mongo_to_postgres
-docker-compose rm -f mongo_to_postgres
-docker-compose up -d mongo_to_postgres
+docker-compose stop db_conversion
+docker-compose rm -f db_conversion
+docker-compose up -d db_conversion
 

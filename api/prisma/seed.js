@@ -1,19 +1,19 @@
 const path = require('path');
 
-const { PrismaClient } = require('@prisma/client');
+const {PrismaClient} = require('@prisma/client');
 const _ = require('lodash/fp');
 const dayjs = require('dayjs');
 const config = require('config');
 
-const { normalize_name } = require('../src/services/project');
+const {normalize_name} = require('../src/services/project');
 const data = require('./seed_data/data');
-const { random_files } = require('./seed_data/random_paths');
-const { generate_data_access_logs } = require('./seed_data/data_access_logs');
-const { generate_staged_logs } = require('./seed_data/staged_logs');
-const { generate_stage_request_logs } = require('./seed_data/stage_request_logs');
-const { generate_date_range } = require('../src/services/datetime');
+const {random_files} = require('./seed_data/random_paths');
+const {generate_data_access_logs} = require('./seed_data/data_access_logs');
+const {generate_staged_logs} = require('./seed_data/staged_logs');
+const {generate_stage_request_logs} = require('./seed_data/stage_request_logs');
+const {generate_date_range} = require('../src/services/datetime');
 const datasetService = require('../src/services/dataset');
-const { readUsersFromJSON } = require('../src/utils');
+const {readUsersFromJSON} = require('../src/utils');
 
 global.__basedir = path.join(__dirname, '..');
 
@@ -21,7 +21,7 @@ const prisma = new PrismaClient();
 
 if (['production'].includes(config.get('mode'))) {
   // exit if in production mode
-  console.error('Seed script should not be run in production mode. Run node src/scripts/init_prod_users.js instead.');
+  console.error('Seed script should not be run in production mode. Run node src/convert/init_prod_users.js instead.');
   process.exit(1);
 }
 
@@ -38,12 +38,12 @@ async function update_seq(table) {
   await prisma.$executeRawUnsafe(`ALTER SEQUENCE ${table}_id_seq RESTART WITH ${currentMaxId + 1}`);
 }
 
-async function put_dataset_files({ dataset_id, num_files = 1000, max_depth = 5 }) {
+async function put_dataset_files({dataset_id, num_files = 1000, max_depth = 5}) {
   const files = random_files(num_files, max_depth, dataset_id);
   await prisma.dataset_file.deleteMany({
-    where: { dataset_id },
+    where: {dataset_id},
   });
-  await datasetService.add_files({ dataset_id, data: files });
+  await datasetService.add_files({dataset_id, data: files});
 }
 
 // Generates different values of space utilization metrics, by the hour, based
@@ -92,7 +92,7 @@ function createRandomUsers(num) {
 
 async function main() {
   await Promise.allSettled(data.roles.map((role) => prisma.role.upsert({
-    where: { id: role.id },
+    where: {id: role.id},
     create: role,
     update: role,
   })));
@@ -101,7 +101,7 @@ async function main() {
   const additional_admins = readUsersFromJSON('admins.json');
   const admin_data = insert_random_dates(data.admins.concat(additional_admins));
   const admin_promises = admin_data.map((admin) => prisma.user.upsert({
-    where: { email: `${admin.username}@iu.edu` },
+    where: {email: `${admin.username}@iu.edu`},
     update: {},
     create: {
       username: admin.username,
@@ -110,7 +110,7 @@ async function main() {
       name: admin.name,
       created_at: admin.date,
       user_role: {
-        create: [{ role_id: 1 }],
+        create: [{role_id: 1}],
       },
     },
   }));
@@ -122,7 +122,7 @@ async function main() {
     data.users.concat(createRandomUsers(50)), // mock some extra users
   );
   const user_promises = user_data.map((user) => prisma.user.upsert({
-    where: { email: `${user.username}@iu.edu` },
+    where: {email: `${user.username}@iu.edu`},
     update: {},
     create: {
       username: user.username,
@@ -131,7 +131,7 @@ async function main() {
       name: user.name,
       created_at: user.date,
       user_role: {
-        create: [{ role_id: 3 }],
+        create: [{role_id: 3}],
       },
     },
   }));
@@ -141,7 +141,7 @@ async function main() {
   // create operators
   const operator_data = insert_random_dates(data.operators);
   const operator_promises = operator_data.map((user) => prisma.user.upsert({
-    where: { email: `${user.username}@iu.edu` },
+    where: {email: `${user.username}@iu.edu`},
     update: {},
     create: {
       username: user.username,
@@ -150,7 +150,7 @@ async function main() {
       name: user.name,
       created_at: user.date,
       user_role: {
-        create: [{ role_id: 2 }],
+        create: [{role_id: 2}],
       },
     },
   }));
@@ -158,10 +158,10 @@ async function main() {
   await Promise.all(operator_promises);
 
   const datasetPromises = data.datasets.map((dataset) => {
-    const { workflows, ...dataset_obj } = dataset;
+    const {workflows, ...dataset_obj} = dataset;
     if (workflows) {
       dataset_obj.workflows = {
-        create: workflows.map((workflow_id) => ({ id: workflow_id })),
+        create: workflows.map((workflow_id) => ({id: workflow_id})),
       };
     }
     return prisma.dataset.upsert({
@@ -255,11 +255,11 @@ async function main() {
   );
 
   // upsert dataset_files
-  await put_dataset_files({ dataset_id: 1, num_files: 100, max_depth: 1 });
-  await put_dataset_files({ dataset_id: 2, num_files: 100, max_depth: 3 });
-  await put_dataset_files({ dataset_id: 3, num_files: 1000, max_depth: 2 });
-  await put_dataset_files({ dataset_id: 7, num_files: 100, max_depth: 1 });
-  await put_dataset_files({ dataset_id: 8, num_files: 100 });
+  await put_dataset_files({dataset_id: 1, num_files: 100, max_depth: 1});
+  await put_dataset_files({dataset_id: 2, num_files: 100, max_depth: 3});
+  await put_dataset_files({dataset_id: 3, num_files: 1000, max_depth: 2});
+  await put_dataset_files({dataset_id: 7, num_files: 100, max_depth: 1});
+  await put_dataset_files({dataset_id: 8, num_files: 100});
 
   // update the auto increment id's sequence numbers
   const tables = ['dataset', 'user', 'role', 'dataset_audit', 'contact'];
