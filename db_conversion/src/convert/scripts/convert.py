@@ -85,8 +85,7 @@ class MongoToPostgresConversionManager:
         # for mongo_dataset in mongo_datasets:
         #   print(f"Converting dataset: {mongo_dataset['name']}")
 
-        convert_datasets(pg_cursor=pg_cursor, mongo_db=self.mongo_db)
-        convert_data_products(pg_cursor=pg_cursor, mongo_db=self.mongo_db)
+        convert_all_datasets(pg_cursor=pg_cursor, mongo_db=self.mongo_db)
         # convert_projects(cursor, self.mongo_db)
         # convert_content_to_about(cursor, self.mongo_db)
 
