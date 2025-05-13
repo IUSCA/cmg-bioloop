@@ -21,6 +21,8 @@ class MongoToPostgresConversionManager:
                mongo_config,
                pg_conn_env_vars):
 
+    print("mongo_config:", mongo_config)
+
     # MongoDB connection
     # Set up SSH tunnel to connect to MongoDB running on a remote server
     # self.tunnel = SSHTunnelForwarder(
@@ -53,28 +55,38 @@ class MongoToPostgresConversionManager:
       user=pg_conn_env_vars['PG_USER'],
       password=pg_conn_env_vars['PG_PASSWORD']
     )
+
     # disable transaction's rollback for seeing actual errors instead of
     # generic error '... psycopg2.errors.InFailedSqlTransaction: current transaction is aborted,
     # commands ignored until end of transaction block ...'
-    # self.postgres_conn.set_session(autocommit=True)
+    self.postgres_conn.set_session(autocommit=True)
+
     self.pg_cursor = self.postgres_conn.cursor()
 
   def convert_mongo_to_postres(self):
     try:
-      with self.postgres_conn.cursor() as cursor:
+      with self.postgres_conn.cursor() as pg_cursor:
         # Drop existing Postgres tables, enums
-        drop_all_enums(cursor)
-        drop_all_tables(cursor)
+        drop_all_enums(pg_cursor=pg_cursor)
+        drop_all_tables(pg_cursor=pg_cursor)
 
         # Re-create tables, enums
-        create_all_enums(cursor)
-        create_all_tables(cursor)
+        create_all_enums(pg_cursor=pg_cursor)
+        create_all_tables(pg_cursor=pg_cursor)
 
         # Convert CMG data (Mongo) to Bioloop data (Postgres)
-        create_roles(cursor)
-        convert_users(cursor, self.mongo_db)
-        # convert_datasets(cursor, self.mongo_db)
-        # convert_data_products(cursor, self.mongo_db)
+        create_roles(pg_cursor=pg_cursor)
+        convert_users(pg_cursor=pg_cursor, mongo_db=self.mongo_db)
+
+        # print("Converting datasets...")
+        # mongo_datasets = list(self.mongo_db.dataset.find())
+        # dataset_count = self.mongo_db.dataset.count_documents({})
+        # print(f"Found {dataset_count} datasets to convert.")
+        # for mongo_dataset in mongo_datasets:
+        #   print(f"Converting dataset: {mongo_dataset['name']}")
+
+        convert_datasets(pg_cursor=pg_cursor, mongo_db=self.mongo_db)
+        convert_data_products(pg_cursor=pg_cursor, mongo_db=self.mongo_db)
         # convert_projects(cursor, self.mongo_db)
         # convert_content_to_about(cursor, self.mongo_db)
 
@@ -142,8 +154,8 @@ def main():
   # }
 
   print("Starting MongoDB to PostgreSQL conversion...")
-  print(f"os.getenv('MONGO_USERNAME'): {os.getenv('MONGO_USERNAME')}")
-  print(f"os.getenv('MONGO_PORT'): {os.getenv('MONGO_PORT')}")
+  # print(f"os.getenv('MONGO_USERNAME'): {os.getenv('MONGO_USERNAME')}")
+  # print(f"os.getenv('MONGO_PORT'): {os.getenv('MONGO_PORT')}")
 
   # todo - throw error if mongo env vars are missing
   mongo_config = {
@@ -155,7 +167,7 @@ def main():
     'password': os.getenv('MONGO_PASSWORD'),
   }
 
-  print(f"mongo_config: {mongo_config}")
+  # print(f"mongo_config: {mongo_config}")
 
   postgres_db = os.getenv('PG_DATABASE')
   pg_user = os.getenv('PG_USER')
@@ -173,9 +185,10 @@ def main():
   missing_pg_env_vars = [var for var, value in pg_env_vars.items() if not value]
 
   if missing_pg_env_vars:
-    print("Following environment variables that are expected to connect to the PostgreSQL database are missing:")
+    # print("Following environment variables that are expected to connect to the PostgreSQL database are missing:")
     for var in missing_pg_env_vars:
-      print(f"env variable {var} not provided")
+      pass
+      # print(f"env variable {var} not provided")
     raise ValueError("Missing required environment variables for connecting to PostgreSQL")
 
   try:

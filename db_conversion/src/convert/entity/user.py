@@ -5,7 +5,7 @@ from ..constants.cmg import cmguser
 from ..constants.common import role_mapping
 
 
-def get_cmguser_id(pg_cursor):
+def get_bioloop_cmguser_id(pg_cursor):
   print("get_cmguser_id")
   pg_cursor.execute(
     """
@@ -23,7 +23,7 @@ def get_cmguser_id(pg_cursor):
 
 
 def create_roles(pg_cursor):
-  print("create_roles")
+  # print("create_roles")
   for role in bioloop_roles:
     pg_cursor.execute(
       """
@@ -33,14 +33,14 @@ def create_roles(pg_cursor):
       (role['name'], role['description'])
     )
 
-  print(f"Inserted or updated {len(bioloop_roles)} roles.")
-  print("create_roles successful.")
+  # print(f"Inserted or updated {len(bioloop_roles)} roles.")
+  # print("create_roles successful.")
 
 
 def convert_users(pg_cursor, mongo_db):
-  print("convert_users")
+  # print("convert_users")
   users = list(mongo_db.users.find())
-  print(f"users[0]: {users[0]}")
+  # print(f"users[0]: {users[0]}")
   users.append(cmguser)
 
   output_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..', 'output'))
@@ -55,17 +55,17 @@ def convert_users(pg_cursor, mongo_db):
       name = user.get('cas_id', 'No cas_id')
       username = user.get('username', 'No username')
       f.write(f"Converting user: {email} - {name} - {username}\n")
-      print(f"Converting user: {email} - {name} - {username}")
+      # print(f"Converting user: {email} - {name} - {username}")
       convert_user(user, pg_cursor)
-  print("convert_users successful.")
+  # print("convert_users successful.")
 
 
 def convert_user(mongo_user, pg_cursor):
-  print("convert_user", mongo_user)
+  # print("convert_user", mongo_user)
   user_id = None
   # Create user
   try:
-    print(f"Try to Convert user: {mongo_user.get('email')}")
+    # print(f"Try to Convert user: {mongo_user.get('email')}")
     # Attempt to insert the user
     pg_cursor.execute(
       """
@@ -82,23 +82,25 @@ def convert_user(mongo_user, pg_cursor):
       )
     )
     user_id = pg_cursor.fetchone()[0]
-    print(
-      f"converted user: {mongo_user.get('email')} - {mongo_user.get('fullname')} - {mongo_user.get('cas_id')}")
+    # print(
+    #   f"converted user: {mongo_user.get('email')} - {mongo_user.get('fullname')} - {mongo_user.get('cas_id')}")
   except Exception:
     # If a unique constraint is violated, log error and continue with the next user
-    print(
-      f"duplicate user not converted: {mongo_user.get('email')} - {mongo_user.get('fullname')} - {mongo_user.get('cas_id')}")
+    # print(
+    #   f"duplicate user not converted: {mongo_user.get('email')} - {mongo_user.get('fullname')} - {mongo_user.get('cas_id')}")
+    pass
 
   # Assign role to user
   if user_id is not None:
     assign_user_roles(mongo_user, user_id, pg_cursor)
   else:
-    print(
-      f"No user_id found for: {mongo_user.get('email')} - {mongo_user.get('fullname')} - {mongo_user.get('cas_id')}")
+    pass
+    # print(
+    #   f"No user_id found for: {mongo_user.get('email')} - {mongo_user.get('fullname')} - {mongo_user.get('cas_id')}")
 
 
 def assign_user_roles(mongo_user, user_id, pg_cursor):
-  print("assign_user_roles", mongo_user, user_id)
+  # print("assign_user_roles", mongo_user, user_id)
   # Mongo (CMG) roles to Postgres (Bioloop) roles
 
   # Fetch all roles from Postgres - admin, operator, user
@@ -116,6 +118,6 @@ def assign_user_roles(mongo_user, user_id, pg_cursor):
         """,
         (user_id, postgres_roles[postgres_role_name])
       )
-      print(
-        f"Assigned role: {mongo_role} - {postgres_role_name} - {mongo_user.get('email')} - {mongo_user.get('fullname')} - {mongo_user.get('cas_id')}")
-  print("assign_user_roles successful.")
+      # print(
+      #   f"Assigned role: {mongo_role} - {postgres_role_name} - {mongo_user.get('email')} - {mongo_user.get('fullname')} - {mongo_user.get('cas_id')}")
+  # print("assign_user_roles successful.")

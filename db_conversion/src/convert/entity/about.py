@@ -1,11 +1,11 @@
 import html
 
-from .user import get_cmguser_id
+from .user import get_bioloop_cmguser_id
 
 
 def convert_content_to_about(pg_cursor, mongo_db):
   # with postgres_conn.cursor() as cur:
-  cmg_user_id = get_cmguser_id(pg_cursor)
+  cmg_user_id = get_bioloop_cmguser_id(pg_cursor)
 
   contents = mongo_db.content.find()
   for content in contents:

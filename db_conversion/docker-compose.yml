@@ -7,7 +7,7 @@ services:
       context: .
       dockerfile: Dockerfile
     volumes:
-      - ./:/opt/sca/app
+      - /Users/ripandey/dev/cmg-bioloop/db_conversion:/opt/sca/app
     working_dir: /opt/sca/app
     #    env_file: ./workers/workers/convert/.env
     environment:
