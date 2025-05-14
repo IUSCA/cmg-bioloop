@@ -79,6 +79,14 @@ model dataset_file_hierarchy {
   @@index([child_id])
 }
 
+model import_log {
+  id           Int      @id @default(autoincrement())
+  initiated_at DateTime @default(now()) @db.Timestamp(6)
+  updated_at   DateTime @default(now()) @updatedAt @db.Timestamp(6)
+  user_id      Int?
+  user         user?    @relation(fields: [user_id], references: [id])
+}
+
 model upload_log {
   id             Int                 @id @default(autoincrement())
   status         upload_status
@@ -191,6 +199,7 @@ model user {
   acknowledged_notifications notification[]
   uploads                    upload_log[]
   user_notifications         user_notification[]
+  import_log                 import_log[]
 }
 
 model user_password {
