@@ -5,10 +5,11 @@ from .audit_log import *
 from .project import *
 from .file import *
 from .dataset_hierarchy import *
+from .dataset_file import *
 
 __all__ = []
 
-for module in [about, user, dataset, audit_log, project, file, dataset_hierarchy]:
+for module in [about, user, dataset, audit_log, project, file, dataset_hierarchy, dataset_file]:
   if hasattr(module, '__all__'):
     __all__.extend(module.__all__)
   else:

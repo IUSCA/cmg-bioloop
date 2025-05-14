@@ -86,6 +86,8 @@ class MongoToPostgresConversionManager:
         events_to_audit_logs(pg_cursor=pg_cursor, mongo_db=self.mongo_db)
         print("converting dataset hierarchies...")
         convert_dataset_hierarchies(pg_cursor=pg_cursor, mongo_db=self.mongo_db)
+        print("Converting dataset files...")
+        convert_dataproduct_files(pg_cursor=pg_cursor, mongo_db=self.mongo_db)
         # convert_projects(cursor, self.mongo_db)
         # convert_content_to_about(cursor, self.mongo_db)
 
