@@ -249,4 +249,50 @@ create_all_tables = """
                   FOREIGN KEY ("user_id") REFERENCES "user"("id") ON DELETE CASCADE,
                   FOREIGN KEY ("role_id") REFERENCES "role"("id") ON DELETE CASCADE
                 );
+                
+                CREATE TABLE "project" (
+                  "id" UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                  "slug" TEXT UNIQUE NOT NULL,
+                  "name" TEXT NOT NULL,
+                  "description" TEXT,
+                  "browser_enabled" BOOLEAN NOT NULL DEFAULT false,
+                  "funding" TEXT,
+                  "metadata" JSONB,
+                  "created_at" TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                  "updated_at" TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP
+                );
+                
+                CREATE TABLE "project_user" (
+                  "project_id" UUID NOT NULL,
+                  "user_id" INTEGER NOT NULL,
+                  "assigned_at" TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                  "assignor_id" INTEGER,
+                  PRIMARY KEY ("project_id", "user_id"),
+                  FOREIGN KEY ("project_id") REFERENCES "project"("id") ON DELETE CASCADE,
+                  FOREIGN KEY ("user_id") REFERENCES "user"("id") ON DELETE CASCADE,
+                  FOREIGN KEY ("assignor_id") REFERENCES "user"("id") ON DELETE SET NULL
+                );
+                
+                CREATE TABLE "project_dataset" (
+                  "project_id" UUID NOT NULL,
+                  "dataset_id" INTEGER NOT NULL,
+                  "assignor_id" INTEGER,
+                  "assigned_at" TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                  PRIMARY KEY ("project_id", "dataset_id"),
+                  FOREIGN KEY ("project_id") REFERENCES "project"("id") ON DELETE CASCADE,
+                  FOREIGN KEY ("dataset_id") REFERENCES "dataset"("id") ON DELETE CASCADE,
+                  FOREIGN KEY ("assignor_id") REFERENCES "user"("id") ON DELETE SET NULL
+                );
+                
+                CREATE TABLE "project_contact" (
+                  "project_id" UUID NOT NULL,
+                  "contact_id" INTEGER NOT NULL,
+                  "assigned_at" TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                  "assignor_id" INTEGER,
+                  PRIMARY KEY ("project_id", "contact_id"),
+                  FOREIGN KEY ("project_id") REFERENCES "project"("id") ON DELETE CASCADE,
+                  FOREIGN KEY ("contact_id") REFERENCES "contact"("id") ON DELETE CASCADE,
+                  FOREIGN KEY ("assignor_id") REFERENCES "user"("id") ON DELETE SET NULL
+                );
+                
 """

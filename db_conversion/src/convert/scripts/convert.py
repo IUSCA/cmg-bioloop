@@ -76,19 +76,20 @@ class MongoToPostgresConversionManager:
         create_all_tables(pg_cursor=pg_cursor)
 
         # Convert CMG data (Mongo) to Bioloop data (Postgres)
-        print("converting roles...")
+        print("converting roles")
         create_roles(pg_cursor=pg_cursor)
-        print("converting users...")
+        print("converting users")
         convert_users(pg_cursor=pg_cursor, mongo_db=self.mongo_db)
-        print("converting datasets...")
+        print("converting datasets")
         convert_all_datasets(pg_cursor=pg_cursor, mongo_db=self.mongo_db)
-        print("converting dataset audit logs...")
+        print("converting dataset audit logs")
         events_to_audit_logs(pg_cursor=pg_cursor, mongo_db=self.mongo_db)
-        print("converting dataset hierarchies...")
+        print("converting dataset hierarchies")
         convert_dataset_hierarchies(pg_cursor=pg_cursor, mongo_db=self.mongo_db)
-        print("Converting dataset files...")
+        print("Converting dataset files")
         convert_dataproduct_files(pg_cursor=pg_cursor, mongo_db=self.mongo_db)
-        # convert_projects(cursor, self.mongo_db)
+        print("converting projects")
+        convert_projects(pg_cursor=pg_cursor, mongo_db=self.mongo_db)
         # convert_content_to_about(cursor, self.mongo_db)
 
       # Commit the transaction
@@ -108,7 +109,7 @@ class MongoToPostgresConversionManager:
     # self.tunnel.stop()
 
   # def test_mongo_connection(self):
-  #   print("Testing MongoDB connection...")
+  #   print("Testing MongoDB connection")
   #   try:
   #     info = self.mongo_client.server_info()
   #     print("MongoDB connection successful.")
@@ -154,7 +155,7 @@ def main():
   #     'private_key_path': os.getenv('SSH_PRIVATE_KEY_PATH')
   # }
 
-  print("Starting MongoDB to PostgreSQL conversion...")
+  print("Starting MongoDB to PostgreSQL conversion")
   # print(f"os.getenv('MONGO_USERNAME'): {os.getenv('MONGO_USERNAME')}")
   # print(f"os.getenv('MONGO_PORT'): {os.getenv('MONGO_PORT')}")
 
