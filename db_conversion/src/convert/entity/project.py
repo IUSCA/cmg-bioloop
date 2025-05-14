@@ -25,8 +25,8 @@ def convert_projects(pg_cursor, mongo_db):
       # Fetch the dataproduct from MongoDB
       mongo_dataproduct = mongo_db.dataproduct.find_one({"_id": dataproduct_id})
       if mongo_dataproduct:
-        print(f"Converting dataproduct: {dataproduct_name}")
         dataproduct_name = mongo_dataproduct.get("name")
+        print(f"Converting dataproduct: {dataproduct_name}")
         is_deleted = mongo_dataproduct.get("visible")
 
         # Find the corresponding dataset in Postgres

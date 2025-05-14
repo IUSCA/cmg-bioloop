@@ -1,7 +1,7 @@
 from psycopg2.extensions import cursor
 from pymongo.database import Database
 
-from .audit_log import create_audit_logs_from_dataset_events
+from .audit_log import events_to_audit_logs
 from .user import get_bioloop_cmguser_id
 from .file import create_file_and_directories
 
@@ -66,13 +66,7 @@ def convert_cmg_datasets(pg_cursor: cursor, mongo_db: Database,
       )
     )
     dataset_id = pg_cursor.fetchone()[0]
-    print(f"Converted {dataset_type}: {mongo_item['_id']}, {new_name} to dataset_id: {dataset_id}")
-
-    # if type == "RAW_DATA":
-  # Additional processing for raw datasets
-  # create_audit_logs_from_dataset_events(pg_cursor, mongo_item, dataset_id, mongo_db)
-  # for checksum in mongo_item.get("checksums", []):
-  #     create_file_and_directories(pg_cursor, checksum, dataset_id)
+    # print(f"Converted {dataset_type}: {mongo_item['_id']}, {new_name} to dataset_id: {dataset_id}")
 
 
 # Usage
