@@ -1,9 +1,8 @@
 from .ddl import *
-from .dml import *
 
 __all__ = []
 
-for module in [ddl, dml]:
+for module in [ddl]:
   if hasattr(module, '__all__'):
     __all__.extend(module.__all__)
   else:

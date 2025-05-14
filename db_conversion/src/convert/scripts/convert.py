@@ -1,7 +1,8 @@
+import os
+
 import pymongo
 import psycopg2
 from dotenv import load_dotenv
-import os
 import fire
 # needed for SSH tunneling to connect to MongoDB running on a remote server
 import paramiko
@@ -83,6 +84,8 @@ class MongoToPostgresConversionManager:
         convert_all_datasets(pg_cursor=pg_cursor, mongo_db=self.mongo_db)
         print("converting dataset audit logs...")
         events_to_audit_logs(pg_cursor=pg_cursor, mongo_db=self.mongo_db)
+        print("converting dataset hierarchies...")
+        convert_dataset_hierarchies(pg_cursor=pg_cursor, mongo_db=self.mongo_db)
         # convert_projects(cursor, self.mongo_db)
         # convert_content_to_about(cursor, self.mongo_db)
 

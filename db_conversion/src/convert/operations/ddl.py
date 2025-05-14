@@ -1,4 +1,9 @@
-# DATA DEFINITION OPERATIONS
+"""
+This module contains Data Definition Language (DDL) operations for managing
+database schema objects such as enums and tables.
+
+These functions execute SQL queries to create or drop database objects.
+"""
 
 from ..pg_queries import queries
 
@@ -13,3 +18,17 @@ def create_all_tables(pg_cursor):
   print("create_tables")
   pg_cursor.execute(queries.create_all_tables)
   print("Database tables created successfully.")
+
+
+def drop_all_enums(pg_cursor):
+  print("drop_all_enums")
+  # with pg_cursor:
+  pg_cursor.execute(queries.drop_all_enums)
+  print("All enum types dropped successfully.")
+
+
+def drop_all_tables(pg_cursor):
+  print("drop_all_tables")
+  # with pg_cursor:
+  pg_cursor.execute(queries.drop_all_tables)
+  print("All tables dropped successfully.")
