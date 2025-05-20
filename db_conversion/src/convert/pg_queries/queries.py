@@ -45,6 +45,7 @@ create_all_tables = """
                 -- Create tables
                 CREATE TABLE "dataset" (
                   "id" SERIAL PRIMARY KEY,
+                  "cmg_id" TEXT UNIQUE NOT NULL,
                   "name" TEXT NOT NULL,
                   "type" TEXT NOT NULL,
                   "num_directories" INTEGER,

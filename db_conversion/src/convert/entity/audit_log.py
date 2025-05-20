@@ -7,7 +7,7 @@ import logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-from ..common import find_corresponding_dataset, find_best_match
+from ..common import find_corresponding_dataset
 
 
 def events_to_audit_logs(pg_cursor: cursor, mongo_db: Database):

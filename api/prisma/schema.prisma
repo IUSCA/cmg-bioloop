@@ -36,6 +36,7 @@ model dataset {
   stage_requests     stage_request_log[]
   bundle             bundle?
   dataset_upload_log dataset_upload_log?
+  cmg_id             String
 
   @@unique([name, type, is_deleted])
 }
