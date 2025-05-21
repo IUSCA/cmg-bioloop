@@ -1,129 +1,192 @@
+from bson import ObjectId
+from datetime import datetime
+from typing import Literal
+
 from psycopg2.extensions import cursor
 from pymongo.database import Database
 
-from typing import Literal
-
-DUPLICATE_SUFFIX = "Duplicate"
+DUPLICATE_PREFIX = "DUPLICATE"
+UNKNOWN_PREFIX = "UNKNOWN"
 
 
 def convert_cmg_datasets(pg_cursor: cursor, mongo_db: Database,
                          dataset_type: Literal["DATA_PRODUCT", "RAW_DATA"]):
   collection = mongo_db.dataproducts if dataset_type == "DATA_PRODUCT" else mongo_db.datasets
 
-  # Group CMG Datasets by `name`
+  print(f"Processing CMG collection {collection.name} (dataset type {dataset_type})")
+
+  # Group CMG datasets by `name`
+  """ 
+  Create a mapping of CMG datasets:
+    - key:
+        the name of a CMG dataset
+    - value:
+        a list of CMG datasets with this name
+  """
   name_groups = {}
-  for mongo_item in collection.find():
+  unknown_count = 0
+  for index, mongo_item in enumerate(collection.find(), start=1):
+    if "name" not in mongo_item:
+      print(f"No 'name' field found in the following CMG {dataset_type}:")
+      print(mongo_item)
+      unknown_count += 1
+      assigned_name = f"{UNKNOWN_PREFIX}-{unknown_count}" if unknown_count > 1 else UNKNOWN_PREFIX
+      print(f"Assigned name: {assigned_name}")
+      mongo_item["name"] = assigned_name
+
     name = mongo_item["name"]
     if name not in name_groups:
       name_groups[name] = []
     name_groups[name].append(mongo_item)
 
+  """
+  For the name of each CMG dataset, process the group of CMG datasets with the same name
+      - original_name:
+          the name of a CMG dataset
+      - items:
+          list of CMG datasets with this name
+  """
   for original_name, items in name_groups.items():
-    if dataset_type == "DATA_PRODUCT":
-      visible_items = [item for item in items if item.get("visible", False)]
-      if len(visible_items) == 1 and len(items) > 1:
-        # If only a single visible (i.e. not deleted) CMG Dataset is found out of several duplicates,
-        # insert it in Bioloop with original name from CMG
-        insert_dataset(pg_cursor, visible_items[0], dataset_type, original_name)
-        # Insert other duplicates with the `Duplicate-[n]` prefix
-        for item in items:
-          if not item.get("visible", False):
-            new_name = handle_duplicate_name(pg_cursor, original_name, dataset_type, False, DUPLICATE_SUFFIX)
-            insert_dataset(pg_cursor, item, dataset_type, new_name)
-      else:
-        # If Multiple visible items or all invisible found among several duplicates, use duplicate prefix for all
-        for item in items:
-          new_name = handle_duplicate_name(pg_cursor, original_name, dataset_type, item.get("visible", False),
-                                           DUPLICATE_SUFFIX)
-          insert_dataset(pg_cursor, item, dataset_type, new_name)
-    else:  # RAW_DATA
-      # For datasets collection, all are considered non-deleted
-      if len(items) == 1:
-        insert_dataset(pg_cursor, items[0], dataset_type, original_name)
-      else:
-        for item in items:
-          new_name = handle_duplicate_name(pg_cursor, original_name, dataset_type, False, DUPLICATE_SUFFIX)
-          insert_dataset(pg_cursor, item, dataset_type, new_name)
-
-
-def insert_dataset(pg_cursor, mongo_item, dataset_type, name):
-  # For DATA_PRODUCT:
-  #   - We get the "visible" value from mongo_item, defaulting to True if not present
-  #   - We then negate this value to get "is_deleted"
-  # For RAW_DATA:
-  #   - We always set "is_deleted" to False
-  is_deleted = not mongo_item.get("visible", True) if dataset_type == "DATA_PRODUCT" else False
-
-  pg_cursor.execute(
     """
-    INSERT INTO dataset (name, type, is_deleted, cmg_id, description, num_directories, num_files, 
-                         du_size, size, created_at, updated_at, origin_path, 
-                         archive_path, is_staged, metadata)
-    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-    RETURNING id
-    """,
-    (
-      name,
-      dataset_type,
-      is_deleted,
-      str(mongo_item["_id"]),
-      mongo_item.get("description", None),
-      mongo_item.get("directories", 0),
-      mongo_item.get("files", 0) if dataset_type == "RAW_DATA" else 0,
-      mongo_item.get("du_size", 0) if dataset_type == "RAW_DATA" else 0,
-      mongo_item.get("size", 0),
-      mongo_item.get("createdAt", None),
-      mongo_item.get("updatedAt", None),
-      mongo_item.get("paths", {}).get("origin", None),
-      mongo_item.get("paths", {}).get("archive", None),
-      mongo_item.get("staged", False),
-      None
+    If the CMG dataset is a DATA_PRODUCT:
+    """
+    if dataset_type == "DATA_PRODUCT":
+      """
+      visible_items: CMG datasets which are not deleted (i.e. have field `visible` set to True) 
+      """
+      visible_items = [item for item in items if item.get("visible", False)]
+
+      if len(visible_items) == 1:
+        """
+        If a single non-deleted dataset is found in CMG for name `original_name`, insert it in 
+        Bioloop with its name unchanged. If there are other datasets in CMG with this name, insert
+        them in Bioloop with the `Duplicate-` prefix.
+        """
+        insert_dataset(pg_cursor, visible_items[0], dataset_type, original_name, False)
+      else:
+        """
+        Else:
+          - either there are multiple non-deleted datasets in CMG with name `original_name`
+          - or, all datasets in CMG with name `original_name` are deleted 
+        In either case, these CMGd datasets can be inserted into Bioloop with
+        their names modified to have prefix `Duplicate-[name]` or `Duplicate-[n]-[name]` (depending on 
+        the number of duplicates).
+        """
+        print(
+          f"Multiple not-deleted CMG {dataset_type} found for name '{original_name}'. Using {DUPLICATE_PREFIX} prefix for all.")
+        for item in items:
+          print(f"Processing CMG {dataset_type} {item['name']}")
+          new_name = handle_duplicate_name(pg_cursor, original_name, dataset_type, item.get("visible"))
+          insert_dataset(pg_cursor, item, dataset_type, new_name, item.get("visible"))
+
+    else:
+      """
+      else, the CMG dataset is a RAW_DATA:
+      """
+      # The datasets in the CMG collection `datasets` don't have a `visible` field. Therefore, they are
+      # all assumed to be not-deleted
+      if len(items) == 1:
+        insert_dataset(pg_cursor, items[0], dataset_type, original_name, False)
+      else:
+        for item in items:
+          new_name = handle_duplicate_name(pg_cursor, original_name, dataset_type, False)
+          insert_dataset(pg_cursor, item, dataset_type, new_name, False)
+
+
+def insert_dataset(pg_cursor, mongo_item, dataset_type, name, is_deleted):
+  if not name:
+    raise ValueError(f"Dataset Name must be specified")
+  elif not dataset_type:
+    raise ValueError(f"Dataset Type must be specified")
+  if is_deleted is None:
+    raise ValueError(f"Deletion status must be specified")
+
+  # string used in logs to represent deletion status
+  log_msg_deleted = 'deleted' if is_deleted else 'non-deleted'
+
+  # Get current timestamp for default values
+  current_timestamp = datetime.utcnow()
+
+  # CMG Datasets with missing names are prefixed with string "UNKNOWN" before insertion into Bioloop.
+  # These CMG datasets may not have fields `createdAt` or `deletedAt`, in which case we default those
+  # to the current timestamp
+  if name.startswith(UNKNOWN_PREFIX):
+    created_at = mongo_item.get("createdAt", current_timestamp)
+    updated_at = mongo_item.get("updatedAt", current_timestamp)
+  else:
+    created_at = mongo_item.get("createdAt", None)
+    updated_at = mongo_item.get("updatedAt", None)
+
+  try:
+    pg_cursor.execute(
+      """
+      INSERT INTO dataset (name, type, is_deleted, cmg_id, description, num_directories, num_files, 
+                           du_size, size, created_at, updated_at, origin_path, 
+                           archive_path, is_staged, metadata)
+      VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+      RETURNING id
+      """,
+      (
+        name,
+        dataset_type,
+        is_deleted,
+        str(mongo_item["_id"]),
+        mongo_item.get("description", None),
+        mongo_item.get("directories", 0),
+        mongo_item.get("files", 0) if dataset_type == "RAW_DATA" else 0,
+        mongo_item.get("du_size", 0) if dataset_type == "RAW_DATA" else 0,
+        mongo_item.get("size", 0),
+        created_at,
+        updated_at,
+        mongo_item.get("paths", {}).get("origin", None),
+        mongo_item.get("paths", {}).get("archive", None),
+        mongo_item.get("staged", False),
+        None
+      )
     )
-  )
-  dataset_id = pg_cursor.fetchone()[0]
-  print(f"Inserted {dataset_type}: {mongo_item['_id']}, {name} to dataset_id: {dataset_id}")
+    dataset_id = pg_cursor.fetchone()[0]
+
+    print(
+      f"""
+      Converted {log_msg_deleted} CMG {dataset_type} {mongo_item['name']} (CMG {dataset_type} Id: {mongo_item['_id']})
+      into {log_msg_deleted} Bioloop {dataset_type} {name} (Bioloop {dataset_type} Id: {dataset_id})
+      """)
+  except Exception as e:
+    print(
+      f"""
+      Error converting {log_msg_deleted} CMG {dataset_type} {mongo_item['name']} (CMG {dataset_type} Id: {mongo_item['_id']})
+      into a {log_msg_deleted} Bioloop {dataset_type}
+      """)
+    print(f"Error details: {str(e)}")
+    raise
+
+  # dataset_id = pg_cursor.fetchone()[0]
+  # print(f"Inserted {dataset_type}: {mongo_item['_id']}, {name} to dataset_id: {dataset_id}")
 
 
 # Usage
 def convert_all_datasets(pg_cursor: cursor, mongo_db: Database):
-  # convert records from CMG's `dataset` collection to Bioloop's `dataset` table rows (with Dataset Type `RAW_DATA`)
+  # convert records from CMG's `dataset` collection to Bioloop's Raw Data
   convert_cmg_datasets(pg_cursor, mongo_db, dataset_type="RAW_DATA")
-  # convert records from CMG's `data_products` collection to Bioloop's `dataset` table (with Dataset Type `DATA_PRODUCT`)
+  # convert records from CMG's `data_products` collection to Bioloop Data Products
   convert_cmg_datasets(pg_cursor, mongo_db, dataset_type="DATA_PRODUCT")
 
 
-def handle_duplicate_name(pg_cursor, original_name, dataset_type, is_deleted, duplicate_suffix):
-  """
-    Generates a new, unique name for a Bioloop Dataset when a duplicate corresponding Dataset is found in Bioloop.
+def handle_duplicate_name(pg_cursor, original_name, dataset_type, is_deleted):
+  if not original_name:
+    raise ValueError(
+      f"Dataset Name must be specified")
+  elif not dataset_type:
+    raise ValueError(
+      f"Dataset Type must be specified")
+  elif is_deleted is None:
+    raise ValueError(f"Deletion status must be specified")
 
-    This function is used during the dataset conversion process to handle cases where
-    a CMG Dataset with the same name already exists in the Bioloop database. It appends a
-    suffix to the original name and increments it until a unique name is found.
-
-    A Bioloop Dataset is considered a duplicate of another if they have the same `name`, `type`, and `is_deleted` values.
-
-    Args:
-        pg_cursor (cursor): PostgreSQL database cursor.
-        original_name (str): The original name of the CMG Dataset that has a duplicate in CMG.
-        dataset_type (str): The type of the Bioloop Dataset (e.g., 'RAW_DATA' or 'DATA_PRODUCT') that the CMG Dataset is to be converted to.
-        is_deleted (bool): Indicates whether the dataset is marked as deleted.
-        duplicate_suffix (str): The prefix to use for duplicate names (e.g., 'Duplicate').
-
-    Returns:
-        str: A new, unique name for the dataset.
-
-    Example:
-        If 'Dataset1' already exists, this function might return 'Duplicate_Dataset_1'.
-        If 'Duplicate_Dataset_1' also exists, it might return 'Duplicate_2_Dataset_1', and so on.
-
-    Note:
-        This function modifies the database by checking for existing names but does not
-        insert or update any records. It only generates a new name.
-    """
-  print(f"Duplicate dataset found: {original_name}")
-  new_name = f"{duplicate_suffix}_{original_name}"
-  suffix = 1
+  print(f"Handling duplicate for: name {original_name}, type {dataset_type}, is_deleted {is_deleted}")
+  new_name = f"{DUPLICATE_PREFIX}_{original_name}"
+  duplicate_count = 1
   while True:
+    print(f"Checking if name '{new_name}' exists...")
     pg_cursor.execute(
       """
       SELECT id FROM dataset
@@ -131,9 +194,12 @@ def handle_duplicate_name(pg_cursor, original_name, dataset_type, is_deleted, du
       """,
       (new_name, dataset_type, is_deleted)
     )
-    if not pg_cursor.fetchone():
+    result = pg_cursor.fetchone()
+    print(f"Query result: {result}")
+    if not result:
       break
-    suffix += 1
-    new_name = f"{duplicate_suffix}_{suffix}_{original_name}"
-  print(f"Renaming to: {new_name}")
+    duplicate_count += 1
+    new_name = f"{DUPLICATE_PREFIX}_{duplicate_count}_{original_name}"
+    print(f"Name exists, trying new name: {new_name}")
+  print(f"Final name: {new_name}")
   return new_name
