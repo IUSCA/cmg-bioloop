@@ -25,7 +25,8 @@ model dataset {
   is_deleted         Boolean             @default(false)
   is_staged          Boolean             @default(false)
   metadata           Json?
-  workflows          workflow[]
+  cmg_id             String              @unique
+  orkflows           workflow[]
   files              dataset_file[]
   audit_logs         dataset_audit[]
   states             dataset_state[]
@@ -36,7 +37,6 @@ model dataset {
   stage_requests     stage_request_log[]
   bundle             bundle?
   dataset_upload_log dataset_upload_log?
-  cmg_id             String
 
   @@unique([name, type, is_deleted])
 }
