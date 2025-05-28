@@ -8,18 +8,16 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-def find_corresponding_dataset(pg_cursor, mongo_item, dataset_type):
+def find_corresponding_dataset(pg_cursor, mongo_item):
   """
   Find the Dataset in Bioloop that corresponds to a given CMG Dataset/Data Product.
 
-  This function now uses the cmg_id field on the Bioloop dataset row to match with
-  the _id field of the mongo_item, ensuring a direct correspondence between
-  CMG MongoDB documents and Bioloop PostgreSQL rows.
+  This function uses the `cmg_id` field on the Bioloop Dataset row to match with
+  the `_id` field of the CMG Dataset.
 
   Args:
       pg_cursor: PostgreSQL cursor
       mongo_item (dict): A dictionary representing a dataset from CMG MongoDB
-      dataset_type (str): The type of dataset ("RAW_DATA" or "DATA_PRODUCT")
 
   Returns:
       tuple: A tuple containing the id and name of the matching Dataset, or None if not found
@@ -35,14 +33,14 @@ def find_corresponding_dataset(pg_cursor, mongo_item, dataset_type):
     """
     SELECT id, name
     FROM dataset
-    WHERE cmg_id = %s AND type = %s
+    WHERE cmg_id = %s
     """,
-    (cmg_id, dataset_type)
+    cmg_id
   )
   matching_dataset = pg_cursor.fetchone()
 
   if not matching_dataset:
-    logger.warning(f"Dataset with CMG ID {cmg_id} and type {dataset_type} not found in Bioloop")
+    logger.warning(f"Dataset with CMG ID {cmg_id} not found in Bioloop")
     return None
 
   return matching_dataset[0], matching_dataset[1]  # Return id and name of the matching dataset

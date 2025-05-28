@@ -51,7 +51,7 @@ def events_to_audit_logs(pg_cursor: cursor, mongo_db: Database):
 
       try:
         # Determine which dataset this mongo_item corresponds to
-        corresponding_dataset = find_corresponding_dataset(pg_cursor, mongo_item, dataset_type)
+        corresponding_dataset = find_corresponding_dataset(pg_cursor, mongo_item)
 
         if corresponding_dataset is None:
           logger.warning(f"No corresponding dataset found for {original_name} in Bioloop")
