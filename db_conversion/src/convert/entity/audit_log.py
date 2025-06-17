@@ -29,6 +29,11 @@ def events_to_audit_logs(pg_cursor: cursor, mongo_db: Database):
     collection = mongo_db.dataproducts if dataset_type == "DATA_PRODUCT" else mongo_db.datasets
 
     for mongo_item in collection.find():
+      if 'name' not in mongo_item or not mongo_item['name']:
+        logger.warning(f"No 'name' field found in the following CMG {dataset_type}:")
+        logger.warning(str(mongo_item))
+        continue
+
       original_name = mongo_item["name"]
       is_deleted = mongo_item.get("visible", False)
 

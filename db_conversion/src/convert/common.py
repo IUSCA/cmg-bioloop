@@ -35,7 +35,7 @@ def find_corresponding_dataset(pg_cursor, mongo_item):
     FROM dataset
     WHERE cmg_id = %s
     """,
-    cmg_id
+    (cmg_id,)
   )
   matching_dataset = pg_cursor.fetchone()
 
