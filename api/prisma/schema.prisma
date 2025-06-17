@@ -25,7 +25,7 @@ model dataset {
   is_deleted         Boolean             @default(false)
   is_staged          Boolean             @default(false)
   metadata           Json?
-  cmg_id             String?             @unique
+  cmg_id             String?
   orkflows           workflow[]
   files              dataset_file[]
   audit_logs         dataset_audit[]
@@ -121,15 +121,16 @@ model file_upload_log {
 }
 
 model dataset_audit {
-  id         Int      @id @default(autoincrement())
-  action     String
-  timestamp  DateTime @default(now())
-  old_data   Json?
-  new_data   Json?
-  user_id    Int?
-  user       user?    @relation(fields: [user_id], references: [id], onDelete: Cascade)
-  dataset_id Int?
-  dataset    dataset? @relation(fields: [dataset_id], references: [id], onDelete: Cascade)
+  id          Int      @id @default(autoincrement())
+  action      String
+  description String?
+  timestamp   DateTime @default(now())
+  old_data    Json?
+  new_data    Json?
+  user_id     Int?
+  user        user?    @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  dataset_id  Int?
+  dataset     dataset? @relation(fields: [dataset_id], references: [id], onDelete: Cascade)
 }
 
 model dataset_state {

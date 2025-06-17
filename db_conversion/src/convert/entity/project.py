@@ -74,7 +74,7 @@ def convert_projects(pg_cursor: cursor, mongo_db: Database):
     for dataproduct_id in dataproduct_ids:
       cmg_dataproduct = mongo_db.dataproducts.find_one({'_id': ObjectId(dataproduct_id)})
       if cmg_dataproduct:
-        bioloop_dataset = find_corresponding_dataset(pg_cursor, cmg_dataproduct)
+        bioloop_dataset = find_corresponding_dataset(pg_cursor, cmg_dataproduct['_id'])
         if bioloop_dataset:
           project_dataset_data.append((bioloop_project_id, bioloop_dataset[0]))
         else:

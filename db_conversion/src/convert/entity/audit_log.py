@@ -7,10 +7,15 @@ import logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-from ..common import find_corresponding_dataset
+from ..common import find_corresponding_dataset, find_corresponding_user
 
 
 def events_to_audit_logs(pg_cursor: cursor, mongo_db: Database):
+  dataset_events_to_audit_logs(pg_cursor, mongo_db)
+  system_events_to_audit_logs(pg_cursor, mongo_db)
+
+
+def dataset_events_to_audit_logs(pg_cursor: cursor, mongo_db: Database):
   """
     Convert Events from CMG MongoDB to Audit Logs in Bioloop PostgreSQL.
 
@@ -43,6 +48,7 @@ def events_to_audit_logs(pg_cursor: cursor, mongo_db: Database):
         SELECT id, name, type, is_deleted, description, num_directories, num_files, 
                du_size, size, created_at, updated_at, origin_path, archive_path, is_staged
         FROM dataset
+        
         WHERE (name = %s OR name LIKE %s)
         AND type = %s AND is_deleted = %s
         """,
@@ -56,7 +62,7 @@ def events_to_audit_logs(pg_cursor: cursor, mongo_db: Database):
 
       try:
         # Determine which dataset this mongo_item corresponds to
-        corresponding_dataset = find_corresponding_dataset(pg_cursor, mongo_item)
+        corresponding_dataset = find_corresponding_dataset(pg_cursor, mongo_item['_id'])
 
         if corresponding_dataset is None:
           logger.warning(f"No corresponding dataset found for {original_name} in Bioloop")
@@ -80,3 +86,52 @@ def events_to_audit_logs(pg_cursor: cursor, mongo_db: Database):
         logger.info(f"Created audit logs for dataset: {dataset_name} (id: {dataset_id})")
       except ValueError as e:
         logger.warning(str(e))
+
+
+def system_events_to_audit_logs(pg_cursor: cursor, mongo_db: Database):
+  """
+  Convert system-wide Events from CMG MongoDB to Audit Logs in Bioloop PostgreSQL.
+
+  This function iterates through the events collection in CMG MongoDB,
+  and creates corresponding audit log entries in Bioloop PostgreSQL.
+
+  Args:
+      pg_cursor (cursor): PostgreSQL database cursor
+      mongo_db (Database): MongoDB database object
+
+  Returns:
+      None
+  """
+  events_collection = mongo_db.events
+
+  for event in events_collection.find():
+
+    logger.info(f"Processing event: {event['action']}")
+    logger.info(event)
+
+    action = event.get('action', 'Unknown Action')
+    timestamp = event.get('createdAt', None)
+    description = event.get('details')
+
+    # Determine the dataset_id if the event is related to a dataset or dataproduct
+    dataset_id = None
+    if event.get('dataset'):
+      dataset_id = find_corresponding_dataset(pg_cursor, event['dataset'])
+    elif event.get('dataproduct'):
+      dataset_id = find_corresponding_dataset(pg_cursor, event['dataproduct'])
+
+    # Determine the user_id
+    user_id = None
+    if event.get('user'):
+      user_id = find_corresponding_user(pg_cursor, mongo_db, mongo_user_id=event['user'])
+
+    # Insert the audit log entry
+    pg_cursor.execute(
+      """
+      INSERT INTO dataset_audit (action, description, timestamp, user_id, dataset_id)
+      VALUES (%s, %s, %s, %s, %s)
+      """,
+      (action, description, timestamp, user_id, dataset_id)
+    )
+
+    logger.info(f"Created audit log for event: {action}")

@@ -17,7 +17,7 @@ def convert_dataproduct_files(pg_cursor: cursor, mongo_db: Database):
   for mongo_item in collection.find():
     try:
       # Find the Bioloop Dataset that matches CMG dataproduct most closely
-      bioloop_dataset = find_corresponding_dataset(pg_cursor, mongo_item)
+      bioloop_dataset = find_corresponding_dataset(pg_cursor, mongo_item['_id'])
 
       if bioloop_dataset is None:
         logger.warning(f"No matching dataset found for {mongo_item['name']} in Bioloop")

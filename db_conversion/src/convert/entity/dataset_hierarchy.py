@@ -25,7 +25,7 @@ def convert_dataset_hierarchies(pg_cursor: cursor, mongo_db: Database):
 
   for cmg_dataproduct in cmg_dataproducts:
     # Find the corresponding Bioloop DATA_PRODUCT
-    bioloop_dataproduct = find_corresponding_dataset(pg_cursor, cmg_dataproduct)
+    bioloop_dataproduct = find_corresponding_dataset(pg_cursor, cmg_dataproduct['_id'])
 
     if not bioloop_dataproduct:
       logger.warning(f"Skipped hierarchy: Bioloop DATA_PRODUCT not found for CMG dataproduct {cmg_dataproduct['name']}")
@@ -46,7 +46,7 @@ def convert_dataset_hierarchies(pg_cursor: cursor, mongo_db: Database):
       continue
 
     # Find the corresponding Bioloop RAW_DATA
-    bioloop_raw_data = find_corresponding_dataset(pg_cursor, cmg_source_dataset)
+    bioloop_raw_data = find_corresponding_dataset(pg_cursor, cmg_source_dataset['_id'])
 
     if not bioloop_raw_data:
       logger.warning(f"Skipped hierarchy: Bioloop RAW_DATA not found for CMG dataset {cmg_source_dataset['name']}")

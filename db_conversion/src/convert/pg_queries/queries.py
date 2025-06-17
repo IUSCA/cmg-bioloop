@@ -45,7 +45,7 @@ create_all_tables = """
                 -- Create tables
                 CREATE TABLE "dataset" (
                   "id" SERIAL PRIMARY KEY,
-                  "cmg_id" TEXT UNIQUE NOT NULL,
+                  "cmg_id" TEXT UNIQUE,
                   "name" TEXT NOT NULL,
                   "type" TEXT NOT NULL,
                   "num_directories" INTEGER,
@@ -131,6 +131,7 @@ create_all_tables = """
                 CREATE TABLE "dataset_audit" (
                   "id" SERIAL PRIMARY KEY,
                   "action" TEXT NOT NULL,
+                  "description" TEXT,
                   "timestamp" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
                   "old_data" JSONB,
                   "new_data" JSONB,
