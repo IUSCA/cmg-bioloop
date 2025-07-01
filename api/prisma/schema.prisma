@@ -26,7 +26,7 @@ model dataset {
   is_staged          Boolean             @default(false)
   metadata           Json?
   cmg_id             String?
-  orkflows           workflow[]
+  workflows          workflow[]
   files              dataset_file[]
   audit_logs         dataset_audit[]
   states             dataset_state[]

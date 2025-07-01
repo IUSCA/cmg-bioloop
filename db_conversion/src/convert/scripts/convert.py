@@ -63,7 +63,7 @@ class MongoToPostgresConversionManager:
       password=pg_conn_env_vars['PG_PASSWORD']
     )
 
-    # disable transaction's rollback for seeing actual errors instead of
+    # The line below disables the transaction's rollback, for seeing actual errors instead of
     # generic error '... psycopg2.errors.InFailedSqlTransaction: current transaction is aborted,
     # commands ignored until end of transaction block ...'
     self.postgres_conn.set_session(autocommit=True)
@@ -109,6 +109,8 @@ class MongoToPostgresConversionManager:
     except Exception as e:
       # Rollback if an error occurs
       self.postgres_conn.rollback()
+      drop_all_workflow_documents(rhythm_db=self.rhythm_mongo_db)
+
       print(f"An error occurred during conversion: {e}")
       raise
     finally:

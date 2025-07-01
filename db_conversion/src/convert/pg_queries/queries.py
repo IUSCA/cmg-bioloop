@@ -297,4 +297,11 @@ create_all_tables = """
                   FOREIGN KEY ("assignor_id") REFERENCES "user"("id") ON DELETE SET NULL
                 );
                 
+                CREATE TABLE "workflow" (
+                  "id" TEXT PRIMARY KEY,
+                  "dataset_id" INTEGER,
+                  "initiator_id" INTEGER,
+                  FOREIGN KEY ("dataset_id") REFERENCES "dataset"("id") ON DELETE CASCADE,
+                  FOREIGN KEY ("initiator_id") REFERENCES "user"("id") ON DELETE SET NULL
+                );
 """

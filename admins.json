@@ -1,0 +1,37 @@
+[
+  {
+    "name": "Rishi Pandey",
+    "username": "ripandey",
+    "email": "ripandey@iu.edu"
+  },
+  {
+    "name": "Charles Brandt",
+    "username": "ccbrandt",
+    "email": "ccbrandt@iu.edu"
+  },
+  {
+    "name": "Deepak Duggirala",
+    "username": "deduggi",
+    "email": "deduggi@iu.edu"
+  },
+  {
+    "name": "Ryan Long",
+    "username": "ryanlong",
+    "email": "ryanlong@iu.edu"
+  },
+  {
+    "name": "E2E User",
+    "username": "e2eUser",
+    "email": "e2eUser@iu.edu"
+  },
+  {
+    "name": "Admin User",
+    "username": "admin",
+    "email": "admin@iu.edu"
+  },
+  {
+    "name": "Operator User",
+    "username": "operator",
+    "email": "operator@iu.edu"
+  }
+]

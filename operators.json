@@ -1,0 +1,12 @@
+[
+  {
+    "name": "Some Operator",
+    "username": "someOperator",
+    "email": "someOperator@iu.edu"
+  },
+  {
+    "name": "Some Other Operator",
+    "username": "someOtherOperator",
+    "email": "someOtherOperator@iu.edu"
+  }
+]

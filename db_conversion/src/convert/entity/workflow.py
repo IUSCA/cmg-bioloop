@@ -25,11 +25,16 @@ def create_workflows(pg_cursor: cursor, rhythm_db: Database):
     workflow_result = rhythm_db.workflow_meta.insert_one(workflow_meta)
     workflow_id = workflow_result.inserted_id
 
+    # Insert a record into the PostgreSQL workflow table
+    pg_cursor.execute(
+      "INSERT INTO workflow (id, dataset_id) VALUES (%s, %s)",
+      (str(workflow_id), dataset_id)
+    )
+
     # Registration steps
     registration_steps = ["inspect", "archive", "stage", "validate"]
     previous_task_id = None
 
-    # todo - avoid nested loop
     for _, step in enumerate(registration_steps):
       celery_taskmeta = {
         "status": "SUCCESS",

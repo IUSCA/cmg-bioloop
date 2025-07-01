@@ -122,8 +122,8 @@ def insert_dataset(pg_cursor, mongo_item, dataset_type, name, is_deleted):
       """
       INSERT INTO dataset (name, type, is_deleted, cmg_id, description, num_directories, num_files, 
                            du_size, size, created_at, updated_at, origin_path, 
-                           archive_path, is_staged, metadata)
-      VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                           archive_path, staged_path, is_staged, metadata)
+      VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
       RETURNING id
       """,
       (
@@ -140,6 +140,7 @@ def insert_dataset(pg_cursor, mongo_item, dataset_type, name, is_deleted):
         updated_at,
         mongo_item.get("paths", {}).get("origin", None),
         mongo_item.get("paths", {}).get("archive", None),
+        mongo_item.get("paths", {}).get("staged", None),
         mongo_item.get("staged", False),
         None
       )

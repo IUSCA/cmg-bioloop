@@ -77,7 +77,7 @@ def convert_user(mongo_user, pg_cursor):
         mongo_user.get("username"),
         mongo_user.get("email"),
         mongo_user.get("fullname"),
-        mongo_user.get("cas_id"),
+        mongo_user.get("username"),
         not mongo_user.get("active", False),
       )
     )
