@@ -8,6 +8,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 from ..common import find_corresponding_dataset, find_corresponding_user
+from .user import get_bioloop_cmguser_id
 
 
 def events_to_audit_logs(pg_cursor: cursor, mongo_db: Database):
@@ -30,6 +31,8 @@ def dataset_events_to_audit_logs(pg_cursor: cursor, mongo_db: Database):
     Returns:
         None
     """
+  cmg_user_id = get_bioloop_cmguser_id(pg_cursor)
+
   for dataset_type in ["RAW_DATA", "DATA_PRODUCT"]:
     collection = mongo_db.dataproducts if dataset_type == "DATA_PRODUCT" else mongo_db.datasets
 
@@ -77,10 +80,10 @@ def dataset_events_to_audit_logs(pg_cursor: cursor, mongo_db: Database):
 
           pg_cursor.execute(
             """
-            INSERT INTO dataset_audit (action, timestamp, dataset_id)
-            VALUES (%s, %s, %s)
+            INSERT INTO dataset_audit (action, timestamp, dataset_id, user_id)
+            VALUES (%s, %s, %s, %s)
             """,
-            (action, timestamp, dataset_id)
+            (action, timestamp, dataset_id, cmg_user_id)
           )
 
         logger.info(f"Created audit logs for dataset: {dataset_name} (id: {dataset_id})")
@@ -102,6 +105,8 @@ def system_events_to_audit_logs(pg_cursor: cursor, mongo_db: Database):
   Returns:
       None
   """
+  cmg_user_id = get_bioloop_cmguser_id(pg_cursor)
+
   events_collection = mongo_db.events
 
   for event in events_collection.find():
@@ -120,18 +125,13 @@ def system_events_to_audit_logs(pg_cursor: cursor, mongo_db: Database):
     elif event.get('dataproduct'):
       dataset_id = find_corresponding_dataset(pg_cursor, event['dataproduct'])
 
-    # Determine the user_id
-    user_id = None
-    if event.get('user'):
-      user_id = find_corresponding_user(pg_cursor, mongo_db, mongo_user_id=event['user'])
-
     # Insert the audit log entry
     pg_cursor.execute(
       """
       INSERT INTO dataset_audit (action, description, timestamp, user_id, dataset_id)
       VALUES (%s, %s, %s, %s, %s)
       """,
-      (action, description, timestamp, user_id, dataset_id)
+      (action, description, timestamp, cmg_user_id, dataset_id)
     )
 
     logger.info(f"Created audit log for event: {action}")
