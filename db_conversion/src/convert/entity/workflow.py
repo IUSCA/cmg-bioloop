@@ -27,8 +27,10 @@ def create_workflows(pg_cursor: cursor, rhythm_db: Database):
 
     # Registration steps
     registration_steps = ["inspect", "archive", "stage", "validate"]
+    previous_task_id = None
 
-    for step in registration_steps:
+    # todo - avoid nested loop
+    for _, step in enumerate(registration_steps):
       celery_taskmeta = {
         "status": "SUCCESS",
         "result": f"[{dataset_id}]",
@@ -47,9 +49,16 @@ def create_workflows(pg_cursor: cursor, rhythm_db: Database):
         "queue": "celery"
       }
 
+      # Add parent_id for all steps except 'inspect'
+      if step != 'inspect':
+        celery_taskmeta["parent_id"] = None if previous_task_id is None else str(previous_task_id)
+
       # Insert celery_taskmeta document and get the generated _id
       task_result = rhythm_db.celery_taskmeta.insert_one(celery_taskmeta)
       task_id = task_result.inserted_id
+
+      # Store the current task_id for the next iteration
+      previous_task_id = task_id
 
       # Add step to workflow_meta
       workflow_meta["steps"].append({
