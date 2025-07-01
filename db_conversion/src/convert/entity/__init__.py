@@ -7,6 +7,7 @@ from .file import *
 from .dataset_hierarchy import *
 from .dataset_file import *
 from .project import *
+from .workflow import *
 
 __all__ = []
 
@@ -17,7 +18,9 @@ for module in [about,
                project,
                file,
                dataset_hierarchy,
-               dataset_file]:
+               dataset_file,
+               workflow,
+               ]:
   if hasattr(module, '__all__'):
     __all__.extend(module.__all__)
   else:

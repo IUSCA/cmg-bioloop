@@ -19,10 +19,12 @@ class MongoToPostgresConversionManager:
 
   def __init__(self,
                # ssh_config,
-               mongo_config,
+               cmg_mongo_config,
+               rhythm_mongo_config,
                pg_conn_env_vars):
 
-    print("mongo_config:", mongo_config)
+    print("cmg_mongo_config:", cmg_mongo_config)
+    print("rhythm_mongo_config:", rhythm_mongo_config)
 
     # MongoDB connection
     # Set up SSH tunnel to connect to MongoDB running on a remote server
@@ -39,14 +41,18 @@ class MongoToPostgresConversionManager:
 
     # Initiate MongoDB connection
     # mongo_uri = f"mongodb://{mongo_config['username']}:{mongo_config['password']}@{mongo_config['host']}:{mongo_config['port']}/{mongo_config['database']}?authSource={mongo_config['authSource']}"
-    mongo_uri = f'mongodb://{mongo_config["host"]}:{mongo_config["port"]}'
-    print(f"Connecting to MongoDB with URI: {mongo_uri}")
-    self.mongo_client = pymongo.MongoClient(mongo_uri)
+    cmg_mongo_uri = f'mongodb://{cmg_mongo_config["host"]}:{cmg_mongo_config["port"]}'
+    print(f"Connecting to MongoDB with URI: {cmg_mongo_uri}")
+    self.cmg_mongo_client = pymongo.MongoClient(cmg_mongo_uri)
+    self.cmg_mongo_db = self.cmg_mongo_client[cmg_mongo_config['database']]
 
-    # if not self.test_mongo_connection():
-    #   raise ConnectionError("Failed to connect to MongoDB")
+    rhythm_mongo_uri = f'mongodb://{rhythm_mongo_config["username"]}:{rhythm_mongo_config["password"]}@{rhythm_mongo_config["host"]}:{rhythm_mongo_config["port"]}/{rhythm_mongo_config["database"]}?authSource={rhythm_mongo_config["authSource"]}'
+    print(f"Connecting to MongoDB with URI: {rhythm_mongo_uri}")
+    self.rhythm_mongo_client = pymongo.MongoClient(rhythm_mongo_uri)
+    self.rhythm_mongo_db = self.rhythm_mongo_client[rhythm_mongo_config['database']]
 
-    self.mongo_db = self.mongo_client[mongo_config['database']]
+    # Test Rhythm MongoDB connection
+    # self.test_rhythm_mongo_connection()
 
     #  Initiate PostgreSQL connection
     self.postgres_conn = psycopg2.connect(
@@ -64,33 +70,38 @@ class MongoToPostgresConversionManager:
 
     self.pg_cursor = self.postgres_conn.cursor()
 
-  def convert_mongo_to_postres(self):
+  def convert_mongo_to_postgres(self):
     try:
       with self.postgres_conn.cursor() as pg_cursor:
         # Drop existing Postgres tables, enums
-        drop_all_enums(pg_cursor=pg_cursor)
-        drop_all_tables(pg_cursor=pg_cursor)
+        drop_bioloop_enums(pg_cursor=pg_cursor)
+        drop_bioloop_tables(pg_cursor=pg_cursor)
 
         # Re-create tables, enums
-        create_all_enums(pg_cursor=pg_cursor)
-        create_all_tables(pg_cursor=pg_cursor)
+        create_bioloop_enums(pg_cursor=pg_cursor)
+        create_bioloop_tables(pg_cursor=pg_cursor)
+
+        # Drop workflow documents
+        drop_all_workflow_documents(rhythm_db=self.rhythm_mongo_db)
 
         # Convert CMG data (Mongo) to Bioloop data (Postgres)
         print("converting roles")
         create_roles(pg_cursor=pg_cursor)
         print("converting users")
-        convert_users(pg_cursor=pg_cursor, mongo_db=self.mongo_db)
+        convert_users(pg_cursor=pg_cursor, mongo_db=self.cmg_mongo_db)
         print("converting datasets")
-        convert_all_datasets(pg_cursor=pg_cursor, mongo_db=self.mongo_db)
+        convert_all_datasets(pg_cursor=pg_cursor, mongo_db=self.cmg_mongo_db)
         print("converting dataset audit logs")
-        events_to_audit_logs(pg_cursor=pg_cursor, mongo_db=self.mongo_db)
+        events_to_audit_logs(pg_cursor=pg_cursor, mongo_db=self.cmg_mongo_db)
         print("converting dataset hierarchies")
-        convert_dataset_hierarchies(pg_cursor=pg_cursor, mongo_db=self.mongo_db)
+        convert_dataset_hierarchies(pg_cursor=pg_cursor, mongo_db=self.cmg_mongo_db)
         print("Converting dataset files")
-        convert_dataproduct_files(pg_cursor=pg_cursor, mongo_db=self.mongo_db)
+        convert_dataproduct_files(pg_cursor=pg_cursor, mongo_db=self.cmg_mongo_db)
         print("converting projects")
-        convert_projects(pg_cursor=pg_cursor, mongo_db=self.mongo_db)
+        convert_projects(pg_cursor=pg_cursor, mongo_db=self.cmg_mongo_db)
         # convert_content_to_about(cursor, self.mongo_db)
+        print("Creating workflows")
+        create_workflows(pg_cursor=pg_cursor, rhythm_db=self.rhythm_mongo_db)
 
       # Commit the transaction
       self.postgres_conn.commit()
@@ -104,9 +115,37 @@ class MongoToPostgresConversionManager:
       self.close_connections()
 
   def close_connections(self):
-    self.mongo_client.close()
+    self.cmg_mongo_client.close()
     self.postgres_conn.close()
     # self.tunnel.stop()
+
+  def test_rhythm_mongo_connection(self):
+    print("Testing Rhythm MongoDB connection")
+    try:
+      info = self.rhythm_mongo_client.server_info()
+      print("Rhythm MongoDB connection successful.")
+      print(f"MongoDB version: {info['version']}")
+      print(f"MongoDB host: {self.rhythm_mongo_client.address[0]}")
+      print(f"MongoDB port: {self.rhythm_mongo_client.address[1]}")
+      print(f"MongoDB database: {self.rhythm_mongo_db.name}")
+
+      # Test write permission
+      # test_collection = self.rhythm_mongo_db.test_collection
+      # test_doc = {"test": "document"}
+      # result = test_collection.insert_one(test_doc)
+      # test_collection.delete_one({"_id": result.inserted_id})
+      # print("Successfully performed test write and delete operations.")
+
+      return True
+    except pymongo.errors.ConnectionFailure as e:
+      print(f"Rhythm MongoDB connection failed: {e}")
+      raise
+    except pymongo.errors.OperationFailure as e:
+      print(f"Rhythm MongoDB authentication or permission error: {e}")
+      raise
+    except Exception as e:
+      print(f"Unexpected error when connecting to Rhythm MongoDB: {e}")
+      raise
 
   # def test_mongo_connection(self):
   #   print("Testing MongoDB connection")
@@ -160,13 +199,22 @@ def main():
   # print(f"os.getenv('MONGO_PORT'): {os.getenv('MONGO_PORT')}")
 
   # todo - throw error if mongo env vars are missing
-  mongo_config = {
+  cmg_mongo_config = {
     'host': os.getenv('MONGO_HOST'),
     'port': int(os.getenv('MONGO_PORT', 27017)),
     'database': os.getenv('MONGO_DB'),
     'authSource': os.getenv('MONGO_AUTH_SOURCE'),
     'username': os.getenv('MONGO_USERNAME'),
     'password': os.getenv('MONGO_PASSWORD'),
+  }
+
+  rhythm_mongo_config = {
+    'host': os.getenv('RHYTHM_MONGO_HOST'),
+    'port': int(os.getenv('RHYTHM_MONGO_PORT', 27018)),
+    'database': os.getenv('RHYTHM_MONGO_DB'),
+    'authSource': os.getenv('RHYTHM_MONGO_AUTH_SOURCE'),
+    'username': os.getenv('RHYTHM_MONGO_USERNAME'),
+    'password': os.getenv('RHYTHM_MONGO_PASSWORD'),
   }
 
   # print(f"mongo_config: {mongo_config}")
@@ -195,14 +243,14 @@ def main():
 
   try:
     # Initialize the conversion manager (this will establish connections)
-    manager = MongoToPostgresConversionManager(mongo_config, pg_env_vars)
+    manager = MongoToPostgresConversionManager(cmg_mongo_config, rhythm_mongo_config, pg_env_vars)
   except Exception as e:
     print(f"Error connecting to databases: {e}")
     raise
 
   try:
     # Begin the conversion process
-    manager.convert_mongo_to_postres()
+    manager.convert_mongo_to_postgres()
   except Exception as e:
     print(f"Error during conversion: {e}")
     raise
