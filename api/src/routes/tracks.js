@@ -27,6 +27,8 @@ router.get(
     query('sort_order').default('desc').isIn(['asc', 'desc']),
   ],
   asyncHandler(async (req, res) => {
+    console.log('req.user.id', req.user.id);
+
     const {
       project_id, name, file_type, genome_type, genome_value, limit, offset, sort_by, sort_order,
     } = req.query;

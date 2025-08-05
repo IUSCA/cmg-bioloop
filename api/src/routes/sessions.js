@@ -2,10 +2,14 @@ const express = require('express');
 const { PrismaClient } = require('@prisma/client');
 const { body, query, param } = require('express-validator');
 const asyncHandler = require('../middleware/asyncHandler');
+const { accessControl } = require('../middleware/auth');
 
 const prisma = new PrismaClient();
 
 const router = express.Router();
+
+// Middleware to check permissions
+const isPermittedTo = accessControl('sessions');
 
 // GET /sessions - Get all sessions accessible to the current user
 router.get(
@@ -91,10 +95,6 @@ router.get(
       sessions,
       metadata: {
         count: total,
-        limit,
-        offset,
-        sort_by,
-        sort_order,
       },
     });
   }),
@@ -196,10 +196,6 @@ router.get(
       sessions,
       metadata: {
         count: total,
-        limit,
-        offset,
-        sort_by,
-        sort_order,
       },
     });
   }),
@@ -208,46 +204,74 @@ router.get(
 // POST /sessions - Create a new session
 router.post(
   '/',
+  isPermittedTo('create'),
   [
-    body('title').isString().notEmpty().trim(),
+    body('session_name').isString().notEmpty().trim(),
     body('genome').isString().notEmpty().trim(),
     body('genome_type').isString().notEmpty().trim(),
     body('track_ids').isArray().optional(),
-    body('track_ids.*').isInt().toInt(),
+    body('track_ids').custom((value) => {
+      if (value && !Array.isArray(value)) {
+        throw new Error('track_ids must be an array');
+      }
+      if (value && value.some((id) => !Number.isInteger(id))) {
+        throw new Error('All track_ids must be integers');
+      }
+      return true;
+    }),
     body('is_public').isBoolean().optional(),
   ],
   asyncHandler(async (req, res) => {
     const {
-      title, genome, genome_type, track_ids = [], is_public = false,
+      session_name, genome, genome_type, track_ids = [], is_public = false,
     } = req.body;
 
     // Validate that all tracks exist and are accessible to the user
     if (track_ids.length > 0) {
-      const tracks = await prisma.track.findMany({
-        where: {
-          id: { in: track_ids },
-          dataset_file: {
-            dataset: {
-              projects: {
-                some: {
-                  project: {
-                    users: {
-                      some: { user_id: req.user.id },
+      let tracks;
+
+      // If user has admin/operator role, they can access all tracks
+      if (req.permission.granted) {
+        tracks = await prisma.track.findMany({
+          where: {
+            id: { in: track_ids },
+          },
+          include: {
+            dataset_file: {
+              include: {
+                dataset: true,
+              },
+            },
+          },
+        });
+      } else {
+        // Regular users can only access tracks from projects they're part of
+        tracks = await prisma.track.findMany({
+          where: {
+            id: { in: track_ids },
+            dataset_file: {
+              dataset: {
+                projects: {
+                  some: {
+                    project: {
+                      users: {
+                        some: { user_id: req.user.id },
+                      },
                     },
                   },
                 },
               },
             },
           },
-        },
-        include: {
-          dataset_file: {
-            include: {
-              dataset: true,
+          include: {
+            dataset_file: {
+              include: {
+                dataset: true,
+              },
             },
           },
-        },
-      });
+        });
+      }
 
       if (tracks.length !== track_ids.length) {
         return res.status(400).json({ error: 'Some tracks are not accessible' });
@@ -257,7 +281,7 @@ router.post(
     // Create session with tracks
     const session = await prisma.genome_browser_session.create({
       data: {
-        title,
+        title: session_name, // Use session_name for the title
         genome,
         genome_type,
         user_id: req.user.id,
@@ -291,11 +315,7 @@ router.post(
           },
           orderBy: { order: 'asc' },
         },
-        _count: {
-          select: {
-            session_tracks: true,
-          },
-        },
+
       },
     });
 
@@ -367,6 +387,7 @@ router.get(
 // PATCH /sessions/:id - Update a session
 router.patch(
   '/:id',
+  isPermittedTo('update'),
   [
     param('id').isInt().toInt(),
     body('title').isString().optional().trim(),
@@ -374,7 +395,15 @@ router.patch(
     body('genome_type').isString().optional().trim(),
     body('is_public').isBoolean().optional(),
     body('track_ids').isArray().optional(),
-    body('track_ids.*').isInt().toInt(),
+    body('track_ids').custom((value) => {
+      if (value && !Array.isArray(value)) {
+        throw new Error('track_ids must be an array');
+      }
+      if (value && value.some((id) => !Number.isInteger(id))) {
+        throw new Error('All track_ids must be integers');
+      }
+      return true;
+    }),
   ],
   asyncHandler(async (req, res) => {
     const { id } = req.params;
@@ -400,24 +429,36 @@ router.patch(
 
     // Validate tracks if provided
     if (track_ids && track_ids.length > 0) {
-      const tracks = await prisma.track.findMany({
-        where: {
-          id: { in: track_ids },
-          dataset_file: {
-            dataset: {
-              projects: {
-                some: {
-                  project: {
-                    users: {
-                      some: { user_id: req.user.id },
+      let tracks;
+
+      // If user has admin/operator role, they can access all tracks
+      if (req.permission.granted) {
+        tracks = await prisma.track.findMany({
+          where: {
+            id: { in: track_ids },
+          },
+        });
+      } else {
+        // Regular users can only access tracks from projects they're part of
+        tracks = await prisma.track.findMany({
+          where: {
+            id: { in: track_ids },
+            dataset_file: {
+              dataset: {
+                projects: {
+                  some: {
+                    project: {
+                      users: {
+                        some: { user_id: req.user.id },
+                      },
                     },
                   },
                 },
               },
             },
           },
-        },
-      });
+        });
+      }
 
       if (tracks.length !== track_ids.length) {
         return res.status(400).json({ error: 'Some tracks are not accessible' });

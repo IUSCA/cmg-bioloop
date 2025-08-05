@@ -67,6 +67,12 @@ const grantsObject = {
       'update:any': ['*'],
       'delete:any': ['*'],
     },
+    sessions: {
+      'create:any': ['*'],
+      'read:any': ['*'],
+      'update:any': ['*'],
+      'delete:any': ['*'],
+    },
   },
 
   // user role permissions
@@ -89,6 +95,9 @@ const grantsObject = {
       'read:any': ['*'],
     },
     tracks: {
+      'read:own': ['*'],
+    },
+    sessions: {
       'read:own': ['*'],
     },
   },
@@ -145,6 +154,12 @@ const grantsObject = {
       'create:any': ['*'],
     },
     tracks: {
+      'create:any': ['*'],
+      'read:any': ['*'],
+      'update:any': ['*'],
+      'delete:any': ['*'],
+    },
+    sessions: {
       'create:any': ['*'],
       'read:any': ['*'],
       'update:any': ['*'],

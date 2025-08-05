@@ -57,66 +57,66 @@
       @update:sort-by="handleSortChange"
       @update:sort-order="handleSortChange"
     >
-        <template #cell(title)="{ item }">
-          <div class="font-medium">{{ item.title }}</div>
+        <template #cell(title)="{ rowData }">
+          <div class="font-medium">{{ rowData?.title }}</div>
         </template>
 
-        <template #cell(genome)="{ item }">
+        <template #cell(genome)="{ rowData }">
           <va-chip size="small" preset="primary">
-            {{ item.genome }}
+            {{ rowData.genome }}
           </va-chip>
         </template>
 
-        <template #cell(genome_type)="{ item }">
+        <template #cell(genome_type)="{ rowData }">
           <va-chip size="small" preset="secondary">
-            {{ item.genome_type }}
+            {{ rowData.genome_type }}
           </va-chip>
         </template>
 
-        <template #cell(tracks_count)="{ item }">
-          <span class="text-sm text-gray-600">
-            {{ item._count?.session_tracks || 0 }} tracks
+        <template #cell(tracks_count)="{ rowData }">
+          <span class="text-sm ">
+            {{ rowData.session_tracks.length || 0 }}
           </span>
         </template>
 
-        <template #cell(owner)="{ item }">
-          <div class="text-sm">
-            <div class="font-medium">{{ item.user?.name || item.user?.username }}</div>
-            <div class="text-gray-500">{{ item.user?.username }}</div>
+        <template #cell(user)="{ rowData }">
+          <div class="">
+            <div class="">{{ rowData?.user?.name }}</div>
+            
           </div>
         </template>
 
-        <template #cell(created_at)="{ item }">
-          <span class="text-sm text-gray-600">
-            {{ date(item.created_at) }}
+        <template #cell(created_at)="{ value }">
+          <span class=" ">
+            {{ date(value) }}
           </span>
         </template>
 
-        <template #cell(actions)="{ item }">
+        <template #cell(actions)="{ rowData }">
           <div class="flex gap-1">
-            <va-button
+            <!-- <va-button
               preset="plain"
               class="flex-auto"
-              @click="viewSession(item)"
+              @click="viewSession(rowData)"
             >
               <va-icon name="visibility" />
-            </va-button>
+            </va-button> -->
             
             <va-button
-              v-if="canEditSession(item)"
+              v-if="canEditSession(rowData)"
               preset="plain"
               class="flex-auto"
-              @click="editSession(item)"
+              @click="editSession(rowData)"
             >
               <va-icon name="edit" />
             </va-button>
             
             <va-button
-              v-if="canDeleteSession(item)"
+              v-if="canDeleteSession(rowData)"
               preset="plain"
               class="flex-auto"
               color="danger"
-              @click="deleteSession(item)"
+              @click="deleteSession(rowData)"
             >
               <va-icon name="delete" />
             </va-button>
@@ -198,6 +198,8 @@ const sessions = computed(() => sessionsStore.sessions);
 const loading = computed(() => sessionsStore.loading);
 const metadata = computed(() => sessionsStore.metadata);
 
+console.log('sessions', sessions.value);
+
 const activeFilters = computed(() => {
   const active = [];
   Object.entries(filters.value).forEach(([key, value]) => {
@@ -214,25 +216,21 @@ const columns = [
     key: 'title',
     label: 'Title',
     sortable: true,
-    width: '25%',
     thStyle: 'white-space: pre-wrap; word-wrap: break-word; word-break: break-word;',
     tdStyle: 'white-space: pre-wrap; word-wrap: break-word; word-break: break-word;',
+    align: 'left',
   },
   {
     key: 'genome',
     label: 'Genome',
     sortable: true,
     width: '15%',
-    thStyle: 'white-space: pre-wrap; word-wrap: break-word; word-break: break-word;',
-    tdStyle: 'white-space: pre-wrap; word-wrap: break-word; word-break: break-word;',
   },
   {
     key: 'genome_type',
     label: 'Genome Type',
     sortable: true,
     width: '15%',
-    thStyle: 'white-space: pre-wrap; word-wrap: break-word; word-break: break-word;',
-    tdStyle: 'white-space: pre-wrap; word-wrap: break-word; word-break: break-word;',
   },
   {
     key: 'tracks_count',
@@ -243,8 +241,8 @@ const columns = [
     tdStyle: 'white-space: pre-wrap; word-wrap: break-word; word-break: break-word;',
   },
   {
-    key: 'owner',
-    label: 'Owner',
+    key: 'user',
+    label: 'Created By',
     sortable: false,
     width: '15%',
     thStyle: 'white-space: pre-wrap; word-wrap: break-word; word-break: break-word;',
@@ -262,9 +260,8 @@ const columns = [
     key: 'actions',
     label: 'Actions',
     sortable: false,
-    width: '10%',
-    thStyle: 'white-space: pre-wrap; word-wrap: break-word; word-break: break-word;',
-    tdStyle: 'white-space: pre-wrap; word-wrap: break-word; word-break: break-word;',
+    align: 'right',
+    width: '6%',
   },
 ];
 
@@ -289,6 +286,7 @@ const fetchSessions = async () => {
     };
     
     await sessionsStore.fetchSessions(params);
+    console.log('sessions', sessions.value);
   } catch (error) {
     console.error('Error fetching sessions:', error);
   }
