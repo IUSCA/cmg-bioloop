@@ -1,7 +1,6 @@
 import logging
 from datetime import datetime
 from urllib.parse import urljoin
-import json
 
 import requests
 from glom import glom, assign as glom_assign
@@ -141,7 +140,7 @@ def get_all_datasets(
             'days_since_last_staged': days_since_last_staged,
             'deleted': deleted,
             'archived': archived,
-            'bundle': bundle
+            'bundle': bundle,
         }
         r = s.get('datasets', params=payload)
         r.raise_for_status()
@@ -152,14 +151,12 @@ def get_all_datasets(
 def get_dataset(dataset_id: str,
                 files: bool = False,
                 bundle: bool = False,
-                include_upload_log: bool = False,
                 workflows: bool = False):
     with APIServerSession() as s:
         payload = {
             'files': files,
             'bundle': bundle,
             'workflows': workflows,
-            'include_upload_log': include_upload_log
         }
         r = s.get(f'datasets/{dataset_id}', params=payload)
 
@@ -167,9 +164,25 @@ def get_dataset(dataset_id: str,
         return dataset_getter(r.json())
 
 
+class DatasetAlreadyExistsError(Exception):
+    pass
+
+
 def create_dataset(dataset):
     with APIServerSession() as s:
         r = s.post('datasets', json=dataset_setter(dataset))
+        if r.status_code == 409:
+            raise DatasetAlreadyExistsError()
+        r.raise_for_status()
+        return r.json()
+
+
+def bulk_create_datasets(datasets):
+    with APIServerSession() as s:
+        # not using dataset_setter because each dataset only has name, type, and origin_path
+        r = s.post('datasets/bulk', json={
+            "datasets": datasets
+        })
         r.raise_for_status()
         return r.json()
 
@@ -179,6 +192,12 @@ def update_dataset(dataset_id, update_data):
         r = s.patch(f'datasets/{dataset_id}', json=dataset_setter(update_data))
         r.raise_for_status()
         return r.json()
+
+
+def delete_dataset(dataset_id: int):
+    with APIServerSession() as s:
+        r = s.delete(f'datasets/{dataset_id}')
+        r.raise_for_status()
 
 
 def add_files_to_dataset(dataset_id, files: list[dict]):
@@ -247,22 +266,16 @@ def get_all_workflows():
         return r.json()
 
 
-def get_dataset_upload_logs():
+def get_dataset_uploads():
     with APIServerSession() as s:
-        r = s.get(f'datasetUploads')
+        r = s.get(f'datasets/uploads')
         r.raise_for_status()
         return r.json()
 
 
-def update_dataset_upload_log(uploaded_dataset_id: int, log_data: dict):
+def update_dataset_upload(uploaded_dataset_id: int, log_data: dict):
     with APIServerSession() as s:
-        r = s.patch(f'datasetUploads/{uploaded_dataset_id}', json=log_data)
-        r.raise_for_status()
-
-
-def delete_dataset_upload_log(uploaded_dataset_id: int):
-    with APIServerSession() as s:
-        r = s.delete(f'datasetUploads/{uploaded_dataset_id}')
+        r = s.patch(f'datasets/uploads/{uploaded_dataset_id}', json=log_data)
         r.raise_for_status()
 
 

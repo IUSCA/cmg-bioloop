@@ -7,6 +7,25 @@ const exports = {
         path: "/projects",
         test_id: "sidebar-projects",
       },
+      {
+        icon: "mdi-folder-plus-outline",
+        title: "Create Dataset",
+        test_id: "sidebar-create-dataset",
+        children: [
+          {
+            feature_key: "import",
+            icon: "mdi-file-cog-outline",
+            title: "Import",
+            path: "/datasets/import",
+          },
+          {
+            feature_key: "uploads",
+            icon: "mdi:folder-upload",
+            title: "Upload",
+            path: "/datasetUpload",
+          },
+        ],
+      },
     ],
     operator_items: [
       {
@@ -28,7 +47,7 @@ const exports = {
       // {
       //   icon: "mdi-folder-upload",
       //   title: "Data Uploader",
-      //   path: "/datauploader",
+      //   path: "/datauploader",  // cspell: disable-line
       // },
       {
         icon: "mdi-dna",
@@ -73,7 +92,6 @@ const exports = {
         path: "/sessions",
         test_id: "sidebar-sessions",
       },
-      {
         icon: "mdi-table-account",
         title: "User Management",
         path: "/users",
@@ -124,13 +142,34 @@ const exports = {
     ],
     admin_items: [],
   },
-  UPLOAD_STATES: {
-    UNINITIATED: "Uninitiated",
-    PROCESSING: "Processing",
-    PROCESSING_FAILED: "Processing Failed",
-    UPLOADING: "Uploading",
-    UPLOAD_FAILED: "Upload Failed",
-    UPLOADED: "Uploaded",
+  UPLOAD_STATUSES: {
+    // Statuses that only appear in the UI
+    UNINITIATED: "UNINITIATED",
+    COMPUTING_CHECKSUMS: "COMPUTING_CHECKSUMS",
+    CHECKSUM_COMPUTATION_FAILED: "CHECKSUM_COMPUTATION_FAILED",
+    // Statuses that appear in the UI and are also persisted to the database
+    UPLOADING: "UPLOADING",
+    UPLOAD_FAILED: "UPLOAD_FAILED",
+    UPLOADED: "UPLOADED",
+    PROCESSING: "PROCESSING",
+    PROCESSING_FAILED: "PROCESSING_FAILED",
+    COMPLETE: "COMPLETE",
+  },
+  DATASET_CREATE_METHODS: {
+    UPLOAD: "UPLOAD",
+    IMPORT: "IMPORT",
+    SCAN: "SCAN",
+  },
+  auth: {
+    verify: {
+      response: {
+        status: {
+          SUCCESS: "success",
+          SIGNUP_REQUIRED: "signup_required",
+          NOT_A_USER: "not_a_user",
+        },
+      },
+    },
   },
   GENOME_TYPES: {
     "human": {

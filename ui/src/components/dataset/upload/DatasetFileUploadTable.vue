@@ -31,66 +31,40 @@
     <template #cell(uploadStatus)="{ value }">
       <span class="flex justify-center">
         <va-popover
-          v-if="value === config.upload.status.UPLOADED"
+          v-if="value === constants.UPLOAD_STATUSES.UPLOADED"
           message="Succeeded"
         >
           <va-icon name="check_circle_outline" color="success" />
         </va-popover>
         <va-popover
-          v-if="value === config.upload.status.UPLOADING"
+          v-if="value === constants.UPLOAD_STATUSES.UPLOADING"
           message="Uploading"
         >
           <va-icon name="pending" color="info" />
         </va-popover>
         <va-popover
-          v-if="value === config.upload.status.UPLOAD_FAILED"
+          v-if="value === constants.UPLOAD_STATUSES.UPLOAD_FAILED"
           message="Failed"
         >
           <va-icon name="error_outline" color="danger" />
         </va-popover>
       </span>
     </template>
-
-    <template #cell(actions)="{ rowIndex }">
-      <div class="flex gap-1">
-        <va-button
-          preset="plain"
-          icon="delete"
-          color="danger"
-          @click="removeFile(rowIndex)"
-          :disabled="props.submitAttempted"
-        />
-      </div>
-    </template>
   </va-data-table>
 </template>
 
 <script setup>
 import config from "@/config";
+import constants from "@/constants";
 
 const props = defineProps({
   files: {
     type: Array,
     default: () => [],
   },
-  sourceRawData: {
-    type: Object,
-  },
-  submitAttempted: {
-    type: Boolean,
-    required: true,
-  },
-  selectingFiles: {
-    type: Boolean,
-    required: true,
-  },
-  selectingDirectory: {
-    type: Boolean,
-    required: true,
-  },
 });
 
-const emit = defineEmits(["files-added", "directory-added", "file-removed"]);
+const emit = defineEmits(["file-removed"]);
 
 const noFilesSelected = computed(() => {
   return props.files.length === 0;
@@ -138,17 +112,7 @@ const columns = [
     thStyle:
       "white-space: pre-wrap; word-wrap: break-word; word-break: break-word;",
   },
-  {
-    key: "actions",
-    width: "15%",
-    thStyle:
-      "white-space: pre-wrap; word-wrap: break-word; word-break: break-word;",
-  },
 ];
-
-const removeFile = (index) => {
-  emit("file-removed", index);
-};
 </script>
 
 <style scoped>

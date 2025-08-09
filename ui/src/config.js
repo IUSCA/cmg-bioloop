@@ -1,6 +1,6 @@
 const exports = {
   mode: "development",
-  // vite server redirects traffic on starting with apiBaseURL
+  // vite server redirects traffic on URLs starting with apiBaseURL
   // to http://${config.apiHost}:${config.apiPort} in dev environment
   apiBasePath: "/api",
   uploadApiBasePath:
@@ -10,9 +10,11 @@ const exports = {
     import.meta.env.VITE_GOOGLE_RETURN || "https://localhost/auth/google",
   cilogonReturn:
     import.meta.env.VITE_CILOGON_RETURN || "https://localhost/auth/cil",
+  microsoftReturn:
+    import.meta.env.VITE_MICROSOFT_RETURN || "https://localhost/auth/microsoft",
   refreshTokenTMinusSeconds: {
     appToken: 300,
-    uploadToken: 5,
+    uploadToken: 20,
   },
   analyticsId: "G-FOO",
   appTitle: "BIOLOOP",
@@ -55,6 +57,7 @@ const exports = {
   auth_enabled: {
     google: true,
     cilogon: true,
+    microsoft: true,
   },
   dashboard: {
     active_tasks: {
@@ -76,11 +79,14 @@ const exports = {
     notifications: {
       enabledForRoles: [],
     },
-    ingestion: {
+    import: {
       enabledForRoles: ["admin"],
     },
     downloads: true,
-    uploads: { enabledForRoles: ["admin"] },
+    signup: true,
+    uploads: {
+      enabledForRoles: ["admin"],
+    },
   },
   notifications: {
     pollingInterval: 5000, // milliseconds
@@ -104,26 +110,16 @@ const exports = {
     { name: 'VCF', id: 'vcf' },
     { name: 'BigWig (bw)', id: 'bw' },
   ],
-  restricted_ingestion_dirs: {
+  restricted_import_dirs: {
     slateScratch: {
       paths:
-        import.meta.env.VITE_SCRATCH_INGESTION_RESTRICTED_DIRS ||
+        import.meta.env.VITE_SCRATCH_IMPORT_RESTRICTED_DIRS ||
         "/scratch/space/restricted",
       key: "scratch",
     },
   },
   upload: {
     scope_prefix: "upload_file:",
-    types: { DATASET: "DATASET" },
-    status: {
-      UPLOADING: "UPLOADING",
-      UPLOAD_FAILED: "UPLOAD_FAILED",
-      UPLOADED: "UPLOADED",
-      PROCESSING: "PROCESSING",
-      PROCESSING_FAILED: "PROCESSING_FAILED",
-      COMPLETE: "COMPLETE",
-      FAILED: "FAILED",
-    },
   },
 };
 

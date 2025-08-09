@@ -1,4 +1,6 @@
-const AccessControl = require('accesscontrol');
+const AccessControl = require('accesscontrol'); // cspell: disable-line
+
+const CONSTANTS = require('../constants');
 
 const grantsObject = {
   admin: {
@@ -15,6 +17,15 @@ const grantsObject = {
       'delete:any': ['*'],
     },
     datasets: {
+      'create:any': ['*'],
+      'read:any': ['*'],
+      'update:any': ['*'],
+      'delete:any': ['*'],
+    },
+    dataset_name: {
+      'read:any': ['*'],
+    },
+    instruments: {
       'create:any': ['*'],
       'read:any': ['*'],
       'update:any': ['*'],
@@ -57,9 +68,6 @@ const grantsObject = {
     },
     upload: {
       'create:any': ['*'],
-      'read:any': ['*'],
-      'update:any': ['*'],
-      'delete:any': ['*'],
     },
     tracks: {
       'create:any': ['*'],
@@ -84,11 +92,28 @@ const grantsObject = {
     projects: {
       'read:own': ['*', '!users'], // cannot read associated users to the project
     },
+    datasets: {
+      'create:any': ['*'],
+      'read:own': ['*'],
+      'update:own': ['*'],
+    },
+    dataset_name: {
+      'read:any': ['*'],
+    },
     project_dataset_files: {
       'read:own': ['*'],
     },
     workflow: {
-      'create:any': ['stage'], // can only create a stage workflow
+      // user role can only create these four workflows
+      'create:any': [
+        CONSTANTS.WORKFLOWS.INTEGRATED,
+        CONSTANTS.WORKFLOWS.STAGE,
+        CONSTANTS.WORKFLOWS.PROCESS_DATASET_UPLOAD,
+        CONSTANTS.WORKFLOWS.CANCEL_DATASET_UPLOAD,
+      ],
+    },
+    instruments: {
+      'read:any': ['*'],
     },
     statistics: {
       'create:any': ['*'],
@@ -99,6 +124,12 @@ const grantsObject = {
     },
     sessions: {
       'read:own': ['*'],
+    },
+    upload: {
+      'create:any': ['*'],
+    },
+    fs: {
+      'read:any': ['*'],
     },
   },
 
@@ -119,6 +150,13 @@ const grantsObject = {
       'read:any': ['*'],
       'update:any': ['*'],
       'delete:any': ['*'],
+    },
+    dataset_name: {
+      'read:any': ['*'],
+    },
+    instruments: {
+      'create:any': ['*'],
+      'read:any': ['*'],
     },
     projects: {
       'create:any': ['*'],
