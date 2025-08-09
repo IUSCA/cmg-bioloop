@@ -9,6 +9,13 @@
     </div>
 
     <div v-else-if="session" class="space-y-6">
+      <!-- Breadcrumbs -->
+      <div class="flex items-center space-x-2 text-sm">
+        <router-link to="/sessions" class="hover:underline">Sessions</router-link>
+        <span>/</span>
+        <span>{{ session.title }}</span>
+      </div>
+
       <!-- Header -->
       <div class="flex justify-between items-start">
         <div>
@@ -208,4 +215,14 @@ const loadSession = async () => {
 onMounted(() => {
   loadSession();
 });
-</script> 
+</script>
+
+<route lang="yaml">
+meta:
+  title: Session Details
+  requiresRoles: ["operator", "admin"]
+  nav: [
+    { label: "Sessions", to: "/sessions" },
+    { label: "Session Details" }
+  ]
+</route> 

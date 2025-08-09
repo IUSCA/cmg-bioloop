@@ -14,10 +14,10 @@
       <!-- Basic session info -->
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
         <va-input
-          v-model="form.title"
-          label="Session Title"
-          placeholder="Enter session title"
-          :error="errors.title"
+          v-model="form.session_name"
+          label="Session Name"
+          placeholder="Enter session name"
+          :error="errors.session_name"
           required
         />
 
@@ -26,6 +26,8 @@
           label="Genome Type"
           placeholder="Select genome type"
           :options="genomeTypeOptions"
+          text-by="name"
+          value-by="id"
           :error="errors.genome_type"
           required
         />
@@ -35,6 +37,8 @@
           label="Genome"
           placeholder="Select genome"
           :options="genomeOptions"
+          text-by="name"
+          value-by="id"
           :error="errors.genome"
           required
         />
@@ -147,7 +151,7 @@ const tracksStore = useTracksStore();
 // Reactive state
 const visible = ref(false);
 const form = ref({
-  title: '',
+  session_name: '',
   genome_type: '',
   genome: '',
   is_public: false,
@@ -160,8 +164,8 @@ const trackColors = ref({});
 // Computed
 const genomeTypeOptions = computed(() => {
   return Object.keys(constants.GENOME_TYPES).map(type => ({
-    text: type.charAt(0).toUpperCase() + type.slice(1),
-    value: type,
+    name: type.charAt(0).toUpperCase() + type.slice(1),
+    id: type,
   }));
 });
 
@@ -170,8 +174,8 @@ const genomeOptions = computed(() => {
   
   const genomes = constants.GENOME_TYPES[form.value.genome_type]?.genomes || [];
   return genomes.map(genome => ({
-    text: genome,
-    value: genome,
+    name: genome,
+    id: genome,
   }));
 });
 
@@ -221,7 +225,7 @@ const initializeForm = () => {
   if (!props.session) return;
   
   form.value = {
-    title: props.session.title || '',
+    session_name: props.session.title || '',
     genome_type: props.session.genome_type || '',
     genome: props.session.genome || '',
     is_public: props.session.is_public || false,
@@ -283,8 +287,8 @@ const getRandomColor = () => {
 const validateForm = () => {
   errors.value = {};
   
-  if (!form.value.title.trim()) {
-    errors.value.title = 'Title is required';
+  if (!form.value.session_name.trim()) {
+    errors.value.session_name = 'Session name is required';
   }
   
   if (!form.value.genome_type) {
@@ -305,7 +309,7 @@ const handleSave = async () => {
   
   try {
     const sessionData = {
-      title: form.value.title.trim(),
+      session_name: form.value.session_name.trim(),
       genome_type: form.value.genome_type,
       genome: form.value.genome,
       is_public: form.value.is_public,

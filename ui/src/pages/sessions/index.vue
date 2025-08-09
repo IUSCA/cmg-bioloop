@@ -58,7 +58,9 @@
       @update:sort-order="handleSortChange"
     >
         <template #cell(title)="{ rowData }">
-          <div class="font-medium">{{ rowData?.title }}</div>
+          <div class="font-medium cursor-pointer hover:underline" @click="viewSession(rowData)">
+            {{ rowData?.title }}
+          </div>
         </template>
 
         <template #cell(genome)="{ rowData }">
@@ -94,13 +96,13 @@
 
         <template #cell(actions)="{ rowData }">
           <div class="flex gap-1">
-            <!-- <va-button
+            <va-button
               preset="plain"
               class="flex-auto"
               @click="viewSession(rowData)"
             >
               <va-icon name="visibility" />
-            </va-button> -->
+            </va-button>
             
             <va-button
               v-if="canEditSession(rowData)"
