@@ -552,123 +552,130 @@ router.delete(
   }),
 );
 
-// POST /sessions/:id/stage - Request staging for session tracks
+// GET /sessions/:id/datahub
+router.get(
+  '/:id/datahub',
+  [param('id').isInt().toInt()],
+  asyncHandler(async (req, res) => {
+    const sessionId = req.params.id;
+    
+    try {
+      const session = await prisma.genome_browser_session.findUnique({
+        where: { id: sessionId },
+        include: {
+          session_tracks: {
+            include: {
+              track: {
+                include: {
+                  dataset_file: {
+                    include: {
+                      dataset: true
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      });
+
+      if (!session) {
+        return res.status(404).json({ error: 'Session not found' });
+      }
+
+      // Convert to DataHub format
+      const tracks = session.session_tracks.map(st => {
+        const track = st.track;
+        const dataset = track.dataset_file?.dataset;
+        
+        // Determine file type and URL
+        let fileType = 'unknown';
+        let url = '';
+        
+        if (track.file_type === 'bam') {
+          fileType = 'bam';
+          url = `${process.env.API_BASE_URL}/files/${track.dataset_file_id}`;
+        } else if (track.file_type === 'bigwig') {
+          fileType = 'bigwig';
+          url = `${process.env.API_BASE_URL}/files/${track.dataset_file_id}`;
+        } else if (track.file_type === 'vcf') {
+          fileType = 'vcf';
+          url = `${process.env.API_BASE_URL}/files/${track.dataset_file_id}`;
+        }
+        
+        return {
+          name: track.name,
+          type: fileType,
+          url: url,
+          color: st.color || '#000000',
+          height: 50,
+          genome: `${track.genomeType}_${track.genomeValue}`,
+          dataset: dataset?.name || 'Unknown'
+        };
+      });
+
+      res.json(tracks);
+    } catch (error) {
+      console.error('Error exporting DataHub:', error);
+      res.status(500).json({ error: 'Failed to export DataHub' });
+    }
+  })
+);
+
+// POST /sessions/:id/stage
 router.post(
   '/:id/stage',
-  [
-    param('id').isInt().toInt(),
-  ],
+  [param('id').isInt().toInt()],
   asyncHandler(async (req, res) => {
-    const { id } = req.params;
+    const sessionId = req.params.id;
+    
+    try {
+      const session = await prisma.genome_browser_session.findUnique({
+        where: { id: sessionId },
+        include: {
+          session_tracks: {
+            include: {
+              track: {
+                include: {
+                  dataset_file: {
+                    include: {
+                      dataset: true
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      });
 
-    // Check if session exists and user has access
-    const session = await prisma.genome_browser_session.findFirst({
-      where: {
-        id,
-        OR: [
-          { user_id: req.user.id },
-          { is_public: true },
-        ],
-      },
-      include: {
-        session_tracks: {
-          include: {
-            track: {
-              include: {
-                dataset_file: {
-                  include: {
-                    dataset: true,
-                  },
-                },
-              },
-            },
-          },
-        },
-      },
-    });
-
-    if (!session) {
-      return res.status(404).json({ error: 'Session not found' });
-    }
-
-    // Check which tracks need staging
-    const tracksToStage = session.session_tracks.filter(
-      (st) => !st.track.dataset_file.dataset.is_staged,
-    );
-
-    if (tracksToStage.length === 0) {
-      return res.status(400).json({ error: 'No tracks need staging' });
-    }
-
-    // Get unique dataset IDs that need staging
-    const datasetIds = [...new Set(tracksToStage.map((st) => st.track.dataset_file.dataset_id))];
-
-    // Create staging request
-    const stagingRequest = {
-      track_ids: tracksToStage.map((st) => st.track_id),
-      dataset_ids: datasetIds,
-      requested_at: new Date(),
-      status: 'pending',
-    };
-
-    // Update session with staging request
-    const updatedSession = await prisma.genome_browser_session.update({
-      where: { id },
-      data: {
-        staging_requested: stagingRequest,
-        staging_requested_by: req.user.id,
-      },
-      include: {
-        user: {
-          select: {
-            id: true,
-            username: true,
-            name: true,
-          },
-        },
-        session_tracks: {
-          include: {
-            track: {
-              include: {
-                dataset_file: {
-                  include: {
-                    dataset: true,
-                  },
-                },
-              },
-            },
-          },
-          orderBy: { order: 'asc' },
-        },
-      },
-    });
-
-    // Request staging for each dataset using the datasets endpoint
-    const stagingPromises = datasetIds.map(async (datasetId) => {
-      try {
-        const response = await fetch(`${req.protocol}://${req.get('host')}/api/datasets/${datasetId}/workflow/stage`, {
-          method: 'POST',
-          headers: {
-            Authorization: req.get('Authorization'),
-            'Content-Type': 'application/json',
-          },
-        });
-        return { datasetId, success: response.ok };
-      } catch (error) {
-        return { datasetId, success: false, error: error.message };
+      if (!session) {
+        return res.status(404).json({ error: 'Session not found' });
       }
-    });
 
-    const stagingResults = await Promise.all(stagingPromises);
+      // Get unique datasets that need staging
+      const datasetsToStage = [...new Set(
+        session.session_tracks
+          .filter(st => !st.track.dataset_file?.dataset?.is_staged)
+          .map(st => st.track.dataset_file?.dataset?.id)
+          .filter(Boolean)
+      )];
 
-    res.json({
-      message: 'Staging request submitted',
-      tracks_to_stage: tracksToStage.length,
-      datasets_requested: datasetIds.length,
-      staging_results: stagingResults,
-      session: updatedSession,
-    });
-  }),
+      if (datasetsToStage.length === 0) {
+        return res.json({ message: 'All datasets are already staged' });
+      }
+
+      // Return the datasets that need staging so the frontend can call the staging workflow
+      res.json({ 
+        message: 'Datasets need staging',
+        datasets: datasetsToStage,
+        note: 'Use the dataset staging workflow to stage these datasets individually'
+      });
+    } catch (error) {
+      console.error('Error checking staging status:', error);
+      res.status(500).json({ error: 'Failed to check staging status' });
+    }
+  })
 );
 
 module.exports = router;

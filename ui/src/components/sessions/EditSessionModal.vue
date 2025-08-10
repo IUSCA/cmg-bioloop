@@ -49,16 +49,15 @@
         />
       </div>
 
-      <!-- Track selection -->
+      <!-- Track Management -->
       <div>
-        <h3 class="text-lg font-medium mb-4">Select Tracks</h3>
+        <h3 class="text-lg font-medium mb-4">Manage Tracks</h3>
         
         <div class="mb-4">
           <va-input
             v-model="trackSearch"
             placeholder="Search tracks..."
             class="w-full"
-            @input="searchTracks"
           />
         </div>
 
@@ -78,10 +77,33 @@
               </div>
             </div>
             
-            <va-checkbox
-              :model-value="selectedTrackIds.includes(track.id)"
-              @update:model-value="toggleTrack(track.id)"
-            />
+            <div class="flex items-center gap-2">
+              <va-input
+                v-model="trackColors[track.id]"
+                placeholder="Color"
+                class="w-20"
+              />
+              <va-button
+                preset="plain"
+                size="small"
+                @click="moveTrackUp(track.id)"
+                :disabled="getTrackIndex(track.id) === 0"
+              >
+                <va-icon name="keyboard_arrow_up" />
+              </va-button>
+              <va-button
+                preset="plain"
+                size="small"
+                @click="moveTrackDown(track.id)"
+                :disabled="getTrackIndex(track.id) === selectedTrackIds.length - 1"
+              >
+                <va-icon name="keyboard_arrow_down" />
+              </va-button>
+              <va-checkbox
+                :model-value="selectedTrackIds.includes(track.id)"
+                @update:model-value="toggleTrack(track.id)"
+              />
+            </div>
           </div>
         </div>
 
@@ -94,7 +116,7 @@
         </div>
       </div>
 
-      <!-- Selected tracks preview -->
+      <!-- Selected Tracks Preview -->
       <div v-if="selectedTracks.length > 0">
         <h3 class="text-lg font-medium mb-4">Selected Tracks ({{ selectedTracks.length }})</h3>
         <div class="space-y-2">
@@ -111,11 +133,10 @@
             </div>
             
             <div class="flex items-center gap-2">
-              <va-input
-                v-model="trackColors[track.id]"
-                placeholder="Color"
-                class="w-20"
-              />
+              <span class="text-sm text-gray-500">Order: {{ index + 1 }}</span>
+              <span v-if="trackColors[track.id]" class="text-sm text-gray-500">
+                Color: {{ trackColors[track.id] }}
+              </span>
               <va-button
                 preset="plain"
                 color="danger"
@@ -159,7 +180,7 @@ const form = ref({
 const errors = ref({});
 const trackSearch = ref('');
 const selectedTrackIds = ref([]);
-const trackColors = ref({});
+const trackColors = ref({}); // New state for track colors
 
 // Computed
 const genomeTypeOptions = computed(() => {
@@ -203,6 +224,13 @@ const selectedTracks = computed(() => {
   return availableTracks.value.filter(track => selectedTrackIds.value.includes(track.id));
 });
 
+const canSubmit = computed(() => {
+  return form.value.session_name.trim() && 
+         form.value.genome_type && 
+         form.value.genome &&
+         selectedTrackIds.value.length > 0;
+});
+
 // Watchers
 watch(() => props.modelValue, (newValue) => {
   visible.value = newValue;
@@ -233,12 +261,10 @@ const initializeForm = () => {
   
   // Set selected tracks from session
   selectedTrackIds.value = props.session.session_tracks?.map(st => st.track_id) || [];
-  
-  // Set track colors
-  trackColors.value = {};
-  props.session.session_tracks?.forEach(st => {
-    trackColors.value[st.track_id] = st.color || getRandomColor();
-  });
+  trackColors.value = props.session.session_tracks?.reduce((acc, st) => ({
+    ...acc,
+    [st.track_id]: st.color || '#000000', // Initialize with existing colors or default
+  }), {});
   
   errors.value = {};
   trackSearch.value = '';
@@ -266,8 +292,10 @@ const toggleTrack = (trackId) => {
     delete trackColors.value[trackId];
   } else {
     selectedTrackIds.value.push(trackId);
-    // Set default color
-    trackColors.value[trackId] = getRandomColor();
+    // Set default color if not already set
+    if (!trackColors.value[trackId]) {
+      trackColors.value[trackId] = '#000000';
+    }
   }
 };
 
@@ -279,9 +307,26 @@ const removeTrack = (trackId) => {
   }
 };
 
-const getRandomColor = () => {
-  const colors = ['#ff0000', '#00ff00', '#0000ff', '#ffff00', '#ff00ff', '#00ffff', '#ff8800', '#8800ff'];
-  return colors[Math.floor(Math.random() * colors.length)];
+const moveTrackUp = (trackId) => {
+  const index = selectedTrackIds.value.indexOf(trackId);
+  if (index > 0) {
+    const temp = selectedTrackIds.value[index];
+    selectedTrackIds.value[index] = selectedTrackIds.value[index - 1];
+    selectedTrackIds.value[index - 1] = temp;
+  }
+};
+
+const moveTrackDown = (trackId) => {
+  const index = selectedTrackIds.value.indexOf(trackId);
+  if (index < selectedTrackIds.value.length - 1) {
+    const temp = selectedTrackIds.value[index];
+    selectedTrackIds.value[index] = selectedTrackIds.value[index + 1];
+    selectedTrackIds.value[index + 1] = temp;
+  }
+};
+
+const getTrackIndex = (trackId) => {
+  return selectedTrackIds.value.indexOf(trackId);
 };
 
 const validateForm = () => {
@@ -314,6 +359,10 @@ const handleSave = async () => {
       genome: form.value.genome,
       is_public: form.value.is_public,
       track_ids: selectedTrackIds.value,
+      track_colors: Object.entries(trackColors.value).map(([id, color]) => ({
+        track_id: id,
+        color: color,
+      })),
     };
     
     const session = await sessionsStore.updateSession(props.session.id, sessionData);
