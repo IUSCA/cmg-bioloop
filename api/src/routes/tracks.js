@@ -273,7 +273,39 @@ router.get(
     const include = {
       dataset_file: {
         include: {
-          dataset: include_dataset,
+          dataset: {
+            include: {
+              projects: {
+                include: {
+                  project: {
+                    select: {
+                      id: true,
+                      name: true,
+                      slug: true,
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+      session_tracks: {
+        include: {
+          session: {
+            include: {
+              user: {
+                select: {
+                  id: true,
+                  username: true,
+                  name: true,
+                },
+              },
+            },
+          },
+        },
+        orderBy: {
+          order: 'asc',
         },
       },
     };
