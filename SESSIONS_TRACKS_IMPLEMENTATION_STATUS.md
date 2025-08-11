@@ -3,6 +3,8 @@
 ## Overview
 This document analyzes the current implementation status of Sessions and Tracks features in the bioloop app compared to CMG's comprehensive feature set. The analysis is based on examining CMG's documentation and the current bioloop codebase.
 
+**IMPORTANT IMPLEMENTATION DECISION**: The in-app genome browser modal functionality ("Open Browser here in modal window") from CMG will NOT be implemented in this app. Instead, external genome browsers will always open in new tabs. This simplifies the architecture and focuses on the core Sessions and Tracks management functionality.
+
 ## Current Implementation Status
 
 ### ✅ **FULLY IMPLEMENTED**
@@ -89,11 +91,11 @@ This document analyzes the current implementation status of Sessions and Tracks 
 - **Missing**: Track comparison tools
 - **Missing**: Track performance monitoring
 
-#### **3. In-App Genome Browser**
-- **Missing**: IGV.js or other in-app genome browser integration
-- **Missing**: Track visualization within the application
-- **Missing**: Browser preference settings
-- **Missing**: Multiple genome browser support
+#### **3. In-App Genome Browser - INTENTIONALLY NOT IMPLEMENTED**
+- **Decision**: In-app genome browser modal functionality from CMG will NOT be implemented
+- **Rationale**: Simplifies architecture and focuses on core Sessions/Tracks management
+- **Alternative**: External genome browsers always open in new tabs via DataHub export
+- **Benefits**: Cleaner codebase, better performance, easier maintenance
 
 ## Recent Implementation Progress
 
@@ -197,7 +199,7 @@ This document analyzes the current implementation status of Sessions and Tracks 
 2. **✅ RESOLVED**: Missing Track Detail Page - Now fully implemented
 3. **🔄 PARTIALLY RESOLVED**: Incomplete Staging Integration - Basic integration exists
 4. **✅ RESOLVED**: Strict Staging Validation - Users can now create sessions with unstaged tracks
-5. **✅ RESOLVED**: In-App Browser Complexity - Simplified to external redirects only
+5. **✅ RESOLVED**: In-App Browser Complexity - Simplified to external redirects only (intentional design decision to not implement CMG's modal functionality)
 
 ### **Recommended Improvements**
 1. **Component Architecture**: Better separation of concerns in session components
@@ -205,6 +207,31 @@ This document analyzes the current implementation status of Sessions and Tracks 
 3. **Performance**: Implement virtual scrolling for large track lists
 4. **Testing**: Add comprehensive test coverage for sessions and tracks
 5. **Project Integration**: Extend session system to work with project access control
+
+## Implementation Decisions & CMG Feature Mapping
+
+### **Features NOT Being Ported from CMG**
+1. **In-App Genome Browser Modal**: The "Open Browser here in modal window" functionality will NOT be implemented
+   - **Rationale**: Simplifies architecture and focuses on core Sessions/Tracks management
+   - **Alternative**: External genome browsers always open in new tabs via DataHub export
+   - **Benefits**: Cleaner codebase, better performance, easier maintenance
+
+2. **IGV.js Integration**: No in-app track visualization within the application
+   - **Rationale**: External browsers provide better performance and user experience
+   - **Alternative**: DataHub export format for external genome browser integration
+
+### **Features Successfully Ported from CMG**
+1. **Session Management**: Complete CRUD operations with track management
+2. **Track Management**: Full track lifecycle with metadata and staging
+3. **Access Control**: Role-based permissions and project associations
+4. **Data Export**: DataHub format for external genome browsers
+5. **Staging Integration**: Track staging workflow and status tracking
+
+### **Features Enhanced Beyond CMG**
+1. **Modern UI**: Vue 3 with Vuestic UI framework instead of Vue 2 with Vuetify
+2. **Database**: PostgreSQL with Prisma instead of MongoDB with Mongoose
+3. **Architecture**: Microservices with Docker instead of monolithic approach
+4. **External Integration**: Simplified external browser workflow with clear user messaging
 
 ## Conclusion
 

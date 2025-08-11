@@ -558,7 +558,7 @@ router.get(
   [param('id').isInt().toInt()],
   asyncHandler(async (req, res) => {
     const sessionId = req.params.id;
-    
+
     try {
       const session = await prisma.genome_browser_session.findUnique({
         where: { id: sessionId },
@@ -569,14 +569,14 @@ router.get(
                 include: {
                   dataset_file: {
                     include: {
-                      dataset: true
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
+                      dataset: true,
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
       });
 
       if (!session) {
@@ -584,14 +584,14 @@ router.get(
       }
 
       // Convert to DataHub format
-      const tracks = session.session_tracks.map(st => {
-        const track = st.track;
+      const tracks = session.session_tracks.map((st) => {
+        const { track } = st;
         const dataset = track.dataset_file?.dataset;
-        
+
         // Determine file type and URL
         let fileType = 'unknown';
         let url = '';
-        
+
         if (track.file_type === 'bam') {
           fileType = 'bam';
           url = `${process.env.API_BASE_URL}/files/${track.dataset_file_id}`;
@@ -602,15 +602,15 @@ router.get(
           fileType = 'vcf';
           url = `${process.env.API_BASE_URL}/files/${track.dataset_file_id}`;
         }
-        
+
         return {
           name: track.name,
           type: fileType,
-          url: url,
+          url,
           color: st.color || '#000000',
           height: 50,
           genome: `${track.genomeType}_${track.genomeValue}`,
-          dataset: dataset?.name || 'Unknown'
+          dataset: dataset?.name || 'Unknown',
         };
       });
 
@@ -619,7 +619,7 @@ router.get(
       console.error('Error exporting DataHub:', error);
       res.status(500).json({ error: 'Failed to export DataHub' });
     }
-  })
+  }),
 );
 
 // POST /sessions/:id/stage
@@ -628,7 +628,7 @@ router.post(
   [param('id').isInt().toInt()],
   asyncHandler(async (req, res) => {
     const sessionId = req.params.id;
-    
+
     try {
       const session = await prisma.genome_browser_session.findUnique({
         where: { id: sessionId },
@@ -639,14 +639,14 @@ router.post(
                 include: {
                   dataset_file: {
                     include: {
-                      dataset: true
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
+                      dataset: true,
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
       });
 
       if (!session) {
@@ -656,9 +656,9 @@ router.post(
       // Get unique datasets that need staging
       const datasetsToStage = [...new Set(
         session.session_tracks
-          .filter(st => !st.track.dataset_file?.dataset?.is_staged)
-          .map(st => st.track.dataset_file?.dataset?.id)
-          .filter(Boolean)
+          .filter((st) => !st.track.dataset_file?.dataset?.is_staged)
+          .map((st) => st.track.dataset_file?.dataset?.id)
+          .filter(Boolean),
       )];
 
       if (datasetsToStage.length === 0) {
@@ -666,16 +666,139 @@ router.post(
       }
 
       // Return the datasets that need staging so the frontend can call the staging workflow
-      res.json({ 
+      res.json({
         message: 'Datasets need staging',
         datasets: datasetsToStage,
-        note: 'Use the dataset staging workflow to stage these datasets individually'
+        note: 'Use the dataset staging workflow to stage these datasets individually',
       });
     } catch (error) {
       console.error('Error checking staging status:', error);
       res.status(500).json({ error: 'Failed to check staging status' });
     }
-  })
+  }),
+);
+
+// GET /sessions/:id/projects - Get projects associated with a session
+router.get(
+  '/:id/projects',
+  isPermittedTo('read'),
+  [
+    param('id').isInt().toInt(),
+    query('limit').isInt({ min: 1, max: 100 }).optional().toInt(),
+    query('offset').isInt({ min: 0 }).optional().toInt(),
+    query('sort_by').isIn(['name', 'created_at', 'updated_at']).optional(),
+    query('sort_order').isIn(['asc', 'desc']).optional(),
+    query('search').trim().optional(),
+  ],
+  asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const {
+      limit = 25,
+      offset = 0,
+      sort_by = 'name',
+      sort_order = 'asc',
+      search,
+    } = req.query;
+
+    try {
+      // First, get the session to verify it exists and user has access
+      const session = await prisma.genome_browser_session.findFirst({
+        where: {
+          id,
+          OR: [
+            { user_id: req.user.id }, // User's own sessions
+            { is_public: true }, // Public sessions
+          ],
+        },
+        include: {
+          session_tracks: {
+            include: {
+              track: {
+                include: {
+                  dataset_file: {
+                    include: {
+                      dataset: {
+                        include: {
+                          projects: {
+                            include: {
+                              project: true,
+                            },
+                          },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      });
+
+      if (!session) {
+        return res.status(404).json({ error: 'Session not found or access denied' });
+      }
+
+      // Extract unique projects from session tracks
+      const projectMap = new Map();
+
+      session.session_tracks.forEach((sessionTrack) => {
+        const dataset = sessionTrack.track.dataset_file?.dataset;
+        if (dataset?.projects) {
+          dataset.projects.forEach((projectAssoc) => {
+            const { project } = projectAssoc;
+            if (!projectMap.has(project.id)) {
+              projectMap.set(project.id, {
+                id: project.id,
+                name: project.name,
+                slug: project.slug,
+                description: project.description,
+                created_at: project.created_at,
+                updated_at: project.updated_at,
+              });
+            }
+          });
+        }
+      });
+
+      let projects = Array.from(projectMap.values());
+
+      // Apply search filter
+      if (search) {
+        projects = projects.filter((project) => project.name.toLowerCase().includes(search.toLowerCase())
+          || (project.description && project.description.toLowerCase().includes(search.toLowerCase())));
+      }
+
+      // Apply sorting
+      projects.sort((a, b) => {
+        const aVal = a[sort_by];
+        const bVal = b[sort_by];
+
+        if (sort_order === 'asc') {
+          return aVal < bVal ? -1 : aVal > bVal ? 1 : 0;
+        }
+        return aVal > bVal ? -1 : aVal < bVal ? 1 : 0;
+      });
+
+      // Apply pagination
+      const total = projects.length;
+      const paginatedProjects = projects.slice(offset, offset + limit);
+
+      res.json({
+        projects: paginatedProjects,
+        metadata: {
+          count: total,
+          limit,
+          offset,
+          sort_by,
+          sort_order,
+        },
+      });
+    } catch (error) {
+      console.error('Error fetching session projects:', error);
+      res.status(500).json({ error: 'Failed to fetch session projects' });
+    }
+  }),
 );
 
 module.exports = router;

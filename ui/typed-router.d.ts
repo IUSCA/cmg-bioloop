@@ -44,7 +44,12 @@ declare module 'vue-router/auto-routes' {
     '/projects/[projectId]/datasets/[datasetId]/filebrowser': RouteRecordInfo<'/projects/[projectId]/datasets/[datasetId]/filebrowser', '/projects/:projectId/datasets/:datasetId/filebrowser', { projectId: ParamValue<true>, datasetId: ParamValue<true> }, { projectId: ParamValue<false>, datasetId: ParamValue<false> }>,
     '/projects/new': RouteRecordInfo<'/projects/new', '/projects/new', Record<never, never>, Record<never, never>>,
     '/rawdata/': RouteRecordInfo<'/rawdata/', '/rawdata', Record<never, never>, Record<never, never>>,
+    '/sessions/': RouteRecordInfo<'/sessions/', '/sessions', Record<never, never>, Record<never, never>>,
+    '/sessions/[id]': RouteRecordInfo<'/sessions/[id]', '/sessions/:id', { id: ParamValue<true> }, { id: ParamValue<false> }>,
+    '/sessions/new': RouteRecordInfo<'/sessions/new', '/sessions/new', Record<never, never>, Record<never, never>>,
     '/stats': RouteRecordInfo<'/stats', '/stats', Record<never, never>, Record<never, never>>,
+    '/tracks/': RouteRecordInfo<'/tracks/', '/tracks', Record<never, never>, Record<never, never>>,
+    '/tracks/[id]': RouteRecordInfo<'/tracks/[id]', '/tracks/:id', { id: ParamValue<true> }, { id: ParamValue<false> }>,
     '/users': RouteRecordInfo<'/users', '/users', Record<never, never>, Record<never, never>>,
     '/workflows/': RouteRecordInfo<'/workflows/', '/workflows', Record<never, never>, Record<never, never>>,
   }

@@ -2,7 +2,6 @@
   <track-list />
 </template>
 
-
 <route lang="yaml">
 meta:
   title: Tracks

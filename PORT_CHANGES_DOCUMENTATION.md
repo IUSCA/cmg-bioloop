@@ -11,8 +11,8 @@ This document details all the port changes made to the bioloop-5 project to reso
 | UI | 443 | 9443 | HTTPS | Frontend application |
 | API | 3030 | 9001 | HTTP | Main API service |
 | Postgres | 5432 | 9002 | TCP | Main database |
-| Queue (RabbitMQ) | 5672 | 9003 | TCP | Message queue |
-| Queue Management | 15672 | 9003 | HTTP | RabbitMQ management UI |
+| Queue (RabbitMQ) | 5672 | 9010 | TCP | Message queue |
+| Queue Management | 15672 | 9010 | HTTP | RabbitMQ management UI |
 | Mongo | 27017 | 9004 | TCP | MongoDB database |
 | Rhythm | 5001 | 9005 | HTTP | Workflow server |
 | Secure Download | 3060 | 9006 | HTTP | File upload/download service |
@@ -166,13 +166,13 @@ WORKFLOW_SERVER_BASE_URL=http://rhythm:9005
 ```bash
 DATABASE_URL="postgresql://appuser:example@localhost:9002/app?schema=public"
 VITE_API_REDIRECT_URL=http://localhost:9001
-# Port forwarding: 9001, 9004, 9003
+# Port forwarding: 9001, 9004, 9010
 ```
 
 **File:** `docs/worker/overview.md`
 ```bash
-# Port forwarding: 9001, 9004, 9003
-ssh -R 9101:localhost:9001 -R 9104:localhost:9004 -R 9103:localhost:9003
+# Port forwarding: 9001, 9004, 9010
+ssh -R 9101:localhost:9001 -R 9104:localhost:9004 -R 9110:localhost:9010
 ```
 
 **File:** `docs/installation/install-docker.md`

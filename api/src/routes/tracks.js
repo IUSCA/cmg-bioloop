@@ -310,25 +310,38 @@ router.get(
       },
     };
 
-    const track = await prisma.track.findFirst({
-      where: {
-        id,
-        dataset_file: {
-          dataset: {
-            projects: {
-              some: {
-                project: {
-                  users: {
-                    some: { user_id: req.user.id },
+    // If user has admin/operator role, they can see all tracks
+    // Otherwise, filter by user's project membership through datasets
+    let track;
+
+    if (req.permission.granted) {
+      // Admin/operator can see any track
+      track = await prisma.track.findFirst({
+        where: { id },
+        include,
+      });
+    } else {
+      // Regular users can only see tracks from datasets they have access to
+      track = await prisma.track.findFirst({
+        where: {
+          id,
+          dataset_file: {
+            dataset: {
+              projects: {
+                some: {
+                  project: {
+                    users: {
+                      some: { user_id: req.user.id },
+                    },
                   },
                 },
               },
             },
           },
         },
-      },
-      include,
-    });
+        include,
+      });
+    }
 
     if (!track) {
       return res.status(404).json({ error: 'Track not found or access denied' });

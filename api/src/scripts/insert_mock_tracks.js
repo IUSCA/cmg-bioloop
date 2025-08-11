@@ -34,6 +34,66 @@ const mockData = {
     fasta: ['Reference Genome', 'Transcriptome', 'Proteome'],
   },
 
+  // Session data for testing
+  sessions: [
+    {
+      title: 'Human Brain RNA-Seq Analysis',
+      genome: 'hg38',
+      genome_type: 'human',
+      is_public: true,
+      description: 'Comprehensive analysis of human brain RNA-Seq data across multiple regions',
+    },
+    {
+      title: 'Mouse Embryo Development Study',
+      genome: 'mm39',
+      genome_type: 'mouse',
+      is_public: false,
+      description: 'ChIP-Seq analysis of mouse embryonic development stages',
+    },
+    {
+      title: 'Cancer Variant Calling Results',
+      genome: 'hg38',
+      genome_type: 'human',
+      is_public: true,
+      description: 'Variant calling results from multiple cancer cell lines',
+    },
+    {
+      title: 'Zebrafish Development Atlas',
+      genome: 'danRer11',
+      genome_type: 'zebrafish',
+      is_public: false,
+      description: 'Developmental stage RNA-Seq analysis in zebrafish',
+    },
+    {
+      title: 'Yeast Genome Assembly',
+      genome: 'sacCer3',
+      genome_type: 'yeast',
+      is_public: true,
+      description: 'High-quality yeast genome assemblies and annotations',
+    },
+    {
+      title: 'Human Blood ATAC-Seq',
+      genome: 'hg38',
+      genome_type: 'human',
+      is_public: false,
+      description: 'ATAC-Seq analysis of human blood samples',
+    },
+    {
+      title: 'Empty Session for Testing',
+      genome: 'hg38',
+      genome_type: 'human',
+      is_public: false,
+      description: 'This session intentionally has no tracks assigned for testing pristine sessions',
+    },
+    {
+      title: 'Public Research Session',
+      genome: 'mm10',
+      genome_type: 'mouse',
+      is_public: true,
+      description: 'Public session for collaborative research',
+    },
+  ],
+
   // Project data
   projects: [
     {
@@ -269,6 +329,81 @@ async function createTracks(datasetFiles, tx = prisma) {
   return tracks;
 }
 
+async function createSessions(user, tracks, tx = prisma) {
+  console.log('Creating sessions...');
+  const sessions = [];
+
+  await Promise.all(mockData.sessions.map(async (sessionData) => {
+    const session = await tx.genome_browser_session.create({
+      data: {
+        title: sessionData.title,
+        genome: sessionData.genome,
+        genome_type: sessionData.genome_type,
+        user_id: user.id,
+        is_public: sessionData.is_public,
+        // Note: metadata field not available in current schema
+        // description stored in title for now
+      },
+    });
+    sessions.push(session);
+    console.log(`Created session: ${session.title}`);
+  }));
+
+  return sessions;
+}
+
+async function assignTracksToSessions(sessions, tracks, tx = prisma) {
+  console.log('Assigning tracks to sessions...');
+  const sessionTracks = [];
+
+  // Create session-track assignments
+  // Some sessions will have tracks, others will remain pristine
+  const sessionsWithTracks = sessions.slice(0, 6); // First 6 sessions get tracks
+  const pristineSessions = sessions.slice(6); // Last 2 sessions remain pristine
+
+  console.log(`Sessions with tracks: ${sessionsWithTracks.length}`);
+  console.log(`Pristine sessions (no tracks): ${pristineSessions.length}`);
+
+  // Assign tracks to sessions that should have them
+  await Promise.all(sessionsWithTracks.map(async (session) => {
+    // Filter tracks that match the session's genome type
+    const compatibleTracks = tracks.filter((track) => track.genomeType === session.genome_type);
+
+    if (compatibleTracks.length === 0) {
+      console.log(`No compatible tracks found for session: ${session.title}`);
+      return;
+    }
+
+    // Randomly select 2-5 tracks for this session
+    const numTracks = Math.floor(Math.random() * 4) + 2; // 2-5 tracks
+    const selectedTracks = compatibleTracks
+      .sort(() => 0.5 - Math.random())
+      .slice(0, Math.min(numTracks, compatibleTracks.length));
+
+    // Create session-track relationships
+    await Promise.all(selectedTracks.map(async (track, index) => {
+      const sessionTrack = await tx.session_track.create({
+        data: {
+          session_id: session.id,
+          track_id: track.id,
+          color: `#${Math.floor(Math.random() * 16777215).toString(16)}`, // Random color
+          title: track.name,
+          order: index,
+        },
+      });
+      sessionTracks.push(sessionTrack);
+      console.log(`Assigned track "${track.name}" to session "${session.title}" (order: ${index})`);
+    }));
+  }));
+
+  // Log pristine sessions
+  pristineSessions.forEach((session) => {
+    console.log(`Session "${session.title}" remains pristine (no tracks assigned)`);
+  });
+
+  return sessionTracks;
+}
+
 async function assignDatasetsToProjects(datasets, projects, tx = prisma) {
   console.log('Assigning datasets to projects...');
   await Promise.all(datasets.map(async (dataset) => {
@@ -317,7 +452,7 @@ async function assignUserToProjects(user, projects, tx = prisma) {
 
 async function main() {
   try {
-    console.log('Starting mock tracks data insertion...');
+    console.log('Starting mock tracks and sessions data insertion...');
 
     await prisma.$transaction(async (tx) => {
       // Find or create e2eUser
@@ -336,22 +471,33 @@ async function main() {
       // Create tracks
       const tracks = await createTracks(datasetFiles, tx);
 
+      // Create sessions
+      const sessions = await createSessions(e2eUser, tracks, tx);
+
+      // Assign tracks to sessions (some sessions will have tracks, others will be pristine)
+      const sessionTracks = await assignTracksToSessions(sessions, tracks, tx);
+
       // Assign datasets to projects
       await assignDatasetsToProjects(datasets, projects, tx);
 
       // Assign e2eUser to all projects
       await assignUserToProjects(e2eUser, projects, tx);
 
-      console.log('\n=== Mock Tracks Data Insertion Complete ===');
+      console.log('\n=== Mock Tracks and Sessions Data Insertion Complete ===');
       console.log(`Created ${projects.length} projects`);
       console.log(`Created ${datasets.length} datasets`);
       console.log(`Created ${datasetFiles.length} dataset files`);
       console.log(`Created ${tracks.length} tracks`);
+      console.log(`Created ${sessions.length} sessions`);
+      console.log(`Created ${sessionTracks.length} session-track relationships`);
       console.log(`Assigned e2eUser to ${projects.length} projects`);
-      console.log('\nYou can now test the tracks feature with this data!');
+      console.log('\nSession Distribution:');
+      console.log(`  • Sessions with tracks: ${sessions.length - 2}`);
+      console.log('  • Pristine sessions (no tracks): 2');
+      console.log('\nYou can now test the tracks and sessions features with this comprehensive test data!');
     });
   } catch (error) {
-    console.error('Error inserting mock tracks data:', error);
+    console.error('Error inserting mock tracks and sessions data:', error);
     throw error;
   } finally {
     await prisma.$disconnect();
