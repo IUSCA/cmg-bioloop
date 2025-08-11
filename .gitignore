@@ -76,3 +76,5 @@ db/db/backups
 db/db_postgres
 db/db/postgres
 db/db/db_postgres
+
+.cursorrules
