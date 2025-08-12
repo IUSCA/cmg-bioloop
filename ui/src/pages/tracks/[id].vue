@@ -1,5 +1,5 @@
 <template>
-  <div class="track-detail p-6">
+  <div class="track-detail">
     <div v-if="loading" class="flex justify-center items-center h-64">
       <va-progress-circular indeterminate />
     </div>
@@ -9,28 +9,13 @@
     </div>
 
     <div v-else-if="track" class="space-y-6">
-      <!-- Breadcrumbs -->
-      <va-breadcrumbs class="text-lg breadcrumbs">
-        <va-breadcrumbs-item to="/tracks" label="Tracks" />
-        <va-breadcrumbs-item :label="track.name" />
-      </va-breadcrumbs>
-
-      <!-- Header -->
-      <div class="flex justify-between items-start">
-        <div>
-          <h1 class="text-3xl font-bold">{{ track.name }}</h1>
-          <p class="text-gray-600 mt-2">
-            Track ID: {{ track.id }} • Created
-            {{ datetime.fromNow(track.created_at) }}
-          </p>
-        </div>
-      </div>
-
       <!-- Track Information Grid -->
       <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <!-- Basic Information -->
         <va-card>
-          <va-card-title>Basic Information</va-card-title>
+          <va-card-title>
+            <span class="text-lg">Basic Information</span>
+          </va-card-title>
           <va-card-content>
             <div class="space-y-4">
               <div class="flex justify-between">
@@ -38,7 +23,7 @@
                 <span>{{ track.name }}</span>
               </div>
               <div class="flex justify-between">
-                <span class="font-medium">File Type:</span>
+                <span class="font-medium">File Type</span>
                 <va-chip
                   :color="getFileTypeColor(track.file_type)"
                   size="small"
@@ -47,19 +32,19 @@
                 </va-chip>
               </div>
               <div class="flex justify-between">
-                <span class="font-medium">Genome Type:</span>
+                <span class="font-medium">Genome Type</span>
                 <va-chip outline size="small">{{ track.genomeType }}</va-chip>
               </div>
               <div class="flex justify-between">
-                <span class="font-medium">Genome Version:</span>
+                <span class="font-medium">Genome Version</span>
                 <va-chip outline size="small">{{ track.genomeValue }}</va-chip>
               </div>
               <div class="flex justify-between">
-                <span class="font-medium">Created:</span>
+                <span class="font-medium">Created</span>
                 <span>{{ datetime.date(track.created_at) }}</span>
               </div>
               <div class="flex justify-between">
-                <span class="font-medium">Last Updated:</span>
+                <span class="font-medium">Last Updated</span>
                 <span>{{ datetime.fromNow(track.updated_at) }}</span>
               </div>
             </div>
@@ -68,11 +53,13 @@
 
         <!-- Dataset Information -->
         <va-card>
-          <va-card-title>Dataset Information</va-card-title>
+          <va-card-title>
+            <span class="text-lg">Dataset Information</span>
+          </va-card-title>
           <va-card-content>
             <div v-if="track.dataset_file?.dataset" class="space-y-4">
               <div class="flex justify-between">
-                <span class="font-medium">Dataset Name:</span>
+                <span class="font-medium">Dataset Name</span>
                 <router-link
                   :to="`/datasets/${track.dataset_file.dataset.id}`"
                   class="va-link"
@@ -81,40 +68,37 @@
                 </router-link>
               </div>
               <div class="flex justify-between">
-                <span class="font-medium">Dataset Type:</span>
+                <span class="font-medium">Dataset Type</span>
                 <span>{{ track.dataset_file.dataset.type }}</span>
               </div>
               <div class="flex justify-between">
-                <span class="font-medium">File Name:</span>
+                <span class="font-medium">File Name</span>
                 <span>{{ track.dataset_file.name }}</span>
               </div>
               <div class="flex justify-between">
-                <span class="font-medium">File Size:</span>
+                <span class="font-medium">File Size</span>
                 <span>{{ formatFileSize(track.dataset_file.size) }}</span>
               </div>
               <div class="flex justify-between">
-                <span class="font-medium">File Path:</span>
-                <div class="flex-1 ml-4">
+                <span class="font-medium">File Path</span>
+                <div class="w-80">
                   <CopyText :text="track.dataset_file.path" />
                 </div>
               </div>
               <div class="flex justify-between">
-                <span class="font-medium">Staging Status:</span>
-                <va-chip
-                  :color="
-                    track.dataset_file.dataset.is_staged ? 'success' : 'warning'
-                  "
-                  size="small"
+                <span class="font-medium">Staged</span>
+                <div
+                  v-if="track.dataset_file.dataset.is_staged"
+                  class="text-green-700"
                 >
-                  {{
-                    track.dataset_file.dataset.is_staged
-                      ? "Staged"
-                      : "Not Staged"
-                  }}
-                </va-chip>
+                  <va-icon name="check_circle_outline" />
+                </div>
+                <div v-else class="text-warning">
+                  <va-icon name="close_circle_outline" />
+                </div>
               </div>
             </div>
-            <div v-else class="text-center text-gray-500 py-4">
+            <div v-else class="text-center py-4">
               No dataset information available
             </div>
           </va-card-content>
@@ -123,12 +107,11 @@
 
       <!-- Associated Sessions -->
       <va-card>
-        <va-card-title>Associated Sessions</va-card-title>
+        <va-card-title>
+          <span class="text-lg">Associated Sessions</span>
+        </va-card-title>
         <va-card-content>
           <div v-if="track.session_tracks?.length" class="space-y-3">
-            <div class="text-sm text-gray-600 mb-3">
-              This track is used in {{ track.session_tracks.length }} session(s)
-            </div>
             <va-data-table
               :items="track.session_tracks"
               :columns="sessionColumns"
@@ -144,31 +127,35 @@
                 </router-link>
               </template>
               <template #cell(created_by)="{ rowData }">
-                <span class="text-sm text-gray-600">
+                <span>
                   {{
                     rowData.session.user?.name || rowData.session.user?.username
                   }}
                 </span>
               </template>
               <template #cell(created_at)="{ rowData }">
-                <span class="text-sm text-gray-500">
+                <span>
                   {{ datetime.fromNow(rowData.session.created_at) }}
                 </span>
               </template>
               <template #cell(color)="{ rowData }">
-                <span v-if="rowData.color" class="text-sm text-gray-500">
-                  {{ rowData.color }}
-                </span>
-                <span v-else class="text-sm text-gray-400">-</span>
+                <div v-if="rowData.color" class="flex items-center gap-2">
+                  <div
+                    class="w-4 h-4 rounded border"
+                    :style="{ backgroundColor: rowData.color }"
+                  ></div>
+                  <span>{{ rowData.color }}</span>
+                </div>
+                <span v-else>-</span>
               </template>
               <template #cell(order)="{ rowData }">
-                <span class="text-sm text-gray-500">
+                <span>
                   {{ rowData.order + 1 }}
                 </span>
               </template>
             </va-data-table>
           </div>
-          <div v-else class="text-center text-gray-500 py-8">
+          <div v-else class="text-center py-8">
             This track is not used in any sessions yet.
           </div>
         </va-card-content>
@@ -176,20 +163,30 @@
 
       <!-- Actions -->
       <va-card>
-        <va-card-title>Actions</va-card-title>
+        <va-card-title>
+          <span class="text-lg">Actions</span>
+        </va-card-title>
         <va-card-content>
-          <div class="flex gap-3">
-            <va-button preset="secondary" @click="addToSession">
-              <va-icon name="plus" />
+          <div class="flex justify-start gap-3">
+            <va-button
+              color="primary"
+              border-color="primary"
+              preset="secondary"
+              class="flex-initial"
+              @click="addToSession"
+            >
               Add to Session
             </va-button>
 
             <va-button
               v-if="auth.canOperate"
-              preset="danger"
+              color="danger"
+              border-color="danger"
+              preset="secondary"
+              class="flex-initial"
               @click="deleteTrack"
             >
-              <va-icon name="delete" />
+              <va-icon name="delete" class="pr-2 text-2xl" />
               Delete Track
             </va-button>
           </div>
@@ -204,6 +201,7 @@ import CopyText from "@/components/utils/CopyText.vue";
 import * as datetime from "@/services/datetime";
 import toast from "@/services/toast";
 import { useAuthStore } from "@/stores/auth";
+import { useNavStore } from "@/stores/nav";
 import { useTracksStore } from "@/stores/tracks";
 import { computed, onMounted } from "vue";
 import { useRoute, useRouter } from "vue-router";
@@ -212,6 +210,7 @@ const route = useRoute();
 const router = useRouter();
 const tracksStore = useTracksStore();
 const auth = useAuthStore();
+const nav = useNavStore();
 
 // Computed
 const track = computed(() => tracksStore.currentTrack);
@@ -224,31 +223,35 @@ const sessionColumns = [
     key: "session_title",
     label: "Session Title",
     sortable: true,
-    width: "30%",
+    width: "35%",
+    thAlign: "left",
+    tdAlign: "left",
   },
   {
     key: "created_by",
     label: "Created By",
     sortable: true,
-    width: "20%",
+    width: "25%",
   },
   {
     key: "created_at",
     label: "Created",
     sortable: true,
-    width: "20%",
+    width: "25%",
   },
-  {
-    key: "color",
-    label: "Color",
-    sortable: false,
-    width: "15%",
-  },
+  // {
+  //   key: "color",
+  //   label: "Color",
+  //   sortable: false,
+  //   width: "15%",
+  // },
   {
     key: "order",
     label: "Order",
     sortable: true,
     width: "15%",
+    thAlign: "right",
+    tdAlign: "right",
   },
 ];
 
@@ -303,6 +306,19 @@ const deleteTrack = async () => {
 onMounted(async () => {
   try {
     await tracksStore.fetchTrack(route.params.id);
+
+    // Set dynamic breadcrumb navigation
+    if (track.value) {
+      nav.setNavItems([
+        {
+          label: "Tracks",
+          to: "/tracks",
+        },
+        {
+          label: track.value.name,
+        },
+      ]);
+    }
   } catch (error) {
     console.error("Failed to load track:", error);
     toast.error("Failed to load track");
@@ -314,5 +330,4 @@ onMounted(async () => {
 meta:
   title: Track Details
   requiresRoles: ["operator", "admin"]
-  nav: [{ label: "Tracks", to: "/tracks" }, { label: "Track Details" }]
 </route>

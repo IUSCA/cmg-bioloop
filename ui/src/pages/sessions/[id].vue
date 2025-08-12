@@ -10,13 +10,10 @@
 
     <div v-else-if="session" class="space-y-6">
       <!-- Breadcrumbs -->
-      <div class="flex items-center space-x-2 text-sm">
-        <router-link to="/sessions" class="hover:underline"
-          >Sessions</router-link
-        >
-        <span>/</span>
-        <span>{{ session.title }}</span>
-      </div>
+      <va-breadcrumbs class="text-lg breadcrumbs">
+        <va-breadcrumbs-item to="/sessions" label="Sessions" />
+        <va-breadcrumbs-item :label="session.title" />
+      </va-breadcrumbs>
 
       <!-- Header -->
       <div class="flex justify-between items-start">
@@ -57,7 +54,9 @@
 
       <!-- Session info -->
       <va-card>
-        <va-card-title>Session Information</va-card-title>
+        <va-card-title>
+          <span class="text-lg">Session Information</span>
+        </va-card-title>
         <va-card-content>
           <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
@@ -94,11 +93,13 @@
       </va-card>
 
       <!-- Tracks List -->
-      <div class="bg-white rounded-lg shadow p-6">
-        <div class="flex justify-between items-center mb-4">
-          <h2 class="text-xl font-semibold">
-            Tracks ({{ session.session_tracks?.length || 0 }})
-          </h2>
+      <va-card>
+        <va-card-title>
+          <span class="text-lg"
+            >Tracks ({{ session.session_tracks?.length || 0 }})</span
+          >
+        </va-card-title>
+        <va-card-content>
           <div class="flex gap-2">
             <va-button
               v-if="hasUnstagedTracks"
@@ -111,72 +112,74 @@
               Check Staging Status
             </va-button>
           </div>
-        </div>
 
-        <div v-if="session.session_tracks?.length" class="space-y-3">
-          <div
-            v-for="sessionTrack in session.session_tracks"
-            :key="sessionTrack.id"
-            class="flex items-center justify-between p-3 border rounded-lg"
-          >
-            <div class="flex-1">
-              <div class="font-medium">{{ sessionTrack.track.name }}</div>
-              <div class="text-sm text-gray-600">
-                {{ sessionTrack.track.file_type }} •
-                {{ sessionTrack.track.genomeType }}
-                {{ sessionTrack.track.genomeValue }}
+          <div v-if="session.session_tracks?.length" class="space-y-3 mt-4">
+            <div
+              v-for="sessionTrack in session.session_tracks"
+              :key="sessionTrack.id"
+              class="flex items-center justify-between p-3 border rounded-lg"
+            >
+              <div class="flex-1">
+                <div class="font-medium">{{ sessionTrack.track.name }}</div>
+                <div class="text-sm text-gray-600">
+                  {{ sessionTrack.track.file_type }} •
+                  {{ sessionTrack.track.genomeType }}
+                  {{ sessionTrack.track.genomeValue }}
+                </div>
+                <div class="text-xs text-gray-500">
+                  Dataset: {{ sessionTrack.track.dataset_file?.dataset?.name }}
+                </div>
+                <div class="flex items-center gap-2 mt-1">
+                  <span
+                    class="text-xs px-2 py-1 rounded-full"
+                    :class="
+                      sessionTrack.track.dataset_file?.dataset?.is_staged
+                        ? 'bg-green-100 text-green-800'
+                        : 'bg-yellow-100 text-yellow-800'
+                    "
+                  >
+                    {{
+                      sessionTrack.track.dataset_file?.dataset?.is_staged
+                        ? "Staged"
+                        : "Not Staged"
+                    }}
+                  </span>
+                  <span
+                    v-if="sessionTrack.color"
+                    class="text-xs px-2 py-1 rounded-full"
+                  >
+                    Color: {{ sessionTrack.color }}
+                  </span>
+                </div>
               </div>
-              <div class="text-xs text-gray-500">
-                Dataset: {{ sessionTrack.track.dataset_file?.dataset?.name }}
-              </div>
-              <div class="flex items-center gap-2 mt-1">
-                <span
-                  class="text-xs px-2 py-1 rounded-full"
-                  :class="
-                    sessionTrack.track.dataset_file?.dataset?.is_staged
-                      ? 'bg-green-100 text-green-800'
-                      : 'bg-yellow-100 text-yellow-800'
-                  "
-                >
-                  {{
-                    sessionTrack.track.dataset_file?.dataset?.is_staged
-                      ? "Staged"
-                      : "Not Staged"
-                  }}
-                </span>
-                <span
-                  v-if="sessionTrack.color"
-                  class="text-xs px-2 py-1 rounded-full bg-gray-100"
-                >
-                  Color: {{ sessionTrack.color }}
-                </span>
-              </div>
-            </div>
 
-            <div class="flex items-center gap-2">
-              <va-button
-                v-if="canEditSession(session)"
-                preset="plain"
-                size="small"
-                @click="editModal.show()"
-              >
-                <va-icon name="edit" />
-              </va-button>
+              <div class="flex items-center gap-2">
+                <va-button
+                  v-if="canEditSession(session)"
+                  preset="plain"
+                  size="small"
+                  @click="editModal.show()"
+                >
+                  <va-icon name="edit" />
+                </va-button>
+              </div>
             </div>
           </div>
-        </div>
 
-        <div v-else class="text-center text-gray-500 py-8">
-          No tracks added to this session yet.
-        </div>
-      </div>
+          <div v-else class="text-center py-8">
+            No tracks added to this session yet.
+          </div>
+        </va-card-content>
+      </va-card>
 
       <!-- Project Associations -->
       <va-card>
-        <va-card-title>Project Associations</va-card-title>
+        <va-card-title>
+          <span class="text-lg">Project Associations</span>
+        </va-card-title>
         <va-card-content>
           <div v-if="sessionProjects.length" class="space-y-3">
-            <div class="text-sm text-gray-600 mb-3">
+            <div class="mb-3">
               This session contains tracks from
               {{ sessionProjects.length }} project(s)
             </div>
@@ -195,21 +198,18 @@
                 </router-link>
               </template>
               <template #cell(description)="{ rowData }">
-                <span class="text-sm text-gray-600">
+                <span>
                   {{ rowData.description || "No description" }}
                 </span>
               </template>
               <template #cell(created_at)="{ rowData }">
-                <span class="text-sm text-gray-500">
+                <span>
                   {{ date(rowData.created_at) }}
                 </span>
               </template>
             </va-data-table>
           </div>
-          <div
-            v-else-if="!projectsLoading"
-            class="text-center text-gray-500 py-8"
-          >
+          <div v-else-if="!projectsLoading" class="text-center py-8">
             This session has no associated projects.
           </div>
         </va-card-content>
@@ -218,7 +218,7 @@
       <!-- Genome Browser Integration -->
       <va-card>
         <va-card-title class="flex items-center justify-between">
-          <span>Genome Browser View</span>
+          <span class="text-lg">Genome Browser View</span>
           <div class="flex gap-2">
             <va-button size="small" preset="secondary" @click="refreshBrowser">
               <va-icon name="refresh" />
@@ -237,25 +237,32 @@
         <va-card-content>
           <div
             v-if="!session.genome_type || !session.genome"
-            class="text-center py-8 text-gray-500"
+            class="text-center py-8"
           >
             <va-icon name="mdi-dna" class="text-4xl mb-2" />
             <p>Please set genome type and version to view tracks</p>
           </div>
           <div
             v-else-if="!session.session_tracks?.length"
-            class="text-center py-8 text-gray-500"
+            class="text-center py-8"
           >
             <va-icon name="mdi-chart-gantt" class="text-4xl mb-2" />
             <p>No tracks added to this session yet</p>
           </div>
           <div v-else>
-            <IGVBrowser
-              :tracks="formattedTracks"
-              :genome="`${session.genome_type}_${session.genome}`"
-              @browser-ready="onBrowserReady"
-              @error="onBrowserError"
-            />
+            <!-- Genome browser functionality removed - use external browsers instead -->
+            <div class="text-center py-8">
+              <va-icon name="mdi-dna" class="text-4xl mb-2" />
+              <p class="text-lg font-medium mb-2">Genome Browser View</p>
+              <p class="text-gray-600 mb-4">
+                This session contains
+                {{ session.session_tracks?.length || 0 }} tracks.
+              </p>
+              <va-button preset="primary" @click="openInExternalBrowser">
+                <va-icon name="open_in_new" class="pr-2" />
+                Open in External Browser
+              </va-button>
+            </div>
 
             <!-- Track Status -->
             <div
@@ -307,7 +314,6 @@
 </template>
 
 <script setup>
-import IGVBrowser from "@/components/IGVBrowser.vue";
 import EditSessionModal from "@/components/sessions/EditSessionModal.vue";
 import api from "@/services/api";
 import { date } from "@/services/datetime";
@@ -384,22 +390,6 @@ const projectColumns = [
     width: "20%",
   },
 ];
-
-// Format tracks for IGV browser
-const formattedTracks = computed(() => {
-  if (!session.value?.session_tracks) return [];
-
-  return session.value.session_tracks.map((sessionTrack) => {
-    const track = sessionTrack.track;
-    return {
-      name: track.name,
-      url: `/api/files/${track.dataset_file_id}`,
-      type: track.file_type,
-      color: sessionTrack.color || "#000000",
-      height: 50,
-    };
-  });
-});
 
 // Methods
 const deleteSession = async () => {
@@ -500,25 +490,10 @@ const loadSessionProjects = async () => {
   }
 };
 
-const refreshBrowser = () => {
-  // Refresh the browser view
-  // This could reload tracks or refresh the visualization
-  console.log("Refreshing browser view");
-};
-
 const handleSessionUpdated = (updatedSession) => {
   toast.success("Session updated successfully");
   // Refresh the session data
   loadSession();
-};
-
-const onBrowserReady = () => {
-  console.log("Browser is ready");
-};
-
-const onBrowserError = (error) => {
-  console.error("Browser error:", error);
-  toast.error("Failed to load genome browser");
 };
 
 const openInExternalBrowser = () => {
