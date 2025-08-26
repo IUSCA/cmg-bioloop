@@ -9,7 +9,7 @@ main()
     console.log('   • 5 research projects');
     console.log('   • 6 datasets (Data Products)');
     console.log('   • Multiple dataset files per dataset');
-    console.log('   • Tracks for visualizable file types (bam, vcf, bigwig, bed, gtf)');
+    console.log('   • Tracks for supported file types (bam, vcf, bigwig, fastq)');
     console.log('   • 8 genome browser sessions with various configurations');
     console.log('   • Session-track relationships (6 sessions with tracks, 2 pristine)');
     console.log('   • Project assignments for datasets (tracks inherit access)');

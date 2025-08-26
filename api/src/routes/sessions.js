@@ -14,6 +14,7 @@ const isPermittedTo = accessControl('sessions');
 // GET /sessions - Get all sessions accessible to the current user
 router.get(
   '/',
+  isPermittedTo('read'),
   [
     query('title').trim().optional(),
     query('genome').trim().optional(),
@@ -34,13 +35,20 @@ router.get(
       sort_order = 'desc',
     } = req.query;
 
-    // Build filter query
-    const filter_query = {
-      OR: [
-        { user_id: req.user.id }, // User's own sessions
-        { is_public: true }, // Public sessions
-      ],
-    };
+    // Build filter query - admin/operator can see all sessions
+    let filter_query;
+    if (req.permission.granted) {
+      // Admin/operator can see all sessions
+      filter_query = {};
+    } else {
+      // Regular users can only see their own sessions and public ones
+      filter_query = {
+        OR: [
+          { user_id: req.user.id }, // User's own sessions
+          { is_public: true }, // Public sessions
+        ],
+      };
+    }
 
     if (title) {
       filter_query.title = { contains: title, mode: 'insensitive' };
@@ -103,6 +111,7 @@ router.get(
 // GET /sessions/:username - Get sessions for a specific user (if accessible)
 router.get(
   '/:username',
+  isPermittedTo('read'),
   [
     param('username').isString().trim(),
     query('title').trim().optional(),
@@ -134,14 +143,23 @@ router.get(
       return res.status(404).json({ error: 'User not found' });
     }
 
-    // Build filter query
-    const filter_query = {
-      user_id: targetUser.id,
-      OR: [
-        { user_id: req.user.id }, // User's own sessions
-        { is_public: true }, // Public sessions
-      ],
-    };
+    // Build filter query - admin/operator can see all sessions
+    let filter_query;
+    if (req.permission.granted) {
+      // Admin/operator can see all sessions for any user
+      filter_query = {
+        user_id: targetUser.id,
+      };
+    } else {
+      // Regular users can only see their own sessions and public ones
+      filter_query = {
+        user_id: targetUser.id,
+        OR: [
+          { user_id: req.user.id }, // User's own sessions
+          { is_public: true }, // Public sessions
+        ],
+      };
+    }
 
     if (title) {
       filter_query.title = { contains: title, mode: 'insensitive' };
@@ -276,6 +294,12 @@ router.post(
       if (tracks.length !== track_ids.length) {
         return res.status(400).json({ error: 'Some tracks are not accessible' });
       }
+
+      // Validate tracks for session compatibility
+      const validationResult = validateTracksForSession(tracks, genome_type, genome);
+      if (!validationResult.isValid) {
+        return res.status(400).json({ error: validationResult.error });
+      }
     }
 
     // Create session with tracks
@@ -326,6 +350,7 @@ router.post(
 // GET /sessions/:id - Get a specific session
 router.get(
   '/:id',
+  isPermittedTo('read'),
   [param('id').isInt().toInt()],
   asyncHandler(async (req, res) => {
     const { id } = req.params;
@@ -366,13 +391,11 @@ router.get(
       return res.status(404).json({ error: 'Session not found' });
     }
 
-    // Check access permissions
-    const hasAccess = session.user_id === req.user.id
+    // If user has admin/operator role, they can see any session
+    // Otherwise, check access permissions
+    const hasAccess = req.permission.granted
+      || session.user_id === req.user.id
       || session.is_public;
-
-    if (!hasAccess) {
-      return res.status(403).json({ error: 'Access denied' });
-    }
 
     // Increment access count
     await prisma.genome_browser_session.update({
@@ -462,6 +485,12 @@ router.patch(
 
       if (tracks.length !== track_ids.length) {
         return res.status(400).json({ error: 'Some tracks are not accessible' });
+      }
+
+      // Validate tracks for session compatibility
+      const validationResult = validateTracksForSession(tracks, genome_type, genome);
+      if (!validationResult.isValid) {
+        return res.status(400).json({ error: validationResult.error });
       }
     }
 
@@ -702,14 +731,23 @@ router.get(
 
     try {
       // First, get the session to verify it exists and user has access
-      const session = await prisma.genome_browser_session.findFirst({
-        where: {
+      let sessionWhere;
+      if (req.permission.granted) {
+        // Admin/operator can see any session
+        sessionWhere = { id };
+      } else {
+        // Regular users can only see their own sessions and public ones
+        sessionWhere = {
           id,
           OR: [
             { user_id: req.user.id }, // User's own sessions
             { is_public: true }, // Public sessions
           ],
-        },
+        };
+      }
+
+      const session = await prisma.genome_browser_session.findFirst({
+        where: sessionWhere,
         include: {
           session_tracks: {
             include: {
@@ -800,5 +838,56 @@ router.get(
     }
   }),
 );
+
+// Track validation functions
+const validateTracksForSession = (tracks, sessionGenomeType, sessionGenome) => {
+  // Validation 1: Check file type consistency (MANDATORY)
+  const firstTrack = tracks[0];
+  for (const track of tracks) {
+    if (track.file_type !== firstTrack.file_type) {
+      return {
+        isValid: false,
+        error: `Cannot mix different file types. Track "${firstTrack.name}" has "${firstTrack.file_type}", track "${track.name}" has "${track.file_type}". Please create separate sessions.`,
+      };
+    }
+  }
+
+  // Validation 2: Check genome type consistency (MANDATORY)
+  for (const track of tracks) {
+    if (track.genomeType !== firstTrack.genomeType) {
+      return {
+        isValid: false,
+        error: `Cannot mix different genome types. Track "${firstTrack.name}" has "${firstTrack.genomeType}", track "${track.name}" has "${track.genomeType}". Please create separate sessions.`,
+      };
+    }
+  }
+
+  // Validation 3: Check genome value consistency
+  for (const track of tracks) {
+    if (track.genomeValue !== firstTrack.genomeValue) {
+      return {
+        isValid: false,
+        error: `Cannot mix different genome assemblies. Track "${firstTrack.name}" has "${firstTrack.genomeValue}", track "${track.name}" has "${track.genomeValue}". Please create separate sessions or manually select one assembly.`,
+      };
+    }
+  }
+
+  // Validation 4: Check if session genome matches track genomes
+  if (sessionGenomeType && sessionGenomeType !== firstTrack.genomeType) {
+    return {
+      isValid: false,
+      error: `Session genome type "${sessionGenomeType}" does not match track genome type "${firstTrack.genomeType}"`,
+    };
+  }
+
+  if (sessionGenome && sessionGenome !== firstTrack.genomeValue) {
+    return {
+      isValid: false,
+      error: `Session genome assembly "${sessionGenome}" does not match track genome assembly "${firstTrack.genomeValue}"`,
+    };
+  }
+
+  return { isValid: true };
+};
 
 module.exports = router;

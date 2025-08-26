@@ -74,6 +74,12 @@
   "upload": {
     "path": ""
   },
+  "trackFileTypes": [
+    { "name": "BAM", "id": "bam" },
+    { "name": "BigWig", "id": "bigwig" },
+    { "name": "VCF", "id": "vcf" },
+    { "name": "FASTQ", "id": "fastq" }
+  ],
   "download_server": {
     "base_url": ""
   },

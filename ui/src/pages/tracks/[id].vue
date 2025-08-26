@@ -169,16 +169,6 @@
         <va-card-content>
           <div class="flex justify-start gap-3">
             <va-button
-              color="primary"
-              border-color="primary"
-              preset="secondary"
-              class="flex-initial"
-              @click="addToSession"
-            >
-              Add to Session
-            </va-button>
-
-            <va-button
               v-if="auth.canOperate"
               color="danger"
               border-color="danger"
@@ -193,6 +183,129 @@
         </va-card-content>
       </va-card>
     </div>
+
+    <!-- Delete Track Modal -->
+    <va-modal :model-value="deleteModal.visible" blur hide-default-actions>
+      <template #header>
+        <div class="flex justify-end">
+          <va-button
+            class="flex-initial"
+            preset="plain"
+            @click="deleteModal.visible = false"
+          >
+            <va-icon name="close" />
+          </va-button>
+        </div>
+      </template>
+
+      <div>
+        <h3 class="va-h5">Delete Track?</h3>
+
+        <va-divider class="my-2" />
+
+        <div class="flex flex-col items-center gap-4">
+          <div>
+            <va-icon name="mdi-dna" class="text-3xl" />
+          </div>
+
+          <!-- Track Name and Type -->
+          <div class="text-center">
+            <span class="text-xl tracking-wide font-medium">
+              {{ track?.file_type?.toUpperCase() || "Unknown" }} /
+              {{ track?.name || "Unknown Track" }}
+            </span>
+          </div>
+
+          <!-- Metadata Grid -->
+          <div class="grid grid-cols-2 gap-6 w-full max-w-md">
+            <!-- File Size -->
+            <div class="flex flex-col items-center text-center">
+              <div class="flex items-center gap-2 mb-1">
+                <va-icon name="mdi-file" class="text-lg text-gray-600" />
+                <span class="text-sm font-medium text-gray-700">File Size</span>
+              </div>
+              <span class="text-sm">
+                {{
+                  track?.dataset_file?.size
+                    ? formatFileSize(track.dataset_file.size)
+                    : "Size unknown"
+                }}
+              </span>
+            </div>
+
+            <!-- Dataset -->
+            <div class="flex flex-col items-center text-center">
+              <div class="flex items-center gap-2 mb-1">
+                <va-icon name="mdi-database" class="text-lg text-gray-600" />
+                <span class="text-sm font-medium text-gray-700">Dataset</span>
+              </div>
+              <span class="text-sm">
+                {{ track?.dataset_file?.dataset?.name || "Dataset unknown" }}
+              </span>
+            </div>
+
+            <!-- Genome Type -->
+            <div class="flex flex-col items-center text-center">
+              <div class="flex items-center gap-2 mb-1">
+                <va-icon name="mdi-dna" class="text-lg text-gray-600" />
+                <span class="text-sm font-medium text-gray-700"
+                  >Genome Type</span
+                >
+              </div>
+              <span class="text-sm">
+                {{ track?.genomeType || "Unknown" }}
+              </span>
+            </div>
+
+            <!-- Genome Version -->
+            <div class="flex flex-col items-center text-center">
+              <div class="flex items-center gap-2 mb-1">
+                <va-icon name="mdi-tag" class="text-lg text-gray-600" />
+                <span class="text-sm font-medium text-gray-700"
+                  >Genome Version</span
+                >
+              </div>
+              <span class="text-sm">
+                {{ track?.genomeValue || "Unknown" }}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <va-divider class="my-4" />
+
+        <div>
+          <va-alert color="#fdeae7" text-color="#940909" class="text-center">
+            <span> This action cannot be undone! </span>
+          </va-alert>
+
+          <ul class="va-unordered va-text-secondary mt-3">
+            <li>
+              This will permanently delete the track
+              <b>{{ track?.name || "Unknown Track" }}</b> and remove it from all
+              sessions.
+            </li>
+            <li>This will not delete the underlying dataset file.</li>
+            <li>This will not delete the dataset itself.</li>
+            <li>
+              This action will affect any sessions that currently use this
+              track.
+            </li>
+          </ul>
+        </div>
+
+        <va-divider class="my-4" />
+
+        <div class="flex justify-end gap-3">
+          <va-button preset="secondary" @click="deleteModal.visible = false">
+            Cancel
+          </va-button>
+          <va-button color="danger" @click="confirmDeleteTrack">
+            Delete Track
+          </va-button>
+        </div>
+      </div>
+    </va-modal>
   </div>
 </template>
 
@@ -211,6 +324,11 @@ const router = useRouter();
 const tracksStore = useTracksStore();
 const auth = useAuthStore();
 const nav = useNavStore();
+
+// Reactive state
+const deleteModal = ref({
+  visible: false,
+});
 
 // Computed
 const track = computed(() => tracksStore.currentTrack);
@@ -275,26 +393,15 @@ const formatFileSize = (bytes) => {
   return Math.round((bytes / Math.pow(1024, i)) * 100) / 100 + " " + sizes[i];
 };
 
-const addToSession = () => {
-  // Navigate to create session page with this track pre-selected
-  router.push({
-    path: "/sessions/new",
-    query: { track_id: track.value.id },
-  });
+const deleteTrack = () => {
+  deleteModal.value.visible = true;
 };
 
-const deleteTrack = async () => {
-  if (
-    !confirm(
-      "Are you sure you want to delete this track? This action cannot be undone.",
-    )
-  ) {
-    return;
-  }
-
+const confirmDeleteTrack = async () => {
   try {
     await tracksStore.deleteTrack(track.value.id);
     toast.success("Track deleted successfully");
+    deleteModal.value.visible = false;
     router.push("/tracks");
   } catch (error) {
     console.error("Failed to delete track:", error);

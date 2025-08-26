@@ -20,8 +20,8 @@ const mockData = {
     yeast: ['sacCer3'],
   },
 
-  // Common bioinformatics file types
-  fileTypes: ['bam', 'vcf', 'bigwig', 'bed', 'gtf', 'fastq', 'fasta', 'bw', 'bb'],
+  // Common bioinformatics file types (only allowed types for sessions)
+  fileTypes: ['bam', 'vcf', 'bigwig', 'fastq'],
 
   // Track names for different types of data
   trackNames: {
@@ -297,8 +297,8 @@ async function createTracks(datasetFiles, tx = prisma) {
   console.log('Creating tracks...');
   const tracks = [];
 
-  // Only create tracks for certain file types
-  const trackableFileTypes = ['bam', 'vcf', 'bigwig', 'bed', 'gtf'];
+  // Only create tracks for certain file types (only allowed types for sessions)
+  const trackableFileTypes = ['bam', 'vcf', 'bigwig', 'fastq'];
   const trackableFiles = datasetFiles.filter((file) => trackableFileTypes.includes(file.filetype));
 
   await Promise.all(trackableFiles.map(async (datasetFile) => {

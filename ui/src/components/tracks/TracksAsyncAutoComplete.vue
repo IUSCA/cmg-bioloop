@@ -19,10 +19,10 @@
 </template>
 
 <script setup>
-import toast from '@/services/toast';
-import { useTracksStore } from '@/stores/tracks';
-import _ from 'lodash';
-import { computed, ref } from 'vue';
+import toast from "@/services/toast";
+import { useTracksStore } from "@/stores/tracks";
+import _ from "lodash";
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 
 const PAGE_SIZE = 10;
 
@@ -32,7 +32,7 @@ const props = defineProps({
   },
   searchTerm: {
     type: String,
-    default: '',
+    default: "",
   },
   disabled: {
     type: Boolean,
@@ -51,11 +51,11 @@ const props = defineProps({
 });
 
 const emit = defineEmits([
-  'clear',
-  'open',
-  'close',
-  'update:selected',
-  'update:searchTerm',
+  "clear",
+  "open",
+  "close",
+  "update:selected",
+  "update:searchTerm",
 ]);
 
 const tracksStore = useTracksStore();
@@ -73,7 +73,7 @@ const searchTerm = computed({
     return props.searchTerm;
   },
   set: (val) => {
-    emit('update:searchTerm', val);
+    emit("update:searchTerm", val);
   },
 });
 
@@ -83,8 +83,8 @@ const searches = ref([]);
 const latestQuery = ref(null);
 
 const onSelect = (item) => {
-  emit('update:searchTerm', item.name);
-  emit('update:selected', item);
+  emit("update:searchTerm", item.name);
+  emit("update:selected", item);
 };
 
 const loadNextPage = () => {
@@ -102,6 +102,8 @@ const batchingQuery = computed(() => {
 const fetchQuery = computed(() => {
   return {
     ...(searchTerm.value && { name: searchTerm.value }),
+    // Only show tracks with file types that support genome browsers
+    file_type: ["bam", "vcf", "bigwig", "fastq"],
     ...batchingQuery.value,
   };
 });
@@ -117,6 +119,9 @@ const searchTracks = ({
   appendToCurrentResults = false,
   logQuery = false,
 } = {}) => {
+  // Debug: log the query being sent
+  console.log("Search query:", fetchQuery.value);
+
   // Ensure that the same query is not being run a second time (which
   // is possible due to debounced searches). If it is, the search
   // can be resolved immediately.
@@ -136,11 +141,34 @@ const searchTracks = ({
           ? tracks.value.concat(res.data.tracks)
           : res.data.tracks;
         totalResultsCount.value = res.data.metadata.count;
+
+        // Show message if no tracks found
+        if (res.data.tracks.length === 0 && !appendToCurrentResults) {
+          tracks.value = [];
+          // Don't show error for empty results, just log it
+          console.log("No tracks found matching the criteria");
+        }
+
         resolveSearch(res.queryIndex);
       })
       .catch((e) => {
         console.error(e);
-        toast.error('Failed to load tracks');
+
+        // Provide more specific error messages
+        if (e.response?.data?.error) {
+          toast.error(`Failed to load tracks: ${e.response.data.error}`);
+        } else if (e.message) {
+          toast.error(`Failed to load tracks: ${e.message}`);
+        } else {
+          toast.error("Failed to load tracks. Please try again.");
+        }
+
+        // Reset tracks on error
+        if (!appendToCurrentResults) {
+          tracks.value = [];
+          totalResultsCount.value = 0;
+        }
+        resolveSearch(searchIndex);
       });
   }
 };
@@ -164,15 +192,15 @@ const performSearch = (searchIndex) => {
 };
 
 const onOpen = () => {
-  emit('open');
+  emit("open");
 };
 
 const onClose = () => {
-  emit('close');
+  emit("close");
 };
 
 const onClear = () => {
-  emit('clear');
+  emit("clear");
 };
 
 watch([searchTerm], () => {
@@ -197,4 +225,4 @@ onBeforeUnmount(() => {
 });
 </script>
 
-<style scoped></style> 
+<style scoped></style>

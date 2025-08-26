@@ -97,7 +97,21 @@ router.get(
       }
 
       if (file_type) {
-        filter_query.file_type = file_type;
+        // Handle array of file types
+        if (Array.isArray(file_type)) {
+          filter_query.file_type = {
+            in: file_type,
+          };
+        } else if (file_type.includes(',')) {
+          // Fallback for comma-separated string
+          const fileTypes = file_type.split(',').map((ft) => ft.trim());
+          filter_query.file_type = {
+            in: fileTypes,
+          };
+        } else {
+          // Single file type
+          filter_query.file_type = file_type;
+        }
       }
 
       if (genome_type) {
