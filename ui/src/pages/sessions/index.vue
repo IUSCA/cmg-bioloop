@@ -19,7 +19,11 @@
       </div>
 
       <!-- Filter button -->
-      <va-button @click="showSearchModal = true" preset="primary" class="flex-none">
+      <va-button
+        @click="showSearchModal = true"
+        preset="primary"
+        class="flex-none"
+      >
         <i-mdi-filter />
         <span> Filters </span>
       </va-button>
@@ -57,74 +61,73 @@
       @update:sort-by="handleSortChange"
       @update:sort-order="handleSortChange"
     >
-        <template #cell(title)="{ rowData }">
-          <div class="font-medium cursor-pointer hover:underline" @click="viewSession(rowData)">
-            {{ rowData?.title }}
-          </div>
-        </template>
+      <template #cell(title)="{ rowData }">
+        <router-link :to="`/sessions/${rowData.id}`" class="va-link">
+          {{ rowData?.title }}
+        </router-link>
+      </template>
 
-        <template #cell(genome)="{ rowData }">
-          <va-chip size="small" preset="primary">
-            {{ rowData.genome }}
-          </va-chip>
-        </template>
+      <template #cell(genome)="{ rowData }">
+        <va-chip outline size="small" preset="primary">
+          {{ rowData.genome }}
+        </va-chip>
+      </template>
 
-        <template #cell(genome_type)="{ rowData }">
-          <va-chip size="small" preset="secondary">
-            {{ rowData.genome_type }}
-          </va-chip>
-        </template>
+      <template #cell(genome_type)="{ rowData }">
+        <va-chip size="small" preset="secondary">
+          {{ rowData.genome_type }}
+        </va-chip>
+      </template>
 
-        <template #cell(tracks_count)="{ rowData }">
-          <span class="text-sm ">
-            {{ rowData.session_tracks.length || 0 }}
-          </span>
-        </template>
+      <template #cell(tracks_count)="{ rowData }">
+        <span class="text-sm">
+          {{ rowData.session_tracks.length || 0 }}
+        </span>
+      </template>
 
-        <template #cell(user)="{ rowData }">
-          <div class="">
-            <div class="">{{ rowData?.user?.name }}</div>
-            
-          </div>
-        </template>
+      <template #cell(user)="{ rowData }">
+        <div class="">
+          <div class="">{{ rowData?.user?.name }}</div>
+        </div>
+      </template>
 
-        <template #cell(created_at)="{ value }">
-          <span class=" ">
-            {{ date(value) }}
-          </span>
-        </template>
+      <template #cell(created_at)="{ value }">
+        <span class=" ">
+          {{ date(value) }}
+        </span>
+      </template>
 
-        <template #cell(actions)="{ rowData }">
-          <div class="flex gap-1">
-            <va-button
-              preset="plain"
-              class="flex-auto"
-              @click="viewSession(rowData)"
-            >
-              <va-icon name="visibility" />
-            </va-button>
-            
-            <va-button
-              v-if="canEditSession(rowData)"
-              preset="plain"
-              class="flex-auto"
-              @click="editSession(rowData)"
-            >
-              <va-icon name="edit" />
-            </va-button>
-            
-            <va-button
-              v-if="canDeleteSession(rowData)"
-              preset="plain"
-              class="flex-auto"
-              color="danger"
-              @click="deleteSession(rowData)"
-            >
-              <va-icon name="delete" />
-            </va-button>
-          </div>
-        </template>
-      </va-data-table>
+      <template #cell(actions)="{ rowData }">
+        <div class="flex gap-1">
+          <va-button
+            preset="plain"
+            class="flex-auto"
+            @click="viewSession(rowData)"
+          >
+            <va-icon name="visibility" />
+          </va-button>
+
+          <va-button
+            v-if="canEditSession(rowData)"
+            preset="plain"
+            class="flex-auto"
+            @click="editSession(rowData)"
+          >
+            <va-icon name="edit" />
+          </va-button>
+
+          <va-button
+            v-if="canDeleteSession(rowData)"
+            preset="plain"
+            class="flex-auto"
+            color="danger"
+            @click="deleteSession(rowData)"
+          >
+            <va-icon name="delete" />
+          </va-button>
+        </div>
+      </template>
+    </va-data-table>
 
     <!-- Search Modal -->
     <session-search-modal
@@ -133,8 +136,6 @@
       @apply="applyFilters"
       @reset="resetFilters"
     />
-
-
 
     <!-- Edit Modal -->
     <edit-session-modal
@@ -146,15 +147,15 @@
 </template>
 
 <script setup>
-import EditSessionModal from '@/components/sessions/EditSessionModal.vue';
-import SessionSearchFilters from '@/components/sessions/SessionSearchFilters.vue';
-import SessionSearchModal from '@/components/sessions/SessionSearchModal.vue';
-import { date } from '@/services/datetime';
-import { useAuthStore } from '@/stores/auth';
-import { useSessionsStore } from '@/stores/sessions';
-import { useDebounceFn } from '@vueuse/core';
-import { computed, onMounted, ref, watch } from 'vue';
-import { useRouter } from 'vue-router';
+import EditSessionModal from "@/components/sessions/EditSessionModal.vue";
+import SessionSearchFilters from "@/components/sessions/SessionSearchFilters.vue";
+import SessionSearchModal from "@/components/sessions/SessionSearchModal.vue";
+import { date } from "@/services/datetime";
+import { useAuthStore } from "@/stores/auth";
+import { useSessionsStore } from "@/stores/sessions";
+import { useDebounceFn } from "@vueuse/core";
+import { computed, onMounted, ref, watch } from "vue";
+import { useRouter } from "vue-router";
 
 const router = useRouter();
 const sessionsStore = useSessionsStore();
@@ -164,35 +165,35 @@ const auth = useAuthStore();
 const showSearchModal = ref(false);
 const showEditModal = ref(false);
 const editingSession = ref(null);
-const inclusive_query = ref('');
+const inclusive_query = ref("");
 
 // Query parameters
 const query = ref({
   page: 1,
   page_size: 25,
-  sort_by: 'created_at',
-  sort_order: 'desc',
+  sort_by: "created_at",
+  sort_order: "desc",
 });
 
 // Filters
 const filters = ref({
-  title: '',
-  genome: '',
-  genome_type: '',
+  title: "",
+  genome: "",
+  genome_type: "",
 });
 
 // Default values function for query persistence
 const defaultParams = () => ({
   page: 1,
   page_size: 25,
-  sort_by: 'created_at',
-  sort_order: 'desc',
+  sort_by: "created_at",
+  sort_order: "desc",
 });
 
 const defaultFilters = () => ({
-  title: '',
-  genome: '',
-  genome_type: '',
+  title: "",
+  genome: "",
+  genome_type: "",
 });
 
 // Computed
@@ -200,12 +201,12 @@ const sessions = computed(() => sessionsStore.sessions);
 const loading = computed(() => sessionsStore.loading);
 const metadata = computed(() => sessionsStore.metadata);
 
-console.log('sessions', sessions.value);
+console.log("sessions", sessions.value);
 
 const activeFilters = computed(() => {
   const active = [];
   Object.entries(filters.value).forEach(([key, value]) => {
-    if (value && value.trim() !== '') {
+    if (value && value.trim() !== "") {
       active.push({ key, value });
     }
   });
@@ -215,55 +216,63 @@ const activeFilters = computed(() => {
 // Table columns configuration
 const columns = [
   {
-    key: 'title',
-    label: 'Title',
+    key: "title",
+    label: "Title",
     sortable: true,
-    thStyle: 'white-space: pre-wrap; word-wrap: break-word; word-break: break-word;',
-    tdStyle: 'white-space: pre-wrap; word-wrap: break-word; word-break: break-word;',
-    align: 'left',
+    thStyle:
+      "white-space: pre-wrap; word-wrap: break-word; word-break: break-word;",
+    tdStyle:
+      "white-space: pre-wrap; word-wrap: break-word; word-break: break-word;",
+    align: "left",
   },
   {
-    key: 'genome',
-    label: 'Genome',
+    key: "genome_type",
+    label: "Genome Type",
     sortable: true,
-    width: '15%',
+    width: "15%",
   },
   {
-    key: 'genome_type',
-    label: 'Genome Type',
+    key: "genome",
+    label: "Genome",
     sortable: true,
-    width: '15%',
+    width: "15%",
   },
   {
-    key: 'tracks_count',
-    label: 'Tracks',
+    key: "tracks_count",
+    label: "Tracks",
     sortable: false,
-    width: '10%',
-    thStyle: 'white-space: pre-wrap; word-wrap: break-word; word-break: break-word;',
-    tdStyle: 'white-space: pre-wrap; word-wrap: break-word; word-break: break-word;',
+    width: "10%",
+    thStyle:
+      "white-space: pre-wrap; word-wrap: break-word; word-break: break-word;",
+    tdStyle:
+      "white-space: pre-wrap; word-wrap: break-word; word-break: break-word;",
   },
   {
-    key: 'user',
-    label: 'Created By',
+    key: "user",
+    label: "Created By",
     sortable: false,
-    width: '15%',
-    thStyle: 'white-space: pre-wrap; word-wrap: break-word; word-break: break-word;',
-    tdStyle: 'white-space: pre-wrap; word-wrap: break-word; word-break: break-word;',
+    width: "15%",
+    thStyle:
+      "white-space: pre-wrap; word-wrap: break-word; word-break: break-word;",
+    tdStyle:
+      "white-space: pre-wrap; word-wrap: break-word; word-break: break-word;",
   },
   {
-    key: 'created_at',
-    label: 'Created',
+    key: "created_at",
+    label: "Created",
     sortable: true,
-    width: '10%',
-    thStyle: 'white-space: pre-wrap; word-wrap: break-word; word-break: break-word;',
-    tdStyle: 'white-space: pre-wrap; word-wrap: break-word; word-break: break-word;',
+    width: "10%",
+    thStyle:
+      "white-space: pre-wrap; word-wrap: break-word; word-break: break-word;",
+    tdStyle:
+      "white-space: pre-wrap; word-wrap: break-word; word-break: break-word;",
   },
   {
-    key: 'actions',
-    label: 'Actions',
+    key: "actions",
+    label: "Actions",
     sortable: false,
-    align: 'right',
-    width: '6%',
+    align: "right",
+    width: "6%",
   },
 ];
 
@@ -286,11 +295,11 @@ const fetchSessions = async () => {
       sort_by: query.value.sort_by,
       sort_order: query.value.sort_order,
     };
-    
+
     await sessionsStore.fetchSessions(params);
-    console.log('sessions', sessions.value);
+    console.log("sessions", sessions.value);
   } catch (error) {
-    console.error('Error fetching sessions:', error);
+    console.error("Error fetching sessions:", error);
   }
 };
 
@@ -317,15 +326,15 @@ const applyFilters = (newFilters) => {
 
 const resetFilters = () => {
   filters.value = { ...defaultFilters() };
-  inclusive_query.value = '';
+  inclusive_query.value = "";
   query.value.page = 1; // Reset to first page when resetting
   showSearchModal.value = false;
 };
 
 const removeFilter = (key) => {
-  filters.value[key] = '';
-  if (key === 'title') {
-    inclusive_query.value = '';
+  filters.value[key] = "";
+  if (key === "title") {
+    inclusive_query.value = "";
   }
   query.value.page = 1; // Reset to first page when removing filter
 };
@@ -345,17 +354,17 @@ const editSession = (session) => {
 };
 
 const deleteSession = async (session) => {
-  if (confirm(`Are you sure you want to delete the session "${session.title}"?`)) {
+  if (
+    confirm(`Are you sure you want to delete the session "${session.title}"?`)
+  ) {
     try {
       await sessionsStore.deleteSession(session.id);
       await fetchSessions(); // Refresh the list
     } catch (error) {
-      console.error('Error deleting session:', error);
+      console.error("Error deleting session:", error);
     }
   }
 };
-
-
 
 const handleSessionUpdated = () => {
   showEditModal.value = false;
@@ -364,9 +373,13 @@ const handleSessionUpdated = () => {
 };
 
 // Watch for changes in query and filters
-watch([query, filters], () => {
-  fetchSessions();
-}, { deep: true });
+watch(
+  [query, filters],
+  () => {
+    fetchSessions();
+  },
+  { deep: true },
+);
 
 // Initial load
 onMounted(() => {
@@ -379,4 +392,4 @@ meta:
   title: Sessions
   requiresRoles: ["operator", "admin"]
   nav: [{ label: "Sessions" }]
-</route> 
+</route>

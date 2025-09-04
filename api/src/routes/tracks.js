@@ -27,8 +27,6 @@ router.get(
     query('sort_order').default('desc').isIn(['asc', 'desc']),
   ],
   asyncHandler(async (req, res) => {
-    console.log('req.user.id', req.user.id);
-
     const {
       project_id, name, file_type, genome_type, genome_value, limit, offset, sort_by, sort_order,
     } = req.query;
@@ -97,7 +95,21 @@ router.get(
       }
 
       if (file_type) {
-        filter_query.file_type = file_type;
+        // Handle array of file types
+        if (Array.isArray(file_type)) {
+          filter_query.file_type = {
+            in: file_type,
+          };
+        } else if (file_type.includes(',')) {
+          // Fallback for comma-separated string
+          const fileTypes = file_type.split(',').map((ft) => ft.trim());
+          filter_query.file_type = {
+            in: fileTypes,
+          };
+        } else {
+          // Single file type
+          filter_query.file_type = file_type;
+        }
       }
 
       if (genome_type) {
@@ -268,26 +280,20 @@ router.get(
   ],
   asyncHandler(async (req, res) => {
     const { id } = req.params;
-    const { include_dataset = false } = req.query;
 
     const include = {
       dataset_file: {
         include: {
-          dataset: include_dataset,
-        },
-      },
-    };
-
-    const track = await prisma.track.findFirst({
-      where: {
-        id,
-        dataset_file: {
           dataset: {
-            projects: {
-              some: {
-                project: {
-                  users: {
-                    some: { user_id: req.user.id },
+            include: {
+              projects: {
+                include: {
+                  project: {
+                    select: {
+                      id: true,
+                      name: true,
+                      slug: true,
+                    },
                   },
                 },
               },
@@ -295,8 +301,58 @@ router.get(
           },
         },
       },
-      include,
-    });
+      session_tracks: {
+        include: {
+          session: {
+            include: {
+              user: {
+                select: {
+                  id: true,
+                  username: true,
+                  name: true,
+                },
+              },
+            },
+          },
+        },
+        orderBy: {
+          order: 'asc',
+        },
+      },
+    };
+
+    // If user has admin/operator role, they can see all tracks
+    // Otherwise, filter by user's project membership through datasets
+    let track;
+
+    if (req.permission.granted) {
+      // Admin/operator can see any track
+      track = await prisma.track.findFirst({
+        where: { id },
+        include,
+      });
+    } else {
+      // Regular users can only see tracks from datasets they have access to
+      track = await prisma.track.findFirst({
+        where: {
+          id,
+          dataset_file: {
+            dataset: {
+              projects: {
+                some: {
+                  project: {
+                    users: {
+                      some: { user_id: req.user.id },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+        include,
+      });
+    }
 
     if (!track) {
       return res.status(404).json({ error: 'Track not found or access denied' });

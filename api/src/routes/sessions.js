@@ -1,6 +1,7 @@
 const express = require('express');
 const { PrismaClient } = require('@prisma/client');
 const { body, query, param } = require('express-validator');
+const logger = require('@/services/logger');
 const asyncHandler = require('../middleware/asyncHandler');
 const { accessControl } = require('../middleware/auth');
 
@@ -14,6 +15,7 @@ const isPermittedTo = accessControl('sessions');
 // GET /sessions - Get all sessions accessible to the current user
 router.get(
   '/',
+  isPermittedTo('read'),
   [
     query('title').trim().optional(),
     query('genome').trim().optional(),
@@ -34,13 +36,20 @@ router.get(
       sort_order = 'desc',
     } = req.query;
 
-    // Build filter query
-    const filter_query = {
-      OR: [
-        { user_id: req.user.id }, // User's own sessions
-        { is_public: true }, // Public sessions
-      ],
-    };
+    // Build filter query - admin/operator can see all sessions
+    let filter_query;
+    if (req.permission.granted) {
+      // Admin/operator can see all sessions
+      filter_query = {};
+    } else {
+      // Regular users can only see their own sessions and public ones
+      filter_query = {
+        OR: [
+          { user_id: req.user.id }, // User's own sessions
+          { is_public: true }, // Public sessions
+        ],
+      };
+    }
 
     if (title) {
       filter_query.title = { contains: title, mode: 'insensitive' };
@@ -102,7 +111,8 @@ router.get(
 
 // GET /sessions/:username - Get sessions for a specific user (if accessible)
 router.get(
-  '/:username',
+  'all/:username',
+  isPermittedTo('read'),
   [
     param('username').isString().trim(),
     query('title').trim().optional(),
@@ -134,14 +144,23 @@ router.get(
       return res.status(404).json({ error: 'User not found' });
     }
 
-    // Build filter query
-    const filter_query = {
-      user_id: targetUser.id,
-      OR: [
-        { user_id: req.user.id }, // User's own sessions
-        { is_public: true }, // Public sessions
-      ],
-    };
+    // Build filter query - admin/operator can see all sessions
+    let filter_query;
+    if (req.permission.granted) {
+      // Admin/operator can see all sessions for any user
+      filter_query = {
+        user_id: targetUser.id,
+      };
+    } else {
+      // Regular users can only see their own sessions and public ones
+      filter_query = {
+        user_id: targetUser.id,
+        OR: [
+          { user_id: req.user.id }, // User's own sessions
+          { is_public: true }, // Public sessions
+        ],
+      };
+    }
 
     if (title) {
       filter_query.title = { contains: title, mode: 'insensitive' };
@@ -276,6 +295,12 @@ router.post(
       if (tracks.length !== track_ids.length) {
         return res.status(400).json({ error: 'Some tracks are not accessible' });
       }
+
+      // Validate tracks for session compatibility
+      const validationResult = validateTracksForSession(tracks, genome_type, genome);
+      if (!validationResult.isValid) {
+        return res.status(400).json({ error: validationResult.error });
+      }
     }
 
     // Create session with tracks
@@ -326,9 +351,12 @@ router.post(
 // GET /sessions/:id - Get a specific session
 router.get(
   '/:id',
+  isPermittedTo('read'),
   [param('id').isInt().toInt()],
   asyncHandler(async (req, res) => {
     const { id } = req.params;
+
+    logger.info(`GET /sessions/${id}`);
 
     const session = await prisma.genome_browser_session.findUnique({
       where: { id },
@@ -366,13 +394,11 @@ router.get(
       return res.status(404).json({ error: 'Session not found' });
     }
 
-    // Check access permissions
-    const hasAccess = session.user_id === req.user.id
+    // If user has admin/operator role, they can see any session
+    // Otherwise, check access permissions
+    const hasAccess = req.permission.granted
+      || session.user_id === req.user.id
       || session.is_public;
-
-    if (!hasAccess) {
-      return res.status(403).json({ error: 'Access denied' });
-    }
 
     // Increment access count
     await prisma.genome_browser_session.update({
@@ -463,6 +489,12 @@ router.patch(
       if (tracks.length !== track_ids.length) {
         return res.status(400).json({ error: 'Some tracks are not accessible' });
       }
+
+      // Validate tracks for session compatibility
+      const validationResult = validateTracksForSession(tracks, genome_type, genome);
+      if (!validationResult.isValid) {
+        return res.status(400).json({ error: validationResult.error });
+      }
     }
 
     // Update session
@@ -552,123 +584,313 @@ router.delete(
   }),
 );
 
-// POST /sessions/:id/stage - Request staging for session tracks
+// GET /sessions/:id/datahub
+router.get(
+  '/:id/datahub',
+  [param('id').isInt().toInt()],
+  asyncHandler(async (req, res) => {
+    const sessionId = req.params.id;
+
+    try {
+      const session = await prisma.genome_browser_session.findUnique({
+        where: { id: sessionId },
+        include: {
+          session_tracks: {
+            include: {
+              track: {
+                include: {
+                  dataset_file: {
+                    include: {
+                      dataset: true,
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      });
+
+      if (!session) {
+        return res.status(404).json({ error: 'Session not found' });
+      }
+
+      // Convert to DataHub format
+      const tracks = session.session_tracks.map((st) => {
+        const { track } = st;
+        const dataset = track.dataset_file?.dataset;
+
+        // Determine file type and URL
+        let fileType = 'unknown';
+        let url = '';
+
+        if (track.file_type === 'bam') {
+          fileType = 'bam';
+          url = `${process.env.API_BASE_URL}/files/${track.dataset_file_id}`;
+        } else if (track.file_type === 'bigwig') {
+          fileType = 'bigwig';
+          url = `${process.env.API_BASE_URL}/files/${track.dataset_file_id}`;
+        } else if (track.file_type === 'vcf') {
+          fileType = 'vcf';
+          url = `${process.env.API_BASE_URL}/files/${track.dataset_file_id}`;
+        }
+
+        return {
+          name: track.name,
+          type: fileType,
+          url,
+          color: st.color || '#000000',
+          height: 50,
+          genome: `${track.genomeType}_${track.genomeValue}`,
+          dataset: dataset?.name || 'Unknown',
+        };
+      });
+
+      res.json(tracks);
+    } catch (error) {
+      console.error('Error exporting DataHub:', error);
+      res.status(500).json({ error: 'Failed to export DataHub' });
+    }
+  }),
+);
+
+// POST /sessions/:id/stage
 router.post(
   '/:id/stage',
+  [param('id').isInt().toInt()],
+  asyncHandler(async (req, res) => {
+    const sessionId = req.params.id;
+
+    try {
+      const session = await prisma.genome_browser_session.findUnique({
+        where: { id: sessionId },
+        include: {
+          session_tracks: {
+            include: {
+              track: {
+                include: {
+                  dataset_file: {
+                    include: {
+                      dataset: true,
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      });
+
+      if (!session) {
+        return res.status(404).json({ error: 'Session not found' });
+      }
+
+      // Get unique datasets that need staging
+      const datasetsToStage = [...new Set(
+        session.session_tracks
+          .filter((st) => !st.track.dataset_file?.dataset?.is_staged)
+          .map((st) => st.track.dataset_file?.dataset?.id)
+          .filter(Boolean),
+      )];
+
+      if (datasetsToStage.length === 0) {
+        return res.json({ message: 'All datasets are already staged' });
+      }
+
+      // Return the datasets that need staging so the frontend can call the staging workflow
+      res.json({
+        message: 'Datasets need staging',
+        datasets: datasetsToStage,
+        note: 'Use the dataset staging workflow to stage these datasets individually',
+      });
+    } catch (error) {
+      console.error('Error checking staging status:', error);
+      res.status(500).json({ error: 'Failed to check staging status' });
+    }
+  }),
+);
+
+// GET /sessions/:id/projects - Get projects associated with a session
+router.get(
+  '/:id/projects',
+  isPermittedTo('read'),
   [
     param('id').isInt().toInt(),
+    query('limit').isInt({ min: 1, max: 100 }).optional().toInt(),
+    query('offset').isInt({ min: 0 }).optional().toInt(),
+    query('sort_by').isIn(['name', 'created_at', 'updated_at']).optional(),
+    query('sort_order').isIn(['asc', 'desc']).optional(),
+    query('search').trim().optional(),
   ],
   asyncHandler(async (req, res) => {
     const { id } = req.params;
+    const {
+      limit = 25,
+      offset = 0,
+      sort_by = 'name',
+      sort_order = 'asc',
+      search,
+    } = req.query;
 
-    // Check if session exists and user has access
-    const session = await prisma.genome_browser_session.findFirst({
-      where: {
-        id,
-        OR: [
-          { user_id: req.user.id },
-          { is_public: true },
-        ],
-      },
-      include: {
-        session_tracks: {
-          include: {
-            track: {
-              include: {
-                dataset_file: {
-                  include: {
-                    dataset: true,
-                  },
-                },
-              },
-            },
-          },
-        },
-      },
-    });
-
-    if (!session) {
-      return res.status(404).json({ error: 'Session not found' });
-    }
-
-    // Check which tracks need staging
-    const tracksToStage = session.session_tracks.filter(
-      (st) => !st.track.dataset_file.dataset.is_staged,
-    );
-
-    if (tracksToStage.length === 0) {
-      return res.status(400).json({ error: 'No tracks need staging' });
-    }
-
-    // Get unique dataset IDs that need staging
-    const datasetIds = [...new Set(tracksToStage.map((st) => st.track.dataset_file.dataset_id))];
-
-    // Create staging request
-    const stagingRequest = {
-      track_ids: tracksToStage.map((st) => st.track_id),
-      dataset_ids: datasetIds,
-      requested_at: new Date(),
-      status: 'pending',
-    };
-
-    // Update session with staging request
-    const updatedSession = await prisma.genome_browser_session.update({
-      where: { id },
-      data: {
-        staging_requested: stagingRequest,
-        staging_requested_by: req.user.id,
-      },
-      include: {
-        user: {
-          select: {
-            id: true,
-            username: true,
-            name: true,
-          },
-        },
-        session_tracks: {
-          include: {
-            track: {
-              include: {
-                dataset_file: {
-                  include: {
-                    dataset: true,
-                  },
-                },
-              },
-            },
-          },
-          orderBy: { order: 'asc' },
-        },
-      },
-    });
-
-    // Request staging for each dataset using the datasets endpoint
-    const stagingPromises = datasetIds.map(async (datasetId) => {
-      try {
-        const response = await fetch(`${req.protocol}://${req.get('host')}/api/datasets/${datasetId}/workflow/stage`, {
-          method: 'POST',
-          headers: {
-            Authorization: req.get('Authorization'),
-            'Content-Type': 'application/json',
-          },
-        });
-        return { datasetId, success: response.ok };
-      } catch (error) {
-        return { datasetId, success: false, error: error.message };
+    try {
+      // First, get the session to verify it exists and user has access
+      let sessionWhere;
+      if (req.permission.granted) {
+        // Admin/operator can see any session
+        sessionWhere = { id };
+      } else {
+        // Regular users can only see their own sessions and public ones
+        sessionWhere = {
+          id,
+          OR: [
+            { user_id: req.user.id }, // User's own sessions
+            { is_public: true }, // Public sessions
+          ],
+        };
       }
-    });
 
-    const stagingResults = await Promise.all(stagingPromises);
+      const session = await prisma.genome_browser_session.findFirst({
+        where: sessionWhere,
+        include: {
+          session_tracks: {
+            include: {
+              track: {
+                include: {
+                  dataset_file: {
+                    include: {
+                      dataset: {
+                        include: {
+                          projects: {
+                            include: {
+                              project: true,
+                            },
+                          },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      });
 
-    res.json({
-      message: 'Staging request submitted',
-      tracks_to_stage: tracksToStage.length,
-      datasets_requested: datasetIds.length,
-      staging_results: stagingResults,
-      session: updatedSession,
-    });
+      if (!session) {
+        return res.status(404).json({ error: 'Session not found or access denied' });
+      }
+
+      // Extract unique projects from session tracks
+      const projectMap = new Map();
+
+      session.session_tracks.forEach((sessionTrack) => {
+        const dataset = sessionTrack.track.dataset_file?.dataset;
+        if (dataset?.projects) {
+          dataset.projects.forEach((projectAssoc) => {
+            const { project } = projectAssoc;
+            if (!projectMap.has(project.id)) {
+              projectMap.set(project.id, {
+                id: project.id,
+                name: project.name,
+                slug: project.slug,
+                description: project.description,
+                created_at: project.created_at,
+                updated_at: project.updated_at,
+              });
+            }
+          });
+        }
+      });
+
+      let projects = Array.from(projectMap.values());
+
+      // Apply search filter
+      if (search) {
+        projects = projects.filter((project) => project.name.toLowerCase().includes(search.toLowerCase())
+          || (project.description && project.description.toLowerCase().includes(search.toLowerCase())));
+      }
+
+      // Apply sorting
+      projects.sort((a, b) => {
+        const aVal = a[sort_by];
+        const bVal = b[sort_by];
+
+        if (sort_order === 'asc') {
+          return aVal < bVal ? -1 : aVal > bVal ? 1 : 0;
+        }
+        return aVal > bVal ? -1 : aVal < bVal ? 1 : 0;
+      });
+
+      // Apply pagination
+      const total = projects.length;
+      const paginatedProjects = projects.slice(offset, offset + limit);
+
+      res.json({
+        projects: paginatedProjects,
+        metadata: {
+          count: total,
+          limit,
+          offset,
+          sort_by,
+          sort_order,
+        },
+      });
+    } catch (error) {
+      console.error('Error fetching session projects:', error);
+      res.status(500).json({ error: 'Failed to fetch session projects' });
+    }
   }),
 );
+
+// Track validation functions
+const validateTracksForSession = (tracks, sessionGenomeType, sessionGenome) => {
+  // Validation 1: Check file type consistency (MANDATORY)
+  const firstTrack = tracks[0];
+  for (const track of tracks) {
+    if (track.file_type !== firstTrack.file_type) {
+      return {
+        isValid: false,
+        error: `Cannot mix different file types. Track "${firstTrack.name}" has "${firstTrack.file_type}", track "${track.name}" has "${track.file_type}". Please create separate sessions.`,
+      };
+    }
+  }
+
+  // Validation 2: Check genome type consistency (MANDATORY)
+  for (const track of tracks) {
+    if (track.genomeType !== firstTrack.genomeType) {
+      return {
+        isValid: false,
+        error: `Cannot mix different genome types. Track "${firstTrack.name}" has "${firstTrack.genomeType}", track "${track.name}" has "${track.genomeType}". Please create separate sessions.`,
+      };
+    }
+  }
+
+  // Validation 3: Check genome value consistency
+  for (const track of tracks) {
+    if (track.genomeValue !== firstTrack.genomeValue) {
+      return {
+        isValid: false,
+        error: `Cannot mix different genome assemblies. Track "${firstTrack.name}" has "${firstTrack.genomeValue}", track "${track.name}" has "${track.genomeValue}". Please create separate sessions or manually select one assembly.`,
+      };
+    }
+  }
+
+  // Validation 4: Check if session genome matches track genomes
+  if (sessionGenomeType && sessionGenomeType !== firstTrack.genomeType) {
+    return {
+      isValid: false,
+      error: `Session genome type "${sessionGenomeType}" does not match track genome type "${firstTrack.genomeType}"`,
+    };
+  }
+
+  if (sessionGenome && sessionGenome !== firstTrack.genomeValue) {
+    return {
+      isValid: false,
+      error: `Session genome assembly "${sessionGenome}" does not match track genome assembly "${firstTrack.genomeValue}"`,
+    };
+  }
+
+  return { isValid: true };
+};
 
 module.exports = router;

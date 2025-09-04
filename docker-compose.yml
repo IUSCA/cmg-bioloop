@@ -1,7 +1,7 @@
 # This is the docker-compose file for the Bioloop project
 # Here we make heavy use of entrypoint scripts to set up the keys and any pre-requisites for the containers.
 # We use the command to run a script that runs any commands that need to run after the containers are up.
-name: bioloop
+name: cmg-bioloop-2
 services:
   ui:
     image: node:21
@@ -228,7 +228,7 @@ services:
       - signet_db:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD", "pg_isready", "-U", "appuser"]
-      interval: 30s
+      interval: 5s
       timeout: 10s
       retries: 5
 
@@ -306,37 +306,37 @@ services:
     profiles:
       - metrics
 
-  db_conversion:
-    build:
-      context: db_conversion
-      dockerfile: Dockerfile
-    volumes:
-      - /Users/ripandey/dev/cmg-bioloop/db_conversion:/opt/sca/app
-    working_dir: /opt/sca/app
-    #    env_file: ./workers/workers/convert/.env
-    environment:
-      ##      - todo - read env vars from .env file instead of defaults
-      - MONGO_HOST=${MONGO_HOST:-host.docker.internal}
-      - MONGO_PORT=${MONGO_PORT:-27017}
-      - MONGO_DB=${MONGO_DB:-cmg}
-      - MONGO_AUTH_SOURCE=${MONGO_AUTH_SOURCE:-cmg}
-      #      - MONGO_USERNAME=${MONGO_USERNAME:-appuser}
-      #      - MONGO_PASSWORD=${MONGO_PASSWORD:-example}
-      - RHYTHM_MONGO_HOST=${RHYTHM_MONGO_HOST:-host.docker.internal}
-      - RHYTHM_MONGO_PORT=${RHYTHM_MONGO_PORT:-27018}
-      - RHYTHM_MONGO_DB=${RHYTHM_MONGO_DB:-celery}
-      - RHYTHM_MONGO_AUTH_SOURCE=${RHYTHM_MONGO_AUTH_SOURCE:-admin}
-      - RHYTHM_MONGO_USERNAME=${RHYTHM_MONGO_USERNAME:-root}
-      - RHYTHM_MONGO_PASSWORD=${RHYTHM_MONGO_PASSWORD:-example}
-      - PG_HOST=${PG_HOST:-postgres}
-      - PG_PORT=${PG_PORT:-5432}
-      - PG_DATABASE=${PG_DATABASE:-app}
-      - PG_USER=${PG_USER:-appuser}
-      - PG_PASSWORD=${PG_PASSWORD:-example}
-    ##    command: python -m workers.convert.db_conversion
-    entrypoint: [ "tail", "-f", "/dev/null" ]
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
+  # db_conversion:
+  #   build:
+  #     context: db_conversion
+  #     dockerfile: Dockerfile
+  #   volumes:
+  #     - /Users/ripandey/dev/cmg-bioloop/db_conversion:/opt/sca/app
+  #   working_dir: /opt/sca/app
+  #   #    env_file: ./workers/workers/convert/.env
+  #   environment:
+  #     ##      - todo - read env vars from .env file instead of defaults
+  #     - MONGO_HOST=${MONGO_HOST:-host.docker.internal}
+  #     - MONGO_PORT=${MONGO_PORT:-27017}
+  #     - MONGO_DB=${MONGO_DB:-cmg}
+  #     - MONGO_AUTH_SOURCE=${MONGO_AUTH_SOURCE:-cmg}
+  #     #      - MONGO_USERNAME=${MONGO_USERNAME:-appuser}
+  #     #      - MONGO_PASSWORD=${MONGO_PASSWORD:-example}
+  #     - RHYTHM_MONGO_HOST=${RHYTHM_MONGO_HOST:-host.docker.internal}
+  #     - RHYTHM_MONGO_PORT=${RHYTHM_MONGO_PORT:-27018}
+  #     - RHYTHM_MONGO_DB=${RHYTHM_MONGO_DB:-celery}
+  #     - RHYTHM_MONGO_AUTH_SOURCE=${RHYTHM_MONGO_AUTH_SOURCE:-admin}
+  #     - RHYTHM_MONGO_USERNAME=${RHYTHM_MONGO_USERNAME:-root}
+  #     - RHYTHM_MONGO_PASSWORD=${RHYTHM_MONGO_PASSWORD:-example}
+  #     - PG_HOST=${PG_HOST:-postgres}
+  #     - PG_PORT=${PG_PORT:-5432}
+  #     - PG_DATABASE=${PG_DATABASE:-app}
+  #     - PG_USER=${PG_USER:-appuser}
+  #     - PG_PASSWORD=${PG_PASSWORD:-example}
+  #   ##    command: python -m workers.convert.db_conversion
+  #   entrypoint: [ "tail", "-f", "/dev/null" ]
+  #   extra_hosts:
+  #     - "host.docker.internal:host-gateway"
 
 
 volumes:

@@ -52,11 +52,13 @@
       </template>
 
       <template #cell(file_type)="{ value }">
-        <va-chip size="small">{{  value }}</va-chip>
+        <va-chip size="small" :color="trackService._getTrackColor(value)">{{
+          value
+        }}</va-chip>
       </template>
 
       <template #cell(genomeType)="{ rowData }">
-        <va-chip size="small" outline>{{ rowData.genomeType }}</va-chip>
+        <va-chip size="small">{{ rowData.genomeType }}</va-chip>
       </template>
 
       <template #cell(genomeValue)="{ rowData }">
@@ -64,8 +66,8 @@
       </template>
 
       <template #cell(dataset)="{ rowData }">
-        <router-link 
-          :to="`/datasets/${rowData.dataset_file?.dataset?.id}`" 
+        <router-link
+          :to="`/datasets/${rowData.dataset_file?.dataset?.id}`"
           class="va-link"
         >
           {{ rowData.dataset_file?.dataset?.name }}
@@ -120,10 +122,9 @@ import useQueryPersistence from "@/composables/useQueryPersistence";
 import useSearchKeyShortcut from "@/composables/useSearchKeyShortcut";
 import * as datetime from "@/services/datetime";
 import toast from "@/services/toast";
+import trackService from "@/services/track";
 import { useAuthStore } from "@/stores/auth";
 import { useTracksStore } from "@/stores/tracks";
-import { computed, onMounted, ref, watch } from 'vue';
-import { useRouter } from 'vue-router';
 
 useSearchKeyShortcut();
 
@@ -143,8 +144,8 @@ const searchModal = ref(null);
 const query = ref({
   page: 1,
   page_size: 25,
-  sort_by: 'created_at',
-  sort_order: 'desc',
+  sort_by: "created_at",
+  sort_order: "desc",
 });
 
 // Filters
@@ -160,8 +161,8 @@ const filters = ref({
 const defaultParams = () => ({
   page: 1,
   page_size: 25,
-  sort_by: 'created_at',
-  sort_order: 'desc',
+  sort_by: "created_at",
+  sort_order: "desc",
 });
 
 const defaultFilters = () => ({
@@ -176,7 +177,7 @@ const defaultFilters = () => ({
 const activeFilters = computed(() => {
   const active = [];
   Object.entries(filters.value).forEach(([key, value]) => {
-    if (value && value !== '') {
+    if (value && value !== "") {
       active.push({ key, value });
     }
   });
@@ -219,14 +220,14 @@ const columns = [
     label: "Genome Type",
     width: "10%",
     thAlign: "center",
-    tdAlign: "center",    
+    tdAlign: "center",
   },
   {
     key: "genomeValue",
     label: "Genome Value",
     width: "10%",
     thAlign: "center",
-    tdAlign: "center",    
+    tdAlign: "center",
   },
   {
     key: "dataset",
@@ -270,11 +271,13 @@ const columns = [
 
 async function fetch_items() {
   data_loading.value = true;
-  
+
   try {
     const params = {
       ...filters.value,
-      ...(query.value.inclusive_query ? { name: query.value.inclusive_query } : {}),
+      ...(query.value.inclusive_query
+        ? { name: query.value.inclusive_query }
+        : {}),
       limit: query.value.page_size,
       offset: offset.value,
       sort_by: query.value.sort_by,
@@ -285,8 +288,8 @@ async function fetch_items() {
     tracks.value = response.tracks;
     total_results.value = response.metadata.count;
   } catch (error) {
-    console.error('Error fetching tracks:', error);
-    toast.error('Failed to fetch tracks');
+    console.error("Error fetching tracks:", error);
+    toast.error("Failed to fetch tracks");
   } finally {
     data_loading.value = false;
   }
@@ -303,7 +306,7 @@ function handleSearch(searchFilters) {
 }
 
 function removeFilter(key) {
-  filters.value[key] = '';
+  filters.value[key] = "";
   query.value.page = 1; // Reset to first page when removing filter
 }
 
@@ -319,14 +322,14 @@ function clearFilters() {
 }
 
 async function deleteTrack(id) {
-  if (confirm('Are you sure you want to delete this track?')) {
+  if (confirm("Are you sure you want to delete this track?")) {
     try {
       await store.deleteTrack(id);
-      toast.success('Track deleted successfully');
+      toast.success("Track deleted successfully");
       await fetch_items(); // Refresh the list
     } catch (error) {
-      console.error('Error deleting track:', error);
-      toast.error('Failed to delete track');
+      console.error("Error deleting track:", error);
+      toast.error("Failed to delete track");
     }
   }
 }
@@ -336,12 +339,16 @@ function viewTrack(track) {
 }
 
 // Watch for changes in query and filters
-watch([query, filters], () => {
-  fetch_items();
-}, { deep: true });
+watch(
+  [query, filters],
+  () => {
+    fetch_items();
+  },
+  { deep: true },
+);
 
 // Initial load
 onMounted(() => {
   fetch_items();
 });
-</script> 
+</script>

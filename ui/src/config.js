@@ -17,7 +17,7 @@ const exports = {
     uploadToken: 20,
   },
   analyticsId: "G-FOO",
-  appTitle: "BIOLOOP",
+  appTitle: "CMG",
   contact: {
     app_admin: "bioloop-ops-l@list.iu.edu",
   },
@@ -105,10 +105,10 @@ const exports = {
     },
   ],
   trackFileTypes: [
-    { name: 'BAM', id: 'bam' },
-    { name: 'BigWig', id: 'bigwig' },
-    { name: 'VCF', id: 'vcf' },
-    { name: 'BigWig (bw)', id: 'bw' },
+    { name: "BAM", id: "bam" },
+    { name: "BigWig", id: "bigwig" },
+    { name: "VCF", id: "vcf" },
+    { name: "FASTQ", id: "fastq" },
   ],
   restricted_import_dirs: {
     slateScratch: {

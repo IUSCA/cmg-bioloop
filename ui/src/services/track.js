@@ -73,6 +73,18 @@ class TrackService {
   delete(id) {
     return api.delete(`/tracks/${id}`);
   }
+
+  _getTrackColor(fileType) {
+    const colors = {
+      bam: "primary",
+      bigwig: "success",
+      bw: "success",
+      vcf: "warning",
+      bed: "info",
+      gtf: "secondary",
+    };
+    return colors[fileType] || "secondary";
+  }
 }
 
 export default new TrackService();
