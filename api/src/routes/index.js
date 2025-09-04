@@ -37,6 +37,7 @@ router.use('/tracks', require('./tracks') /* #swagger.security = [{"BearerAuth":
 router.use('/sessions', require('./sessions') /* #swagger.security = [{"BearerAuth": []}] */);
 router.use('/instruments', require('./instruments') /* #swagger.security = [{"BearerAuth": []}] */);
 router.use('/uploads', require('./uploads') /* #swagger.security = [{"BearerAuth": []}] */);
+router.use('/conversions', require('./conversions') /* #swagger.security = [{"BearerAuth": []}] */);
 
 if (featureService.isFeatureEnabled({ key: 'fs' })) {
   router.use('/fs', require('./fs') /* #swagger.security = [{"BearerAuth": []}] */);
