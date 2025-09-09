@@ -2,8 +2,9 @@ import logging
 from datetime import datetime, timedelta
 
 import fire
-import workers.api as api
 from pymongo import MongoClient
+
+import workers.api as api
 from workers.config import config
 from workers.config.celeryconfig import result_backend
 
@@ -125,7 +126,7 @@ def purge_stale_workflows(app_id: str = config['app_id'],
 
     example usage: 
     
-    python -m workers.scripts.purge_stale_workflows --app_id='bioloop-dev.sca.iu.edu' --workflow_types='["stage", "integrated"]' --age_threshold=86400 --max_purge_count=10 --dry_run
+    python -m workers.scripts.purge_stale_workflows --app_id='cmg-bioloop.sca.iu.edu' --workflow_types='["stage", "integrated"]' --age_threshold=86400 --max_purge_count=10 --dry_run
     """
     WorkflowPurgeManager(app_id, workflow_types, age_threshold, max_purge_count, dry_run).purge()
 

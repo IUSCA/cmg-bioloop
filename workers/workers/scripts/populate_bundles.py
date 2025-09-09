@@ -88,7 +88,7 @@ def initiate_bundle_sync(app_id=config['app_id'], dry_run=False):
 
     example usage:
 
-    python -m workers.scripts.sync_bundles_phase1 --app_id='bioloop-dev.sca.iu.edu' --dry_run
+    python -m workers.scripts.sync_bundles_phase1 --app_id='cmg-bioloop.sca.iu.edu' --dry_run
     """
 
     BundleSyncManager(dry_run=dry_run, app_id=app_id).populate_bundles()

@@ -8,7 +8,7 @@ app = Celery("tasks")
 app.config_from_object(celeryconfig)
 # print('\n'.join(app.tasks.keys()))
 
-APP_ID = 'bioloop-dev.sca.iu.edu'
+APP_ID = 'cmg-bioloop.sca.iu.edu'
 
 steps = [
     {

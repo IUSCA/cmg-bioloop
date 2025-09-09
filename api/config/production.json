@@ -1,6 +1,6 @@
 {
   "mode": "production",
-  "app_id": "bioloop-dev.sca.iu.edu",
+  "app_id": "cmg-bioloop.sca.iu.edu",
   "express": {
     "host": "0.0.0.0"
   },
@@ -10,7 +10,7 @@
   "auth": {
     "mode": "prod",
     "jwt": {
-      "iss": "bioloop-dev.sca.iu.edu",
+      "iss": "cmg-bioloop.sca.iu.edu",
       "ttl_milliseconds": 3600000
     }
   }

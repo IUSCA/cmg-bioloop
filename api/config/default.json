@@ -1,6 +1,6 @@
 {
   "mode": "default",
-  "app_id": "bioloop-dev.sca.iu.edu",
+  "app_id": "cmg-bioloop.sca.iu.edu",
   "express": {
     "port": 3030,
     "host": "localhost"

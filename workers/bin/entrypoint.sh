@@ -26,7 +26,7 @@ if [ $WORKER_TYPE == "celery_worker" ]; then
     --pidfile celery_worker.pid \
     --hostname 'bioloop-celery-w1@%h' \
     --autoscale 8,3 \
-    --queues 'bioloop-dev.sca.iu.edu.q'
+    --queues 'cmg-bioloop.sca.iu.edu.q'
       # --detach
 elif [ $WORKER_TYPE == "watch" ]; then
   echo "Starting Watch Worker"
