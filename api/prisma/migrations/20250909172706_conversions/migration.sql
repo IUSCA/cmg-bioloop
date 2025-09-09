@@ -25,7 +25,8 @@ ALTER TABLE "dataset_audit" DROP COLUMN "description";
 -- AlterTable
 ALTER TABLE "track" DROP COLUMN "file_type",
 DROP COLUMN "genomeType",
-DROP COLUMN "genomeValue";
+DROP COLUMN "genomeValue",
+ADD COLUMN     "color" TEXT;
 
 -- DropTable
 DROP TABLE "import_log";

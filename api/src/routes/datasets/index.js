@@ -931,24 +931,10 @@ router.get(
       },
     });
 
-    if (dataset.metadata.stage_alias) {
-      const download_file_path = isFileDownload
-        ? `${dataset.metadata.stage_alias}/${file.path}`
-        : `${datasetService.get_bundle_name(dataset)}`;
-      const url = new URL(download_file_path, `${config.get('download_server.base_url')}`);
-      // use url.pathname instead of download_file_path to deal with spaces in
-      // the file path oauth scope cannot contain spaces
-      const download_token = await authService.get_download_token(url.pathname);
-
-      const downloadUrl = new URL(
-        `download/${encodeURIComponent(download_file_path)}`,
-        config.get('download_server.base_url'),
-      );
-      res.json({
-        url: downloadUrl.href,
-        bearer_token: download_token.accessToken,
-      });
-    } else {
+    try {
+      const download_url = await datasetService.get_download_url({ dataset, file });
+      res.json(download_url);
+    } catch (e) {
       next(createError.NotFound('Dataset is not prepared for download'));
     }
   }),

@@ -22,6 +22,7 @@ const {
 const CONSTANTS = require('../constants');
 const asyncHandler = require('../middleware/asyncHandler');
 const { getPermission, accessControl } = require('../middleware/auth');
+const authService = require('./auth');
 
 /**
  * Normalizes the name of a dataset to be compatible with the system.
@@ -1245,6 +1246,28 @@ const initiateUploadWorkflow = async ({ dataset = null, requestedWorkflow = null
   return { workflowInitiated: requestedWorkflowInitiated, workflowInitiationError };
 };
 
+const get_download_url = async ({ dataset, file = null } = {}) => {
+  if (dataset.metadata.stage_alias) {
+    const download_file_path = file
+      ? `${dataset.metadata.stage_alias}/${file.path}`
+      : `${get_bundle_name(dataset)}`;
+    const url = new URL(download_file_path, `${config.get('download_server.base_url')}`);
+    // use url.pathname instead of download_file_path to deal with spaces in
+    // the file path oauth scope cannot contain spaces
+    const download_token = await authService.get_download_token(url.pathname);
+
+    const downloadUrl = new URL(
+      `download/${encodeURIComponent(download_file_path)}`,
+      config.get('download_server.base_url'),
+    );
+    return {
+      url: downloadUrl.href,
+      bearer_token: download_token.accessToken,
+    };
+  }
+  throw new Error('Dataset is not prepared for download');
+};
+
 module.exports = {
   soft_delete,
   get_dataset,
@@ -1267,4 +1290,5 @@ module.exports = {
   buildDatasetsFetchQuery,
   normalize_name,
   initiateUploadWorkflow,
+  get_download_url,
 };

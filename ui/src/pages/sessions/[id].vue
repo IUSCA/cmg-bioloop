@@ -64,6 +64,7 @@
                   border-color="primary"
                   preset="secondary"
                   class="flex-initial"
+                  @click="openInGenomeBrowser"
                 >
                   <i-mdi-open-in-new class="pr-2 text-2xl" />
                   Open in Genome Browser
@@ -248,6 +249,7 @@ import trackService from "@/services/track";
 import { useAuthStore } from "@/stores/auth";
 import { useNavStore } from "@/stores/nav";
 import { useSessionsStore } from "@/stores/sessions";
+import config from "@/config";
 
 const route = useRoute();
 const router = useRouter();
@@ -294,6 +296,12 @@ const _stagedTracksCount = computed(() => {
   return session.value.session_tracks.filter(
     (st) => st.track.dataset_file?.dataset?.is_staged,
   ).length;
+});
+
+const genomeBrowserUrl = computed(() => {
+  const genomeBrowserBaseUrl = config.genomeBrowserUrl;
+  const sessionTracksUrl = `/sessions/${session.value.id}/tracks`;
+  return `${genomeBrowserBaseUrl}/?genome=${session.value.genome}&hub=${sessionTracksUrl}`;
 });
 
 const associatedTracks = computed(() => {
@@ -493,18 +501,11 @@ const handleSessionUpdated = (updatedSession) => {
   loadSession();
 };
 
-const openInExternalBrowser = () => {
+const openInGenomeBrowser = () => {
   if (!session.value) return;
 
-  // Generate DataHub URL for external browser
-  const datahubUrl = `${window.location.origin}/api/sessions/${session.value.id}/datahub`;
-
   // Open in new tab
-  window.open(datahubUrl, "_blank");
-
-  toast.info(
-    "DataHub export opened in new tab. Copy the URL to use with external genome browsers.",
-  );
+  window.open(genomeBrowserUrl.value, "_blank");
 };
 
 // Lifecycle

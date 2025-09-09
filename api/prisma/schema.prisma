@@ -419,6 +419,7 @@ model track {
   // genomeValue     String
   dataset_file_id Int          @unique
   dataset_file    dataset_file @relation(fields: [dataset_file_id], references: [id], onDelete: Cascade)
+  color           String?
   created_at      DateTime     @default(now()) @db.Timestamp(6)
   updated_at      DateTime     @default(now()) @updatedAt @db.Timestamp(6)
   session_tracks  session_track[]

@@ -134,6 +134,9 @@ const exports = {
     "spaceranger-v1.3.1",
     "spaceranger-v1.1.0",
   ],
+  genomeBrowserUrl:
+    import.meta.env.VITE_GENOME_BROWSER_URL ||
+    "https://epigenomegateway.wustl.edu/browser",
 };
 
 export default exports;

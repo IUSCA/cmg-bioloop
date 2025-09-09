@@ -4,6 +4,7 @@ const { body, query, param } = require('express-validator');
 const logger = require('@/services/logger');
 const asyncHandler = require('../middleware/asyncHandler');
 const { accessControl } = require('../middleware/auth');
+const datasetService = require('../services/dataset');
 
 const prisma = new PrismaClient();
 
@@ -892,5 +893,53 @@ const validateTracksForSession = (tracks, sessionGenomeType, sessionGenome) => {
 
   return { isValid: true };
 };
+
+router.get(
+  '/:id/tracks',
+  [param('id').isInt().toInt()],
+  asyncHandler(async (req, res) => {
+    const sessionId = req.params.id;
+    const session = await prisma.genome_browser_session.findUnique({
+      where: { id: sessionId },
+      include: {
+        session_tracks: {
+          include: {
+            track: {
+              include: {
+                dataset_file: {
+                  include: {
+                    dataset: true,
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    const tracks = session.session_tracks.map((st) => {
+      const { track } = st;
+      const track_file = track.dataset_file;
+      const dataset = track_file?.dataset;
+      return {
+        name: track.name,
+        type: dataset.file_type,
+        options: {
+          color: st.color,
+          height: 100,
+        },
+        showOnHubLoad: true,
+        url: datasetService.get_download_url({
+          dataset, file: track_file,
+        }),
+      };
+    });
+
+    console.log('tracks');
+    console.log(tracks);
+    res.json(tracks);
+  }),
+);
 
 module.exports = router;
