@@ -30,6 +30,8 @@ class Register:
 
     def register(self, event: str, new_dirs: list[Path]) -> None:
         logger.info(f'event: {event}, new_dirs: {len(new_dirs)}')
+        for new_dir in new_dirs:
+            logger.info(f'new_dir: {new_dir.name}')
         if event not in ['add', 'full_scan']:
             return
 

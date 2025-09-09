@@ -167,7 +167,7 @@ ALTER TABLE "argument_value" ADD CONSTRAINT "argument_value_argument_id_fkey" FO
 ALTER TABLE "argument_value" ADD CONSTRAINT "argument_value_conversion_id_fkey" FOREIGN KEY ("conversion_id") REFERENCES "conversion"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "conversion" ADD CONSTRAINT "conversion_dataset_id_fkey" FOREIGN KEY ("dataset_id") REFERENCES "dataset"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "conversion" ADD CONSTRAINT "conversion_dataset_id_fkey" FOREIGN KEY ("dataset_id") REFERENCES "dataset"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "conversion" ADD CONSTRAINT "conversion_definition_id_fkey" FOREIGN KEY ("definition_id") REFERENCES "conversion_definition"("id") ON DELETE RESTRICT ON UPDATE CASCADE;

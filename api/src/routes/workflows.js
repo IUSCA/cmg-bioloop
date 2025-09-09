@@ -25,7 +25,9 @@ router.get(
     async (req, res, next) => {
       // #swagger.tags = ['Workflow']
 
-      const { dataset_id, dataset_name, workflow_id } = req.query;
+      const {
+        dataset_id, dataset_name, workflow_id,
+      } = req.query;
       let workflow_ids = null;
 
       // if workflow_id is provided, then ignore dataset_id and dataset_name
@@ -89,6 +91,7 @@ router.get(
         },
         include: {
           initiator: true,
+          // conversion: !!include_conversion,
         },
       });
 

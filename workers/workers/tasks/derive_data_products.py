@@ -6,9 +6,13 @@ from pathlib import Path
 
 import requests
 from celery import Celery
+from sca_rhythm import Workflow
+from this import d
 
 import workers.api as api
 import workers.config.celeryconfig as celeryconfig
+import workers.workflow_utils as wf_utils
+from workers.celery_app import app as celery_app
 from workers.config import config
 from workers.conversion import get_conversion_output_dir
 
@@ -16,7 +20,82 @@ app = Celery("tasks")
 app.config_from_object(celeryconfig)
 
 
-def derive(celery_task, dataset_id_conversion_id, **kwargs):
+def get_fastq_files_directories(conversion_output_dir: Path,
+                              conversion_id: int,
+                              dataset_name: str) -> list[Path]:
+    # Check if there are any *.fastq.gz files at the root of conversion output directory
+    root_fastq_files = list(conversion_output_dir.glob("*.fastq.gz"))
+    print(f"root_fastq_files: {root_fastq_files}")
+
+    output_directories: list[Path] = []
+    if root_fastq_files:
+        print(f"Found file {root_fastq_files} at the root of conversion output directory")
+        # Create a new directory for the fastq files
+        new_dir_name = f"Conversion-{conversion_id}-{dataset_name}"
+        data_product_path = conversion_output_dir / new_dir_name
+        data_product_path.mkdir(exist_ok=True)
+        
+        print(f"Found {len(root_fastq_files)} *.fastq.gz files, moving them to {new_dir_name}")
+        
+        # Move all fastq files to the new directory
+        for fastq_file in root_fastq_files:
+            destination = data_product_path / fastq_file.name
+            print(f"  - Moving {fastq_file.name} to {new_dir_name}/")
+            fastq_file.rename(destination)
+        
+        # Add the new directory to output_directories
+        output_directories.append(data_product_path)
+        print(f"  - Added new directory: {new_dir_name}")
+    else:
+        # Fall back to existing logic for directories with '_' in their names
+        for item in conversion_output_dir.iterdir():
+            item_path: Path = conversion_output_dir / item
+            print(f"item_path: {item_path}")
+            if item_path.is_dir() and '_' in item_path.name:
+                print(f"  - Appending: {item_path.name}")
+                output_directories.append(item_path)
+    
+    return output_directories
+
+
+def get_product_track_files(product_id: int) -> list[int]:
+        """Get files for a single product that match the name pattern."""
+        product_details: dict = api.get_dataset(product_id, files=True)
+        files: list[dict] = product_details.get('files', [])
+        
+        # Filter files that match the name pattern and create payload format
+        matching_files_ids: list[dict] = [
+            {'id': file['id']} 
+            for file in files 
+            if file['name'].endswith('bam') or file['name'].endswith('bw') or file['name'].endswith('vcf') or file['name'].endswith('bigwig')
+        ]
+        
+        print(f"Found {len(matching_files_ids)} matching files for product {product_id}")
+        return matching_files_ids
+    
+
+def create_tracks_for_data_products(data_products: list[dict]) -> None:
+    """
+    Create tracks for all data products by finding files that match a certain name pattern.
+    Avoids nested loops by using list comprehensions and functional programming.
+    
+    @param data_products: List of data product dictionaries with 'id' field
+    @param file_name_pattern: Pattern to match in file names (default: '_')
+    """
+    # Process all data products and create tracks
+    for data_product in data_products:
+        product_id = data_product['id']
+        # Todo: avoid nested loop
+        track_file_ids = get_product_track_files(product_id)
+        
+        if track_file_ids:
+            api.create_tracks(product_id, track_file_ids)
+            print(f"Associated {len(track_file_ids)} files as tracks for data product {product_id}")
+        else:
+            print(f"No matching files found for data product {product_id}")
+
+
+def derive_data_products(celery_task, dataset_id: int, conversion_id: int):
     """
     Create data product datasets from conversion output directories.
     
@@ -29,20 +108,16 @@ def derive(celery_task, dataset_id_conversion_id, **kwargs):
     @return: tuple (dataset_id, conversion_id)
     """
     # Get conversion information
-    conversion = api.get_conversion(conversion_id=dataset_id_conversion_id['conversion_id'], include_dataset=True)
-    dataset = api.get_dataset(dataset_id=dataset_id_conversion_id['dataset_id'])
+    conversion = api.get_conversion(conversion_id=conversion_id, include_dataset=True)
+    dataset = api.get_dataset(dataset_id=dataset_id)
     
     conversion_output_dir = get_conversion_output_dir(conversion)
     print(f"conversion_output_dir: {conversion_output_dir}")
 
     # Find all directories inside this conversion's output directory
     output_directories: list[Path] = []
-    for item in conversion_output_dir.iterdir():
-        item_path: Path = conversion_output_dir / item
-        print(f"item_path: {item_path}")
-        if item_path.is_dir() and '_' in item_path.name:
-            print(f"  - Appending: {item_path.name}")
-            output_directories.append(item_path)
+    
+    output_directories = get_fastq_files_directories(conversion_output_dir, conversion_id, dataset['name'])
     
     if not output_directories:
         print("No output directories found - no data products to create")
@@ -121,7 +196,7 @@ def derive(celery_task, dataset_id_conversion_id, **kwargs):
     conflicting_data_products: list[dict] = []
     if result.get('conflicted'):
         print(f"Fetching details for {len(result['conflicted'])} conflicted datasets...")
-        # Gather details of conflicted datasets by fetching them from the API.
+        # Gather details of conflicted datasets
         for conflicted in result['conflicted']:
             conflicting_data_product_matches = api.get_all_datasets(
                 name=conflicted['name'],
@@ -129,39 +204,39 @@ def derive(celery_task, dataset_id_conversion_id, **kwargs):
                 match_name_exact=True,
             )
             if len(conflicting_data_product_matches) > 0:
-                product = conflicting_data_product_matches[0]
-                conflicting_data_products.append(product)
-                print(f"  - Found conflicted dataset: {product['name']} (ID: {product['id']})")
+                data_product = conflicting_data_product_matches[0]
+                conflicting_data_products.append(data_product)
+                print(f"  - Found conflicted dataset: {data_product['name']} (ID: {data_product['id']})")
 
     # Create a combined list of all datasets (created + conflicting). Filter out duplicates.
     derived_data_products: list[dict] = []
     seen_ids = set()
     
     # Add created datasets first
-    for product in created_data_products:
-        if product['id'] not in seen_ids:
-            derived_data_products.append(product)
-            seen_ids.add(product['id'])
+    for data_product in created_data_products:
+        if data_product['id'] not in seen_ids:
+            derived_data_products.append(data_product)
+            seen_ids.add(data_product['id'])
     
     # Add conflicting datasets, avoiding duplicates
-    for product in conflicting_data_products:
-        if product['id'] not in seen_ids:
-            derived_data_products.append(product)
-            seen_ids.add(product['id'])
+    for data_product in conflicting_data_products:
+        if data_product['id'] not in seen_ids:
+            derived_data_products.append(data_product)
+            seen_ids.add(data_product['id'])
         
     # Create hierarchy relationships for all data products (created + conflicted)
     if derived_data_products:
         dataset_hierarchy_data: list[dict] = []
         conversion_derived_dataset_associations: list[dict] = []
         
-        for product in derived_data_products:
+        for data_product in derived_data_products:
             dataset_hierarchy_data.append({
                 "source_id": dataset['id'],
-                "derived_id": product['id']
+                "derived_id": data_product['id']
             })
             conversion_derived_dataset_associations.append({
                 "conversion_id": conversion['id'],
-                "dataset_id": product['id']
+                "dataset_id": data_product['id']
             })
 
         # print("dataset_hierarchy_data: ")
@@ -191,5 +266,22 @@ def derive(celery_task, dataset_id_conversion_id, **kwargs):
                 print(f"Skipping creation of conversion's derived-dataset associations")
             else:
                 raise
+        
+        # Associate files as tracks for all data products
+        create_tracks_for_data_products(derived_data_products)
 
-    return {'dataset_id': dataset['id'], 'conversion_id': conversion['id']},
+    # Kick off 'Integrated' workflow for all data products
+    for data_product in derived_data_products:
+        wf = Workflow(celery_app=celery_app, **wf_utils.get_wf_body(wf_name='integrated'))
+        wf.start(data_product['id'])
+        print(f"Started workflow {wf} for data product {data_product['id']}")
+        api.add_workflow_to_dataset(dataset_id=data_product['id'], workflow_id=wf.workflow['_id'])
+
+
+def derive(celery_task, dataset_id_conversion_id, **kwargs):
+    dataset_id = dataset_id_conversion_id['dataset_id']
+    conversion_id = dataset_id_conversion_id['conversion_id']
+    derive_data_products(celery_task, dataset_id, conversion_id)
+
+    return {'dataset_id': dataset_id, 'conversion_id': conversion_id},
+

@@ -3,7 +3,8 @@ from datetime import datetime
 from urllib.parse import urljoin
 
 import requests
-from glom import glom, assign as glom_assign
+from glom import assign as glom_assign
+from glom import glom
 from requests.adapters import HTTPAdapter, Retry
 
 import workers.utils as utils
@@ -260,6 +261,14 @@ def add_workflow_to_dataset(dataset_id, workflow_id):
         r.raise_for_status()
 
 
+def add_workflow_to_dataset(dataset_id, workflow_id):
+    with APIServerSession() as s:
+        r = s.post(f'datasets/{dataset_id}/workflows', json={
+            'workflow_id': workflow_id
+        })
+        r.raise_for_status()
+
+
 def register_process(worker_process: dict):
     with APIServerSession(enable_retry=False) as s:
         r = s.post(f'workflows/processes', json=worker_process)
@@ -307,9 +316,15 @@ def get_conversion(conversion_id: int, include_dataset: bool = False):
         return r.json()
 
 
-def post_conversion_derived_datasets(derivation_data: dict):
+def post_conversion_derived_datasets(derived_data: dict):
     with APIServerSession() as s:
-        r = s.post('conversions/derived_datasets', json=derivation_data)
+        r = s.post('conversions/derived_datasets', json=derived_data)
+        r.raise_for_status()
+
+
+def create_tracks(dataset_id, files: list[dict]):
+    with APIServerSession() as s:
+        r = s.post(f'datasets/{dataset_id}/tracks', json=files)
         r.raise_for_status()
 
 

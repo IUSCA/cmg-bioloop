@@ -13,7 +13,7 @@ const asyncHandler = require('./asyncHandler');
 
 function authenticate(req, res, next) {
   const authHeader = req.headers.authorization || '';
-  console.log('authHeader', authHeader);
+  // console.log('authHeader', authHeader);
   if (!authHeader) return next(createError.Unauthorized('Authentication failed. Token not found.'));
 
   const err = createError.Unauthorized('Authentication failed. Token is not valid.');

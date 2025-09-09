@@ -647,6 +647,27 @@ router.post(
   }),
 );
 
+router.post(
+  '/:id/tracks',
+  isPermittedTo('update'),
+  validate([
+    param('id').isInt().toInt(),
+    body('files').isArray().notEmpty(),
+  ]),
+  asyncHandler(async (req, res, next) => {
+    // #swagger.tags = ['datasets']
+    // #swagger.summary = Associate files to a dataset as tracks
+    await prisma.transaction(async (tx) => {
+      await tx.track.createMany({
+        data: req.body.files.map((f) => ({
+          dataset_file_id: f.id,
+        })),
+      });
+    });
+    res.sendStatus(200);
+  }),
+);
+
 // add workflow ids to dataset
 router.post(
   '/:id/workflows',
