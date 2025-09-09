@@ -315,9 +315,6 @@ async function createTracks(datasetFiles, tx = prisma) {
     const track = await tx.track.create({
       data: {
         name: trackName,
-        file_type: datasetFile.filetype,
-        genomeType,
-        genomeValue,
         dataset_file_id: datasetFile.id,
       },
     });

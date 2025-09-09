@@ -379,6 +379,11 @@ async function main() {
   await prisma.argument.createMany({
     data: argumentDataWithPrograms,
   });
+
+  // Create tracks and sessions for testing
+  console.log('\n=== Creating Tracks and Sessions ===');
+  const { main: createTracksAndSessions } = require('../src/scripts/insert_mock_tracks');
+  await createTracksAndSessions();
 }
 
 main()
