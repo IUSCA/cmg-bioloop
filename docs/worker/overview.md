@@ -116,7 +116,7 @@ docker-compose up queue mongo -d
 Start Workers
 
 ```bash
-python -m celery -A tests.celery_app worker --loglevel INFO -O fair --pidfile celery_worker.pid --hostname 'bioloop-celery-w1@%h' --autoscale=2,1 --queues 'bioloop-dev.sca.iu.edu.q'
+python -m celery -A tests.celery_app worker --loglevel INFO -O fair --pidfile celery_worker.pid --hostname 'bioloop-celery-w1@%h' --autoscale=2,1 --queues 'cmg-new.sca.iu.edu'
 ```
 
 `--concurrency 1`: number of worker processed to pre-fork

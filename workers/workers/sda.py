@@ -63,7 +63,8 @@ def get_hash(sda_path: str, missing_ok: bool = False) -> str | None:
 
 def delete(path: str) -> None:
     if exists(path):
-        command = ['hsi', '-P', f'rm {path}']
+        # command = ['hsi', '-P', f'rm {path}']
+        command = ['rm', '-rf', path]
         cmd.execute(command)
 
 

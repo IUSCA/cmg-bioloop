@@ -357,11 +357,18 @@ function navigateBackSafely(router, fallback = "/") {
   }, 300);
 }
 
+function cleanParams(params) {
+  return Object.fromEntries(
+    Object.entries(params).filter(([_, v]) => v !== null && v !== undefined),
+  );
+}
+
 export {
   arrayEquals,
   capitalize,
   caseInsensitiveIncludes,
   cmp,
+  cleanParams,
   dayjs,
   difference,
   downloadFile,
@@ -381,6 +388,5 @@ export {
   navigateBackSafely,
   setIntersection,
   union,
-  validateEmail
+  validateEmail,
 };
-

@@ -38,7 +38,7 @@ if [ "$WORKER_TYPE" = "celery_worker" ]; then
     --pidfile celery_worker.pid \
     --hostname 'bioloop-celery-w1@%h' \
     --autoscale 8,3 \
-    --queues 'bioloop-dev.sca.iu.edu.q'
+    --queues 'cmg-new.sca.iu.edu.q'
       # --detach
 elif [ "$WORKER_TYPE" = "conversion_worker" ]; then
   echo "Starting Conversion Worker"
@@ -50,7 +50,7 @@ elif [ "$WORKER_TYPE" = "conversion_worker" ]; then
     --pidfile conversion_worker.pid \
     --hostname 'bioloop-celery-w1@%h' \
     --autoscale 8,3 \
-    --queues 'conversion.bioloop-dev.sca.iu.edu.q'
+    --queues 'conversion.cmg-new.sca.iu.edu.q'
       # --detach
 elif [ "$WORKER_TYPE" = "watch" ]; then
   echo "Starting Watch Worker"

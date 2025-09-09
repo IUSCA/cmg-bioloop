@@ -55,8 +55,6 @@
           <span>{{ rowData.definition?.program?.name }}</span>
         </template>
 
-
-
         <template #cell(initiated_at)="{ value }">
           <span>{{ datetime.date(value) }}</span>
         </template>
@@ -73,8 +71,6 @@
             <span class="text-sm">{{ rowData.workflow_id }}</span>
           </router-link>
         </template> -->
-
-
       </va-data-table>
     </div>
 
@@ -94,10 +90,9 @@
 
 <script setup>
 import useQueryPersistence from "@/composables/useQueryPersistence";
-import ConversionService from "@/services/conversions";
+import ConversionApiService from "@/services/conversion/api";
 import * as datetime from "@/services/datetime";
 import toast from "@/services/toast";
-import { useAuthStore } from "@/stores/auth";
 import { useConversionStore } from "@/stores/conversion";
 import { storeToRefs } from "pinia";
 
@@ -109,8 +104,7 @@ const props = defineProps({
 
 const store = useConversionStore();
 const { filters, query, params, activeFilters } = storeToRefs(store);
-
-const auth = useAuthStore();
+import conversionApiService from "@/services/conversion/api";
 
 const PAGE_SIZE_OPTIONS = [25, 50, 100];
 
@@ -162,7 +156,6 @@ const columns = [
     tdAlign: "right",
     thAlign: "right",
   },
-
 ];
 
 function fetch_items() {
@@ -183,13 +176,14 @@ function fetch_items() {
   if (!sort_order) {
     sort_by = null;
   }
-  ConversionService.getAll({
-    limit: query.value.page_size,
-    offset: offset.value,
-    sort_by,
-    sort_order,
-    ...filters_api,
-  })
+  conversionApiService
+    .getAll({
+      limit: query.value.page_size,
+      offset: offset.value,
+      sort_by,
+      sort_order,
+      ...filters_api,
+    })
     .then((res) => {
       conversions.value = res.data?.conversions || [];
       total_results.value = res.data?.metadata?.count || 0;

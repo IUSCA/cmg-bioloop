@@ -8,8 +8,9 @@ from celery import Celery
 import workers.api as api
 import workers.config.celeryconfig as celeryconfig
 from workers import cmd
-from workers.exceptions import ConversionException
 from workers.config import config
+from workers.conversion import get_conversion_output_dir
+from workers.exceptions import ConversionException
 
 app = Celery("tasks")
 app.config_from_object(celeryconfig)
@@ -88,13 +89,9 @@ def run_conversion(celery_task, conversion_id, **kwargs):
     #     print(f"type of arg {i}: {type(arg)}")
     # print("--------------------------------")
 
-    all_conversions_output_dir = Path(conversion['definition']['output_directory'])
-    conversion_run_dir = all_conversions_output_dir / f'{conversion["id"]}'
-    if conversion_run_dir.exists():
-        shutil.rmtree(conversion_run_dir)
-    conversion_output_dir = conversion_run_dir / f'{dataset["name"]}'
+    conversion_output_dir = get_conversion_output_dir(conversion=conversion)
     conversion_output_dir.mkdir(parents=True, exist_ok=True)
-
+    
     # If Dataset being converted has a sample sheet, write it to the Dataset's staged directory
     if has_sample_sheet(arguments=argsList):
         write_sample_sheet(arguments=argsList, dataset=dataset)
@@ -119,6 +116,13 @@ def run_conversion(celery_task, conversion_id, **kwargs):
         dataset=dataset,
         conversion_output_dir=conversion_output_dir
     )
+
+    print(f"conversion_output_dir: {conversion_output_dir}")
+    print("--------------------------------")
+    print("contents of conversion_output_dir:")
+    for item in conversion_output_dir.iterdir():
+        print(f"  {item}")
+    print("--------------------------------")
     
     print(f"args: {args}")
     print("args (joined): " + " ".join(str(a) for a in args))
@@ -127,8 +131,15 @@ def run_conversion(celery_task, conversion_id, **kwargs):
         cmd.execute_with_log_tracking(cmd=args, celery_task=celery_task, cwd=str(cwd) if cwd else None)
     else:
         cmd.execute(cmd=args, cwd=str(cwd) if cwd else None)
-        
     
+    print(f"conversion_output_dir: {conversion_output_dir}")
+    print("--------------------------------")
+    print("contents of conversion_output_dir:")
+    for item in conversion_output_dir.iterdir():
+        print(f"  {item}")
+    print("--------------------------------")
+
+
     print(f"task convert returned dataset_id, conversion_id")
     print(f"dataset_id: {dataset_id}")
     print(f"conversion_id: {conversion_id}")

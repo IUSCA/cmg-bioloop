@@ -54,17 +54,17 @@
 <script setup>
 import DatasetType from "@/components/dataset/DatasetType.vue";
 import Pagination from "@/components/utils/Pagination.vue";
-import ConversionService from "@/services/conversions";
+import ConversionApiService from "@/services/conversion/api";
 import * as datetime from "@/services/datetime";
 import toast from "@/services/toast";
 import { formatBytes } from "@/services/utils";
-import { computed, ref, watch } from 'vue';
+import { computed, ref, watch } from "vue";
 
-const props = defineProps({ 
+const props = defineProps({
   conversionId: {
     type: [Number],
-    required: true
-  }
+    required: true,
+  },
 });
 
 const derivedDatasets = ref([]);
@@ -76,45 +76,45 @@ const PAGE_SIZE_OPTIONS = [10, 25, 50, 100];
 const query = ref({
   page: 1,
   page_size: 25,
-  sort_by: 'created_at',
-  sort_order: 'desc',
+  sort_by: "created_at",
+  sort_order: "desc",
 });
 
 const columns = [
   {
-    key: 'name',
-    label: 'Dataset Name',
+    key: "name",
+    label: "Dataset Name",
     sortable: true,
-    thAlign: 'left',
-    tdAlign: 'left',
+    thAlign: "left",
+    tdAlign: "left",
   },
   {
-    key: 'type',
-    label: 'Type',
+    key: "type",
+    label: "Type",
     sortable: true,
-    thAlign: 'left',
-    tdAlign: 'left',
+    thAlign: "left",
+    tdAlign: "left",
   },
   {
-    key: 'size',
-    label: 'Size',
+    key: "size",
+    label: "Size",
     sortable: true,
-    thAlign: 'right',
-    tdAlign: 'right',
+    thAlign: "right",
+    tdAlign: "right",
   },
   {
-    key: 'files',
-    label: 'Files',
+    key: "files",
+    label: "Files",
     sortable: true,
-    thAlign: 'right',
-    tdAlign: 'right',
+    thAlign: "right",
+    tdAlign: "right",
   },
   {
-    key: 'created_at',
-    label: 'Created',
+    key: "created_at",
+    label: "Created",
     sortable: true,
-    thAlign: 'left',
-    tdAlign: 'left',
+    thAlign: "left",
+    tdAlign: "left",
   },
 ];
 
@@ -130,14 +130,17 @@ const fetchParams = computed(() => {
 
 async function fetchDerivedDatasets() {
   if (!props.conversionId) return;
-  
+
   loading.value = true;
   try {
-    const response = await ConversionService.getDerivedDatasets(props.conversionId, fetchParams.value);
+    const response = await ConversionApiService.getDerivedDatasets(
+      props.conversionId,
+      fetchParams.value,
+    );
     derivedDatasets.value = response.data.derived_datasets || [];
     total_results.value = response.data.metadata.count || 0;
   } catch (error) {
-    toast.error('Error fetching derived datasets:', error);
+    toast.error("Error fetching derived datasets:", error);
     derivedDatasets.value = [];
     total_results.value = 0;
   } finally {
@@ -146,11 +149,16 @@ async function fetchDerivedDatasets() {
 }
 
 watch(
-  () => [query.value.page, query.value.page_size, query.value.sort_by, query.value.sort_order],
+  () => [
+    query.value.page,
+    query.value.page_size,
+    query.value.sort_by,
+    query.value.sort_order,
+  ],
   () => {
     fetchDerivedDatasets();
   },
-  { immediate: true }
+  { immediate: true },
 );
 
 watch(
@@ -159,6 +167,6 @@ watch(
     query.value.page = 1; // Reset to first page
     fetchDerivedDatasets();
   },
-  { immediate: true }
+  { immediate: true },
 );
 </script>

@@ -18,9 +18,10 @@ def archive_dataset(celery_task, dataset_id, **kwargs):
 
 
 @app.task(base=WorkflowTask, bind=True, name='delete_dataset',
-          autoretry_for=(Exception,),
-          max_retries=3,
-          default_retry_delay=5)
+          # autoretry_for=(Exception,),
+          # max_retries=3,
+          # default_retry_delay=5
+          )
 def delete_dataset(celery_task, dataset_id, **kwargs):
     from workers.tasks.delete import delete_dataset as task_body
     return task_body(celery_task, dataset_id, **kwargs)
@@ -31,7 +32,8 @@ def delete_dataset(celery_task, dataset_id, **kwargs):
           max_retries=3,
           default_retry_delay=5)
 def download_illumina_dataset(celery_task, dataset_id, **kwargs):
-    from workers.tasks.illumina_download import download_illumina_dataset as task_body
+    from workers.tasks.illumina_download import \
+      download_illumina_dataset as task_body
     return task_body(celery_task, dataset_id, **kwargs)
 
 
@@ -118,7 +120,8 @@ def delete_source(celery_task, dataset_id, **kwargs):
           max_retries=3,
           default_retry_delay=5)
 def delete_dataset(celery_task, dataset_id, **kwargs):
-    from workers.tasks.mark_archived_and_delete import mark_archived_and_delete as task_body
+    from workers.tasks.mark_archived_and_delete import \
+      mark_archived_and_delete as task_body
     return task_body(celery_task, dataset_id, **kwargs)
 
 
@@ -136,5 +139,6 @@ def process_dataset_upload(celery_task, dataset_id, **kwargs):
           max_retries=3,
           default_retry_delay=5)
 def cancel_dataset_upload(celery_task, dataset_id, **kwargs):
-    from workers.tasks.cancel_dataset_upload import purge_uploaded_resources as task_body
+    from workers.tasks.cancel_dataset_upload import \
+      purge_uploaded_resources as task_body
     return task_body(celery_task, dataset_id, **kwargs)

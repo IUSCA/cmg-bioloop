@@ -1,4 +1,11 @@
-import api from "./api";
+import api from "../api";
+import qs from "qs";
+
+function cleanParams(params) {
+  return Object.fromEntries(
+    Object.entries(params).filter(([_, v]) => v !== null && v !== undefined),
+  );
+}
 
 class ConversionService {
   getAllDefinitions() {
@@ -18,9 +25,14 @@ class ConversionService {
     params = {
       include_dataset: false,
       include_derived_datasets: false,
+      include_definition: false,
     },
   ) {
-    return api.get(`/conversions/${id}`, { params });
+    return api.get(`/conversions/${id}`, {
+      params: cleanParams(params),
+      paramsSerializer: (params) =>
+        qs.stringify(params, { arrayFormat: "repeat" }),
+    });
   }
 
   create(conversion) {

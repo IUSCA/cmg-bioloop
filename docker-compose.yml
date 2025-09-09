@@ -20,6 +20,8 @@ services:
     restart: unless-stopped # This can help with loading conatainer after it has all the keys set up.
     expose:
       - 3030
+    ports:
+      - 127.0.0.1:3030:3030
     env_file:
       - tests/.env.default # Variables needed for testing user information
       - db/postgres/.env.default # For Postgres connection settings
@@ -80,7 +82,7 @@ services:
       - db/mongo/.env.default # For MongoDB connection settings
       - db/queue/.env.default # For RabbitMQ connection settings
       - workers/.env.default # For all default settings
-      # - workers/.env? # For keys made after the first run
+      - workers/.env # For keys made after the first run
     working_dir: /opt/sca/app
     volumes:
       - ./workers/:/opt/sca/app
@@ -109,7 +111,7 @@ services:
       - db/mongo/.env.default # For MongoDB connection settings
       - db/queue/.env.default # For RabbitMQ connection settings
       - workers/.env.default # For all default settings
-      # - workers/.env? # For keys made after the first run
+      - workers/.env # For keys made after the first run
     working_dir: /opt/sca/app
     volumes:
       - ./workers/:/opt/sca/app
@@ -137,7 +139,7 @@ services:
       - db/mongo/.env.default # For MongoDB connection settings
       - db/queue/.env.default # For RabbitMQ connection settings
       - workers/.env.default # For all default settings
-      # - workers/.env? # For keys made after the first run
+      - workers/.env # For keys made after the first run
     working_dir: /opt/sca/app
     volumes:
       - ./workers/:/opt/sca/app

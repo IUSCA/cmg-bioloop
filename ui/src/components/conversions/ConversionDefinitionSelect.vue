@@ -15,7 +15,7 @@
 </template>
 
 <script setup>
-import conversionService from "@/services/conversions";
+import conversionApiService from "@/services/conversion/api";
 // const props = defineProps({})
 
 const model = defineModel();
@@ -25,7 +25,7 @@ const loading = ref(false);
 
 onMounted(() => {
   loading.value = true;
-  conversionService
+  conversionApiService
     .getAllDefinitions()
     .then((response) => {
       definitions.value = response.data;

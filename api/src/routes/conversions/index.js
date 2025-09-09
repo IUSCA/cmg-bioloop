@@ -149,7 +149,9 @@ router.get(
   isPermittedTo('read'),
   validate([
     param('id').isInt({ min: 1 }).toInt(),
-    query('include_dataset').toBoolean().default(false),
+    query('include_dataset').default(false).toBoolean(),
+    query('include_derived_datasets').default(false).toBoolean(),
+    query('include_definition').default(false).toBoolean(),
   ]),
   asyncHandler(async (req, res, next) => {
   // #swagger.tags = ['Conversions']
@@ -291,7 +293,7 @@ router.post(
   ]),
   asyncHandler(async (req, res, next) => {
     // #swagger.tags = ['Conversions']
-    await prisma.conversion_derivation.createMany({
+    await prisma.conversion_derived_dataset.createMany({
       data: req.body,
     });
     res.sendStatus(200);

@@ -1,6 +1,6 @@
 {
   "mode": "default",
-  "app_id": "cmg-bioloop.sca.iu.edu",
+  "app_id": "cmg-new.sca.iu.edu",
   "express": {
     "port": 3030,
     "host": "localhost"
@@ -159,7 +159,7 @@
         {
           "name": "convert",
           "task": "convert_dataset",
-          "queue": "conversion.bioloop-dev.sca.iu.edu.q"
+          "queue": "conversion.cmg-new.sca.iu.edu.q"
         }
       ]
     },
@@ -169,22 +169,22 @@
         {
           "name": "convert",
           "task": "convert_genomic",
-          "queue": "conversion.bioloop-dev.sca.iu.edu.q"
+          "queue": "conversion.cmg-new.sca.iu.edu.q"
         },
         {
           "name": "generate qc",
           "task": "generate_qc",
-          "queue": "conversion.bioloop-dev.sca.iu.edu.q"
+          "queue": "conversion.cmg-new.sca.iu.edu.q"
         },
         {
           "name": "copy reports",
           "task": "copy_conversion_reports",
-          "queue": "conversion.bioloop-dev.sca.iu.edu.q"
+          "queue": "conversion.cmg-new.sca.iu.edu.q"
         },
         {
           "name": "derive data products",
           "task": "derive_data_products",
-          "queue": "conversion.bioloop-dev.sca.iu.edu.q"
+          "queue": "conversion.cmg-new.sca.iu.edu.q"
         }
       ]
     }

@@ -55,7 +55,7 @@
 </template>
 
 <script setup>
-import conversionService from "@/services/conversions";
+import conversionApiService from "@/services/conversion/api";
 import toast from "@/services/toast";
 const props = defineProps({
   datasetIds: { type: Array, required: true },
@@ -86,7 +86,7 @@ function show() {
 
 function convert_datasets() {
   loading.value = true;
-  conversionService
+  conversionApiService
     .createBulk({
       definition_id: definition.value.id,
       dataset_ids: props.datasetIds,
@@ -176,7 +176,7 @@ function convert_datasets() {
 }
 
 function removeNullValues(argValues) {
-  return argValues.filter(arg => arg.value != null);
+  return argValues.filter((arg) => arg.value != null);
 }
 
 function close() {
@@ -187,4 +187,3 @@ function close() {
   emit("done");
 }
 </script>
-

@@ -26,6 +26,8 @@ model dataset {
   is_deleted        Boolean             @default(false)
   is_staged         Boolean             @default(false)
   metadata          Json?
+  src_instrument_id Int?
+  file_type         String?
   workflows         workflow[]
   files             dataset_file[]
   audit_logs        dataset_audit[]
@@ -37,11 +39,18 @@ model dataset {
   stage_requests    stage_request_log[]
   bundle            bundle?
   src_instrument    instrument?         @relation(fields: [src_instrument_id], references: [id])
-  src_instrument_id Int?
   conversions       conversion[]
   derived_from_conversions conversion_derived_dataset[]
+  genomic_details dataset_genomic_attributes?
 
   @@unique([name, type, is_deleted])
+}
+
+model dataset_genomic_attributes {
+  dataset_id Int @id
+  dataset    dataset @relation(fields: [dataset_id], references: [id], onDelete: Cascade)
+  genome_type String
+  genome_value String
 }
 
 model dataset_hierarchy {
@@ -403,9 +412,11 @@ model instrument {
 model track {
   id              Int          @id @default(autoincrement())
   name            String
-  file_type       String?
-  genomeType      String
-  genomeValue     String
+  // todo - track file_type on Dataset instead?
+  // file_type       String?
+  // todo - track genomeType and genomeValue on Dataset instead?
+  // genomeType      String
+  // genomeValue     String
   dataset_file_id Int          @unique
   dataset_file    dataset_file @relation(fields: [dataset_file_id], references: [id], onDelete: Cascade)
   created_at      DateTime     @default(now()) @db.Timestamp(6)
@@ -516,11 +527,11 @@ model conversion {
   definition_id   Int
   workflow_id     String?
   dataset_id      Int
-  initiator_id    Int
+  initiator_id    Int?
   argument_values argument_value[]
   dataset         dataset               @relation(fields: [dataset_id], references: [id])
   definition      conversion_definition @relation(fields: [definition_id], references: [id])
-  initiator       user                  @relation(fields: [initiator_id], references: [id])
+  initiator       user?                  @relation(fields: [initiator_id], references: [id], onDelete: SetNull)
   additional_args Json?                 // e.g., { [ {"--no-lane-splitting": "true" }, {"--barcode-mismatches": "1"} ] }
   derived_datasets conversion_derived_dataset[]
 }

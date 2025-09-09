@@ -32,7 +32,7 @@
 </template>
 
 <script setup>
-import conversionService from "@/services/conversions";
+import conversionApiService from "@/services/conversion/api";
 import toast from "@/services/toast";
 const props = defineProps({
   dataset: Object,
@@ -47,7 +47,7 @@ const argValues = ref([]);
 
 function convert_dataset() {
   loading.value = true;
-  conversionService
+  conversionApiService
     .create({
       definition_id: definition.value.id,
       dataset_id: props.dataset.id,
@@ -86,4 +86,3 @@ const reason = computed(() => {
   return "";
 });
 </script>
-

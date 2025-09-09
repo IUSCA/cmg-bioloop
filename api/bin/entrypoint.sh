@@ -95,7 +95,7 @@ fi
 
 if ! grep -q "^APP_API_TOKEN=[^ ]\+" "workers/.env"; then
   echo "APP_API_TOKEN=$(node src/scripts/issue_token.js svc_tasks)"
-  echo "APP_API_TOKEN=$(node src/scripts/issue_token.js svc_tasks)" >> workers/.env
+  echo "APP_API_TOKEN=$(node src/scripts/issue_token.js svc_tasks)" > workers/.env
 fi
 
 # Dynamically load environment variables from .env file

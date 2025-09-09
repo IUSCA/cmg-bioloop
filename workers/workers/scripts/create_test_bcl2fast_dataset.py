@@ -17,18 +17,19 @@ Requirements:
     - Proper permissions to write to /opt/sca/data/origin/raw_data
 """
 
-import os
-import sys
 import json
+import os
 import shutil
-from pathlib import Path
+import sys
 from datetime import datetime
+from pathlib import Path
+
+from workers.api import APIServerSession
+from workers.config import config
 
 # # Add the workers directory to the path so we can import api
 # sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
-from workers.api import APIServerSession
-from workers.config import config
 
 
 def check_dataset_exists(api_session, dataset_name, dataset_type="raw_data"):
@@ -152,35 +153,84 @@ Sample2,Sample2,,,A002,CGATCGAT,B002,ATGCATGC,TestProject,Test sample 2
     lane_path = bcl_path / "L001"
     lane_path.mkdir(exist_ok=True)
     
-    # Create empty BCL files for the 4-read structure (151 + 8 + 8 + 151 = 318 cycles)
+    # Create BCL files with actual index sequences for proper demultiplexing
     total_cycles = 151 + 8 + 8 + 151  # Read1 + Index1 + Index2 + Read2
     tiles = ["1101"]  # Single tile for simplicity
+    
+    # Define the sequences we'll use for each sample
+    # Sample1: ACGTACGT (I7), TGCATGCA (I5)
+    # Sample2: CGATCGAT (I7), ATGCATGC (I5)
+    sample_sequences = [
+        {
+            'read1': 'A' * 151,  # Simple sequence for read 1
+            'index1': 'ACGTACGT',  # I7 index for Sample1
+            'index2': 'TGCATGCA',  # I5 index for Sample1  
+            'read2': 'T' * 151   # Simple sequence for read 2
+        },
+        {
+            'read1': 'C' * 151,  # Simple sequence for read 1
+            'index1': 'CGATCGAT',  # I7 index for Sample2
+            'index2': 'ATGCATGC',  # I5 index for Sample2
+            'read2': 'G' * 151   # Simple sequence for read 2
+        }
+    ]
+    
+    # Base quality scores (all high quality)
+    base_to_byte = {'A': 0, 'C': 1, 'G': 2, 'T': 3, 'N': 0}
+    
+    num_clusters = len(sample_sequences)
     
     for cycle in range(1, total_cycles + 1):
         cycle_path = lane_path / f"C{cycle:03d}.1"
         cycle_path.mkdir(exist_ok=True)
         
+        # Determine which read/index we're in
+        if cycle <= 151:  # Read 1
+            read_type = 'read1'
+            position = cycle - 1
+        elif cycle <= 151 + 8:  # Index 1
+            read_type = 'index1'
+            position = cycle - 151 - 1
+        elif cycle <= 151 + 8 + 8:  # Index 2
+            read_type = 'index2'
+            position = cycle - 151 - 8 - 1
+        else:  # Read 2
+            read_type = 'read2'
+            position = cycle - 151 - 8 - 8 - 1
+        
         # Create files for each tile
         for tile in tiles:
-            # Create minimal BCL files with proper format headers
+            # Create BCL file with actual base calls
             bcl_file = cycle_path / f"s_1_{tile}.bcl"
-            # Create a minimal but valid BCL file with 4-byte header + minimal cluster data
-            bcl_header = b'\x01\x00\x00\x00'  # 1 cluster count (little endian)
-            cluster_data = b'\x41' * 4  # Simple base calls (A=0x41)
+            bcl_header = b'\x02\x00\x00\x00'  # 2 clusters (little endian)
+            
+            cluster_data = b''
+            for sample in sample_sequences:
+                sequence = sample[read_type]
+                if position < len(sequence):
+                    base = sequence[position]
+                    base_call = base_to_byte[base] | (30 << 2)  # Base call with quality 30
+                    cluster_data += base_call.to_bytes(1, 'little')
+                else:
+                    # Pad with N if sequence is shorter
+                    cluster_data += b'\x00'  # N with quality 0
+            
             bcl_file.write_bytes(bcl_header + cluster_data)
             
             # Create LOCs file (cluster positions)
             locs_file = cycle_path / f"s_1_{tile}.locs"
             locs_header = b'\x01\x00\x00\x00'  # Version 1
-            cluster_count = b'\x01\x00\x00\x00'  # 1 cluster
-            positions = b'\x00\x10\x00\x00\x00\x10\x00\x00'  # X=4096, Y=4096 (little endian)
+            cluster_count = num_clusters.to_bytes(4, 'little')
+            # Two clusters at different positions
+            positions = b'\x00\x10\x00\x00\x00\x10\x00\x00'  # Cluster 1: X=4096, Y=4096
+            positions += b'\x00\x20\x00\x00\x00\x20\x00\x00'  # Cluster 2: X=8192, Y=8192
             locs_file.write_bytes(locs_header + cluster_count + positions)
             
             # Create FILTER file (pass filter flags)
             filter_file = cycle_path / f"s_1_{tile}.filter"
             filter_header = b'\x00\x00\x00\x00'  # Version 0
-            cluster_count = b'\x01\x00\x00\x00'  # 1 cluster  
-            filter_data = b'\x01'  # Pass filter (1 = pass, 0 = fail)
+            cluster_count = num_clusters.to_bytes(4, 'little')
+            filter_data = b'\x01\x01'  # Both clusters pass filter
             filter_file.write_bytes(filter_header + cluster_count + filter_data)
     
     # Create InterOp directory with minimal stats files
@@ -196,7 +246,7 @@ Sample2,Sample2,,,A002,CGATCGAT,B002,ATGCATGC,TestProject,Test sample 2
         "dataset_name": dataset_name,
         "dataset_type": "raw_data",
         "created_at": datetime.now().isoformat(),
-        "description": "Test dataset for bcl2fast pipeline validation - bcl2fastq v2.20 compatible",
+        "description": "Test dataset for bcl2fast pipeline validation - bcl2fastq v2.20 compatible with proper index sequences for demultiplexing",
         "pipeline": "bcl2fast",
         "test_flags": ["--no-lane-splitting"],
         "structure": {
@@ -279,9 +329,11 @@ def main():
         print("\nKey Compatibility Fixes:")
         print("✓ RunInfo.xml: LaneCount as XML attribute (not nested element)")
         print("✓ Sample Sheet: 4-read structure (151+8+8+151)")
-        print("✓ BCL files: Proper binary format with headers")
+        print("✓ BCL files: Proper binary format with headers and real index sequences")
+        print("✓ Index sequences: ACGTACGT/TGCATGCA for Sample1, CGATCGAT/ATGCATGC for Sample2")
         print("✓ Tile naming: FourDigit format (1101)")
         print("✓ InterOp: Quality metrics included")
+        print("✓ Demultiplexing: BCL data now contains proper index sequences for sample assignment")
         print("\nDataset Structure:")
         print("├── SampleSheet.csv (bcl2fastq v2.20 compatible)")
         print("├── RunInfo.xml (LaneCount as XML attribute)")
@@ -296,6 +348,15 @@ def main():
         print("└── metadata.json (updated dataset metadata)")
         print("\nThis dataset is now fully compatible with bcl2fastq v2.20")
         print("and should resolve the XML attribute parsing errors.")
+        print("\nExpected bcl2fastq output:")
+        print("├── TestProject/")
+        print("│   ├── Sample1_S1_L001_R1_001.fastq.gz")
+        print("│   ├── Sample1_S1_L001_R2_001.fastq.gz")
+        print("│   ├── Sample2_S2_L001_R1_001.fastq.gz")
+        print("│   └── Sample2_S2_L001_R2_001.fastq.gz")
+        print("├── Undetermined_S0_L001_R1_001.fastq.gz (should be minimal)")
+        print("└── Undetermined_S0_L001_R2_001.fastq.gz (should be minimal)")
+        print("\nThe FASTQ files in TestProject/ will be suitable for genome browser visualization.")
         
         # Display the SampleSheet contents
         print("\n" + "="*70)

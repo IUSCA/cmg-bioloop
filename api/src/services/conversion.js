@@ -18,7 +18,11 @@ const INCLUDE = {
   },
 };
 
-function getAssociations({ include_dataset = false, include_derived_datasets = false }) {
+function getAssociations({
+  include_dataset = false,
+  include_derived_datasets = false,
+  include_definition = false,
+}) {
   const associations = {
     ...INCLUDE,
   };
@@ -47,6 +51,14 @@ function getAssociations({ include_dataset = false, include_derived_datasets = f
             num_directories: true,
           },
         },
+      },
+    };
+  }
+  if (include_definition) {
+    associations.definition = {
+      select: {
+        output_directory: true,
+        logs_directory: true,
       },
     };
   }

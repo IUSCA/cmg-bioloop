@@ -1,13 +1,14 @@
 from __future__ import annotations
 
-from pathlib import Path
 import shutil
+from pathlib import Path
 
 from celery import Celery
 
 import workers.api as api
 import workers.config.celeryconfig as celeryconfig
 from workers.config import config
+from workers.conversion import get_conversion_output_dir
 
 app = Celery("tasks")
 app.config_from_object(celeryconfig)
@@ -17,13 +18,7 @@ def copy(celery_task, dataset_id_conversion_id, **kwargs):
     conversion = api.get_conversion(conversion_id=dataset_id_conversion_id['conversion_id'], include_dataset=True)
     dataset = api.get_dataset(dataset_id=dataset_id_conversion_id['dataset_id'])
     
-    all_conversions_output_dir = Path(conversion['definition']['output_directory'])
-    print(f"all_conversions_output_dir: {all_conversions_output_dir}")
-    
-    conversion_run_dir = all_conversions_output_dir / f'{conversion["id"]}'
-    print(f"conversion_run_dir: {conversion_run_dir}")
-  
-    conversion_output_dir = conversion_run_dir / f'{dataset["name"]}'
+    conversion_output_dir = get_conversion_output_dir(conversion)
     print(f"conversion_output_dir: {conversion_output_dir}")
 
     reports_target_dir = Path(config['paths']['conversion']['reports']) / str(conversion['id']) / dataset['name']

@@ -1,5 +1,43 @@
+/*
+  Warnings:
+
+  - You are about to drop the column `cmg_id` on the `dataset` table. All the data in the column will be lost.
+  - You are about to drop the column `description` on the `dataset_audit` table. All the data in the column will be lost.
+  - You are about to drop the column `file_type` on the `track` table. All the data in the column will be lost.
+  - You are about to drop the column `genomeType` on the `track` table. All the data in the column will be lost.
+  - You are about to drop the column `genomeValue` on the `track` table. All the data in the column will be lost.
+  - You are about to drop the `import_log` table. If the table is not empty, all the data it contains will be lost.
+
+*/
 -- CreateEnum
 CREATE TYPE "argument_value_type" AS ENUM ('STRING', 'NUMBER', 'BOOLEAN');
+
+-- DropForeignKey
+ALTER TABLE "import_log" DROP CONSTRAINT "import_log_user_id_fkey";
+
+-- AlterTable
+ALTER TABLE "dataset" DROP COLUMN "cmg_id",
+ADD COLUMN     "file_type" TEXT;
+
+-- AlterTable
+ALTER TABLE "dataset_audit" DROP COLUMN "description";
+
+-- AlterTable
+ALTER TABLE "track" DROP COLUMN "file_type",
+DROP COLUMN "genomeType",
+DROP COLUMN "genomeValue";
+
+-- DropTable
+DROP TABLE "import_log";
+
+-- CreateTable
+CREATE TABLE "dataset_genomic_attributes" (
+    "dataset_id" INTEGER NOT NULL,
+    "genome_type" TEXT NOT NULL,
+    "genome_value" TEXT NOT NULL,
+
+    CONSTRAINT "dataset_genomic_attributes_pkey" PRIMARY KEY ("dataset_id")
+);
 
 -- CreateTable
 CREATE TABLE "conversion_definition" (
@@ -71,7 +109,7 @@ CREATE TABLE "conversion" (
     "definition_id" INTEGER NOT NULL,
     "workflow_id" TEXT,
     "dataset_id" INTEGER NOT NULL,
-    "initiator_id" INTEGER NOT NULL,
+    "initiator_id" INTEGER,
     "additional_args" JSONB,
 
     CONSTRAINT "conversion_pkey" PRIMARY KEY ("id")
@@ -108,6 +146,9 @@ CREATE UNIQUE INDEX "cmd_line_program_name_key" ON "cmd_line_program"("name");
 CREATE UNIQUE INDEX "cmd_line_program_name_executable_path_key" ON "cmd_line_program"("name", "executable_path");
 
 -- AddForeignKey
+ALTER TABLE "dataset_genomic_attributes" ADD CONSTRAINT "dataset_genomic_attributes_dataset_id_fkey" FOREIGN KEY ("dataset_id") REFERENCES "dataset"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
 ALTER TABLE "conversion_definition" ADD CONSTRAINT "conversion_definition_program_id_fkey" FOREIGN KEY ("program_id") REFERENCES "cmd_line_program"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
@@ -132,7 +173,7 @@ ALTER TABLE "conversion" ADD CONSTRAINT "conversion_dataset_id_fkey" FOREIGN KEY
 ALTER TABLE "conversion" ADD CONSTRAINT "conversion_definition_id_fkey" FOREIGN KEY ("definition_id") REFERENCES "conversion_definition"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "conversion" ADD CONSTRAINT "conversion_initiator_id_fkey" FOREIGN KEY ("initiator_id") REFERENCES "user"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "conversion" ADD CONSTRAINT "conversion_initiator_id_fkey" FOREIGN KEY ("initiator_id") REFERENCES "user"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "conversion_derived_dataset" ADD CONSTRAINT "conversion_derived_dataset_conversion_id_fkey" FOREIGN KEY ("conversion_id") REFERENCES "conversion"("id") ON DELETE CASCADE ON UPDATE CASCADE;
