@@ -74,25 +74,25 @@ def get_product_track_files(product_id: int) -> list[int]:
         return matching_files_ids
     
 
-def create_tracks_for_data_products(data_products: list[dict]) -> None:
-    """
-    Create tracks for all data products by finding files that match a certain name pattern.
-    Avoids nested loops by using list comprehensions and functional programming.
+# def create_tracks_for_data_products(data_products: list[dict]) -> None:
+#     """
+#     Create tracks for all data products by finding files that match a certain name pattern.
+#     Avoids nested loops by using list comprehensions and functional programming.
     
-    @param data_products: List of data product dictionaries with 'id' field
-    @param file_name_pattern: Pattern to match in file names (default: '_')
-    """
-    # Process all data products and create tracks
-    for data_product in data_products:
-        product_id = data_product['id']
-        # Todo: avoid nested loop
-        track_file_ids = get_product_track_files(product_id)
+#     @param data_products: List of data product dictionaries with 'id' field
+#     @param file_name_pattern: Pattern to match in file names (default: '_')
+#     """
+#     # Process all data products and create tracks
+#     for data_product in data_products:
+#         product_id = data_product['id']
+#         # Todo: avoid nested loop
+#         track_file_ids = get_product_track_files(product_id)
         
-        if track_file_ids:
-            api.create_tracks(product_id, track_file_ids)
-            print(f"Associated {len(track_file_ids)} files as tracks for data product {product_id}")
-        else:
-            print(f"No matching files found for data product {product_id}")
+#         if track_file_ids:
+#             api.create_tracks(product_id, track_file_ids)
+#             print(f"Associated {len(track_file_ids)} files as tracks for data product {product_id}")
+#         else:
+#             print(f"No matching files found for data product {product_id}")
 
 
 def derive_data_products(celery_task, dataset_id: int, conversion_id: int):
@@ -268,7 +268,7 @@ def derive_data_products(celery_task, dataset_id: int, conversion_id: int):
                 raise
         
         # Associate files as tracks for all data products
-        create_tracks_for_data_products(derived_data_products)
+        # create_tracks_for_data_products(derived_data_products)
 
     # Kick off 'Integrated' workflow for all data products
     for data_product in derived_data_products:

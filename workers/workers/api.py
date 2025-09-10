@@ -308,10 +308,23 @@ def create_notification(payload: dict):
         r.raise_for_status()
 
 
-def get_conversion(conversion_id: int, include_dataset: bool = False):
+def get_conversion(conversion_id: int,
+                   include_dataset: bool = False,
+                   include_definition: bool = False):
     with APIServerSession() as s:
         r = s.get(f'conversions/{conversion_id}', 
-                    params={'include_dataset': include_dataset})
+                    params={
+                        'include_dataset': include_dataset,
+                        'include_definition': include_definition,
+                    }
+                  )
+        r.raise_for_status()
+        return r.json()
+
+
+def get_conversion_definition(definition_id: int):
+    with APIServerSession() as s:
+        r = s.get(f'conversions/definitions/{definition_id}')
         r.raise_for_status()
         return r.json()
 

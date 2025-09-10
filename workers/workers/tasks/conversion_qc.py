@@ -55,7 +55,7 @@ def generate_qc(celery_task, dataset_id_conversion_id, **kwargs):
     for item in qc_output_dir.iterdir():
         print(f"  {item}")
     print("--------------------------------")
-            
+                
     report_id = create_report(
         celery_task=celery_task,
         dataset_dir=conversion_output_dir,

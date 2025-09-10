@@ -14,8 +14,33 @@ const router = express.Router();
 
 const INCLUDE = {
   program: {
-    include: {
-      arguments: true,
+    select: {
+      id: true,
+      name: true,
+      executable_path: true,
+      executable_directory: true,
+      allow_additional_args: true,
+      created_at: true,
+      updated_at: true,
+      arguments: {
+        select: {
+          id: true,
+          name: true,
+          value_type: true,
+          allowed_values: true,
+          is_required: true,
+          default_value: true,
+          is_flag: true,
+          description: true,
+          min_value: true,
+          max_value: true,
+          min_length: true,
+          max_length: true,
+          position: true,
+          dynamic_variable_name: true,
+          program_id: true,
+        },
+      },
     },
   },
   author: {
@@ -53,16 +78,16 @@ router.get(
   ]),
   asyncHandler(async (req, res, next) => {
   // #swagger.tags = ['Conversion Definitions']
-    const conversion = await prisma.conversion_definition.findUniqueOrThrow({
+    const conversion_definition = await prisma.conversion_definition.findUniqueOrThrow({
       where: {
         id: req.params.id,
       },
       include: INCLUDE,
     });
-    if (!conversion) {
+    if (!conversion_definition) {
       return next(createError(404, 'Conversion definition not found'));
     }
-    return res.json(conversion);
+    return res.json(conversion_definition);
   }),
 );
 

@@ -68,12 +68,26 @@ def get_program_args(arguments: list,
 
 
 def run_conversion(celery_task, conversion_id, **kwargs):
-    conversion = api.get_conversion(conversion_id=conversion_id, include_dataset=True)
+    conversion = api.get_conversion(conversion_id=conversion_id,
+                                    include_dataset=True,
+                                    include_definition=True)
     dataset_id = conversion['dataset_id']
     argsList = conversion['argsList']
-    definition = conversion['definition']
-    program = definition['program']
     
+    print(f"conversion:")
+    pprint(conversion, indent=4)
+    
+    # definition = conversion['definition']
+
+    # print(f"definition:")
+    # pprint(definition, indent=4)
+
+    definition_details = api.get_conversion_definition(definition_id=conversion['definition_id'])
+    
+    program = definition_details['program']
+    print(f"program:")
+    pprint(program, indent=4)
+
     # Get full dataset information to access staged_path
     dataset = api.get_dataset(dataset_id=dataset_id)
     
@@ -127,9 +141,12 @@ def run_conversion(celery_task, conversion_id, **kwargs):
     print(f"args: {args}")
     print("args (joined): " + " ".join(str(a) for a in args))
     
-    if definition.get('capture_logs', False):
+    print("DEBUG: Capturing logs: ", definition_details.get('capture_logs'))
+    if definition_details.get('capture_logs', False):
+        print("DEBUG: Capturing logs")
         cmd.execute_with_log_tracking(cmd=args, celery_task=celery_task, cwd=str(cwd) if cwd else None)
     else:
+        print("DEBUG: Not capturing logs")
         cmd.execute(cmd=args, cwd=str(cwd) if cwd else None)
     
     print(f"conversion_output_dir: {conversion_output_dir}")

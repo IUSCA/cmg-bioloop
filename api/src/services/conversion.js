@@ -57,8 +57,19 @@ function getAssociations({
   if (include_definition) {
     associations.definition = {
       select: {
+        id: true,
+        created_at: true,
+        updated_at: true,
+        name: true,
+        description: true,
+        enabled: true,
+        author_id: true,
+        dataset_types: true,
+        tags: true,
+        program_id: true,
         output_directory: true,
         logs_directory: true,
+        capture_logs: true,
       },
     };
   }
