@@ -43,11 +43,18 @@
               <!-- Logs Section -->
               <div class="mt-4" v-if="logs.length > 0">
                 <div class="flex items-start gap-2">
-                  <span class="font-semibold flex-none">Conversion Logs:</span>
-                  <div
-                    class="bg-gray-100 dark:bg-gray-800 px-3 py-2 rounded text-sm overflow-x-auto overflow-y-auto max-h-32 max-w-xs sm:max-w-sm md:max-w-md lg:max-w-lg xl:max-w-xl"
-                  >
-                    <pre class="whitespace-pre">{{ formattedLogs }}</pre>
+                  <span class="font-semibold flex-none">Conversion Logs</span>
+                  <div class="flex items-start gap-2">
+                    <div
+                      class="bg-gray-100 dark:bg-gray-800 px-3 py-2 rounded text-sm overflow-x-auto overflow-y-auto max-h-32 max-w-sm"
+                    >
+                      <pre class="whitespace-pre">{{ formattedLogs }}</pre>
+                    </div>
+                    <CopyButton
+                      :text="formattedLogs"
+                      preset="plain"
+                      class="flex-none mt-1"
+                    />
                   </div>
                 </div>
               </div>
