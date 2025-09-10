@@ -46,6 +46,10 @@ class ConversionService {
   getDerivedDatasets(id, params = {}) {
     return api.get(`/conversions/${id}/derived_datasets`, { params });
   }
+
+  getLogs(id) {
+    return api.get(`/conversions/${id}/logs`);
+  }
 }
 
 export default new ConversionService();

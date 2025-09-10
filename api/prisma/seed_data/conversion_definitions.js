@@ -9,7 +9,7 @@ const conversionDefinitions = [
     dataset_types: ['RAW_DATA'],
     tags: [],
     capture_logs: true,
-    logs_directory: '/opt/sca/data/conversion/bcl2fastq/logs',
+    // logs_directory: '/opt/sca/data/conversion/bcl2fastq/logs',
     output_directory: '/opt/sca/data/conversion/output',
   },
   {
@@ -19,7 +19,7 @@ const conversionDefinitions = [
     dataset_types: ['RAW_DATA'],
     tags: [],
     capture_logs: true,
-    logs_directory: '/opt/sca/data/conversion/bcl-convert/logs',
+    // logs_directory: '/opt/sca/data/conversion/bcl-convert/logs',
     output_directory: '/opt/sca/data/conversion/output',
   },
   {
@@ -29,7 +29,7 @@ const conversionDefinitions = [
     dataset_types: ['RAW_DATA'],
     tags: [],
     capture_logs: true,
-    logs_directory: '/opt/sca/data/conversion/cellranger-v8.0.1/logs',
+    // logs_directory: '/opt/sca/data/conversion/cellranger-v8.0.1/logs',
     output_directory: '/opt/sca/data/conversion/output',
   },
   {
@@ -39,7 +39,7 @@ const conversionDefinitions = [
     dataset_types: ['RAW_DATA'],
     tags: [],
     capture_logs: true,
-    logs_directory: '/opt/sca/data/conversion/cellranger-v6.1.2/logs',
+    // logs_directory: '/opt/sca/data/conversion/cellranger-v6.1.2/logs',
     output_directory: '/opt/sca/data/conversion/output',
   },
   {
@@ -49,7 +49,7 @@ const conversionDefinitions = [
     dataset_types: ['RAW_DATA'],
     tags: [],
     capture_logs: true,
-    logs_directory: '/opt/sca/data/conversion/cellranger-v4.0.0/logs',
+    // logs_directory: '/opt/sca/data/conversion/cellranger-v4.0.0/logs',
     output_directory: '/opt/sca/data/conversion/output',
   },
   {
@@ -59,7 +59,7 @@ const conversionDefinitions = [
     dataset_types: ['RAW_DATA'],
     tags: [],
     capture_logs: true,
-    logs_directory: '/opt/sca/data/conversion/cellranger-arc/logs',
+    // logs_directory: '/opt/sca/data/conversion/cellranger-arc/logs',
     output_directory: '/opt/sca/data/conversion/output',
   },
   {
@@ -69,7 +69,7 @@ const conversionDefinitions = [
     dataset_types: ['RAW_DATA'],
     tags: [],
     capture_logs: true,
-    logs_directory: '/opt/sca/data/conversion/cellranger-arc-v2/logs',
+    // logs_directory: '/opt/sca/data/conversion/cellranger-arc-v2/logs',
     output_directory: '/opt/sca/data/conversion/output',
   },
   {
@@ -79,7 +79,7 @@ const conversionDefinitions = [
     dataset_types: ['RAW_DATA'],
     tags: [],
     capture_logs: true,
-    logs_directory: '/opt/sca/data/conversion/cellranger-atac/logs',
+    // logs_directory: '/opt/sca/data/conversion/cellranger-atac/logs',
     output_directory: '/opt/sca/data/conversion/output',
   },
   {
@@ -89,7 +89,7 @@ const conversionDefinitions = [
     dataset_types: ['RAW_DATA'],
     tags: [],
     capture_logs: true,
-    logs_directory: '/opt/sca/data/conversion/spaceranger-v3.0.1/logs',
+    // logs_directory: '/opt/sca/data/conversion/spaceranger-v3.0.1/logs',
     output_directory: '/opt/sca/data/conversion/output',
   },
   {
@@ -99,7 +99,7 @@ const conversionDefinitions = [
     dataset_types: ['RAW_DATA'],
     tags: [],
     capture_logs: true,
-    logs_directory: '/opt/sca/data/conversion/spaceranger-v1.3.1/logs',
+    // logs_directory: '/opt/sca/data/conversion/spaceranger-v1.3.1/logs',
     output_directory: '/opt/sca/data/conversion/output',
   },
   {
@@ -109,7 +109,7 @@ const conversionDefinitions = [
     dataset_types: ['RAW_DATA'],
     tags: [],
     capture_logs: true,
-    logs_directory: '/opt/sca/data/conversion/spaceranger-v1.1.0/logs',
+    // logs_directory: '/opt/sca/data/conversion/spaceranger-v1.1.0/logs',
     output_directory: '/opt/sca/data/conversion/output',
   },
 ];

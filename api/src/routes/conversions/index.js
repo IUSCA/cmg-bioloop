@@ -722,4 +722,52 @@ router.post(
   }),
 );
 
+// Get logs for a conversion
+router.get(
+  '/:id/logs',
+  isPermittedTo('read'),
+  validate([
+    param('id').isInt({ min: 1 }).toInt(),
+  ]),
+  asyncHandler(async (req, res, next) => {
+    // #swagger.tags = ['Conversions']
+    const conversionId = req.params.id;
+
+    const conversion = await prisma.conversion.findUniqueOrThrow({
+      where: { id: conversionId },
+      select: { workflow_id: true },
+    });
+
+    if (!conversion.workflow_id) {
+      return res.json([]);
+    }
+
+    // Find worker processes for this workflow
+    const workerProcesses = await prisma.worker_process.findMany({
+      where: { workflow_id: conversion.workflow_id },
+      select: { id: true },
+    });
+
+    if (workerProcesses.length === 0) {
+      return res.json([]);
+    }
+
+    const workerProcessIds = workerProcesses.map((wp) => wp.id);
+
+    // Get all logs for these worker processes
+    const logs = await prisma.log.findMany({
+      where: {
+        worker_process_id: {
+          in: workerProcessIds,
+        },
+      },
+      orderBy: {
+        timestamp: 'asc',
+      },
+    });
+
+    return res.json(logs);
+  }),
+);
+
 module.exports = router;

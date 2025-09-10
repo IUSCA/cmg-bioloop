@@ -40,18 +40,20 @@
                 />
               </div>
 
-              <!-- <div
-                class="flex gap-2 items-center w-full"
-                v-if="conversion?.definition?.logs_directory"
-              >
-                <i-mdi-file-document class="text-lg" />
-                <span class="font-semibold"> Logs Directory : </span>
+              <!-- Logs Section -->
+              <div class="mt-4" v-if="logs.length > 0">
+                <div class="flex items-start gap-2">
+                  <span class="font-semibold flex-none">Conversion Logs:</span>
+                  <div
+                    class="bg-gray-100 dark:bg-gray-800 px-3 py-2 rounded text-sm overflow-x-auto overflow-y-auto max-h-32"
+                    style="max-width: 400px"
+                  >
+                    <pre class="whitespace-pre">{{ formattedLogs }}</pre>
+                  </div>
+                </div>
+              </div>
 
-                <CopyText
-                  :text="conversion?.definition?.logs_directory"
-                  class="w-96"
-                />
-              </div> -->
+              <div class="flex gap-2 items-center w-full"></div>
             </va-card-content>
           </va-card>
         </div>
@@ -80,20 +82,27 @@ import toast from "@/services/toast";
 const props = defineProps({ conversionId: String });
 
 const conversion = ref({});
+const logs = ref([]);
 const loading = ref(false);
 
 function fetch_conversion(show_loading = false) {
   loading.value = show_loading;
   console.log("fetching conversion", props.conversionId);
-  conversionApiService
-    .get(props.conversionId, {
+
+  // Fetch conversion details and logs in parallel
+  Promise.all([
+    conversionApiService.get(props.conversionId, {
       include_dataset: true,
       include_derived_datasets: true,
       include_definition: true,
-    })
-    .then((res) => {
-      conversion.value = res.data;
-      console.log("conversion.value", conversion.value);
+    }),
+    conversionApiService.getLogs(props.conversionId),
+  ])
+    .then(([conversionRes, logsRes]) => {
+      conversion.value = conversionRes.data;
+      logs.value = logsRes.data;
+      // console.log("conversion.value", conversion.value);
+      // console.log("logs.value", logs.value);
     })
     .catch((err) => {
       console.error(err);
@@ -105,6 +114,10 @@ function fetch_conversion(show_loading = false) {
       loading.value = false;
     });
 }
+
+const formattedLogs = computed(() => {
+  return logs.value.map((log) => `${log.message.trim()}`).join("\n");
+});
 
 const conversionOutputDir = computed(() => {
   return (
