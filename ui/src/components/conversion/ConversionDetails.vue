@@ -42,8 +42,13 @@
           <td>Program</td>
           <td>
             <div v-if="props.conversion.definition?.program">
-              <div class="font-medium">{{ props.conversion.definition.program.name }}</div>
-              <div v-if="props.conversion.definition.program.description" class="text-sm text-gray-600 dark:text-gray-400">
+              <div class="font-medium">
+                {{ props.conversion.definition.program.name }}
+              </div>
+              <div
+                v-if="props.conversion.definition.program.description"
+                class="text-sm text-gray-600 dark:text-gray-400"
+              >
                 {{ props.conversion.definition.program.description }}
               </div>
             </div>
@@ -53,21 +58,39 @@
           <td>Sample Sheet</td>
           <td>
             <div v-if="sampleSheetContent" class="flex items-start gap-2">
-              <div class="bg-gray-100 dark:bg-gray-800 px-3 py-2 rounded text-sm overflow-x-auto overflow-y-auto max-h-32" style="max-width: 400px;">
+              <div
+                class="bg-gray-100 dark:bg-gray-800 px-3 py-2 rounded text-sm overflow-x-auto overflow-y-auto max-h-32 max-w-sm"
+              >
                 <pre class="whitespace-pre">{{ sampleSheetContent }}</pre>
               </div>
-              <CopyButton :text="sampleSheetContent" preset="plain" class="flex-none mt-1" />
+              <CopyButton
+                :text="sampleSheetContent"
+                preset="plain"
+                class="flex-none mt-1"
+              />
             </div>
           </td>
         </tr>
         <tr>
           <td>Arguments</td>
           <td>
-            <div v-if="props.conversion.argsList && props.conversion.argsList.length > 0" class="flex items-start gap-2">
-              <code class="bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded text-sm break-all flex-1">
+            <div
+              v-if="
+                props.conversion.argsList &&
+                props.conversion.argsList.length > 0
+              "
+              class="flex items-start gap-2"
+            >
+              <code
+                class="bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded text-sm break-all flex-1"
+              >
                 {{ filteredArgumentsString }}
               </code>
-              <CopyButton :text="filteredArgumentsString" preset="plain" class="flex-none mt-1" />
+              <CopyButton
+                :text="filteredArgumentsString"
+                preset="plain"
+                class="flex-none mt-1"
+              />
             </div>
           </td>
         </tr>
@@ -83,7 +106,9 @@
           <td>Initiator</td>
           <td>
             <span v-if="props.conversion.initiator">
-              {{ props.conversion.initiator.name }} ({{ props.conversion.initiator.username }})
+              {{ props.conversion.initiator.name }} ({{
+                props.conversion.initiator.username
+              }})
             </span>
           </td>
         </tr>
@@ -101,10 +126,10 @@ const props = defineProps({ conversion: Object });
 
 const sampleSheetContent = computed(() => {
   if (!props.conversion.argsList) return null;
-  
+
   // Find --sample-sheet in the flat argsList and return the next element
   for (let i = 0; i < props.conversion.argsList.length - 1; i++) {
-    if (props.conversion.argsList[i] === '--sample-sheet') {
+    if (props.conversion.argsList[i] === "--sample-sheet") {
       return props.conversion.argsList[i + 1];
     }
   }
@@ -112,31 +137,36 @@ const sampleSheetContent = computed(() => {
 });
 
 const filteredArgumentsString = computed(() => {
-  if (!props.conversion.argsList) return '';
-  
+  if (!props.conversion.argsList) return "";
+
   // Filter out Sample Sheet arguments and join the rest
-  const filteredArgs = props.conversion.argsList.filter(arg => {
+  const filteredArgs = props.conversion.argsList.filter((arg) => {
     // Check if this is a Sample Sheet argument by looking at the argument values
-    const sampleSheetArg = props.conversion.argument_values?.find(argVal => 
-      argVal.argument.name === 'Sample Sheet' || 
-      argVal.argument.name === '--sample-sheet' ||
-      argVal.argument.name === 'sample-sheet'
+    const sampleSheetArg = props.conversion.argument_values?.find(
+      (argVal) =>
+        argVal.argument.name === "Sample Sheet" ||
+        argVal.argument.name === "--sample-sheet" ||
+        argVal.argument.name === "sample-sheet",
     );
-    
+
     // If we found a Sample Sheet argument, exclude its value from the args list
     if (sampleSheetArg && arg === sampleSheetArg.value) {
       return false;
     }
-    
+
     // Also exclude the argument name itself if it matches Sample Sheet patterns
-    if (arg === 'Sample Sheet' || arg === '--sample-sheet' || arg === 'sample-sheet') {
+    if (
+      arg === "Sample Sheet" ||
+      arg === "--sample-sheet" ||
+      arg === "sample-sheet"
+    ) {
       return false;
     }
-    
+
     return true;
   });
-  
-  return filteredArgs.join(' ');
+
+  return filteredArgs.join(" ");
 });
 </script>
 
