@@ -43,18 +43,29 @@
               <!-- Logs Section -->
               <div class="mt-4" v-if="logs.length > 0">
                 <div class="flex items-start gap-2">
-                  <span class="font-semibold flex-none">Conversion Logs</span>
+                  <span class="font-semibold flex-none">Logs</span>
                   <div class="flex items-start gap-2">
                     <div
-                      class="bg-gray-100 dark:bg-gray-800 px-3 py-2 rounded text-sm overflow-x-auto overflow-y-auto max-h-32 max-w-sm"
+                      class="bg-gray-100 dark:bg-gray-800 px-3 py-2 rounded text-sm overflow-x-auto overflow-y-auto max-h-32 max-w-md"
                     >
                       <pre class="whitespace-pre">{{ formattedLogs }}</pre>
                     </div>
-                    <CopyButton
-                      :text="formattedLogs"
-                      preset="plain"
-                      class="flex-none mt-1"
-                    />
+                    <div class="flex flex-col gap-5">
+                      <CopyButton
+                        :text="formattedLogs"
+                        preset="plain"
+                        class="flex-none"
+                      />
+                      <va-popover message="Expand" placement="top">
+                        <va-button
+                          preset="plain"
+                          icon="open_in_full"
+                          size="small"
+                          @click="openLogsModal"
+                          class="flex-none"
+                        />
+                      </va-popover>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -78,6 +89,22 @@
       </va-card>
     </div>
   </va-inner-loading>
+
+  <!-- Logs Modal -->
+  <va-modal v-model="showLogsModal" size="large" title="Conversion Logs">
+    <div class="flex flex-row gap-3">
+      <CopyButton
+        :text="formattedLogs"
+        preset="secondary"
+        class="items-baseline"
+      />
+      <div
+        class="bg-gray-100 dark:bg-gray-800 p-4 rounded text-sm max-h-96 overflow-auto"
+      >
+        <pre class="whitespace-pre">{{ formattedLogs }}</pre>
+      </div>
+    </div>
+  </va-modal>
 </template>
 
 <script setup>
@@ -90,6 +117,11 @@ const props = defineProps({ conversionId: String });
 const conversion = ref({});
 const logs = ref([]);
 const loading = ref(false);
+const showLogsModal = ref(false);
+
+function openLogsModal() {
+  showLogsModal.value = true;
+}
 
 function fetch_conversion(show_loading = false) {
   loading.value = show_loading;

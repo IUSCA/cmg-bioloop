@@ -63,11 +63,22 @@
               >
                 <pre class="whitespace-pre">{{ sampleSheetContent }}</pre>
               </div>
-              <CopyButton
-                :text="sampleSheetContent"
-                preset="plain"
-                class="flex-none mt-1"
-              />
+              <div class="flex flex-col gap-5">
+                <CopyButton
+                  :text="sampleSheetContent"
+                  preset="plain"
+                  class="flex-none"
+                />
+                <va-popover message="Expand" placement="top">
+                  <va-button
+                    preset="plain"
+                    icon="open_in_full"
+                    size="small"
+                    @click="openSampleSheetModal"
+                    class="flex-none"
+                  />
+                </va-popover>
+              </div>
             </div>
           </td>
         </tr>
@@ -86,11 +97,22 @@
               >
                 {{ filteredArgumentsString }}
               </code>
-              <CopyButton
-                :text="filteredArgumentsString"
-                preset="plain"
-                class="flex-none mt-1"
-              />
+              <div class="flex flex-col gap-5">
+                <CopyButton
+                  :text="filteredArgumentsString"
+                  preset="plain"
+                  class="flex-none"
+                />
+                <va-popover message="Expand" placement="top">
+                  <va-button
+                    preset="plain"
+                    icon="open_in_full"
+                    size="small"
+                    @click="openArgumentsModal"
+                    class="flex-none"
+                  />
+                </va-popover>
+              </div>
             </div>
           </td>
         </tr>
@@ -115,14 +137,58 @@
       </tbody>
     </table>
   </div>
+
+  <!-- Sample Sheet Modal -->
+  <va-modal v-model="showSampleSheetModal" size="large" title="Sample Sheet">
+    <div class="flex flex-row gap-3">
+      <div class="flex flex-none">
+        <CopyButton
+          :text="sampleSheetContent"
+          preset="secondary"
+          class="items-baseline"
+        />
+      </div>
+      <div
+        class="bg-gray-100 dark:bg-gray-800 p-4 rounded text-sm max-h-96 overflow-auto"
+      >
+        <pre class="whitespace-pre">{{ sampleSheetContent }}</pre>
+      </div>
+    </div>
+  </va-modal>
+
+  <!-- Arguments Modal -->
+  <va-modal v-model="showArgumentsModal" size="large" title="Arguments">
+    <div class="flex">
+      <CopyButton
+        :text="filteredArgumentsString"
+        preset="secondary"
+        class="items-baseline"
+      />
+      <div
+        class="bg-gray-100 dark:bg-gray-800 p-4 rounded text-sm max-h-96 overflow-auto"
+      >
+        <code class="whitespace-pre-wrap">{{ filteredArgumentsString }}</code>
+      </div>
+    </div>
+  </va-modal>
 </template>
 
 <script setup>
 import CopyButton from "@/components/utils/buttons/CopyButton.vue";
 import * as datetime from "@/services/datetime";
 import { formatBytes } from "@/services/utils";
-
 const props = defineProps({ conversion: Object });
+
+const showSampleSheetModal = ref(false);
+const showArgumentsModal = ref(false);
+
+function openSampleSheetModal() {
+  showSampleSheetModal.value = true;
+}
+
+function openArgumentsModal() {
+  showArgumentsModal.value = true;
+}
 
 const sampleSheetContent = computed(() => {
   if (!props.conversion.argsList) return null;
