@@ -40,6 +40,22 @@
                 />
               </div>
 
+              <!-- Reports Button -->
+              <div class="mt-4">
+                <div class="flex gap-2 items-center w-full">
+                  <i-mdi-file-document-multiple class="text-lg" />
+                  <span class="font-semibold flex-none">Reports</span>
+                  <va-button
+                    preset="secondary"
+                    icon="open_in_new"
+                    size="small"
+                    @click="openReports"
+                  >
+                    View Reports
+                  </va-button>
+                </div>
+              </div>
+
               <!-- Logs Section -->
               <div class="mt-4" v-if="logs.length > 0">
                 <div class="flex items-start gap-2">
@@ -121,6 +137,12 @@ const showLogsModal = ref(false);
 
 function openLogsModal() {
   showLogsModal.value = true;
+}
+
+function openReports() {
+  const conversionId = props.conversionId;
+  const reportsUrl = `${window.location.origin}/conversions/${conversionId}/reports/Reports/html/`;
+  window.open(reportsUrl, "_blank");
 }
 
 function fetch_conversion(show_loading = false) {
