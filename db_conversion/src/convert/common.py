@@ -1,8 +1,9 @@
+import logging
+from typing import Literal
+
 from bson.objectid import ObjectId
 from psycopg2.extensions import cursor
 from pymongo.database import Database
-from typing import Literal
-import logging
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -41,13 +42,15 @@ def find_corresponding_dataset(pg_cursor, mongo_item_id):
   matching_dataset = pg_cursor.fetchone()
 
   if not matching_dataset:
-    logger.warning(f"Dataset with CMG ID {matching_dataset} not found in Bioloop")
-    return None
+    raise Exception(f"Dataset with CMG ID {mongo_id_str} not found in Bioloop")
 
-  return matching_dataset[0], matching_dataset[1]  # Return id and name of the matching dataset
+  # Return id and name of the matching dataset
+  return matching_dataset[0], matching_dataset[1]
 
 
-def find_corresponding_user(pg_cursor: cursor, mongo_db: Database, mongo_user_id: ObjectId) -> int:
+def find_corresponding_user(pg_cursor: cursor,
+                            mongo_db: Database,
+                            mongo_user_id: ObjectId,) -> int:
   """
   Find the corresponding user ID in PostgreSQL for a given MongoDB user ID.
 
@@ -87,8 +90,7 @@ def find_corresponding_user(pg_cursor: cursor, mongo_db: Database, mongo_user_id
   )
   result = pg_cursor.fetchone()
 
-  if result:
-    return result[0]
-  else:
-    logger.warning(f"No corresponding user found in Bioloop for CMG user: {username}")
-    return None
+  if not result:
+    raise Exception(f"No corresponding user found in Bioloop for CMG user: {username}")
+
+  return result[0]

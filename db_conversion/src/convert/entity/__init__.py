@@ -1,12 +1,13 @@
 from .about import *
-from .user import *
-from .dataset import *
 from .audit_log import *
-from .project import *
-from .file import *
-from .dataset_hierarchy import *
+from .conversion import *
+from .dataset import *
 from .dataset_file import *
+from .dataset_hierarchy import *
+from .file import *
 from .project import *
+from .session import *
+from .user import *
 from .workflow import *
 
 __all__ = []
@@ -17,6 +18,8 @@ for module in [about,
                audit_log,
                project,
                file,
+               conversion,
+               session,
                dataset_hierarchy,
                dataset_file,
                workflow,

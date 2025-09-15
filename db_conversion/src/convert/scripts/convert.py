@@ -1,16 +1,15 @@
 import os
 
-import pymongo
-import psycopg2
-from dotenv import load_dotenv
 import fire
 # needed for SSH tunneling to connect to MongoDB running on a remote server
 import paramiko
+import psycopg2
+import pymongo
+from dotenv import load_dotenv
 from sshtunnel import SSHTunnelForwarder
 
 from ..entity import *
 from ..operations import *
-
 
 # python -um src.convert.scripts.convert
 
@@ -100,6 +99,10 @@ class MongoToPostgresConversionManager:
         print("converting projects")
         convert_projects(pg_cursor=pg_cursor, mongo_db=self.cmg_mongo_db)
         # convert_content_to_about(cursor, self.mongo_db)
+        print("converting Conversions")
+        convert_conversions(pg_cursor=pg_cursor, mongo_db=self.cmg_mongo_db)
+        print("converting Sessions")
+        convert_sessions(pg_cursor=pg_cursor, mongo_db=self.cmg_mongo_db)
         print("Creating workflows")
         create_workflows(pg_cursor=pg_cursor, rhythm_db=self.rhythm_mongo_db)
 

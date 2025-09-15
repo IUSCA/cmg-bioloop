@@ -1,6 +1,7 @@
 from ..utils import extract_directories, mongo_file_to_pg_file
 
 
+# todo - format all sql strings
 def create_file_and_directories(pg_cursor, file, dataset_id):
   print("create_file_and_directories", file, dataset_id)
   pg_file = mongo_file_to_pg_file(file)
@@ -11,11 +12,11 @@ def create_file_and_directories(pg_cursor, file, dataset_id):
   current_path = ""
   for dir_name in directories:
     current_path += dir_name + "/"
+
     pg_cursor.execute(
       """
       INSERT INTO dataset_file (name, path, dataset_id, filetype)
       VALUES (%s, %s, %s, 'directory')
-      ON CONFLICT (path, dataset_id) DO NOTHING
       RETURNING id
       """,
       (dir_name, current_path.rstrip('/'), dataset_id)
@@ -27,7 +28,6 @@ def create_file_and_directories(pg_cursor, file, dataset_id):
         """
         INSERT INTO dataset_file_hierarchy (parent_id, child_id)
         VALUES (%s, %s)
-        ON CONFLICT DO NOTHING
         """,
         (parent_id, dir_id)
       )

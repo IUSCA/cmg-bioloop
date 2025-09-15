@@ -439,7 +439,6 @@ model genome_browser_session {
   staging_requested Json?  // Staging request details
   staging_completed Boolean @default(false)
   staging_requested_by Int? // User who requested staging
-  
   session_tracks  session_track[]
 }
 

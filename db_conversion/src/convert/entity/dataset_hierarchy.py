@@ -1,11 +1,8 @@
-from pymongo.database import Database
-from psycopg2.extensions import cursor
-from bson import ObjectId
 import logging
 
-from pymongo.database import Database
-from psycopg2.extensions import cursor
 from bson import ObjectId
+from psycopg2.extensions import cursor
+from pymongo.database import Database
 
 from ..common import find_corresponding_dataset
 
@@ -57,7 +54,6 @@ def convert_dataset_hierarchies(pg_cursor: cursor, mongo_db: Database):
       """
       INSERT INTO dataset_hierarchy (source_id, derived_id)
       VALUES (%s, %s)
-      ON CONFLICT (source_id, derived_id) DO NOTHING
       """,
       (bioloop_raw_data[0], bioloop_dataproduct[0])
     )
