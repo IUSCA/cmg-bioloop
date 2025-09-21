@@ -1,7 +1,11 @@
-import pymongo
-import psycopg2
 import hashlib
 import json
+import logging
+
+import psycopg2
+import pymongo
+
+logger = logging.getLogger(__name__)
 
 # Mongo conn
 mongo_client = pymongo.MongoClient("connection_string")
@@ -26,8 +30,8 @@ def record_count_comparison(mongo_collection, postgres_table):
     mongo_count = mongo_db[mongo_collection].count_documents({})
     postgres_cursor.execute(f"SELECT COUNT(*) FROM {postgres_table}")
     postgres_count = postgres_cursor.fetchone()[0]
-    print(f"MongoDB: {mongo_count}, PostgreSQL: {postgres_count}")
-    print('EQUAL' if mongo_count == postgres_count else 'NOT EQUAL')
+    logger.info(f"MongoDB: {mongo_count}, PostgreSQL: {postgres_count}")
+    logger.info('EQUAL' if mongo_count == postgres_count else 'NOT EQUAL')
 
 
 def checksum_comparison(mongo_collection, postgres_table, sample_size=100):
@@ -49,7 +53,7 @@ def checksum_comparison(mongo_collection, postgres_table, sample_size=100):
             postgres_checksum = calculate_checksum(postgres_record)
 
             if mongo_checksum != postgres_checksum:
-                print(f"Checksum mismatch for record {mongo_id} in {mongo_collection}/{postgres_table}")
+                logger.info(f"Checksum mismatch for record {mongo_id} in {mongo_collection}/{postgres_table}")
 
 
 def sample_data_comparison(mongo_collection, postgres_table, sample_size=100):

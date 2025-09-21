@@ -182,6 +182,7 @@ model user {
   updated_at                 DateTime                @default(now()) @updatedAt @db.Timestamp(6)
   is_deleted                 Boolean                 @default(false)
   metadata                   Json?
+  cmg_id                     String?                 @db.VarChar(100)
   user_role                  user_role[]
   settings                   user_settings?
   contacts                   contact[]
@@ -320,6 +321,7 @@ model project {
   metadata        Json?
   created_at      DateTime          @default(now()) @db.Timestamp(6)
   updated_at      DateTime          @default(now()) @updatedAt @db.Timestamp(6)
+  cmg_id          String?    
   users           project_user[]
   datasets        project_dataset[]
   contacts        project_contact[]

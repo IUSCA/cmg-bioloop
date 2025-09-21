@@ -77,6 +77,10 @@ db/db_postgres
 db/db/postgres
 db/db/db_postgres
 
+cmg_data/dump/
+cmg_data/data/
+cmg_convert.log
+
 *.log
 curl_cmds
 .cursorrules

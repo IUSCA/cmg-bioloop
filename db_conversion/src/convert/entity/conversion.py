@@ -5,12 +5,13 @@ from bson import ObjectId
 from psycopg2.extensions import cursor
 from pymongo.database import Database
 
-from ..common import find_corresponding_dataset, find_corresponding_user
+from ..common import (find_corresponding_bioloop_dataset,
+                      find_corresponding_bioloop_user)
 
 
-def _get_conversion_definition_id(pg_cursor: cursor, pipeline_name: str) -> Optional[int]:
+def _get_conversion_definition_id(pg_cursor: cursor, pipeline_name: str) -> int:
   if not pipeline_name:
-    return None
+    raise Exception(f"Pipeline name must be specified")
   pg_cursor.execute(
     """
     SELECT id FROM conversion_definition WHERE name = %s
@@ -18,9 +19,11 @@ def _get_conversion_definition_id(pg_cursor: cursor, pipeline_name: str) -> Opti
     (pipeline_name,)
   )
   row = pg_cursor.fetchone()
-  if not row:
+  if row is not None:
+    row = row['id']
+  else:
     raise Exception(f"Conversion definition not found for pipeline: {pipeline_name}")
-  return row[0] if row else None
+  return row
 
 
 def _insert_conversion(pg_cursor: cursor,
@@ -36,7 +39,7 @@ def _insert_conversion(pg_cursor: cursor,
     """,
     (initiated_at, definition_id, None, dataset_id, initiator_id)
   )
-  return pg_cursor.fetchone()[0]
+  return pg_cursor.fetchone()['id']
 
 
 def _link_derived_datasets(pg_cursor: cursor,
@@ -45,10 +48,10 @@ def _link_derived_datasets(pg_cursor: cursor,
                            cmg_conversion_id: ObjectId):
   # Link all CMG dataproducts that reference this conversion to the inserted Bioloop conversion
   for dp in mongo_db.dataproducts.find({ 'conversion': cmg_conversion_id }):
-    bioloop_dataset = find_corresponding_dataset(pg_cursor, dp['_id'])
+    bioloop_dataset = find_corresponding_bioloop_dataset(pg_cursor, dp['_id'])
     if not bioloop_dataset:
       continue
-    bioloop_dataset_id, _ = bioloop_dataset
+    bioloop_dataset_id = bioloop_dataset['id']
 
     # Check if the record already exists
     pg_cursor.execute(
@@ -89,15 +92,16 @@ def convert_conversions(pg_cursor: cursor, mongo_db: Database):
 
     # Map source dataset (RAW_DATA)
     src_dataset = conv.get('dataset')
-    src_dataset = find_corresponding_dataset(pg_cursor, src_dataset)
+    src_dataset = find_corresponding_bioloop_dataset(pg_cursor, src_dataset)
     if not src_dataset:
       raise Exception(f"Source dataset not found for conversion: {conv['_id']}")
-    dataset_id, _ = src_dataset
+    dataset_id = src_dataset['id']
 
     # Map initiator
     initiator_id = None
     if conv.get('user'):
-      initiator_id = find_corresponding_user(pg_cursor, mongo_db, conv.get('user'))
+      initiator = find_corresponding_bioloop_user(pg_cursor, mongo_db, conv.get('user'))
+      initiator_id = initiator['id']
       if not initiator_id:
         raise Exception(f"Initiator not found for conversion: {conv['_id']}")
 

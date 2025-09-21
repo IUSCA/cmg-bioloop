@@ -33,7 +33,8 @@ create_all_tables = """
                   "notes" TEXT,
                   "created_at" TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
                   "updated_at" TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                  "is_deleted" BOOLEAN NOT NULL DEFAULT false
+                  "is_deleted" BOOLEAN NOT NULL DEFAULT false,
+                  "cmg_id" TEXT
                 );
                 
                 CREATE TABLE "role" (
@@ -261,7 +262,8 @@ create_all_tables = """
                   "funding" TEXT,
                   "metadata" JSONB,
                   "created_at" TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                  "updated_at" TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP
+                  "updated_at" TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                  "cmg_id" TEXT
                 );
                 
                 CREATE TABLE "project_user" (

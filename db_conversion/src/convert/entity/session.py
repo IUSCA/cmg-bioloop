@@ -4,7 +4,8 @@ from bson import ObjectId
 from psycopg2.extensions import cursor
 from pymongo.database import Database
 
-from ..common import find_corresponding_dataset, find_corresponding_user
+from ..common import (find_corresponding_bioloop_dataset,
+                      find_corresponding_bioloop_user)
 
 
 def _ensure_track_for_dataset_file(pg_cursor: cursor, dataset_file_id: int, name: str) -> int:
@@ -15,11 +16,11 @@ def _ensure_track_for_dataset_file(pg_cursor: cursor, dataset_file_id: int, name
     """,
     (dataset_file_id,)
   )
-  row = pg_cursor.fetchone()
+  row = pg_cursor.fetchone()['id']
   if not row:
     raise Exception(f"Track not found for dataset_file_id: {dataset_file_id}")
   if row:
-    return row[0]
+    return row
 
   pg_cursor.execute(
     """
@@ -29,7 +30,7 @@ def _ensure_track_for_dataset_file(pg_cursor: cursor, dataset_file_id: int, name
     """,
     (name, dataset_file_id)
   )
-  return pg_cursor.fetchone()[0]
+  return pg_cursor.fetchone()['id']
 
 
 def _find_dataset_file_by_basename(pg_cursor: cursor, dataset_id: int, basename: str) -> Optional[int]:
@@ -42,7 +43,10 @@ def _find_dataset_file_by_basename(pg_cursor: cursor, dataset_id: int, basename:
     (dataset_id,)
   )
   matches = []
-  for file_id, name, path in pg_cursor.fetchall():
+  for row in pg_cursor.fetchall():
+    file_id = row['id']
+    name = row['name']
+    path = row['path']
     candidate = name if name else path.split('/')[-1]
     if candidate == basename:
       matches.append(file_id)
@@ -70,7 +74,8 @@ def convert_sessions(pg_cursor: cursor, mongo_db: Database):
     # Map session owner
     user_id = None
     if sess.get('user'):
-      user_id = find_corresponding_user(pg_cursor, mongo_db, sess.get('user'))
+      user = find_corresponding_bioloop_user(pg_cursor, mongo_db, sess.get('user'))
+      user_id = user['id']
 
     title = sess.get('title') or 'Genome Browser Session'
     genome = sess.get('genome') or ''
@@ -85,7 +90,7 @@ def convert_sessions(pg_cursor: cursor, mongo_db: Database):
       """,
       (title, genome, genome_type, user_id, sess.get('access_count', 0))
     )
-    session_id = pg_cursor.fetchone()[0]
+    session_id = pg_cursor.fetchone()['id']
 
     # For each CMG track: map to dataset_file and create track + session_track
     for idx, tr in enumerate(sess.get('tracks', [])):
@@ -100,11 +105,11 @@ def convert_sessions(pg_cursor: cursor, mongo_db: Database):
         raise Exception(f"Track missing filename: {tr}")
 
       # Find DATA_PRODUCT dataset
-      cmg_data_product = find_corresponding_dataset(pg_cursor, cmg_data_product_id)
+      cmg_data_product = find_corresponding_bioloop_dataset(pg_cursor, cmg_data_product_id)
       if not cmg_data_product:
         # continue
         raise Exception(f"DATA_PRODUCT not found for track: {tr}")
-      dataset_id, _ = cmg_data_product
+      dataset_id = cmg_data_product['id']
 
       # Find a dataset_file by basename
       file_id = _find_dataset_file_by_basename(pg_cursor, dataset_id, filename)

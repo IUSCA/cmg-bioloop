@@ -4,9 +4,8 @@ from bson import ObjectId
 from psycopg2.extensions import cursor
 from pymongo.database import Database
 
-from ..common import find_corresponding_dataset
+from ..common import find_corresponding_bioloop_dataset
 
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
@@ -18,35 +17,31 @@ def convert_dataset_hierarchies(pg_cursor: cursor, mongo_db: Database):
   between CMG's `dataproducts` and `datasets` (CMG `dataproducts` are derived from
   `datasets`) and creates corresponding `dataset_hierarchy` records in Bioloop PostgreSQL.
   """
-  cmg_dataproducts = mongo_db.dataproducts.find({})
+  cmg_data_products = mongo_db.dataproducts.find({})
 
-  for cmg_dataproduct in cmg_dataproducts:
+  for cmg_data_product in cmg_data_products:
     # Find the corresponding Bioloop DATA_PRODUCT
-    bioloop_dataproduct = find_corresponding_dataset(pg_cursor, cmg_dataproduct['_id'])
+    bioloop_data_product = find_corresponding_bioloop_dataset(pg_cursor, cmg_data_product['_id'])
 
-    if not bioloop_dataproduct:
-      logger.warning(f"Skipped hierarchy: Bioloop DATA_PRODUCT not found for CMG dataproduct {cmg_dataproduct['name']}")
-      continue
+    # Get the source dataset for this CMG dataproduct
+    cmg_source_dataset_id = cmg_data_product.get('dataset')
 
-    # Get the source dataset for this dataproduct
-    source_dataset_id = cmg_dataproduct.get('dataset')
-
-    if not source_dataset_id:
-      logger.warning(f"Skipped hierarchy: No source dataset found for CMG dataproduct {cmg_dataproduct['name']}")
+    if not cmg_source_dataset_id:
+      # logger.info(f"Skipped hierarchy: No source dataset found for CMG dataproduct {cmg_data_product['name']}")
       continue
 
     # Find the corresponding source dataset in CMG
-    cmg_source_dataset = mongo_db.datasets.find_one({'_id': ObjectId(source_dataset_id)})
+    cmg_source_dataset = mongo_db.datasets.find_one({'_id': ObjectId(cmg_source_dataset_id)})
 
     if not cmg_source_dataset:
-      logger.warning(f"Skipped hierarchy: CMG source dataset not found for dataproduct {cmg_dataproduct['name']}")
+      # logger.info(f"Skipped hierarchy: CMG source dataset not found for dataproduct {cmg_data_product['name']}")
       continue
 
     # Find the corresponding Bioloop RAW_DATA
-    bioloop_raw_data = find_corresponding_dataset(pg_cursor, cmg_source_dataset['_id'])
+    bioloop_raw_data = find_corresponding_bioloop_dataset(pg_cursor, cmg_source_dataset['_id'])
 
     if not bioloop_raw_data:
-      logger.warning(f"Skipped hierarchy: Bioloop RAW_DATA not found for CMG dataset {cmg_source_dataset['name']}")
+      # logger.info(f"Skipped hierarchy: Bioloop RAW_DATA not found for CMG dataset {cmg_source_dataset['name']}")
       continue
 
     # Insert the hierarchy relationship into Bioloop
@@ -55,8 +50,10 @@ def convert_dataset_hierarchies(pg_cursor: cursor, mongo_db: Database):
       INSERT INTO dataset_hierarchy (source_id, derived_id)
       VALUES (%s, %s)
       """,
-      (bioloop_raw_data[0], bioloop_dataproduct[0])
+      (bioloop_raw_data['id'], bioloop_data_product['id'])
     )
-    logger.info(f"Created hierarchy: {bioloop_raw_data[1]} -> {bioloop_dataproduct[1]}")
+    # logger.info(f"Created hierarchy:")
+    # logger.info(f"Bioloop RAW_DATA: {bioloop_raw_data['name']} (Id: {bioloop_raw_data['id']})")
+    # logger.info(f"Bioloop DATA_PRODUCT: {bioloop_data_product['name']} (Id: {bioloop_data_product['id']})")
 
-  logger.info("Dataset hierarchy conversion completed.")
+  # logger.info("Dataset hierarchy conversion completed.")

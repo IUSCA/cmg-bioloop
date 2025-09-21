@@ -4,7 +4,6 @@ from .conversion import *
 from .dataset import *
 from .dataset_file import *
 from .dataset_hierarchy import *
-from .file import *
 from .project import *
 from .session import *
 from .user import *
@@ -17,7 +16,6 @@ for module in [about,
                dataset,
                audit_log,
                project,
-               file,
                conversion,
                session,
                dataset_hierarchy,

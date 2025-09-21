@@ -14,7 +14,7 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy env variables file
-COPY .env .
+# COPY .env .
 
 # Copy source code
 RUN mkdir src

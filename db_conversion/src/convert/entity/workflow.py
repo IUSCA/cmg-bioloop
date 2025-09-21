@@ -1,10 +1,13 @@
+import logging
 from datetime import datetime
 from typing import Literal
+
 from psycopg2.extensions import cursor
 from pymongo.database import Database
 
 from ..constants.common import app_id
 
+logger = logging.getLogger(__name__)
 
 def create_workflows(pg_cursor: cursor, rhythm_db: Database):
   # Fetch all datasets with archive_path from Bioloop
@@ -12,7 +15,8 @@ def create_workflows(pg_cursor: cursor, rhythm_db: Database):
   archived_datasets = pg_cursor.fetchall()
 
   for dataset in archived_datasets:
-    dataset_id, archive_path = dataset
+    dataset_id = dataset['id']
+    # archive_path = dataset['archive_path']
 
     # Create workflow_meta document
     workflow_meta = {
@@ -78,4 +82,4 @@ def create_workflows(pg_cursor: cursor, rhythm_db: Database):
     # Update the workflow_meta document with the steps
     rhythm_db.workflow_meta.update_one({"_id": workflow_id}, {"$set": {"steps": workflow_meta["steps"]}})
 
-  print(f"Created workflows for {len(archived_datasets)} datasets.")
+  logger.info(f"Created workflows for {len(archived_datasets)} datasets.")
