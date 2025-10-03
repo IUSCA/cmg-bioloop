@@ -119,6 +119,9 @@ class MongoToPostgresConversionManager:
         # convert_files(pg_cursor=pg_cursor, mongo_db=self.cmg_mongo_db)
         logger.info("converting projects")
         convert_projects(pg_cursor=pg_cursor, mongo_db=self.cmg_mongo_db)
+        logger.info("converting Conversions")
+        convert_conversions(pg_cursor=pg_cursor, mongo_db=self.cmg_mongo_db)
+
         
         # todo - assign CMG IDs to all entities
         #   - assign CMG IDs to dataset_files after they are populated via staging
@@ -127,8 +130,6 @@ class MongoToPostgresConversionManager:
 
         
         # # convert_content_to_about(cursor, self.mongo_db)
-        # logger.info("converting Conversions")
-        # convert_conversions(pg_cursor=pg_cursor, mongo_db=self.cmg_mongo_db)
         # logger.info("converting Sessions")
         # convert_sessions(pg_cursor=pg_cursor, mongo_db=self.cmg_mongo_db)
         # logger.info("Creating workflows")

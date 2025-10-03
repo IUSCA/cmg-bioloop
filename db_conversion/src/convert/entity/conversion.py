@@ -1,3 +1,4 @@
+import logging
 from datetime import datetime
 from typing import Optional
 
@@ -8,6 +9,7 @@ from pymongo.database import Database
 from ..common import (find_corresponding_bioloop_dataset,
                       find_corresponding_bioloop_user)
 
+logger = logging.getLogger(__name__)
 
 def _get_conversion_definition_id(pg_cursor: cursor, pipeline_name: str) -> int:
   if not pipeline_name:
@@ -46,29 +48,26 @@ def _link_derived_datasets(pg_cursor: cursor,
                            mongo_db: Database,
                            conversion_id: int,
                            cmg_conversion_id: ObjectId):
-  # Link all CMG dataproducts that reference this conversion to the inserted Bioloop conversion
+  # Gather CMG dataproducts that were created by this conversion, find the corresponding Bioloop datasets, and
+  # link them to the corresponding Bioloop conversion
+
+  conversion_association_data = []
+
   for dp in mongo_db.dataproducts.find({ 'conversion': cmg_conversion_id }):
     bioloop_dataset = find_corresponding_bioloop_dataset(pg_cursor, dp['_id'])
     if not bioloop_dataset:
+      logger.warning(f"No corresponding Bioloop dataset found for CMG dataproduct: {dp['_id']}")
       continue
     bioloop_dataset_id = bioloop_dataset['id']
+    conversion_association_data.append((conversion_id, bioloop_dataset_id))
 
-    # Check if the record already exists
-    pg_cursor.execute(
-        "SELECT 1 FROM conversion_derived_dataset WHERE conversion_id = %s AND dataset_id = %s",
-        (conversion_id, bioloop_dataset_id)
-    )
-    if pg_cursor.fetchone():
-        raise Exception(f"Record already exists: conversion_id={conversion_id}, dataset_id={bioloop_dataset_id}")
-
-    # Link the derived dataset to the conversion 
-    pg_cursor.execute(
-      """
-      INSERT INTO conversion_derived_dataset (conversion_id, dataset_id)
-      VALUES (%s, %s)
-      """,
-      (conversion_id, bioloop_dataset_id)
-    )
+  pg_cursor.executemany(
+    """
+    INSERT INTO conversion_derived_dataset (conversion_id, dataset_id)
+    VALUES (%s, %s)
+    """,
+    conversion_association_data
+  )
 
 
 def convert_conversions(pg_cursor: cursor, mongo_db: Database):
@@ -80,7 +79,6 @@ def convert_conversions(pg_cursor: cursor, mongo_db: Database):
   - dataset_id: Bioloop dataset where dataset.cmg_id == CMG conversion.dataset _id (RAW_DATA)
   - initiator_id: map CMG conversion.user to Bioloop user (username/cas_id)
   - initiated_at: CMG createdAt (fallback: updatedAt or now)
-  - Do NOT populate additional_args
   - Link derived DATA_PRODUCT datasets via conversion_derived_dataset using CMG dataproduct.conversion
   """
 
