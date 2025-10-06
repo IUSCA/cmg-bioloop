@@ -119,7 +119,17 @@ class MongoToPostgresConversionManager:
         # convert_files(pg_cursor=pg_cursor, mongo_db=self.cmg_mongo_db)
         logger.info("converting projects")
         convert_projects(pg_cursor=pg_cursor, mongo_db=self.cmg_mongo_db)
-        
+
+# #!/bin/bash
+# #SBATCH --job-name=hello_world
+# #SBATCH --output=hello_%j.out
+# #SBATCH --ntasks=1
+# #SBATCH --time=00:01:00
+# #SBATCH -A cmguser
+
+# echo "Hello World from $(hostname) at $(date)"
+
+
         # todo - assign CMG IDs to all entities
         #   - assign CMG IDs to dataset_files after they are populated via staging
 

@@ -54,6 +54,21 @@
       </div>
     </div>
 
+    <!-- Choose whether to use a specific Platform -->
+    <div class="space-y-2 pl-3">
+      <div class="flex items-center gap-3">
+        <div class="flex-1">
+          <va-checkbox v-model="usePlatform" label="Use platform" />
+        </div>
+      </div>
+      <!-- Execution Platform -->
+      <ExecutionPlatformForm
+        v-if="usePlatform"
+        v-model:platform="platform"
+        v-model:metadata="platformMetadata"
+      />
+    </div>
+
     <!-- Program -->
     <va-card class="mt-5">
       <va-card-content>
@@ -77,4 +92,53 @@
 <script setup>
 const definition = defineModel("definition");
 const argValues = defineModel("argValues");
+const executionMetadata = defineModel("executionMetadata");
+
+const usePlatform = ref(false);
+
+// Computed property for nested v-model binding
+const platform = computed({
+  get: () => executionMetadata.value?.platform,
+  set: (value) => {
+    executionMetadata.value = {
+      ...executionMetadata.value,
+      platform: value,
+    };
+  },
+});
+
+// Computed property for nested v-model binding
+const platformMetadata = computed({
+  get: () => executionMetadata.value?.metadata || {},
+  set: (value) => {
+    executionMetadata.value = {
+      ...executionMetadata.value,
+      metadata: value,
+    };
+  },
+});
+
+watch(
+  executionMetadata,
+  (newValue) => {
+    console.log("-------------- ConversionForm ------------------");
+    console.log("executionMetadata WATCH, new value:", newValue);
+    console.log("-------------- ConversionForm ------------------");
+  },
+  { deep: true },
+);
+
+watch(usePlatform, (newValue) => {
+  console.log("-------------- ConversionForm ------------------");
+  console.log("usePlatform WATCH, new value:", newValue);
+  executionMetadata.value = {};
+  console.log("-------------- ConversionForm ------------------");
+});
+
+onMounted(() => {
+  console.log("-------------- ConversionForm ------------------");
+  console.log("executionMetadata ON MOUNTED, value:", executionMetadata.value);
+  console.log("usePlatform ON MOUNTED, value:", usePlatform.value);
+  console.log("-------------- ConversionForm ------------------");
+});
 </script>

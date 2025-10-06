@@ -215,5 +215,19 @@ config = {
         'cellranger-v4.0.0', 'cellranger-arc', 'cellranger-arc-v2', 
         'cellranger-atac', 'spaceranger-v3.0.1', 'spaceranger-v1.3.1', 
         'spaceranger-v1.1.0'
-    ]
+    ],
+    'execution_platform': {
+        # 'KUBERNETES': { },
+        # 'AWS_BATCH': { },
+        # 'CUSTOM': { },
+        'SLURM': {
+          'connection': {
+            'type': 'ssh',
+            'host': 'h1.quartz.uits.iu.edu',
+            'user': 'cmguser',
+            'private_key': '~/.ssh/id_rsa',
+          },
+          'slurm_script_dir': '/slurm_scripts',
+        },
+    }
 }

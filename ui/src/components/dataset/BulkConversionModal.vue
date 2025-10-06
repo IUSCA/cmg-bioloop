@@ -11,6 +11,7 @@
           v-if="results === null"
           v-model:definition="definition"
           v-model:argValues="argValues"
+          v-model:execution-metadata="execution_metadata"
         />
 
         <!-- results -->
@@ -73,6 +74,7 @@ const loading = ref(false);
 const definition = ref();
 const argValues = ref([]);
 const results = ref(null);
+const execution_metadata = ref({});
 
 const num_datasets = computed(() => props.datasetIds?.length || 0);
 
@@ -92,6 +94,8 @@ function convert_datasets() {
       dataset_ids: props.datasetIds,
       argument_values: removeNullValues(argValues.value.argument_values),
       user_argument_values: argValues.value.user_argument_values,
+      execution_platform: execution_metadata.value.platform,
+      execution_metadata: execution_metadata.value.metadata,
     })
     .then((res) => {
       // res.data: type: {dataset_id: [status, conversion_object | {name, message}]}
@@ -184,6 +188,22 @@ function close() {
   definition.value = null;
   argValues.value = [];
   results.value = null;
+  execution_metadata.value = {};
   emit("done");
 }
+
+watch(execution_metadata, (newValue) => {
+  console.log("-------------- BulkConversionModal ------------------");
+  console.log("execution_metadata WATCH, new value:", newValue);
+  console.log("-------------- BulkConversionModal ------------------");
+});
+
+onMounted(() => {
+  console.log("-------------- BulkConversionModal ------------------");
+  console.log(
+    "execution_metadata ON MOUNTED, value:",
+    execution_metadata.value,
+  );
+  console.log("-------------- BulkConversionModal ------------------");
+});
 </script>

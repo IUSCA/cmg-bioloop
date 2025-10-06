@@ -25,6 +25,7 @@
         <ConversionForm
           v-model:definition="definition"
           v-model:argValues="argValues"
+          v-model:execution-metadata="execution_metadata"
         />
       </div>
     </va-modal>
@@ -44,6 +45,7 @@ const visible = ref(false);
 const loading = ref(false);
 const definition = ref();
 const argValues = ref([]);
+const execution_metadata = ref({});
 
 function convert_dataset() {
   loading.value = true;
@@ -52,6 +54,8 @@ function convert_dataset() {
       definition_id: definition.value.id,
       dataset_id: props.dataset.id,
       argument_values: argValues.value,
+      execution_platform: execution_metadata.value.platform,
+      execution_metadata: execution_metadata.value.metadata,
     })
     .then(() => {
       emit("update");
@@ -73,6 +77,7 @@ function close() {
   visible.value = false;
   definition.value = null;
   argValues.value = [];
+  execution_metadata.value = {};
 }
 
 const disabled = computed(() => {
