@@ -70,7 +70,7 @@ class SlurmExecutor(ExecutorBase):
 
         job_script_content = artifacts['JOB_SCRIPT']['content_inline']
 
-        # Generate unique script name
+        # Generate unique SLURM script name
         timestamp = int(time.time())
         script_name = f"job_{self.process_request_id}_{timestamp}.sh"
         remote_path = f"{self.remote_work_dir}/{script_name}"
@@ -128,12 +128,8 @@ class SlurmExecutor(ExecutorBase):
         )
 
         if not result.ok or not result.stdout.strip():
-            return {
-                'state': 'UNKNOWN',
-                'exit_code': None,
-                'elapsed': None,
-                'max_memory': None
-            }
+            print(f"sacct failed for job {job_id}: {result.stderr}")
+            raise Exception(f"sacct failed for job {job_id}: {result.stderr}")
 
         # Parse sacct output
         fields = result.stdout.strip().split('|')

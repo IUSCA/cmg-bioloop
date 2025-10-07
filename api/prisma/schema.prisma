@@ -379,7 +379,7 @@ model worker_process {
   id          Int      @id @default(autoincrement())
   pid         Int
   task_id     String
-  executor_job_id String? // ID of external process started by job (like Slurm job ID)
+  executor_job_id String? // ID of external process started by job (for jobs running on external platforms like Slurm/k8s)
   step        String
   workflow_id String?
   workflow    workflow? @relation(fields: [workflow_id], references: [id])
@@ -589,26 +589,6 @@ model dynamic_variable {
   updated_at  DateTime   @default(now()) @updatedAt @db.Timestamp(6)
   argument    argument[]
 }
-
-// model execution_artifact_schema {
-//   id                  Int               @id @default(autoincrement())
-//   execution_platform  execution_platform
-//   artifact_type       artifact_type
-//   name                String?        // file name.
-//   description         String?  
-//   is_required         Boolean @default(false)
-//   allowed_extensions  String[]          // [".sh", ".bash"]
-//   max_size_bytes      Int?
-//   content_type        String?           // text/x-shellscript, application/yaml, etc.  
-//   supports_template   Boolean @default(false) // Template support for display artifact-information in UI
-//   template_schema     Json?
-//   default_template    String?
-//   config              Json?
-//   created_at          DateTime @default(now()) @db.Timestamp(6)
-//   updated_at          DateTime @updatedAt @db.Timestamp(6)
-  
-//   @@unique([execution_platform, artifact_type])
-// }
 
 enum execution_platform {
   LOCAL            // app host

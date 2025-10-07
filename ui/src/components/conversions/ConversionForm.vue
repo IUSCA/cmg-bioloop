@@ -79,7 +79,7 @@
     <template #step-content-1>
       <div class="space-y-4">
         <div class="flex items-center gap-3">
-          <va-checkbox v-model="usePlatform" label="Use execution platform (SLURM, K8s, etc.)" />
+          <va-checkbox v-model="usePlatform" label="Use external platform for execution (SLURM, K8s, etc.)" />
         </div>
 
         <!-- Execution Platform Form -->
@@ -92,7 +92,7 @@
         <!-- Message when not using platform -->
         <div v-else class="flex flex-col justify-center items-center h-40">
           <span class="text-gray-500">
-            Job will run locally on the worker host.
+            Job will run on the application host.
           </span>
         </div>
       </div>

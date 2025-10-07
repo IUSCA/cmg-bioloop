@@ -72,118 +72,37 @@ def run_conversion(celery_task, conversion_id, **kwargs):
     conversion = api.get_conversion(conversion_id=conversion_id,
                                     include_dataset=True,
                                     include_definition=True)
-    dataset_id = conversion['dataset_id']
-    argsList = conversion['argsList']
 
     print(f"conversion:")
     pprint(conversion, indent=4)
 
-    # Check if this conversion has process_requests (SLURM/platform jobs)
+    # Validate process_requests count
     process_requests = conversion.get('requested_processes', [])
-    if process_requests:
-        print(f"Found {len(process_requests)} process request(s) - will use executor")
-        return run_conversion_with_executor(celery_task, conversion, process_requests, **kwargs)
-    else:
-        print("No process requests - running locally")
-        return run_conversion_locally(celery_task, conversion, **kwargs)
+    if len(process_requests) > 1:
+        raise ConversionException(f"Expected 0 or 1 process requests, got {len(process_requests)}")
 
+    process_request = process_requests[0] if process_requests else None
 
-def run_conversion_with_executor(celery_task, conversion, process_requests, **kwargs):
-    """
-    Submit conversion job(s) to execution platform (SLURM, K8s, etc.)
-
-    Args:
-        celery_task: Celery task instance
-        conversion: Conversion dict from API
-        process_requests: List of process_request dicts
-    """
+    # Common preparation for both local and platform execution
     dataset_id = conversion['dataset_id']
     conversion_id = conversion['id']
-
-    # Get SLURM config from application config
-    slurm_config = config.get('execution_config', {}).get('SLURM', {})
-    executor_config = {
-        'host': slurm_config['connection']['host'],
-        'ssh_user': slurm_config['connection']['user'],
-        'remote_work_dir': slurm_config.get('remote_work_dir', '/tmp/slurm_jobs'),
-        'ssh_key_path': slurm_config['connection'].get('private_key'),
-    }
-
-    submitted_jobs = []
-
-    # Submit each process request
-    for pr in process_requests:
-        process_request_id = pr['id']
-        job_step = pr.get('job_step', 'main')
-        execution_platform = pr['execution_platform']
-
-        print(f"Submitting process_request {process_request_id} (step: {job_step}) to {execution_platform}")
-
-        if execution_platform == 'SLURM':
-            # Create SLURM executor
-            executor = SlurmExecutor(config=executor_config, process_request_id=process_request_id)
-
-            # Submit job - executor fetches artifacts and submits to SLURM
-            slurm_job_id = executor.submit_job()
-
-            print(f"Submitted SLURM job {slurm_job_id} for process_request {process_request_id}")
-
-            submitted_jobs.append({
-                'process_request_id': process_request_id,
-                'job_step': job_step,
-                'executor_job_id': slurm_job_id,
-                'platform': execution_platform
-            })
-
-            # TODO: Store slurm_job_id in worker_process table or process_request table
-            # For now, just log it
-        else:
-            print(f"Unsupported execution platform: {execution_platform}")
-            raise ConversionException(f"Execution platform {execution_platform} not implemented")
-
-    print(f"Submitted {len(submitted_jobs)} job(s):")
-    pprint(submitted_jobs, indent=4)
-
-    # TODO: Poll for job completion and update status
-    # For now, return immediately
-    return {'dataset_id': dataset_id, 'conversion_id': conversion_id, 'submitted_jobs': submitted_jobs}
-
-
-def run_conversion_locally(celery_task, conversion, **kwargs):
-    """
-    Run conversion locally on the worker host (existing behavior)
-
-    Args:
-        celery_task: Celery task instance
-        conversion: Conversion dict from API
-    """
-    dataset_id = conversion['dataset_id']
     argsList = conversion['argsList']
 
     definition_details = api.get_conversion_definition(definition_id=conversion['definition_id'])
-    
+
     program = definition_details['program']
     print(f"program:")
     pprint(program, indent=4)
 
     # Get full dataset information to access staged_path
     dataset = api.get_dataset(dataset_id=dataset_id)
-    
+
     if not dataset['is_staged']:
         raise ConversionException(f"Dataset {dataset_id} is not staged")
 
-    # print(f"argsList:")
-    # pprint(argsList)
-    # print("type of argsList: ", type(argsList))
-    # print(f"length of argsList: {len(argsList)}")
-    # for i, arg in enumerate(argsList):
-    #     print(f"arg {i}: {arg}")
-    #     print(f"type of arg {i}: {type(arg)}")
-    # print("--------------------------------")
-
     conversion_output_dir = get_conversion_output_dir(conversion=conversion)
     conversion_output_dir.mkdir(parents=True, exist_ok=True)
-    
+
     # If Dataset being converted has a sample sheet, write it to the Dataset's staged directory
     if has_sample_sheet(arguments=argsList):
         write_sample_sheet(arguments=argsList, dataset=dataset)
@@ -202,7 +121,7 @@ def run_conversion_locally(celery_task, conversion, **kwargs):
         raise ConversionException(f"Executable {executable_path} does not exist")
     if not executable_path.is_file():
         raise ConversionException(f"Executable {executable_path} is not a file")
-        
+
     args = [program['executable_path']] + get_program_args(
         arguments=argsList,
         dataset=dataset,
@@ -215,18 +134,50 @@ def run_conversion_locally(celery_task, conversion, **kwargs):
     for item in conversion_output_dir.iterdir():
         print(f"  {item}")
     print("--------------------------------")
-    
+
     print(f"args: {args}")
     print("args (joined): " + " ".join(str(a) for a in args))
-    
-    print("DEBUG: Capturing logs: ", definition_details.get('capture_logs'))
-    if definition_details.get('capture_logs', False):
-        print("DEBUG: Capturing logs")
-        cmd.execute_with_log_tracking(cmd=args, celery_task=celery_task, cwd=str(cwd) if cwd else None)
+
+    # Execute locally or via platform
+    if process_request is None:
+        # Run locally
+        print("No process requests - running locally")
+        print("DEBUG: Capturing logs: ", definition_details.get('capture_logs'))
+        if definition_details.get('capture_logs', False):
+            print("DEBUG: Capturing logs")
+            cmd.execute_with_log_tracking(cmd=args, celery_task=celery_task, cwd=str(cwd) if cwd else None)
+        else:
+            print("DEBUG: Not capturing logs")
+            cmd.execute(cmd=args, cwd=str(cwd) if cwd else None)
     else:
-        print("DEBUG: Not capturing logs")
-        cmd.execute(cmd=args, cwd=str(cwd) if cwd else None)
-    
+        # Run via platform
+        process_request_id = process_request['id']
+        execution_platform = process_request['execution_platform']
+
+        print(f"Found 1 process request - submitting to {execution_platform}")
+
+        if execution_platform == 'SLURM':
+            # Get SLURM config from application config
+            slurm_config = config.get('execution_config', {}).get('SLURM', {})
+            executor_config = {
+                'host': slurm_config['connection']['host'],
+                'ssh_user': slurm_config['connection']['user'],
+                'remote_work_dir': slurm_config.get('remote_work_dir', '/tmp/slurm_jobs'),
+                'ssh_key_path': slurm_config['connection'].get('private_key'),
+            }
+
+            # Create SLURM executor
+            executor = SlurmExecutor(config=executor_config, process_request_id=process_request_id)
+
+            # Submit job - executor fetches artifacts and submits to SLURM
+            slurm_job_id = executor.submit_job()
+
+            print(f"Submitted SLURM job {slurm_job_id} for process_request {process_request_id}")
+
+            # TODO: store slurm_job_id in worker_process table or process_request table
+        else:
+            raise ConversionException(f"Execution platform {execution_platform} not implemented")
+
     print(f"conversion_output_dir: {conversion_output_dir}")
     print("--------------------------------")
     print("contents of conversion_output_dir:")
@@ -234,9 +185,8 @@ def run_conversion_locally(celery_task, conversion, **kwargs):
         print(f"  {item}")
     print("--------------------------------")
 
-
     print(f"task convert returned dataset_id, conversion_id")
     print(f"dataset_id: {dataset_id}")
     print(f"conversion_id: {conversion_id}")
-    return {'dataset_id': dataset_id, 'conversion_id': conversion_id},
+    return {'dataset_id': dataset_id, 'conversion_id': conversion_id}
 
