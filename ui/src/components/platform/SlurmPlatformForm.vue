@@ -67,8 +67,8 @@ watch(
     console.log("Number of files:", newFiles?.length);
     console.log("Files:", newFiles);
 
-    // IMPORTANT: Replace the entire object to trigger reactivity up the chain
-    // Using spread operator creates a new object reference, which Vue detects
+    // Note: replace the entire object to trigger reactivity up the chain
+    // using spread operator creates a new object reference, which Vue detects
     metadata.value = {
       ...metadata.value,
       files: newFiles,

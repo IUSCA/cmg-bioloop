@@ -2,7 +2,6 @@
   <va-card class="mt-5">
     <va-card-title>
       <div class="flex items-center justify-between w-full">
-        <span class="text-lg">SLURM Directives</span>
         <va-select
           v-model="selectedCommand"
           :options="commandOptions"
@@ -11,6 +10,7 @@
           placeholder="Select command"
           preset="bordered"
           class="w-48"
+          label="Slurm Directive"
           @update:modelValue="onCommandChange"
         />
       </div>

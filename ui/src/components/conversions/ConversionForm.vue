@@ -75,10 +75,6 @@
       </div>
     </template>
 
-    <!-- 
-    in step icon's, use outline icons, like others in the app.
-    -->
-
     <!-- Step 2: Execution Platform -->
     <template #step-content-1>
       <div class="space-y-4">
