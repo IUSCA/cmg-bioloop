@@ -118,6 +118,7 @@ async function convert_datasets() {
             {
               execution_platform: execution_metadata.value.platform,
               artifacts: artifacts,
+              execution_config: execution_metadata.value?.metadata?.execution_config || null,
             },
           ]
         : [],

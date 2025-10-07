@@ -511,6 +511,7 @@ router.post(
           data: {
             conversion_id: conversion.id,
             execution_platform: request.execution_platform,
+            execution_config: request.execution_config || null,
           },
         });
         request.artifacts.forEach(async (artifact) => {
@@ -621,6 +622,34 @@ async function validateAndCreateConversion(
     });
   await Promise.all(promises);
 
+  // Handle SLURM directives if present in process_requests
+  const slurmProcessRequests = process_request.filter(req => req.execution_platform === 'SLURM' && req.execution_config);
+  if (slurmProcessRequests.length > 0) {
+    // Get SLURM program and its arguments
+    const slurmProgram = await prisma.cmd_line_program.findFirst({
+      where: { name: 'slurm' },
+      include: { arguments: true }
+    });
+    
+    if (slurmProgram) {
+      // Add SLURM argument values to argVals
+      slurmProcessRequests.forEach(slurmRequest => {
+        const directives = slurmRequest.execution_config;
+        slurmProgram.arguments.forEach(slurmArg => {
+          const directiveKey = slurmArg.name.replace('--', '').replace('-', '');
+          const directiveValue = directives[directiveKey];
+          
+          if (directiveValue !== null && directiveValue !== undefined && directiveValue !== '') {
+            argVals[slurmArg.id.toString()] = {
+              value: conversionService.convertValueForStorage(directiveValue, slurmArg),
+              definition: slurmArg,
+            };
+          }
+        });
+      });
+    }
+  }
+
   // check if all required arguments are provided
   // if not, add values for missing arguments with default values
   const requiredArguments = conversionDefinition.program.arguments.filter((arg) => arg.is_required || arg.position);
@@ -658,6 +687,7 @@ async function validateAndCreateConversion(
         data: {
           conversion_id: conversion.id,
           execution_platform: request.execution_platform,
+          execution_config: request.execution_config || null,
         },
       });
       request.artifacts.forEach(async (artifact) => {

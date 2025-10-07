@@ -1,26 +1,43 @@
 <template>
-  <div>
-    <va-file-upload
-      v-model="files"
-      dropzone
-      dropZoneText="Select SLURM script(s)"
-      label="SLURM script"
-      preset="bordered"
-      class="w-full"
-    />
+  <div class="flex flex-col gap-4">
+    <!-- Mode Selection -->
+    <div class="flex items-center gap-3">
+      <va-checkbox
+        v-model="useDirectives"
+        @update:modelValue="onModeChange"
+      />
+      <span class="font-semibold">Use SLURM Directives (instead of script upload)</span>
+    </div>
 
-    <!-- Debug display -->
-    <!-- <div v-if="files && files.length > 0" class="mt-2 text-sm text-gray-600">
-      Selected: {{ files.length }} file(s)
-    </div> -->
+    <!-- SLURM Script Upload (when not using directives) -->
+    <div v-if="!useDirectives">
+      <va-file-upload
+        v-model="files"
+        dropzone
+        dropZoneText="Select SLURM script(s)"
+        label="SLURM script"
+        preset="bordered"
+        class="w-full"
+      />
+    </div>
+
+    <!-- SLURM Directives Form (when using directives) -->
+    <SlurmDirectivesForm 
+      v-if="useDirectives"
+      v-model:directives="directives" 
+    />
   </div>
 </template>
 
 <script setup>
+import SlurmDirectivesForm from './SlurmDirectivesForm.vue';
+
 const metadata = defineModel("metadata");
 
-// Local reactive ref for files
+// Local reactive refs
 const files = ref([]);
+const directives = ref({});
+const useDirectives = ref(false);
 
 // Initialize metadata if needed
 onMounted(() => {
@@ -51,6 +68,44 @@ watch(
     };
 
     console.log("Updated metadata.value:", metadata.value);
+    console.log("-------------- SlurmPlatformForm ------------------");
+  },
+  { deep: true },
+);
+
+// Handle mode change
+function onModeChange(useDirectivesMode) {
+  useDirectives.value = useDirectivesMode;
+  
+  // Clear the opposite mode's data
+  if (useDirectivesMode) {
+    files.value = [];
+  } else {
+    directives.value = {};
+  }
+  
+  // Update metadata with mode information
+  metadata.value = {
+    ...metadata.value,
+    use_directives: useDirectivesMode,
+  };
+}
+
+// Watch directives and update metadata
+watch(
+  directives,
+  (newDirectives) => {
+    console.log("-------------- SlurmPlatformForm ------------------");
+    console.log("directives WATCH triggered");
+    console.log("Directives:", newDirectives);
+
+    // Update metadata with directives as execution_config
+    metadata.value = {
+      ...metadata.value,
+      execution_config: newDirectives,
+    };
+
+    console.log("Updated metadata.value with execution_config:", metadata.value);
     console.log("-------------- SlurmPlatformForm ------------------");
   },
   { deep: true },
