@@ -544,6 +544,7 @@ model argument_value {
 model process_request {
   id              Int                   @id @default(autoincrement())
   execution_platform execution_platform @default(LOCAL)
+  job_step          String? // e.g. "checksum-computation", "file-download"
   conversion_id           Int?
   conversion              conversion? @relation(fields: [conversion_id], references: [id], onDelete: SetNull)
   artifacts       process_artifact[]
@@ -565,7 +566,6 @@ model conversion {
   initiator       user?                  @relation(fields: [initiator_id], references: [id], onDelete: SetNull)
   additional_args Json?                 // e.g., { [ {"--no-lane-splitting": "true" }, {"--barcode-mismatches": "1"} ] }
   derived_datasets conversion_derived_dataset[]
-  // requested_execution_platform execution_platform @default(LOCAL)
   requested_processes process_request[]
   metadata Json?
 }

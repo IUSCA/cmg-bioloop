@@ -1,26 +1,45 @@
+import time
+from io import StringIO
 from pathlib import Path
 
 from fabric import Connection
 
-from workers.config import config
-
 from .base import ExecutorBase
 
+# todo - make SSH connection optional
 
 class SlurmExecutor(ExecutorBase):
     """Executor for SLURM-based HPC clusters"""
 
-    def __init__(self):
-        execution_config = config['execution_config']['SLURM']
+    def validate_config(self):
+        """Validate required SLURM configuration"""
+        required_keys = ['host', 'ssh_user', 'remote_work_dir']
+        missing = [k for k in required_keys if k not in self.config]
+        if missing:
+            raise ValueError(f"Missing required SLURM config keys: {missing}")
 
-        self.host = execution_config['connection']['host']
-        self.ssh_user = execution_config['connection']['user']
-        self.ssh_key_path = execution_config['connection'].get('private_key')
-        # self.defaults = execution_config.get('defaults', {})
+    def __init__(self,
+                config: dict,
+                process_request_id: int):
+        """
+        Initialize SLURM executor
 
-        # Container directory for SLURM submission scripts
-        self.slurm_script_dir = Path(execution_config['slurm_script_dir'])
-        self.slurm_script_dir.mkdir(parents=True, exist_ok=True)
+        Args:
+            config: Dict with keys:
+                - host: SLURM head node hostname
+                - ssh_user: SSH username
+                - remote_work_dir: Directory on SLURM host for job scripts
+                - ssh_key_path: Optional path to SSH private key
+            process_request_id: ID to fetch artifacts from database
+        """
+        super().__init__(config, process_request_id)
+
+        self.remote_work_dir = config['remote_work_dir']
+        
+        connection_config = config['connection']
+        self.host = connection_config['host']
+        self.ssh_user = connection_config['user']
+        self.ssh_key_path = connection_config.get('ssh_key_path')
 
         # Initialize Fabric connection
         connect_kwargs = {}
@@ -33,53 +52,42 @@ class SlurmExecutor(ExecutorBase):
             connect_kwargs=connect_kwargs
         )
 
-    def submit_job(self,
-                   command,
-                   working_dir,
-                   worker_process_id,
-                  #  resources,
-                  #  environment=None
-                   ) -> str:
+    def submit_job(self, **kwargs) -> str:
         """
-        Submit a job to SLURM
+        Submit a job to SLURM using artifacts from database
 
         Args:
-            command: Command to execute (list or string)
-            working_dir: Working directory for the job
-            worker_process_id: ID for tracking the worker process
-            resources: Dict of SLURM resources (gpus, mem, time_limit, partition, etc.)
-            environment: Optional dict of environment variables
+            **kwargs: Additional parameters (not used currently)
 
         Returns:
             SLURM job ID as string
         """
-        # Merge defaults with job-specific resources
-        # job_resources = {**self.defaults, **resources}
+        # Fetch artifacts for this process request
+        artifacts = self.fetch_artifacts()
 
-        # Prepare command
-        if isinstance(command, list):
-            command_str = ' '.join(str(c) for c in command)
-        else:
-            command_str = str(command)
+        if 'JOB_SCRIPT' not in artifacts:
+            raise ValueError(f"No JOB_SCRIPT artifact found for process_request_id: {self.process_request_id}")
 
-        # Generate SLURM script
-        script_path = self.generate_slurm_script(
-            name='submission_script',
-            command=command_str,
-            working_dir=working_dir,
-            # resources=job_resources,
-            # environment=environment
-        )
+        job_script_content = artifacts['JOB_SCRIPT']['content_inline']
 
-        # Submit to SLURM via SSH
-        result = self.conn.run(f"sbatch {script_path}", hide=True)
+        # Generate unique script name
+        timestamp = int(time.time())
+        script_name = f"job_{self.process_request_id}_{timestamp}.sh"
+        remote_path = f"{self.remote_work_dir}/{script_name}"
+
+        # Write script to remote host via SSH
+        self.conn.put(StringIO(job_script_content), remote_path)
+        self.conn.run(f"chmod +x {remote_path}", hide=True)
+
+        # Submit to SLURM via sbatch
+        result = self.conn.run(f"sbatch {remote_path}", hide=True)
 
         if result.failed:
             raise Exception(f"sbatch failed: {result.stderr}")
 
         # Parse job ID from "Submitted batch job 12345"
-        job_id = result.stdout.strip().split()[-1]
-        return job_id
+        slurm_job_id = result.stdout.strip().split()[-1]
+        return slurm_job_id
 
     def get_job_status(self, job_id: str) -> dict:
         """
@@ -162,18 +170,3 @@ class SlurmExecutor(ExecutorBase):
         status = self.get_job_status(job_id)
         terminal_states = ['COMPLETED', 'FAILED', 'CANCELLED', 'TIMEOUT', 'NODE_FAIL']
         return status['state'] in terminal_states
-
-    def generate_slurm_script(self,
-                               name: str,
-                               directives: str,
-                               command: str,
-                               working_dir: str) -> str:
-        # script_path.chmod(0o755)
-
-        pass
-
-
-    def close(self):
-        """Close the SSH connection"""
-        if self.conn:
-            self.conn.close()

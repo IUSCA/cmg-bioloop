@@ -11,6 +11,7 @@ from workers import cmd
 from workers.config import config
 from workers.conversion import get_conversion_output_dir
 from workers.exceptions import ConversionException
+from workers.executors.slurm import SlurmExecutor
 
 app = Celery("tasks")
 app.config_from_object(celeryconfig)
@@ -73,14 +74,91 @@ def run_conversion(celery_task, conversion_id, **kwargs):
                                     include_definition=True)
     dataset_id = conversion['dataset_id']
     argsList = conversion['argsList']
-    
+
     print(f"conversion:")
     pprint(conversion, indent=4)
-    
-    # definition = conversion['definition']
 
-    # print(f"definition:")
-    # pprint(definition, indent=4)
+    # Check if this conversion has process_requests (SLURM/platform jobs)
+    process_requests = conversion.get('requested_processes', [])
+    if process_requests:
+        print(f"Found {len(process_requests)} process request(s) - will use executor")
+        return run_conversion_with_executor(celery_task, conversion, process_requests, **kwargs)
+    else:
+        print("No process requests - running locally")
+        return run_conversion_locally(celery_task, conversion, **kwargs)
+
+
+def run_conversion_with_executor(celery_task, conversion, process_requests, **kwargs):
+    """
+    Submit conversion job(s) to execution platform (SLURM, K8s, etc.)
+
+    Args:
+        celery_task: Celery task instance
+        conversion: Conversion dict from API
+        process_requests: List of process_request dicts
+    """
+    dataset_id = conversion['dataset_id']
+    conversion_id = conversion['id']
+
+    # Get SLURM config from application config
+    slurm_config = config.get('execution_config', {}).get('SLURM', {})
+    executor_config = {
+        'host': slurm_config['connection']['host'],
+        'ssh_user': slurm_config['connection']['user'],
+        'remote_work_dir': slurm_config.get('remote_work_dir', '/tmp/slurm_jobs'),
+        'ssh_key_path': slurm_config['connection'].get('private_key'),
+    }
+
+    submitted_jobs = []
+
+    # Submit each process request
+    for pr in process_requests:
+        process_request_id = pr['id']
+        job_step = pr.get('job_step', 'main')
+        execution_platform = pr['execution_platform']
+
+        print(f"Submitting process_request {process_request_id} (step: {job_step}) to {execution_platform}")
+
+        if execution_platform == 'SLURM':
+            # Create SLURM executor
+            executor = SlurmExecutor(config=executor_config, process_request_id=process_request_id)
+
+            # Submit job - executor fetches artifacts and submits to SLURM
+            slurm_job_id = executor.submit_job()
+
+            print(f"Submitted SLURM job {slurm_job_id} for process_request {process_request_id}")
+
+            submitted_jobs.append({
+                'process_request_id': process_request_id,
+                'job_step': job_step,
+                'executor_job_id': slurm_job_id,
+                'platform': execution_platform
+            })
+
+            # TODO: Store slurm_job_id in worker_process table or process_request table
+            # For now, just log it
+        else:
+            print(f"Unsupported execution platform: {execution_platform}")
+            raise ConversionException(f"Execution platform {execution_platform} not implemented")
+
+    print(f"Submitted {len(submitted_jobs)} job(s):")
+    pprint(submitted_jobs, indent=4)
+
+    # TODO: Poll for job completion and update status
+    # For now, return immediately
+    return {'dataset_id': dataset_id, 'conversion_id': conversion_id, 'submitted_jobs': submitted_jobs}
+
+
+def run_conversion_locally(celery_task, conversion, **kwargs):
+    """
+    Run conversion locally on the worker host (existing behavior)
+
+    Args:
+        celery_task: Celery task instance
+        conversion: Conversion dict from API
+    """
+    dataset_id = conversion['dataset_id']
+    argsList = conversion['argsList']
 
     definition_details = api.get_conversion_definition(definition_id=conversion['definition_id'])
     
