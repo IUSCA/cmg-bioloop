@@ -5,26 +5,25 @@
     </va-card-title>
     <va-card-content>
       <div class="flex flex-col gap-4">
-        <!-- Platform selection -->
-        <div class="flex items-center gap-3">
-          <div class="flex-1">
-            <va-select
-              v-model="selectedPlatform"
-              :options="platforms"
-              label="Platform"
-              :text-by="(option) => option.label"
-              :track-by="(option) => option.value"
-              :value-by="(option) => option.value"
-              placeholder="Select execution platform"
-              preset="bordered"
-              class="w-full"
-              clearable
-            />
-          </div>
-          <!-- Platform-specific form -->
-          <div v-if="selectedPlatform === 'SLURM'">
-            <SlurmPlatformForm v-model:metadata="metadata" />
-          </div>
+        <!-- Platform selection (first row) -->
+        <div class="flex-1">
+          <va-select
+            v-model="selectedPlatform"
+            :options="platforms"
+            label="Platform"
+            :text-by="(option) => option.label"
+            :track-by="(option) => option.value"
+            :value-by="(option) => option.value"
+            placeholder="Select execution platform"
+            preset="bordered"
+            class="w-full"
+            clearable
+          />
+        </div>
+
+        <!-- Platform-specific form (appears after platform selection) -->
+        <div v-if="selectedPlatform === 'SLURM'">
+          <SlurmPlatformForm v-model:metadata="metadata" />
         </div>
       </div>
     </va-card-content>

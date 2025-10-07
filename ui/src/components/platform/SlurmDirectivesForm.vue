@@ -6,6 +6,8 @@
         <va-select
           v-model="selectedCommand"
           :options="commandOptions"
+          :text-by="(option) => option.label"
+          :value-by="(option) => option.value"
           placeholder="Select command"
           preset="bordered"
           class="w-48"

@@ -1,16 +1,23 @@
 <template>
   <div class="flex flex-col gap-4">
-    <!-- Mode Selection -->
-    <div class="flex items-center gap-3">
-      <va-checkbox
-        v-model="useDirectives"
+    <!-- Mode Selection (Radio buttons side-by-side) -->
+    <div class="flex items-center gap-6">
+      <va-radio
+        v-model="slurmMode"
+        option="script"
+        label="Use SLURM Script"
         @update:modelValue="onModeChange"
       />
-      <span class="font-semibold">Use SLURM Directives (instead of script upload)</span>
+      <va-radio
+        v-model="slurmMode"
+        option="directives"
+        label="Use SLURM Directives"
+        @update:modelValue="onModeChange"
+      />
     </div>
 
-    <!-- SLURM Script Upload (when not using directives) -->
-    <div v-if="!useDirectives">
+    <!-- SLURM Script Upload (when using script mode) -->
+    <div v-if="slurmMode === 'script'">
       <va-file-upload
         v-model="files"
         dropzone
@@ -21,10 +28,10 @@
       />
     </div>
 
-    <!-- SLURM Directives Form (when using directives) -->
-    <SlurmDirectivesForm 
-      v-if="useDirectives"
-      v-model:directives="directives" 
+    <!-- SLURM Directives Form (when using directives mode) -->
+    <SlurmDirectivesForm
+      v-if="slurmMode === 'directives'"
+      v-model:directives="directives"
     />
   </div>
 </template>
@@ -37,7 +44,7 @@ const metadata = defineModel("metadata");
 // Local reactive refs
 const files = ref([]);
 const directives = ref({});
-const useDirectives = ref(false);
+const slurmMode = ref('script'); // Default to script mode
 
 // Initialize metadata if needed
 onMounted(() => {
@@ -65,6 +72,7 @@ watch(
     metadata.value = {
       ...metadata.value,
       files: newFiles,
+      slurm_mode: 'script',
     };
 
     console.log("Updated metadata.value:", metadata.value);
@@ -74,20 +82,20 @@ watch(
 );
 
 // Handle mode change
-function onModeChange(useDirectivesMode) {
-  useDirectives.value = useDirectivesMode;
-  
+function onModeChange(mode) {
+  slurmMode.value = mode;
+
   // Clear the opposite mode's data
-  if (useDirectivesMode) {
+  if (mode === 'directives') {
     files.value = [];
-  } else {
+  } else if (mode === 'script') {
     directives.value = {};
   }
-  
+
   // Update metadata with mode information
   metadata.value = {
     ...metadata.value,
-    use_directives: useDirectivesMode,
+    slurm_mode: mode,
   };
 }
 
@@ -103,6 +111,7 @@ watch(
     metadata.value = {
       ...metadata.value,
       execution_config: newDirectives,
+      slurm_mode: 'directives',
     };
 
     console.log("Updated metadata.value with execution_config:", metadata.value);
