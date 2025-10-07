@@ -395,11 +395,11 @@ model process_artifact {
   process            process_request @relation(fields: [process_id], references: [id], onDelete: Cascade)
   artifact_type       artifact_type
   storage_type        storage_type @default(INLINE)
-  content_inline      String?           // to store small files directly, if needed
+  content_inline      String?           // small files can be stored directly
   file_path           String?
-  external_url        String?           // external storage (S3, etc.)
+  external_url        String?           // external storage (S3 etc.)
   supports_template   Boolean @default(false)
-  template_variables  Json?             // variables used to render in UI  
+  template_variables  Json?             // variables/config used to render in UI
   created_at          DateTime @default(now()) @db.Timestamp(6)
   updated_at          DateTime @updatedAt @db.Timestamp(6)
 }
@@ -544,11 +544,10 @@ model argument_value {
 model process_request {
   id              Int                   @id @default(autoincrement())
   execution_platform execution_platform @default(LOCAL)
-  source_type         String?            // 'conversion', 'workflow', etc.
-  source_id           String?
+  conversion_id           Int?
+  conversion              conversion? @relation(fields: [conversion_id], references: [id], onDelete: SetNull)
   artifacts       process_artifact[]
-  execution_config    Json?             // Execution-specific config
-  process_type        String?            // 'slurm', 'k8s', etc.
+  execution_config    Json?              // Execution-specific config
   created_at      DateTime @default(now()) @db.Timestamp(6)
   updated_at      DateTime @updatedAt @db.Timestamp(6)
 }

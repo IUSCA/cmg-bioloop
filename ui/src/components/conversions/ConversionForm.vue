@@ -55,10 +55,10 @@
     </div>
 
     <!-- Choose whether to use a specific Platform -->
-    <div class="space-y-2 pl-3">
+    <div class="space-y-2">
       <div class="flex items-center gap-3">
         <div class="flex-1">
-          <va-checkbox v-model="usePlatform" label="Use platform" />
+          <va-checkbox v-model="usePlatform" label="Platform-dependent" />
         </div>
       </div>
       <!-- Execution Platform -->

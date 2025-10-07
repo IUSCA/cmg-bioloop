@@ -259,6 +259,20 @@ const exports = {
       genomes: ["TbruceiTREU927", "TbruceiLister427"],
     },
   },
+  artifact_type: {
+    JOB_SCRIPT: "JOB_SCRIPT",
+    ENVIRONMENT_SETUP: "ENVIRONMENT_SETUP",
+    RUNTIME_CONFIG: "RUNTIME_CONFIG",
+    RESOURCE_MANIFEST: "RESOURCE_MANIFEST",
+    SECRETS: "SECRETS",
+    DEPENDENCY_FILE: "DEPENDENCY_FILE",
+    CUSTOM: "CUSTOM",
+  },
+  storage_type: {
+    INLINE: "INLINE",
+    FILE_PATH: "FILE_PATH",
+    EXTERNAL_URL: "EXTERNAL_URL",
+  },
 };
 
 export default exports;

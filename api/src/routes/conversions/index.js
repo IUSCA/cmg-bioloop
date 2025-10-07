@@ -22,6 +22,45 @@ const prisma = new PrismaClient();
 const isPermittedTo = accessControl('conversion');
 const router = express.Router();
 
+// Validate artifact content
+function validateArtifact(artifact) {
+  // Validate artifact type
+  const validArtifactTypes = [
+    'JOB_SCRIPT',
+    'ENVIRONMENT_SETUP',
+    'RUNTIME_CONFIG',
+    'RESOURCE_MANIFEST',
+    'SECRETS',
+    'DEPENDENCY_FILE',
+    'CUSTOM',
+  ];
+  if (!validArtifactTypes.includes(artifact.artifact_type)) {
+    throw createError(400, `Invalid artifact_type: ${artifact.artifact_type}`);
+  }
+
+  // Validate storage type
+  const validStorageTypes = ['INLINE', 'FILE_PATH', 'EXTERNAL_URL'];
+  if (!validStorageTypes.includes(artifact.storage_type)) {
+    throw createError(400, `Invalid storage_type: ${artifact.storage_type}`);
+  }
+
+  // Validate content is present ,i f INLINE storage
+  if (artifact.storage_type === 'INLINE' && !artifact.content_inline) {
+    throw createError(400, 'content_inline is required for INLINE storage type');
+  }
+
+  // Validate content size (1MB limit for inline storage)
+  if (artifact.storage_type === 'INLINE' && artifact.content_inline) {
+    const sizeInBytes = Buffer.byteLength(artifact.content_inline, 'utf8');
+    const maxSize = 1024 * 1024; // 1MB
+    if (sizeInBytes > maxSize) {
+      throw createError(400, `Artifact content too large: ${sizeInBytes} bytes (max: ${maxSize} bytes)`);
+    }
+
+    // todo - check if uploaded file is proper text file
+  }
+}
+
 router.use('/definitions', require('./definitions'));
 router.use('/dynamic-arguments', require('./dynamicArguments'));
 
@@ -345,9 +384,13 @@ router.post(
       .withMessage(
         'user_argument_values must be an array of objects with argument_name and value fields',
       ),
+    body('process_requests').optional().isArray(),
   ]),
   asyncHandler(async (req, res, next) => {
     // #swagger.tags = ['Conversions']
+
+    console.log('req.user.id', req.user.id);
+    console.log('req.body', req.body);
 
     // validate if definition_id, dataset_id exists
     const conversionDefinition = await prisma.conversion_definition.findUnique({
@@ -462,6 +505,27 @@ router.post(
         },
       });
 
+      // create Process Requests
+      await Promise.all(req.body.process_requests.map(async (request) => {
+        const process_request = await tx.process_request.create({
+          data: {
+            conversion_id: conversion.id,
+            execution_platform: request.execution_platform,
+          },
+        });
+        request.artifacts.forEach(async (artifact) => {
+          validateArtifact(artifact);
+          await tx.process_artifact.create({
+            data: {
+              process_id: process_request.id,
+              artifact_type: artifact.artifact_type,
+              storage_type: artifact.storage_type,
+              content_inline: artifact.content_inline,
+            },
+          });
+        });
+      }));
+
       const wf_body = datasetService.get_wf_body('conversion');
       // create the workflow
       const wf = (await wfService.create({
@@ -531,6 +595,7 @@ async function validateAndCreateConversion(
     argument_values,
     initiator_id,
     user_argument_values = [],
+    process_request = [],
   } = {},
 ) {
   const argVals = _.cloneDeep(argument_values);
@@ -587,6 +652,27 @@ async function validateAndCreateConversion(
       },
     });
 
+    // create Process Request and Artifact records
+    await Promise.all(process_request.map(async (request) => {
+      const conversion_process_request = await tx.process_request.create({
+        data: {
+          conversion_id: conversion.id,
+          execution_platform: request.execution_platform,
+        },
+      });
+      request.artifacts.forEach(async (artifact) => {
+        validateArtifact(artifact);
+        await tx.process_artifact.create({
+          data: {
+            process_id: conversion_process_request.id,
+            artifact_type: artifact.artifact_type,
+            storage_type: artifact.storage_type,
+            content_inline: artifact.content_inline,
+          },
+        });
+      });
+    }));
+
     const workflow_type = config.genomic_conversion_programs.includes(conversionDefinition.program.name)
       ? 'genomic_conversion'
       : 'conversion';
@@ -627,9 +713,13 @@ router.post(
     body('dataset_ids').isArray().custom((array) => array.every(Number.isInteger)),
     body('argument_values').default([]).isArray(),
     body('user_argument_values').default([]).isArray(),
+    body('process_requests').optional().isArray(),
   ]),
   asyncHandler(async (req, res, next) => {
     // #swagger.tags = ['Conversions']
+
+    console.log('req.user.id', req.user.id);
+    console.log('req.body', req.body);
 
     // validate if definition_id, dataset_id exists
     const conversionDefinition = await prisma.conversion_definition.findUnique({
@@ -698,6 +788,7 @@ router.post(
             initiator_id: req.user.id,
             argument_values: argVals,
             user_argument_values: req.body.user_argument_values,
+            process_request: req.body.process_requests,
           },
         )),
       );

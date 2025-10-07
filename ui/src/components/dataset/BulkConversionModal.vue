@@ -56,8 +56,11 @@
 </template>
 
 <script setup>
+import constants from "@/constants";
 import conversionApiService from "@/services/conversion/api";
 import toast from "@/services/toast";
+import { readFileAsText } from "@/services/utils";
+
 const props = defineProps({
   datasetIds: { type: Array, required: true },
 });
@@ -86,16 +89,38 @@ function show() {
   visible.value = true;
 }
 
-function convert_datasets() {
+async function convert_datasets() {
   loading.value = true;
+
+  // Read file contents if execution platform is specified
+  let artifacts = [];
+  if (execution_metadata.value?.metadata?.files?.length > 0) {
+    artifacts = await Promise.all(
+      execution_metadata.value.metadata.files.map(async (file) => {
+        const content = await readFileAsText(file);
+        return {
+          artifact_type: constants.artifact_type.JOB_SCRIPT,
+          storage_type: constants.storage_type.INLINE,
+          content_inline: content,
+        };
+      }),
+    );
+  }
+
   conversionApiService
     .createBulk({
       definition_id: definition.value.id,
       dataset_ids: props.datasetIds,
       argument_values: removeNullValues(argValues.value.argument_values),
       user_argument_values: argValues.value.user_argument_values,
-      execution_platform: execution_metadata.value.platform,
-      execution_metadata: execution_metadata.value.metadata,
+      process_requests: execution_metadata.value?.platform
+        ? [
+            {
+              execution_platform: execution_metadata.value.platform,
+              artifacts: artifacts,
+            },
+          ]
+        : [],
     })
     .then((res) => {
       // res.data: type: {dataset_id: [status, conversion_object | {name, message}]}
