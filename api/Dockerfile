@@ -5,17 +5,22 @@ ARG APP_UID
 
 # create appuser and appgroup with the same ids as in the production VM.
 RUN groupadd -o --gid ${APP_GID} appgroup
+# echo "created appgroup with id ${APP_GID}"
 RUN useradd -ms /bin/bash --uid ${APP_UID} --gid ${APP_GID} appuser
+# echo "created appuser with id ${APP_UID}"
 
 WORKDIR /opt/sca/app
 RUN chown -R appuser:appgroup /opt/sca/app
+# echo "changed ownership of /opt/sca/app to appuser:appgroup"
 
 # execute below steps as
 USER appuser:appgroup
+# echo "executing below steps as appuser:appgroup"
 
 # create node_modules directory before the external / docker volume mounts
 # otherwise docker daemon will attempt to create this directory and it will be owned by root:root.
 RUN mkdir /opt/sca/app/node_modules
+# echo "created node_modules directory"
 
 # setup for installing npm global packages as non-root user
 RUN npm config set prefix '/home/appuser/.local/'
@@ -24,8 +29,24 @@ ENV PATH="/home/appuser/.local/bin/:${PATH}"
 
 # install pnpm and install packages from pnpm-lock.yaml
 RUN npm install pm2 -g
+
+# Copy package files for dependency installation
+COPY --chown=appuser:appgroup package*.json ./
+
+# Install dependencies during build phase
+RUN npm ci
+
+# Copy the rest of the application code
+COPY --chown=appuser:appgroup . .
+
+# Generate Prisma client during build phase
+RUN npx prisma generate client
+
+# Run the application
+ENTRYPOINT exec /opt/sca/app/node_modules/.bin/nodemon --signal SIGTERM src/index.js
+
 # RUN npm install -g pnpm
-ENTRYPOINT npm ci && npx prisma generate client && exec pm2-runtime ecosystem.config.js
+# ENTRYPOINT npm ci && npx prisma generate client && exec pm2-runtime ecosystem.config.js
 # ENTRYPOINT pnpm fetch && npx prisma db push && exec /opt/sca/app/node_modules/.bin/nodemon --signal SIGTERM src/index.js
 
 # Entrypoint will be run in the shell mode - https://docs.docker.com/engine/reference/builder/#shell-form-entrypoint-example

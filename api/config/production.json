@@ -1,6 +1,6 @@
 {
   "mode": "production",
-  "app_id": "cmg-new.sca.iu.edu",
+  "app_id": "cmg-test.sca.iu.edu",
   "express": {
     "host": "0.0.0.0"
   },
