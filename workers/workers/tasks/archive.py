@@ -1,9 +1,10 @@
+import json
 import shutil
 from pathlib import Path
+
 from celery import Celery
 from celery.utils.log import get_task_logger
 from sca_rhythm import WorkflowTask
-import json
 
 import workers.api as api
 import workers.cmd as cmd
@@ -44,7 +45,7 @@ def make_tarfile(celery_task: WorkflowTask, tar_path: Path, source_dir: str, sou
     return tar_path
 
 
-def archive(celery_task: WorkflowTask, dataset: dict, delete_local_file: bool = False):
+def archive(celery_task: WorkflowTask, dataset: dict, delete_local_file: bool = False, skip_sda_upload: bool = None):
     # Tar the dataset directory and compute checksum
     bundle = Path(f'{config["paths"][dataset["type"]]["bundle"]["generate"]}/{dataset["name"]}.tar')
 
@@ -61,40 +62,55 @@ def archive(celery_task: WorkflowTask, dataset: dict, delete_local_file: bool = 
         'md5': bundle_checksum,
     }
 
-    # Use local archive directory instead of SDA
-    local_archive_dir = Path(f'/opt/sca/data/archive/{dataset["type"].lower()}')
-    local_archive_dir.mkdir(parents=True, exist_ok=True)
+    # Check if SDA upload should be skipped (from config or parameter)
+    if skip_sda_upload is None:
+        skip_sda_upload = config.get('file_info_population', {}).get('skip_sda_upload', False)
     
-    local_archive_path = local_archive_dir / bundle.name
-    
-    # Copy the bundle to the local archive location
-    logger.info(f'Copying bundle {bundle} to local archive at {local_archive_path}')
-    shutil.copy2(bundle, local_archive_path)
-    
-    # Verify the copy was successful
-    if not local_archive_path.exists():
-        raise Exception(f'Failed to copy bundle to local archive: {local_archive_path}')
-    
-    # Verify checksum of archived file
-    archived_checksum = utils.checksum(local_archive_path)
-    if archived_checksum != bundle_checksum:
-        raise Exception(f'Checksum mismatch after archiving. Original: {bundle_checksum}, Archived: {archived_checksum}')
-    
-    logger.info(f'Successfully archived bundle to local storage: {local_archive_path}')
+    if skip_sda_upload:
+        # Use local archive directory instead of SDA
+        local_archive_dir = Path(f'/opt/sca/data/archive/{dataset["type"].lower()}')
+        local_archive_dir.mkdir(parents=True, exist_ok=True)
+        
+        local_archive_path = local_archive_dir / bundle.name
+        
+        # Copy the bundle to the local archive location
+        logger.info(f'Copying bundle {bundle} to local archive at {local_archive_path}')
+        shutil.copy2(bundle, local_archive_path)
+        
+        # Verify the copy was successful
+        if not local_archive_path.exists():
+            raise Exception(f'Failed to copy bundle to local archive: {local_archive_path}')
+        
+        # Verify checksum of archived file
+        archived_checksum = utils.checksum(local_archive_path)
+        if archived_checksum != bundle_checksum:
+            raise Exception(f'Checksum mismatch after archiving. Original: {bundle_checksum}, Archived: {archived_checksum}')
+        
+        logger.info(f'Successfully archived bundle to local storage: {local_archive_path}')
+        archive_path = str(local_archive_path)
+    else:
+        # Original SDA upload logic would go here
+        # For now, we'll use local archive as fallback
+        local_archive_dir = Path(f'/opt/sca/data/archive/{dataset["type"].lower()}')
+        local_archive_dir.mkdir(parents=True, exist_ok=True)
+        local_archive_path = local_archive_dir / bundle.name
+        shutil.copy2(bundle, local_archive_path)
+        archive_path = str(local_archive_path)
 
     if delete_local_file:
-        # file successfully archived locally, delete the local copy
+        # file successfully archived, delete the local copy
         logger.info("Deleting local bundle after successful archiving")
         bundle.unlink()
 
-    return str(local_archive_path), bundle_attrs
+    return archive_path, bundle_attrs
 
 
 def archive_dataset(celery_task, dataset_id, **kwargs):
     dataset = api.get_dataset(dataset_id=dataset_id, bundle=True)
-    sda_bundle_path, bundle_attrs = archive(celery_task, dataset)
+    skip_sda_upload = kwargs.get('skip_sda_upload', None)
+    archive_path, bundle_attrs = archive(celery_task, dataset, skip_sda_upload=skip_sda_upload)
     update_data = {
-        'archive_path': sda_bundle_path,
+        'archive_path': archive_path,
         'bundle': bundle_attrs
     }
     api.update_dataset(dataset_id=dataset_id, update_data=update_data)

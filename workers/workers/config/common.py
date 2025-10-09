@@ -184,6 +184,31 @@ config = {
               "queue": "conversion.cmg-new.sca.iu.edu.q"
             }
           ]
+        },
+        "file_info_population": {
+          "name": "File Info Population",
+          "steps": [
+            {
+              "name": "inspect",
+              "task": "inspect_dataset"
+            },
+            {
+              "name": "archive",
+              "task": "archive_dataset"
+            },
+            {
+              "name": "stage",
+              "task": "stage_dataset"
+            },
+            {
+              "name": "validate",
+              "task": "validate_dataset"
+            },
+            {
+              "name": "delete_source",
+              "task": "delete_source"
+            }
+          ]
         }
     },
     'celery': {
@@ -202,7 +227,7 @@ config = {
     },
     'workflow': {
         'purge': {
-            'types': ['integrated', 'stage', 'delete', 'conversion'],
+            'types': ['integrated', 'stage', 'delete', 'conversion', 'file_info_population'],
             'age_threshold_seconds': 86400,
             'max_purge_count': 10
         }
@@ -215,5 +240,14 @@ config = {
         'cellranger-v4.0.0', 'cellranger-arc', 'cellranger-arc-v2', 
         'cellranger-atac', 'spaceranger-v3.0.1', 'spaceranger-v1.3.1', 
         'spaceranger-v1.1.0'
-    ]
+    ],
+    'file_info_population': {
+        'batch_size': 10,
+        'max_download_size_tb': 10,
+        'download_dir': '/opt/sca/data/file_info_downloads',
+        'state_file': '/opt/sca/data/file_info_population_state.json',
+        'skip_sda_upload': True,  # Skip SDA upload in archive step
+        'poll_interval_seconds': 300,  # 5 minutes between batch completion checks
+        'max_retries_per_dataset': 3
+    }
 }
