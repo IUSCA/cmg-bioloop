@@ -528,10 +528,10 @@ model conversion {
   initiated_at    DateTime              @default(now()) @db.Timestamp(6)
   definition_id   Int
   workflow_id     String?
-  dataset_id      Int
+  dataset_id      Int?
   initiator_id    Int?
   argument_values argument_value[]
-  dataset         dataset               @relation(fields: [dataset_id], references: [id], onDelete: Cascade)
+  dataset         dataset?              @relation(fields: [dataset_id], references: [id], onDelete: Cascade)
   definition      conversion_definition @relation(fields: [definition_id], references: [id])
   initiator       user?                  @relation(fields: [initiator_id], references: [id], onDelete: SetNull)
   additional_args Json?                 // e.g., { [ {"--no-lane-splitting": "true" }, {"--barcode-mismatches": "1"} ] }

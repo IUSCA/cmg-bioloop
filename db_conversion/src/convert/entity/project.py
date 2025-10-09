@@ -22,8 +22,8 @@ def get_cmg_users_from_project_groups(mongo_db: Database, cmg_group_ids: List[st
   users = set()
   for group in mongo_db.groups.find({'_id': {'$in': [ObjectId(gid) for gid in cmg_group_ids]}}):
     users.update(group.get('users', []))
-  logger.info(f"Found {len(users)} users from groups: {cmg_group_ids}")
-  logger.info(pprint.pformat(users))
+  # logger.info(f"Found {len(users)} users from groups: {cmg_group_ids}")
+  # logger.info(pprint.pformat(users))
   return list(users)
 
 
@@ -35,10 +35,10 @@ def convert_projects(pg_cursor: cursor, mongo_db: Database):
   in Bioloop PostgreSQL based on the `projects` collection in CMG MongoDB.
   """
   cmg_projects: List[Dict[str, Any]] = list(mongo_db.projects.find({}))
-  logger.info(f"Converting {len(cmg_projects)} projects")
+  # logger.info(f"Converting {len(cmg_projects)} projects")
   
   cmg_project_ids: List[str] = [str(project['_id']) for project in cmg_projects]
-  logger.info(f"Generated {len(cmg_project_ids)} project IDs")
+  # logger.info(f"Generated {len(cmg_project_ids)} project IDs")
 
   project_data: List[Tuple[str, str, str, str, str, str]] = [(
     project.get('name'),
@@ -58,40 +58,40 @@ def convert_projects(pg_cursor: cursor, mongo_db: Database):
     project_data
   )
 
-  for project in project_data:
-    logger.info(f"Project: {project}")
-    logger.info(pprint.pformat(project))
+  # for project in project_data:
+    # logger.info(f"Project: {project}")
+    # logger.info(pprint.pformat(project))
 
-  logger.info(f"Inserted {len(project_data)} projects")
+  # logger.info(f"Inserted {len(project_data)} projects")
 
   # Initialize association lists outside the loop to accumulate all associations
   bioloop_project_data_product_associations = []
   bioloop_project_user_associations = []
 
   for cmg_project in cmg_projects:
-    logger.info(f"Converting project: {cmg_project.get('name')}")
+    # logger.info(f"Converting project: {cmg_project.get('name')}")
     cmg_project_data_product_associations = cmg_project.get('dataproducts', [])
-    logger.info(f"CMG project data product associations: {cmg_project_data_product_associations}")
+    # logger.info(f"CMG project data product associations: {cmg_project_data_product_associations}")
     cmg_project_user_associations = cmg_project.get('users', []) + \
                                     get_cmg_users_from_project_groups(mongo_db,
                                                                       cmg_project.get('groups', []))
-    logger.info(f"CMG project user associations: {cmg_project_user_associations}")
+    # logger.info(f"CMG project user associations: {cmg_project_user_associations}")
 
     try:
       bioloop_project = find_corresponding_bioloop_project(pg_cursor, cmg_project['_id'])
     except CMGProjectNotFoundException as e:
       logger.warning(f"No corresponding project found for CMG project: {cmg_project.get('name')}, Id: {cmg_project.get('_id')}")
       continue
-    logger.info(f"Bioloop project:")
+    # logger.info(f"Bioloop project:")
     bioloop_project_id = bioloop_project['id']
 
     for cmg_data_product_id in cmg_project_data_product_associations:
       try:
         bioloop_data_product = find_corresponding_bioloop_dataset(pg_cursor, cmg_data_product_id)
-        logger.info(f"Bioloop data product:")
-        logger.info(pprint.pformat(bioloop_data_product))
+        # logger.info(f"Bioloop data product:")
+        # logger.info(pprint.pformat(bioloop_data_product))
         bioloop_project_data_product_associations.append((bioloop_project_id, bioloop_data_product['id']))
-        logger.info(f"Added data product association: {bioloop_project_id} - {bioloop_data_product['id']}")
+        # logger.info(f"Added data product association: {bioloop_project_id} - {bioloop_data_product['id']}")
       except CMGDatasetNotFoundException as e:
         logger.warning(f"No corresponding data product found for CMG data product: {cmg_data_product_id}")
         continue
@@ -99,17 +99,17 @@ def convert_projects(pg_cursor: cursor, mongo_db: Database):
     for cmg_user_id in cmg_project_user_associations:
       try:
         bioloop_user = find_corresponding_bioloop_user(pg_cursor, mongo_db, cmg_user_id)
-        logger.info(f"Bioloop user:")
-        logger.info(pprint.pformat(bioloop_user))
+        # logger.info(f"Bioloop user:")
+        # logger.info(pprint.pformat(bioloop_user))
         bioloop_project_user_associations.append((bioloop_project_id, bioloop_user['id']))
-        logger.info(f"Added user association: {bioloop_project_id} - {bioloop_user['id']}")
+        # logger.info(f"Added user association: {bioloop_project_id} - {bioloop_user['id']}")
       except CMGUserNotFoundException as e:
         logger.warning(f"No corresponding Bioloop user found for CMG user ID: {cmg_user_id}")
         continue
       
   # Batch insert Project-Dataset and Project-User associations
-  logger.info(f"Total project-dataset associations to insert: {len(bioloop_project_data_product_associations)}")
-  logger.info(f"Total project-user associations to insert: {len(bioloop_project_user_associations)}")
+  # logger.info(f"Total project-dataset associations to insert: {len(bioloop_project_data_product_associations)}")
+  # logger.info(f"Total project-user associations to insert: {len(bioloop_project_user_associations)}")
   
   if bioloop_project_data_product_associations:
     pg_cursor.executemany(
@@ -131,7 +131,7 @@ def convert_projects(pg_cursor: cursor, mongo_db: Database):
   
   pg_cursor.execute("SELECT COUNT(*) FROM project_user")
   inserted_count = pg_cursor.fetchone()['count']
-  logger.info(f"Rows inserted into project_user: {inserted_count}")
+  # logger.info(f"Rows inserted into project_user: {inserted_count}")
 
-  logger.info(f"Converted {len(cmg_projects)} projects")
-  logger.info("Project conversion completed.")
+  # logger.info(f"Converted {len(cmg_projects)} projects")
+  # logger.info("Project conversion completed.")

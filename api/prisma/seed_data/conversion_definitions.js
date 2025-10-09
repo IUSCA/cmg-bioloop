@@ -112,6 +112,26 @@ const conversionDefinitions = [
     // logs_directory: '/opt/sca/data/conversion/spaceranger-v1.1.0/logs',
     output_directory: '/opt/sca/data/conversion/output',
   },
+  {
+    name: 'cellranger',
+    description: 'Single-cell RNA sequencing analysis pipeline for 10x Genomics data (generic version)',
+    enabled: true,
+    dataset_types: ['RAW_DATA'],
+    tags: [],
+    capture_logs: true,
+    // logs_directory: '/opt/sca/data/conversion/cellranger/logs',
+    output_directory: '/opt/sca/data/conversion/output',
+  },
+  {
+    name: 'spaceranger',
+    description: 'Spatial transcriptomics analysis pipeline for tissue imaging data (generic version)',
+    enabled: true,
+    dataset_types: ['RAW_DATA'],
+    tags: [],
+    capture_logs: true,
+    // logs_directory: '/opt/sca/data/conversion/spaceranger/logs',
+    output_directory: '/opt/sca/data/conversion/output',
+  },
 ];
 
 module.exports = {

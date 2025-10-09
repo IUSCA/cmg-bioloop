@@ -65,6 +65,18 @@ const cmdLinePrograms = [
     executable_directory: '',
     allow_additional_args: true,
   },
+  {
+    name: 'cellranger',
+    executable_path: '/opt/sca/data/conversion/cellranger/bin/cellranger',
+    executable_directory: '',
+    allow_additional_args: true,
+  },
+  {
+    name: 'spaceranger',
+    executable_path: '/opt/sca/data/conversion/spaceranger/bin/spaceranger',
+    executable_directory: '',
+    allow_additional_args: true,
+  },
 ];
 
 module.exports = {

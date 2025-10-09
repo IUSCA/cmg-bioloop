@@ -82,4 +82,4 @@ def create_workflows(pg_cursor: cursor, rhythm_db: Database):
     # Update the workflow_meta document with the steps
     rhythm_db.workflow_meta.update_one({"_id": workflow_id}, {"$set": {"steps": workflow_meta["steps"]}})
 
-  logger.info(f"Created workflows for {len(archived_datasets)} datasets.")
+  # logger.info(f"Created workflows for {len(archived_datasets)} datasets.")

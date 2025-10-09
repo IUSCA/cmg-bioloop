@@ -115,7 +115,6 @@ class MongoToPostgresConversionManager:
         logger.info("converting dataset hierarchies")
         convert_dataset_hierarchies(pg_cursor=pg_cursor, mongo_db=self.cmg_mongo_db)
         # logger.info("Converting dataset files")
-        # logger.info("converting files")
         # convert_files(pg_cursor=pg_cursor, mongo_db=self.cmg_mongo_db)
         logger.info("converting projects")
         convert_projects(pg_cursor=pg_cursor, mongo_db=self.cmg_mongo_db)

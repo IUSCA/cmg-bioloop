@@ -57,10 +57,12 @@ def convert_users(pg_cursor, mongo_db):
   # todo - remove temporary file
   with open(output_file, 'w') as f:
     for user in users:
+      logger.info(f"Converting user: {user}")
+      f.write(f"Converting user: {user}\n")
       email = user.get('email', 'No email')
-      name = user.get('cas_id', 'No cas_id')
+      name = user.get('username', 'No cas_id')
       username = user.get('username', 'No username')
-      f.write(f"Converting user: {email} - {name} - {username}\n")
+      # f.write(f"Converting user: {email} - {name} - {username}\n")
       # logger.info(f"Converting user: {email} - {name} - {username}")
       convert_user(user, pg_cursor)
   # logger.info("convert_users successful.")
@@ -114,8 +116,11 @@ def assign_user_roles(cmg_user, user_id, pg_cursor):
 
   # Create user_role associations
   for cmg_role in cmg_user.get('roles', []):
+    # logger.info(f"Assigning role: {cmg_role}")
     postgres_role_name = role_mapping.get(cmg_role)
+    # logger.info(f"Postgres role name: {postgres_role_name}")
     if postgres_role_name and postgres_role_name in postgres_roles:
+      # logger.info(f"Assigning role: {cmg_role} - {postgres_role_name} - {user_id}")
       pg_cursor.execute(
         """
         INSERT INTO user_role (user_id, role_id)

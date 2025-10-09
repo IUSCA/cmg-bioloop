@@ -3,12 +3,18 @@ drop_all_enums = """
                 DROP TYPE IF EXISTS ACCESS_TYPE CASCADE;
                 DROP TYPE IF EXISTS NOTIFICATION_STATUS CASCADE;
                 DROP TYPE IF EXISTS UPLOAD_STATUS CASCADE;
+                DROP TYPE IF EXISTS UPLOAD_TYPE CASCADE;
+                DROP TYPE IF EXISTS DATASET_CREATE_METHOD CASCADE;
+                DROP TYPE IF EXISTS ARGUMENT_VALUE_TYPE CASCADE;
 """
 
 drop_all_tables = """
                 DROP TABLE IF EXISTS
-                dataset_file_hierarchy, upload_log, dataset_upload_log, file_upload_log,
-                dataset_audit, dataset_state, bundle, data_access_log, stage_request_log,
+                session_track, genome_browser_session, track, conversion_derived_dataset, 
+                argument_value, conversion, argument, conversion_definition, cmd_line_program,
+                dynamic_variable, log, worker_process, dataset_genomic_attributes, about, nonce, instrument,
+                dataset_file_hierarchy, file_upload_log, dataset_upload_log, dataset_audit,
+                dataset_state, bundle, data_access_log, stage_request_log,
                 user_password, user_login, user_settings, notification, role_notification,
                 user_notification, contact, user_role, dataset_file, dataset_hierarchy,
                 project_dataset, project_user, project_contact, project, workflow, metric,
@@ -21,6 +27,9 @@ create_all_enums = """
                 CREATE TYPE ACCESS_TYPE AS ENUM ('BROWSER', 'SLATE_SCRATCH');
                 CREATE TYPE NOTIFICATION_STATUS AS ENUM ('CREATED', 'ACKNOWLEDGED', 'RESOLVED');
                 CREATE TYPE UPLOAD_STATUS AS ENUM ('UPLOADING', 'UPLOAD_FAILED', 'UPLOADED', 'PROCESSING', 'PROCESSING_FAILED', 'COMPLETE', 'FAILED');
+                CREATE TYPE UPLOAD_TYPE AS ENUM ('DATASET');
+                CREATE TYPE DATASET_CREATE_METHOD AS ENUM ('UPLOAD', 'IMPORT', 'SCAN');
+                CREATE TYPE ARGUMENT_VALUE_TYPE AS ENUM ('STRING', 'NUMBER', 'BOOLEAN');
 """
 
 create_all_tables = """                
@@ -34,7 +43,8 @@ create_all_tables = """
                   "created_at" TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
                   "updated_at" TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
                   "is_deleted" BOOLEAN NOT NULL DEFAULT false,
-                  "cmg_id" TEXT
+                  "metadata" JSONB,
+                  "cmg_id" VARCHAR(100)
                 );
                 
                 CREATE TABLE "role" (
@@ -46,7 +56,6 @@ create_all_tables = """
                 -- Create tables
                 CREATE TABLE "dataset" (
                   "id" SERIAL PRIMARY KEY,
-                  "cmg_id" TEXT UNIQUE,
                   "name" TEXT NOT NULL,
                   "type" TEXT NOT NULL,
                   "num_directories" INTEGER,
@@ -63,6 +72,9 @@ create_all_tables = """
                   "is_deleted" BOOLEAN NOT NULL DEFAULT false,
                   "is_staged" BOOLEAN NOT NULL DEFAULT false,
                   "metadata" JSONB,
+                  "src_instrument_id" INTEGER,
+                  "file_type" TEXT,
+                  "cmg_id" TEXT UNIQUE,
                   UNIQUE ("name", "type", "is_deleted")
                 );
                 
@@ -101,21 +113,27 @@ create_all_tables = """
                 
                 CREATE INDEX ON "dataset_file_hierarchy" ("child_id");
                 
-                CREATE TABLE "upload_log" (
+                CREATE TABLE "dataset_audit" (
                   "id" SERIAL PRIMARY KEY,
-                  "status" upload_status NOT NULL,
-                  "initiated_at" TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                  "action" TEXT NOT NULL,
+                  "create_method" DATASET_CREATE_METHOD,
                   "updated_at" TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                  "user_id" INTEGER NOT NULL,
-                  FOREIGN KEY ("user_id") REFERENCES "user"("id")
+                  "timestamp" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                  "old_data" JSONB,
+                  "new_data" JSONB,
+                  "user_id" INTEGER,
+                  "dataset_id" INTEGER,
+                  FOREIGN KEY ("user_id") REFERENCES "user"("id") ON DELETE SET NULL,
+                  FOREIGN KEY ("dataset_id") REFERENCES "dataset"("id") ON DELETE CASCADE,
+                  UNIQUE ("dataset_id", "create_method")
                 );
                 
                 CREATE TABLE "dataset_upload_log" (
                   "id" SERIAL PRIMARY KEY,
-                  "dataset_id" INTEGER UNIQUE NOT NULL,
-                  "upload_log_id" INTEGER UNIQUE NOT NULL,
-                  FOREIGN KEY ("dataset_id") REFERENCES "dataset"("id") ON DELETE CASCADE,
-                  FOREIGN KEY ("upload_log_id") REFERENCES "upload_log"("id") ON DELETE CASCADE
+                  "status" UPLOAD_STATUS NOT NULL,
+                  "updated_at" TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                  "audit_log_id" INTEGER UNIQUE NOT NULL,
+                  FOREIGN KEY ("audit_log_id") REFERENCES "dataset_audit"("id") ON DELETE CASCADE
                 );
                 
                 CREATE TABLE "file_upload_log" (
@@ -123,23 +141,10 @@ create_all_tables = """
                   "name" TEXT NOT NULL,
                   "md5" TEXT NOT NULL,
                   "num_chunks" INTEGER NOT NULL,
-                  "status" upload_status NOT NULL,
+                  "status" UPLOAD_STATUS NOT NULL,
                   "path" TEXT,
-                  "upload_log_id" INTEGER,
-                  FOREIGN KEY ("upload_log_id") REFERENCES "upload_log"("id") ON DELETE CASCADE
-                );
-                
-                CREATE TABLE "dataset_audit" (
-                  "id" SERIAL PRIMARY KEY,
-                  "action" TEXT NOT NULL,
-                  "description" TEXT,
-                  "timestamp" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                  "old_data" JSONB,
-                  "new_data" JSONB,
-                  "user_id" INTEGER,
-                  "dataset_id" INTEGER,
-                  FOREIGN KEY ("user_id") REFERENCES "user"("id") ON DELETE CASCADE,
-                  FOREIGN KEY ("dataset_id") REFERENCES "dataset"("id") ON DELETE CASCADE
+                  "dataset_upload_log_id" INTEGER,
+                  FOREIGN KEY ("dataset_upload_log_id") REFERENCES "dataset_upload_log"("id") ON DELETE CASCADE
                 );
                 
                 CREATE TABLE "dataset_state" (
@@ -164,7 +169,7 @@ create_all_tables = """
                 CREATE TABLE "data_access_log" (
                   "id" SERIAL PRIMARY KEY,
                   "timestamp" TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                  "access_type" access_type NOT NULL,
+                  "access_type" ACCESS_TYPE NOT NULL,
                   "file_id" INTEGER,
                   "dataset_id" INTEGER,
                   "user_id" INTEGER NOT NULL,
@@ -306,4 +311,201 @@ create_all_tables = """
                   FOREIGN KEY ("dataset_id") REFERENCES "dataset"("id") ON DELETE CASCADE,
                   FOREIGN KEY ("initiator_id") REFERENCES "user"("id") ON DELETE SET NULL
                 );
+                
+                CREATE TABLE "metric" (
+                  "timestamp" TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                  "measurement" TEXT NOT NULL,
+                  "subject" TEXT NOT NULL,
+                  "usage" BIGINT,
+                  "limit" BIGINT,
+                  "fields" JSONB,
+                  "tags" JSONB,
+                  PRIMARY KEY ("timestamp", "measurement", "subject")
+                );
+                
+                CREATE TABLE "dataset_genomic_attributes" (
+                  "dataset_id" INTEGER NOT NULL PRIMARY KEY,
+                  "genome_type" TEXT NOT NULL,
+                  "genome_value" TEXT NOT NULL,
+                  FOREIGN KEY ("dataset_id") REFERENCES "dataset"("id") ON DELETE CASCADE
+                );
+                
+                CREATE TABLE "worker_process" (
+                  "id" SERIAL PRIMARY KEY,
+                  "pid" INTEGER NOT NULL,
+                  "task_id" TEXT NOT NULL,
+                  "step" TEXT NOT NULL,
+                  "workflow_id" TEXT NOT NULL,
+                  "tags" JSONB,
+                  "start_time" TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                  "hostname" TEXT NOT NULL
+                );
+                
+                CREATE TABLE "log" (
+                  "id" SERIAL PRIMARY KEY,
+                  "timestamp" TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                  "message" TEXT NOT NULL,
+                  "level" TEXT NOT NULL,
+                  "worker_process_id" INTEGER NOT NULL,
+                  FOREIGN KEY ("worker_process_id") REFERENCES "worker_process"("id") ON DELETE CASCADE
+                );
+                
+                CREATE INDEX ON "log" ("worker_process_id");
+                
+                CREATE TABLE "about" (
+                  "id" SERIAL PRIMARY KEY,
+                  "html" TEXT NOT NULL,
+                  "created_at" TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                  "last_updated_by_id" INTEGER,
+                  FOREIGN KEY ("last_updated_by_id") REFERENCES "user"("id") ON DELETE SET NULL
+                );
+                
+                CREATE TABLE "nonce" (
+                  "id" UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                  "created_at" TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                  "purpose" TEXT,
+                  "expires_at" TIMESTAMP(6)
+                );
+                
+                CREATE TABLE "instrument" (
+                  "id" SERIAL PRIMARY KEY,
+                  "name" TEXT UNIQUE NOT NULL,
+                  "host" TEXT UNIQUE NOT NULL,
+                  "description" TEXT,
+                  "created_at" TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                  "updated_at" TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP
+                );
+                
+                CREATE TABLE "track" (
+                  "id" SERIAL PRIMARY KEY,
+                  "name" TEXT NOT NULL,
+                  "dataset_file_id" INTEGER UNIQUE NOT NULL,
+                  "color" TEXT,
+                  "created_at" TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                  "updated_at" TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                  FOREIGN KEY ("dataset_file_id") REFERENCES "dataset_file"("id") ON DELETE CASCADE
+                );
+                
+                CREATE TABLE "genome_browser_session" (
+                  "id" SERIAL PRIMARY KEY,
+                  "title" TEXT NOT NULL,
+                  "genome" TEXT NOT NULL,
+                  "genome_type" TEXT NOT NULL,
+                  "user_id" INTEGER NOT NULL,
+                  "created_at" TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                  "updated_at" TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                  "access_count" INTEGER NOT NULL DEFAULT 0,
+                  "is_public" BOOLEAN NOT NULL DEFAULT false,
+                  "staging_requested" JSONB,
+                  "staging_completed" BOOLEAN NOT NULL DEFAULT false,
+                  "staging_requested_by" INTEGER,
+                  FOREIGN KEY ("user_id") REFERENCES "user"("id") ON DELETE CASCADE
+                );
+                
+                CREATE TABLE "session_track" (
+                  "id" SERIAL PRIMARY KEY,
+                  "session_id" INTEGER NOT NULL,
+                  "track_id" INTEGER NOT NULL,
+                  "color" TEXT,
+                  "title" TEXT,
+                  "order" INTEGER NOT NULL DEFAULT 0,
+                  "created_at" TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                  "updated_at" TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                  FOREIGN KEY ("session_id") REFERENCES "genome_browser_session"("id") ON DELETE CASCADE,
+                  FOREIGN KEY ("track_id") REFERENCES "track"("id") ON DELETE CASCADE,
+                  UNIQUE ("session_id", "track_id")
+                );
+                
+                CREATE TABLE "cmd_line_program" (
+                  "id" SERIAL PRIMARY KEY,
+                  "name" TEXT UNIQUE NOT NULL,
+                  "executable_path" TEXT NOT NULL,
+                  "executable_directory" TEXT,
+                  "allow_additional_args" BOOLEAN NOT NULL DEFAULT false,
+                  "created_at" TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                  "updated_at" TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                  UNIQUE ("name", "executable_path")
+                );
+                
+                CREATE TABLE "conversion_definition" (
+                  "id" SERIAL PRIMARY KEY,
+                  "created_at" TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                  "updated_at" TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                  "name" TEXT UNIQUE NOT NULL,
+                  "description" TEXT,
+                  "enabled" BOOLEAN NOT NULL DEFAULT false,
+                  "author_id" INTEGER NOT NULL,
+                  "dataset_types" TEXT[],
+                  "tags" TEXT[],
+                  "program_id" INTEGER NOT NULL,
+                  "output_directory" TEXT,
+                  "logs_directory" TEXT,
+                  "capture_logs" BOOLEAN NOT NULL DEFAULT false,
+                  FOREIGN KEY ("program_id") REFERENCES "cmd_line_program"("id") ON DELETE RESTRICT,
+                  FOREIGN KEY ("author_id") REFERENCES "user"("id") ON DELETE RESTRICT
+                );
+                
+                CREATE TABLE "dynamic_variable" (
+                  "name" TEXT PRIMARY KEY,
+                  "description" TEXT,
+                  "created_at" TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                  "updated_at" TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP
+                );
+                
+                CREATE TABLE "argument" (
+                  "id" SERIAL PRIMARY KEY,
+                  "name" TEXT,
+                  "value_type" ARGUMENT_VALUE_TYPE NOT NULL,
+                  "allowed_values" TEXT[],
+                  "is_required" BOOLEAN NOT NULL DEFAULT false,
+                  "default_value" TEXT,
+                  "is_flag" BOOLEAN NOT NULL DEFAULT false,
+                  "description" TEXT,
+                  "min_value" DOUBLE PRECISION,
+                  "max_value" DOUBLE PRECISION,
+                  "min_length" INTEGER,
+                  "max_length" INTEGER,
+                  "position" INTEGER,
+                  "dynamic_variable_name" TEXT,
+                  "program_id" INTEGER NOT NULL,
+                  FOREIGN KEY ("dynamic_variable_name") REFERENCES "dynamic_variable"("name") ON DELETE SET NULL,
+                  FOREIGN KEY ("program_id") REFERENCES "cmd_line_program"("id") ON DELETE RESTRICT
+                );
+                
+                CREATE TABLE "conversion" (
+                  "id" SERIAL PRIMARY KEY,
+                  "initiated_at" TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                  "definition_id" INTEGER NOT NULL,
+                  "workflow_id" TEXT,
+                  "dataset_id" INTEGER,
+                  "initiator_id" INTEGER,
+                  "additional_args" JSONB,
+                  FOREIGN KEY ("dataset_id") REFERENCES "dataset"("id") ON DELETE CASCADE,
+                  FOREIGN KEY ("definition_id") REFERENCES "conversion_definition"("id") ON DELETE RESTRICT,
+                  FOREIGN KEY ("initiator_id") REFERENCES "user"("id") ON DELETE SET NULL
+                );
+                
+                CREATE TABLE "argument_value" (
+                  "id" SERIAL PRIMARY KEY,
+                  "argument_id" INTEGER NOT NULL,
+                  "conversion_id" INTEGER NOT NULL,
+                  "value" TEXT,
+                  FOREIGN KEY ("argument_id") REFERENCES "argument"("id") ON DELETE RESTRICT,
+                  FOREIGN KEY ("conversion_id") REFERENCES "conversion"("id") ON DELETE RESTRICT
+                );
+                
+                CREATE TABLE "conversion_derived_dataset" (
+                  "conversion_id" INTEGER NOT NULL,
+                  "dataset_id" INTEGER NOT NULL,
+                  "created_at" TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                  "updated_at" TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                  "metadata" JSONB,
+                  PRIMARY KEY ("conversion_id", "dataset_id"),
+                  FOREIGN KEY ("conversion_id") REFERENCES "conversion"("id") ON DELETE CASCADE,
+                  FOREIGN KEY ("dataset_id") REFERENCES "dataset"("id") ON DELETE CASCADE
+                );
+                
+                -- Add foreign key constraints that reference tables defined later
+                ALTER TABLE "dataset" ADD CONSTRAINT "dataset_src_instrument_id_fkey" 
+                  FOREIGN KEY ("src_instrument_id") REFERENCES "instrument"("id");
 """
