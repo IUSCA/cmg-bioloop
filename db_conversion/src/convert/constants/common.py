@@ -1,4 +1,4 @@
-app_id = 'cmg-new.sca.iu.edu'
+app_id = 'cmg-test.sca.iu.edu'
 
 role_mapping = {
   'admin': 'operator',

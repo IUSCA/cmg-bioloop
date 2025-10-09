@@ -7,4 +7,4 @@ python -m celery \
   --pidfile celery_worker.pid \
   --hostname 'tests-celery@%h' \
   --autoscale 1,1 \
-  --queues 'cmg-new.sca.iu.edu'
+  --queues 'cmg-test.sca.iu.edu'

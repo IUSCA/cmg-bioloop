@@ -29,7 +29,7 @@ ONE_GIGABYTE = 1024 * 1024 * 1024
 FIVE_MINUTES = 5 * 60
 
 config = {
-    'app_id': 'cmg-new.sca.iu.edu',
+    'app_id': 'cmg-test.sca.iu.edu',
     # cspell: disable-next-line
     'genome_file_types': ['.cbcl', '.bcl', '.bcl.gz', '.bgzf', '.fastq.gz', '.bam', '.bam.bai', '.vcf.gz',
                           '.vcf.gz.tbi', '.vcf'],
@@ -155,7 +155,7 @@ config = {
             {
               "name": "convert",
               "task": "convert_dataset",
-              "queue": "conversion.cmg-new.sca.iu.edu.q"
+              "queue": "conversion.cmg-test.sca.iu.edu.q"
             },
 
           ]
@@ -166,22 +166,22 @@ config = {
             {
               "name": "convert",
               "task": "convert_genomic",
-              "queue": "conversion.cmg-new.sca.iu.edu.q"
+              "queue": "conversion.cmg-test.sca.iu.edu.q"
             },
             {
               "name": "generate qc",
               "task": "generate_qc",
-              "queue": "conversion.cmg-new.sca.iu.edu.q"
+              "queue": "conversion.cmg-test.sca.iu.edu.q"
             },
             {
               "name": "copy reports",
               "task": "copy_conversion_reports",
-              "queue": "conversion.cmg-new.sca.iu.edu.q"
+              "queue": "conversion.cmg-test.sca.iu.edu.q"
             },
             {
               "name": "derive data products",
               "task": "derive_data_products",
-              "queue": "conversion.cmg-new.sca.iu.edu.q"
+              "queue": "conversion.cmg-test.sca.iu.edu.q"
             }
           ]
         },
