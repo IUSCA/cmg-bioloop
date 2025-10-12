@@ -1,3 +1,4 @@
+import logging
 from typing import List, Optional
 
 from bson import ObjectId
@@ -6,57 +7,34 @@ from pymongo.database import Database
 
 from ..common import (find_corresponding_bioloop_dataset,
                       find_corresponding_bioloop_user)
+from ..exceptions.exceptions import (CMGDatasetNotFoundException,
+                                     CMGFileNotFoundException,
+                                     CMGIndeterminateFileException,
+                                     CMGUserNotFoundException)
+
+logger = logging.getLogger(__name__)
 
 
-def _ensure_track_for_dataset_file(pg_cursor: cursor, dataset_file_id: int, name: str) -> int:
-  # Track has unique(dataset_file_id)
+def _find_dataset_file_by_name(pg_cursor: cursor, dataset_id: int, filename: str) -> Optional[int]:
+  # Match on file name if present
   pg_cursor.execute(
     """
-    SELECT id FROM track WHERE dataset_file_id = %s
+    SELECT * FROM dataset_file
+    WHERE dataset_id = %s AND name = %s
     """,
-    (dataset_file_id,)
-  )
-  row = pg_cursor.fetchone()['id']
-  if not row:
-    raise Exception(f"Track not found for dataset_file_id: {dataset_file_id}")
-  if row:
-    return row
-
-  pg_cursor.execute(
-    """
-    INSERT INTO track (name, dataset_file_id)
-    VALUES (%s, %s)
-    RETURNING id
-    """,
-    (name, dataset_file_id)
-  )
-  return pg_cursor.fetchone()['id']
-
-
-def _find_dataset_file_by_basename(pg_cursor: cursor, dataset_id: int, basename: str) -> Optional[int]:
-  # Match on basename of path or explicit name if present
-  pg_cursor.execute(
-    """
-    SELECT id, COALESCE(name, ''), path FROM dataset_file
-    WHERE dataset_id = %s
-    """,
-    (dataset_id,)
+    (dataset_id, filename)
   )
   matches = []
   for row in pg_cursor.fetchall():
     file_id = row['id']
-    name = row['name']
-    path = row['path']
-    candidate = name if name else path.split('/')[-1]
-    if candidate == basename:
-      matches.append(file_id)
+    matches.append(file_id)
 
   if len(matches) == 0:
-    raise Exception(f"No dataset_file matched basename '{basename}' in dataset_id {dataset_id}")
-    # return None
-  if len(matches) == 1:
-    return matches[0]
-  raise Exception(f"Multiple dataset_files matched basename '{basename}' in dataset_id {dataset_id}: {matches}")
+    raise CMGFileNotFoundException(f"No dataset_file matched file name '{filename}' in dataset_id {dataset_id}")
+  if len(matches) > 1:
+    raise CMGIndeterminateFileException(f"Multiple dataset_files matched file name '{filename}' in dataset_id {dataset_id}: {matches}")
+
+  return matches[0]
 
 
 def convert_sessions(pg_cursor: cursor, mongo_db: Database):
@@ -70,17 +48,23 @@ def convert_sessions(pg_cursor: cursor, mongo_db: Database):
     then find dataset_file by filename basename, ensure track exists for that dataset_file.
   """
 
-  for sess in mongo_db.sessions.find():
+  for cmg_session in mongo_db.sessions.find():
+    print(f"Converting session: {cmg_session.get('title')}, user: {cmg_session.get('user')}, genome: {cmg_session.get('genome')}, genome_type: {cmg_session.get('genome_type')}")
     # Map session owner
     user_id = None
-    if sess.get('user'):
-      user = find_corresponding_bioloop_user(pg_cursor, mongo_db, sess.get('user'))
-      user_id = user['id']
+    if cmg_session.get('user'):
+      try:
+        user = find_corresponding_bioloop_user(pg_cursor, mongo_db, cmg_session.get('user'))
+        user_id = user['id']
+      except CMGUserNotFoundException as e:
+        logger.warning(f"No corresponding user found for CMG user: {cmg_session.get('user')}")
+        continue
 
-    title = sess.get('title') or 'Genome Browser Session'
-    genome = sess.get('genome') or ''
-    genome_type = sess.get('genome_type') or ''
+    title = cmg_session.get('title') or 'Genome Browser Session'
+    genome = cmg_session.get('genome') or None
+    genome_type = cmg_session.get('genome_type') or None
 
+    print(f"Inserting session: {title}, genome: {genome}, genome_type: {genome_type}, user_id: {user_id}, access_count: {cmg_session.get('access_count', 0)}")
     # Insert session
     pg_cursor.execute(
       """
@@ -88,43 +72,65 @@ def convert_sessions(pg_cursor: cursor, mongo_db: Database):
       VALUES (%s, %s, %s, %s, %s)
       RETURNING id
       """,
-      (title, genome, genome_type, user_id, sess.get('access_count', 0))
+      (title, genome, genome_type, user_id, cmg_session.get('access_count', 0))
     )
     session_id = pg_cursor.fetchone()['id']
+    logger.info(f"Inserted session ID: {session_id}")
+
+    session_track_associations = []
 
     # For each CMG track: map to dataset_file and create track + session_track
-    for idx, tr in enumerate(sess.get('tracks', [])):
-      cmg_data_product_id = tr.get('dataproduct')
-      filename = tr.get('filename')
-      if not cmg_data_product_id:
-        # continue
+    for idx, tr in enumerate(cmg_session.get('tracks', [])):
+      cmg_track_data_product_id = tr.get('dataproduct')
+      if not cmg_track_data_product_id:
         raise Exception(f"Track missing dataproduct: {tr}")
+      cmg_track_file_name = tr.get('filename')
+      if not cmg_track_file_name:
+        raise Exception(f"Track missing filename: {tr}")      
 
-      if not filename:
-        # continue
-        raise Exception(f"Track missing filename: {tr}")
+      logger.info(f"Converting track: {cmg_track_file_name}, dataproduct: {cmg_track_data_product_id}")
 
-      # Find DATA_PRODUCT dataset
-      cmg_data_product = find_corresponding_bioloop_dataset(pg_cursor, cmg_data_product_id)
-      if not cmg_data_product:
-        # continue
-        raise Exception(f"DATA_PRODUCT not found for track: {tr}")
-      dataset_id = cmg_data_product['id']
+      # Find corresponding Bioloop DATA_PRODUCT
+      bioloop_dataset_id = None
+      try:
+        bioloop_data_product = find_corresponding_bioloop_dataset(pg_cursor, cmg_track_data_product_id)
+        bioloop_dataset_id = bioloop_data_product['id']
+      except CMGDatasetNotFoundException:
+        logger.warning(f"No corresponding data product found for CMG data product: {cmg_track_data_product_id}")
+        continue
+      logger.info(f"Bioloop DATA_PRODUCT: ID: {bioloop_data_product['id']}, Name: {bioloop_data_product['name']}, Type: {bioloop_data_product['type']}")
 
-      # Find a dataset_file by basename
-      file_id = _find_dataset_file_by_basename(pg_cursor, dataset_id, filename)
-      if not file_id:
+      # Find a dataset_file by file name
+      bioloop_file_id = None
+      try:
+        bioloop_file = _find_dataset_file_by_name(pg_cursor, bioloop_dataset_id, cmg_track_file_name)
+        bioloop_file_id = bioloop_file['id']
+      except CMGFileNotFoundException:
+        logger.warning(f"No corresponding dataset_file found for CMG dataset_file: {cmg_track_file_name}")
+        continue
+      except CMGIndeterminateFileException:
+        logger.warning(f"Multiple dataset_files matched file name '{cmg_track_file_name}' in dataset_id {bioloop_dataset_id}: {bioloop_file}")
         continue
 
-      # Ensure a track exists for this dataset_file
-      track_name = tr.get('title') or filename
-      track_id = _ensure_track_for_dataset_file(pg_cursor, file_id, track_name)
-
-      # Create session_track (omit title, color, order)
+      # create track
       pg_cursor.execute(
         """
-        INSERT INTO session_track (session_id, track_id)
+        INSERT INTO track (name, dataset_file_id)
         VALUES (%s, %s)
         """,
-        (session_id, track_id)
+        (tr.get('title'), bioloop_file_id)
       )
+      track_id = pg_cursor.fetchone()['id']
+      logger.info(f"Inserted track ID: {track_id}")
+      
+      session_track_associations.append((session_id, track_id))
+    
+    # Associate all created tracks with the session
+    pg_cursor.executemany(
+      """
+      INSERT INTO session_track (session_id, track_id)
+      VALUES (%s, %s)
+      """,
+      session_track_associations
+    )
+    logger.info(f"Inserted {len(session_track_associations)} session_track associations")

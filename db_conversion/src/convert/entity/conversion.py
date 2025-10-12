@@ -33,7 +33,7 @@ def _get_conversion_definition_id(pg_cursor: cursor, pipeline_name: str) -> int:
   )
   row = pg_cursor.fetchone()
   if row is not None:
-    logger.info(f"Conversion definition found for pipeline: {pipeline_name}, ID: {row['id']}")
+    # logger.info(f"Conversion definition found for pipeline: {pipeline_name}, ID: {row['id']}")
     row = row['id']
   else:
     raise Exception(f"Conversion definition not found for pipeline: {pipeline_name}")
@@ -45,7 +45,7 @@ def _populate_pipeline_definitions(pg_cursor: cursor):
     Implements the same logic as api/prisma/seed.js lines 317-381.
     """
 
-    logger.info("Populating pipeline definitions...")
+    # logger.info("Populating pipeline definitions...")
 
     cmg_bioloop_user_id = get_bioloop_cmguser_id(pg_cursor)
 
@@ -53,13 +53,13 @@ def _populate_pipeline_definitions(pg_cursor: cursor):
     workers_path = os.path.join(os.path.dirname(__file__), '..', '..', '..', '..', 'workers')
     sys.path.insert(0, workers_path)
     
-    logger.info("Starting pipeline definitions population...")
+    # logger.info("Starting pipeline definitions population...")
     
     # Create cmd_line_programs (equivalent to seed.js lines 321-324)
-    logger.info("Inserting cmd_line_programs...")
+    # logger.info("Inserting cmd_line_programs...")
     for program in CMD_LINE_PROGRAMS:
-        logger.info(f"Inserting cmd_line_program:")
-        logger.info(pprint.pformat(program))
+        # logger.info(f"Inserting cmd_line_program:")
+        # logger.info(pprint.pformat(program))
         pg_cursor.execute(
             """
             INSERT INTO cmd_line_program (name, executable_path, executable_directory, allow_additional_args)
@@ -69,20 +69,20 @@ def _populate_pipeline_definitions(pg_cursor: cursor):
         )
     
     # Get the inserted programs to map their IDs
-    logger.info("Creating program name to ID mapping...")
+    # logger.info("Creating program name to ID mapping...")
     pg_cursor.execute("SELECT id, name FROM cmd_line_program")
     programs = pg_cursor.fetchall()
     program_map = {}
     for program in programs:
-        logger.info(f"Program:")
-        logger.info(pprint.pformat(program))
+        # logger.info(f"Program:")
+        # logger.info(pprint.pformat(program))
         program_map[program['name']] = program['id']
     
     # Update conversion definitions with program_id references
-    logger.info("Inserting conversion_definitions...")
+    # logger.info("Inserting conversion_definitions...")
     for definition in CONVERSION_DEFINITIONS:
-        logger.info(f"Inserting conversion_definition:")
-        logger.info(pprint.pformat(definition))
+        # logger.info(f"Inserting conversion_definition:")
+        # logger.info(pprint.pformat(definition))
         pg_cursor.execute(
             """
             INSERT INTO conversion_definition (name, description, enabled, dataset_types, tags, capture_logs, output_directory, program_id, author_id)
@@ -102,14 +102,14 @@ def _populate_pipeline_definitions(pg_cursor: cursor):
         )
     
     # Update arguments with program_id references
-    logger.info("Inserting arguments...")
+    # logger.info("Inserting arguments...")
     argument_data_with_programs = []
     
     # bcl2fastq links to all args
     bcl2fastq_program_id = program_map['bcl2fastq']
     for arg in ARGUMENT_DATA:
-        logger.info(f"Inserting argument:")
-        logger.info(pprint.pformat(arg))
+        # logger.info(f"Inserting argument:")
+        # logger.info(pprint.pformat(arg))
         argument_data_with_programs.append({
             **arg,
             'program_id': bcl2fastq_program_id
@@ -118,13 +118,13 @@ def _populate_pipeline_definitions(pg_cursor: cursor):
     # Other programs link to specific shared args: --no-lane-splitting, --delete-undetermined, --filter-single-index
     shared_arg_names = ['--no-lane-splitting', '--delete-undetermined', '--filter-single-index']
     conversion_programs_shared_args = [arg for arg in ARGUMENT_DATA if arg['name'] in shared_arg_names]
-    logger.info(f"Conversion programs shared args:")
-    logger.info(pprint.pformat(conversion_programs_shared_args))
+    # logger.info(f"Conversion programs shared args:")
+    # logger.info(pprint.pformat(conversion_programs_shared_args))
     
-    logger.info(f"Inserting other program names:")
+    # logger.info(f"Inserting other program names:")
     for program_name in OTHER_PROGRAM_NAMES:
-        logger.info(f"Inserting other program name:")
-        logger.info(pprint.pformat(program_name))
+        # logger.info(f"Inserting other program name:")
+        # logger.info(pprint.pformat(program_name))
         program_id = program_map.get(program_name)
         if program_id:
             for arg in conversion_programs_shared_args:
@@ -133,11 +133,11 @@ def _populate_pipeline_definitions(pg_cursor: cursor):
                     'program_id': program_id
                 })
     
-    logger.info(f"Inserting argument data with programs:")
+    # logger.info(f"Inserting argument data with programs:")
     # Insert all arguments
     for arg in argument_data_with_programs:
-        logger.info(f"Inserting argument data with program:")
-        logger.info(pprint.pformat(arg))
+        # logger.info(f"Inserting argument data with program:")
+        # logger.info(pprint.pformat(arg))
         pg_cursor.execute(
             """
             INSERT INTO argument (name, value_type, allowed_values, is_required, default_value, is_flag, description, 
@@ -162,14 +162,14 @@ def _populate_pipeline_definitions(pg_cursor: cursor):
             )
         )
     
-    logger.info("Pipeline definitions population completed successfully!")
+    # logger.info("Pipeline definitions population completed successfully!")
 
 def _insert_conversion(pg_cursor: cursor,
                        definition_id: int,
                        dataset_id: int,
                        initiator_id: Optional[int],
                        initiated_at) -> int:
-  logger.info(f"Inserting conversion: {definition_id}, {dataset_id}, {initiator_id}, {initiated_at}")
+  # logger.info(f"Inserting conversion: {definition_id}, {dataset_id}, {initiator_id}, {initiated_at}")
   pg_cursor.execute(
     """
     INSERT INTO conversion (initiated_at, definition_id, workflow_id, dataset_id, initiator_id)
@@ -188,18 +188,18 @@ def _link_derived_datasets(pg_cursor: cursor,
   # Gather CMG dataproducts that were created by this conversion, find the corresponding Bioloop datasets, and
   # link them to the corresponding Bioloop conversion
 
-  logger.info(f"Linking derived datasets for Bioloop conversion: {conversion_id}, CMG conversion: {cmg_conversion_id}")
+  # logger.info(f"Linking derived datasets for Bioloop conversion: {conversion_id}, CMG conversion: {cmg_conversion_id}")
 
   conversion_association_data = []
 
   for dp in mongo_db.dataproducts.find({ 'conversion': cmg_conversion_id }):
-    logger.info(f"CMG dataproduct: {dp['_id']}, name: {dp['name']}")
+    # logger.info(f"CMG dataproduct: {dp['_id']}, name: {dp['name']}")
     bioloop_dataset = find_corresponding_bioloop_dataset(pg_cursor, dp['_id'])
     if not bioloop_dataset:
-      logger.warning(f"No corresponding Bioloop dataset found for CMG dataproduct: {dp['_id']}")
+      # logger.warning(f"No corresponding Bioloop dataset found for CMG dataproduct: {dp['_id']}")
       continue
     bioloop_dataset_id = bioloop_dataset['id']
-    logger.info(f"Bioloop dataset: {bioloop_dataset_id}, name: {bioloop_dataset['name']}")
+    # logger.info(f"Bioloop dataset: {bioloop_dataset_id}, name: {bioloop_dataset['name']}")
     conversion_association_data.append((conversion_id, bioloop_dataset_id))
 
   pg_cursor.executemany(
@@ -226,47 +226,48 @@ def convert_conversions(pg_cursor: cursor, mongo_db: Database):
   print("populate pipeline definitions")
   _populate_pipeline_definitions(pg_cursor)
 
-  logger.info("Converting conversions...")
+  # logger.info("Converting conversions...")
   for conv in mongo_db.conversions.find():
-    logger.info(f"Converting conversion: {conv['_id']}, pipeline: {conv.get('pipeline')}, dataset: {conv.get('dataset')}")
+    # logger.info(f"Converting conversion: {conv['_id']}, pipeline: {conv.get('pipeline')}, dataset: {conv.get('dataset')}")
     pipeline = conv.get('pipeline')
-    logger.info(f"Pipeline ID: {pipeline}")
+    # logger.info(f"Pipeline ID: {pipeline}")
     definition_id = _get_conversion_definition_id(pg_cursor, pipeline)
-    logger.info(f"Definition ID: {definition_id}")
+    # logger.info(f"Definition ID: {definition_id}")
     if not definition_id:
       raise Exception(f"Conversion definition not found for pipeline: {pipeline}")
 
     # Map source dataset (RAW_DATA)
     src_dataset = conv.get('dataset')
-    logger.info(f"Source dataset: {src_dataset}")
+    # logger.info(f"Source dataset: {src_dataset}")
     bioloop_src_dataset_id = None
     try:
       bioloop_src_dataset = find_corresponding_bioloop_dataset(pg_cursor, src_dataset)
-      logger.info(f"Bioloop Dataset:")
-      logger.info(pprint.pformat(bioloop_src_dataset))
+      # logger.info(f"Bioloop Dataset:")
+      # logger.info(pprint.pformat(bioloop_src_dataset))
       bioloop_src_dataset_id = bioloop_src_dataset['id']
-      logger.info(f"Bioloop Source Dataset ID: {bioloop_src_dataset_id}")
+      # logger.info(f"Bioloop Source Dataset ID: {bioloop_src_dataset_id}")
     except CMGDatasetNotFoundException as e:
-      logger.warning(f"No corresponding dataset found for CMG dataset: {src_dataset}")
-      # continue
+      # logger.warning(f"No corresponding dataset found for CMG dataset: {src_dataset}")
+      continue
     
     # Map initiator
     initiator_id = None
     if conv.get('user'):
-      logger.info(f"Initiator: {conv.get('user')}")
+      # logger.info(f"Initiator: {conv.get('user')}")
       try:
         initiator = find_corresponding_bioloop_user(pg_cursor, mongo_db, conv.get('user'))
-        logger.info(f"Bioloop User ID: {initiator['id']}, username: {initiator['username']}")
+        # logger.info(f"Bioloop User ID: {initiator['id']}, username: {initiator['username']}")
         initiator_id = initiator['id']
       except CMGUserNotFoundException as e:
-        logger.warning(f"No corresponding user found for CMG user: {conv.get('user')}")
+        pass
+        # logger.warning(f"No corresponding user found for CMG user: {conv.get('user')}")
         # continue
 
     # Timestamps
     initiated_at = conv.get('createdAt') or conv.get('updatedAt') or datetime.utcnow()
 
-    logger.info("Inserting conversion:")
-    logger.info(f"Definition ID: {definition_id}, Dataset ID: {bioloop_src_dataset_id}, Initiator ID: {initiator_id}, Initiated At: {initiated_at}")
+    # logger.info("Inserting conversion:")
+    # logger.info(f"Definition ID: {definition_id}, Dataset ID: {bioloop_src_dataset_id}, Initiator ID: {initiator_id}, Initiated At: {initiated_at}")
 
     # Insert conversion
     conversion_id = _insert_conversion(
@@ -276,10 +277,10 @@ def convert_conversions(pg_cursor: cursor, mongo_db: Database):
       initiator_id=initiator_id,
       initiated_at=initiated_at,
     )
-    logger.info(f"Bioloop conversion ID: {conversion_id}")
+    # logger.info(f"Bioloop conversion ID: {conversion_id}")
 
     # Link derived datasets created by this conversion
-    logger.info(f"Linking derived datasets for Bioloop conversion: {conversion_id}, CMG conversion: {conv['_id']}")
+    # logger.info(f"Linking derived datasets for Bioloop conversion: {conversion_id}, CMG conversion: {conv['_id']}")
     _link_derived_datasets(pg_cursor, mongo_db, conversion_id, conv['_id'])
 
-  logger.info("Conversions converted successfully!")
+  # logger.info("Conversions converted successfully!")

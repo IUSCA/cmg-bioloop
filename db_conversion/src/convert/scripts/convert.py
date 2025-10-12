@@ -28,7 +28,7 @@ logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.FileHandler(log_file),
+        logging.FileHandler(log_file, mode='w'),  # 'w' mode overwrites the file
         logging.StreamHandler()  # Also print to console
     ]
 )
@@ -120,7 +120,8 @@ class MongoToPostgresConversionManager:
         convert_projects(pg_cursor=pg_cursor, mongo_db=self.cmg_mongo_db)
         logger.info("converting Conversions")
         convert_conversions(pg_cursor=pg_cursor, mongo_db=self.cmg_mongo_db)
-
+        logger.info("converting Sessions")
+        convert_sessions(pg_cursor=pg_cursor, mongo_db=self.cmg_mongo_db)
         
         # todo - assign CMG IDs to all entities
         #   - assign CMG IDs to dataset_files after they are populated via staging

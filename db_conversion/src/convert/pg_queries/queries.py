@@ -388,10 +388,10 @@ create_all_tables = """
                 
                 CREATE TABLE "genome_browser_session" (
                   "id" SERIAL PRIMARY KEY,
-                  "title" TEXT NOT NULL,
-                  "genome" TEXT NOT NULL,
-                  "genome_type" TEXT NOT NULL,
-                  "user_id" INTEGER NOT NULL,
+                  "title" TEXT,
+                  "genome" TEXT,
+                  "genome_type" TEXT,
+                  "user_id" INTEGER,
                   "created_at" TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
                   "updated_at" TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
                   "access_count" INTEGER NOT NULL DEFAULT 0,
