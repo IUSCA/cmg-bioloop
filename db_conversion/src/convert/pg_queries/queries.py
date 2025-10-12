@@ -325,8 +325,8 @@ create_all_tables = """
                 
                 CREATE TABLE "dataset_genomic_attributes" (
                   "dataset_id" INTEGER NOT NULL PRIMARY KEY,
-                  "genome_type" TEXT NOT NULL,
-                  "genome_value" TEXT NOT NULL,
+                  "genome_type" TEXT,
+                  "genome_value" TEXT,
                   FOREIGN KEY ("dataset_id") REFERENCES "dataset"("id") ON DELETE CASCADE
                 );
                 

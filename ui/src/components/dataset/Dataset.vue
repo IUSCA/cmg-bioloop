@@ -5,7 +5,8 @@
       <!-- Dataset Info + Status Cards -->
       <div class="grid gird-cols-1 lg:grid-cols-2 gap-3">
         <!-- Dataset Info -->
-        <div class="">
+        <div class="flex flex-col gap-3">
+          <!-- Dataset Info Card -->
           <va-card>
             <va-card-title>
               <!-- <span class="text-xl">Info</span> -->
@@ -42,6 +43,15 @@
                   <i-mdi-pencil-outline class="pr-2 text-xl" /> Edit Description
                 </va-button> -->
               </div>
+            </va-card-content>
+          </va-card>
+          <!-- Dataset Genomic Info Card -->
+          <va-card v-if="auth.isFeatureEnabled('genomeBrowser')">
+            <va-card-title>
+              <span class="text-lg">Genomic Info</span>
+            </va-card-title>
+            <va-card-content>
+              <DatasetGenomicInfo :dataset="dataset" />
             </va-card-content>
           </va-card>
         </div>

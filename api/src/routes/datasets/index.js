@@ -337,6 +337,7 @@ router.get(
     query('initiator').optional().toBoolean(),
     query('include_conversions').toBoolean().default(false),
     query('include_source_instrument').toBoolean().optional(),
+    query('include_genomic_attributes').toBoolean().optional(),
   ]),
   datasetService.dataset_access_check,
   asyncHandler(async (req, res, next) => {
@@ -356,6 +357,7 @@ router.get(
       initiator: req.query.initiator || false,
       include_conversions: req.query.include_conversions || false,
       include_source_instrument: req.query.include_source_instrument || false,
+      include_genomic_attributes: req.query.include_genomic_attributes || false,
     });
 
     res.json(dataset);

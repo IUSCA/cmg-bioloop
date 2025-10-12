@@ -128,6 +128,20 @@ def insert_dataset(pg_cursor, mongo_item, dataset_type, name, is_deleted):
   # dataset_id = pg_cursor.fetchone()['id']
   # # logger.info(f"Inserted {dataset_type}: {mongo_item['_id']}, {name} to dataset_id: {dataset_id}")
 
+  # Insert genomic details if present
+  logger.info(f"Inserting genomic details for dataset: {name}")
+  mongo_item_genome = mongo_item.get("genome", None)
+  mongo_item_genome_type = mongo_item.get("genome_type", None)
+  logger.info(f"Genome type: {mongo_item_genome_type}, Genome value: {mongo_item_genome}")
+  
+  genomic_details_id = pg_cursor.execute(
+    """
+    INSERT INTO dataset_genomic_attributes (dataset_id, genome_type, genome_value)
+    VALUES (%s, %s, %s)
+    """,
+    (dataset_id, mongo_item_genome_type, mongo_item_genome)
+  )
+  logger.info(f"Genomic details inserted for dataset: {name}, genomic details id: {genomic_details_id}")
 
 # Usage
 def convert_all_datasets(pg_cursor: cursor, mongo_db: Database):

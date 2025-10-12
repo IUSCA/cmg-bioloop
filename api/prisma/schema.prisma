@@ -49,8 +49,8 @@ model dataset {
 model dataset_genomic_attributes {
   dataset_id Int @id
   dataset    dataset @relation(fields: [dataset_id], references: [id], onDelete: Cascade)
-  genome_type String
-  genome_value String
+  genome_type String?
+  genome_value String?
 }
 
 model dataset_hierarchy {

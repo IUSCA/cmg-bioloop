@@ -49,10 +49,6 @@
           <td>Files</td>
           <td>{{ props.dataset.num_files }}</td>
         </tr>
-        <tr v-if="auth.isFeatureEnabled('genomeBrowser')">
-          <td>Genome Files</td>
-          <td>{{ props.dataset.metadata?.num_genome_files }}</td>
-        </tr>
         <tr>
           <td>Directories</td>
           <td>{{ props.dataset.num_directories }}</td>

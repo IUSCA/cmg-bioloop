@@ -201,6 +201,7 @@ async function get_dataset({
   initiator = false,
   include_conversions = false,
   include_source_instrument = false,
+  include_genomic_attributes = false,
 }) {
   const fileSelect = files ? {
     select: {
@@ -247,6 +248,14 @@ async function get_dataset({
         },
       } : undefined),
     },
+    ...(include_genomic_attributes ? {
+      genomic_details: {
+        select: {
+          genome_type: true,
+          genome_value: true,
+        },
+      },
+    } : undefined),
   });
   const dataset_workflows = dataset.workflows;
 
