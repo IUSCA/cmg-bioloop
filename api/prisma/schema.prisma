@@ -42,6 +42,7 @@ model dataset {
   conversions       conversion[]
   derived_from_conversions conversion_derived_dataset[]
   genomic_details dataset_genomic_attributes?
+  import_log dataset_import_log?
 
   @@unique([name, type, is_deleted])
 }
@@ -100,6 +101,15 @@ model dataset_upload_log {
   updated_at   DateTime          @default(now()) @updatedAt @db.Timestamp(6)
   audit_log    dataset_audit     @relation(fields: [audit_log_id], references: [id], onDelete: Cascade)
   audit_log_id Int               @unique
+}
+
+model dataset_import_log {
+  id Int @id @default(autoincrement())
+  dataset_id Int @unique
+  dataset dataset @relation(fields: [dataset_id], references: [id], onDelete: Cascade)
+  metadata Json?
+  created_at DateTime @default(now()) @db.Timestamp(6)
+  updated_at DateTime @default(now()) @updatedAt @db.Timestamp(6)
 }
 
 model file_upload_log {

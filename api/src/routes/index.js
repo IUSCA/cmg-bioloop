@@ -3,6 +3,7 @@ const express = require('express');
 const { authenticate } = require('../middleware/auth');
 const featureService = require('../services/features');
 const uploadRouter = require('./datasets/uploads');
+const importRouter = require('./datasets/imports');
 
 const router = express.Router();
 
@@ -24,6 +25,10 @@ router.use(authenticate);
  */
 if (featureService.isFeatureEnabled({ key: 'upload' })) {
   router.use('/datasets/uploads', uploadRouter /* #swagger.security = [{"BearerAuth": []}] */);
+}
+
+if (featureService.isFeatureEnabled({ key: 'import' })) {
+  router.use('/datasets/imports', importRouter /* #swagger.security = [{"BearerAuth": []}] */);
 }
 
 router.use('/datasets', require('./datasets') /* #swagger.security = [{"BearerAuth": []}] */);

@@ -92,6 +92,25 @@ const exports = {
         path: "/workflows",
         test_id: "sidebar-workflows",
       },
+      {
+        icon: "mdi-history",
+        title: "Logs",
+        test_id: "sidebar-logs",
+        children: [
+          {
+            feature_key: "import",
+            icon: "mdi-file-import-outline",
+            title: "Import Logs",
+            path: "/datasets/imports",
+          },
+          {
+            feature_key: "uploads",
+            icon: "mdi-file-upload-outline",
+            title: "Upload Logs",
+            path: "/datasetUpload",
+          },
+        ],
+      },
       // {
       //   icon: "mdi-account-multiple",
       //   title: "Group Management",
