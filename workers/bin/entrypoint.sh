@@ -1,6 +1,7 @@
 #!/bin/bash
 set -e
 
+echo "Running entrypoint script for workers container"
 
 echo "Waiting for .env file to be ready..."
 while [ ! -f ".env" ] || ! grep -Eq "^APP_API_TOKEN=[^ ]+" ".env"; do
@@ -8,11 +9,14 @@ while [ ! -f ".env" ] || ! grep -Eq "^APP_API_TOKEN=[^ ]+" ".env"; do
   sleep 1
 done
 
+echo ".env file is ready and should contain APP_API_TOKEN"
 
+echo "loading environment variables from .env file"
 if [ -f .env ]; then
+  echo ".env file exists"
   export $(grep -v '^#' .env | xargs)
+  echo "exported environment variables from .env file"
 fi
-
 
 echo ".env file is ready. Starting the worker..."
 
@@ -73,3 +77,5 @@ elif [ "$WORKER_TYPE" = "process_upload_dataset" ]; then
 else
   echo "Invalid Worker Type"
 fi
+
+echo "Completed entrypoint script for workers container"

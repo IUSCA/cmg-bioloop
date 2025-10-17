@@ -15,6 +15,15 @@ function getAll({
   limit = null,
   workflow_ids = null,
 } = {}) {
+  console.log('getAll wfService', {
+    last_task_run,
+    prev_task_runs,
+    status,
+    app_id,
+    skip,
+    limit,
+    workflow_ids,
+  });
   return wfApi.get('/workflows', {
     params: {
       last_task_run,

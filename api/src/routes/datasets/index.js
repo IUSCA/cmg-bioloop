@@ -345,6 +345,8 @@ router.get(
     // only select path and md5 columns from the dataset_file table if files is
     // true
 
+    console.log('req.query', req.query);
+
     const dataset = await datasetService.get_dataset({
       id: req.params.id,
       files: req.query.files,

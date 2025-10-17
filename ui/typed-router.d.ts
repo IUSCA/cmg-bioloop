@@ -37,6 +37,7 @@ declare module 'vue-router/auto-routes' {
     '/datasets/[datasetId]/': RouteRecordInfo<'/datasets/[datasetId]/', '/datasets/:datasetId', { datasetId: ParamValue<true> }, { datasetId: ParamValue<false> }>,
     '/datasets/[datasetId]/filebrowser': RouteRecordInfo<'/datasets/[datasetId]/filebrowser', '/datasets/:datasetId/filebrowser', { datasetId: ParamValue<true> }, { datasetId: ParamValue<false> }>,
     '/datasets/import': RouteRecordInfo<'/datasets/import', '/datasets/import', Record<never, never>, Record<never, never>>,
+    '/datasets/imports/': RouteRecordInfo<'/datasets/imports/', '/datasets/imports', Record<never, never>, Record<never, never>>,
     '/datasetUpload/': RouteRecordInfo<'/datasetUpload/', '/datasetUpload', Record<never, never>, Record<never, never>>,
     '/datasetUpload/new': RouteRecordInfo<'/datasetUpload/new', '/datasetUpload/new', Record<never, never>, Record<never, never>>,
     '/profile': RouteRecordInfo<'/profile', '/profile', Record<never, never>, Record<never, never>>,

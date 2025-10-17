@@ -95,10 +95,12 @@ class MongoToPostgresConversionManager:
         # Drop existing Postgres tables, enums
         drop_bioloop_enums(pg_cursor=pg_cursor)
         drop_bioloop_tables(pg_cursor=pg_cursor)
+        drop_bioloop_workflow_documents(rhythm_db=self.rhythm_mongo_db)
 
         # Re-create tables, enums
         create_bioloop_enums(pg_cursor=pg_cursor)
         create_bioloop_tables(pg_cursor=pg_cursor)
+        create_bioloop_workflow_documents(rhythm_db=self.rhythm_mongo_db)
 
         # Drop workflow documents
         # drop_all_workflow_documents(rhythm_db=self.rhythm_mongo_db)
@@ -122,18 +124,12 @@ class MongoToPostgresConversionManager:
         convert_conversions(pg_cursor=pg_cursor, mongo_db=self.cmg_mongo_db)
         logger.info("converting Sessions")
         convert_sessions(pg_cursor=pg_cursor, mongo_db=self.cmg_mongo_db)
-        
-        # todo - assign CMG IDs to all entities
-        #   - assign CMG IDs to dataset_files after they are populated via staging
-
-        # todo - review Sessions conversion
-
-        
+        logger.info("Creating workflows")
+        create_workflows_for_past_stagings(pg_cursor=pg_cursor, mongo_db=self.cmg_mongo_db, rhythm_db=self.rhythm_mongo_db)
+                
         # # convert_content_to_about(cursor, self.mongo_db)
         # logger.info("converting Sessions")
         # convert_sessions(pg_cursor=pg_cursor, mongo_db=self.cmg_mongo_db)
-        # logger.info("Creating workflows")
-        # create_workflows(pg_cursor=pg_cursor, rhythm_db=self.rhythm_mongo_db)
 
       # Commit the transaction
       self.postgres_conn.commit()

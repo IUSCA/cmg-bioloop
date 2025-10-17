@@ -203,6 +203,20 @@ async function get_dataset({
   include_source_instrument = false,
   include_genomic_attributes = false,
 }) {
+  console.log('get_dataset', {
+    id,
+    files,
+    workflows,
+    last_task_run,
+    prev_task_runs,
+    only_active,
+    bundle,
+    includeProjects,
+    initiator,
+    include_conversions,
+    include_source_instrument,
+    include_genomic_attributes,
+  });
   const fileSelect = files ? {
     select: {
       path: true,
@@ -223,6 +237,7 @@ async function get_dataset({
       },
     },
   } : INCLUDE_WORKFLOWS;
+  console.log('workflow_include', workflow_include);
 
   const conversion_includes = {
     include: conversionService.INCLUDE,
@@ -258,8 +273,10 @@ async function get_dataset({
     } : undefined),
   });
   const dataset_workflows = dataset.workflows;
+  console.log('dataset_workflows', dataset_workflows);
 
   if (workflows && dataset.workflows.length > 0) {
+    console.log('if workflows and dataset.workflows.length > 0');
     // include workflow objects with dataset
     try {
       const wf_res = await wfService.getAll({
@@ -268,6 +285,7 @@ async function get_dataset({
         prev_task_runs,
         workflow_ids: dataset.workflows.map((x) => x.id),
       });
+      console.log(wf_res.data.results);
       dataset.workflows = wf_res.data.results.map((wf) => {
         const dataset_wf = dataset_workflows.find((dw) => dw.id === wf.id);
         return {

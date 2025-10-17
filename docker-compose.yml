@@ -190,7 +190,9 @@ services:
   # You must clone the rhythm_api repo and place it in the rhythm folder
   rhythm:
     restart: unless-stopped
-    image: harbor.sca.iu.edu/rhythm/api:latest
+    build:
+      context: ../rhythm_api
+    # image: harbor.sca.iu.edu/rhythm/api:latest
     expose:
       - 5001
     env_file:
@@ -212,6 +214,7 @@ services:
     depends_on:
       - queue
       - mongo
+      # - api
 
   # Secure_download container
   secure_download:
@@ -390,8 +393,8 @@ services:
       - MONGO_AUTH_SOURCE=${MONGO_AUTH_SOURCE:-cmg}
       - MONGO_USERNAME=${MONGO_USERNAME:-appuser}
       - MONGO_PASSWORD=${MONGO_PASSWORD:-example}
-      - RHYTHM_MONGO_HOST=${RHYTHM_MONGO_HOST:-host.docker.internal}
-      - RHYTHM_MONGO_PORT=${RHYTHM_MONGO_PORT:-27018}
+      - RHYTHM_MONGO_HOST=${RHYTHM_MONGO_HOST:-mongo}
+      - RHYTHM_MONGO_PORT=${RHYTHM_MONGO_PORT:-27017}
       - RHYTHM_MONGO_DB=${RHYTHM_MONGO_DB:-celery}
       - RHYTHM_MONGO_AUTH_SOURCE=${RHYTHM_MONGO_AUTH_SOURCE:-admin}
       - RHYTHM_MONGO_USERNAME=${RHYTHM_MONGO_USERNAME:-root}

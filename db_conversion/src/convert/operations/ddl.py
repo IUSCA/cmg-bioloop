@@ -41,11 +41,20 @@ def drop_bioloop_tables(pg_cursor):
   logger.info("All tables dropped successfully.")
 
 
-def drop_all_workflow_documents(rhythm_db: Database):
-  logger.info("drop_workflow_meta_documents")
-  result = rhythm_db.workflow_meta.delete_many({})
-  logger.info(f"Deleted {result.deleted_count} documents from workflow_meta collection.")
+def drop_bioloop_workflow_documents(rhythm_db: Database):
+  logger.info("drop_workflow_meta_collection")
+  rhythm_db.drop_collection("workflow_meta")
+  logger.info("Dropped workflow_meta collection successfully.")
 
-  logger.info("drop_celery_taskmeta_documents")
-  result = rhythm_db.celery_taskmeta.delete_many({})
-  logger.info(f"Deleted {result.deleted_count} documents from celery_taskmeta collection.")
+  logger.info("drop_celery_taskmeta_collection")
+  rhythm_db.drop_collection("celery_taskmeta")
+  logger.info("Dropped celery_taskmeta collection successfully.")
+
+def create_bioloop_workflow_documents(rhythm_db: Database):
+    logger.info("create_workflow_meta_collection")
+    rhythm_db.create_collection("workflow_meta")
+    logger.info("Workflow meta collection created successfully.")
+
+    logger.info("create_celery_taskmeta_collection")
+    rhythm_db.create_collection("celery_taskmeta")
+    logger.info("Celery taskmeta collection created successfully.")
