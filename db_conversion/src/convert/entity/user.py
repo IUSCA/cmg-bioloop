@@ -1,6 +1,7 @@
 import logging
 import os
 import traceback
+from datetime import datetime
 
 import psycopg2
 
@@ -78,8 +79,8 @@ def convert_user(cmg_user, pg_cursor):
   try:
     pg_cursor.execute(
       """
-      INSERT INTO "user" (username, email, name, cas_id, is_deleted, cmg_id)
-      VALUES (%s, %s, %s, %s, %s, %s)
+      INSERT INTO "user" (username, email, name, cas_id, is_deleted, cmg_id, created_at)
+      VALUES (%s, %s, %s, %s, %s, %s, %s)
       RETURNING id
       """,
       (
@@ -89,6 +90,7 @@ def convert_user(cmg_user, pg_cursor):
         cmg_user.get("username"),
         not cmg_user.get("active", False),
         str(cmg_user.get("_id")),
+        cmg_user.get("createdDate", datetime.now()),
       )
     )
     user_id = pg_cursor.fetchone()['id']
