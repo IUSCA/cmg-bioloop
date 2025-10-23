@@ -84,3 +84,5 @@ cmg_convert.log
 *.log
 curl_cmds
 .cursorrules
+
+backup_*
