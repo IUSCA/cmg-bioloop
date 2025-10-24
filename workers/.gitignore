@@ -104,5 +104,3 @@ conversion_worker.state
 workers/scripts/requirements.txt
 
 workers/scripts/get_size.py
-workers/config/production.py
-

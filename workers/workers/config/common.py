@@ -62,6 +62,7 @@ config = {
         'download_dir': '/path/to/download_dir',
         'conversion': {
           'reports': '/path/to/conversion_reports',
+          'reports_access': '/path/to/access/conversion_reports',
         },
         'root': '/path/to/root'
     },
