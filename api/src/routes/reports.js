@@ -5,10 +5,10 @@ const router = express.Router();
 const options = {
   dotfiles: 'ignore',
   etag: true,
-  index: false,
+  index: ['index.html'],
   lastModified: false,
   maxAge: '1d',
-  redirect: false,
+  redirect: true,
 };
 
 router.use(express.static('reports', options));

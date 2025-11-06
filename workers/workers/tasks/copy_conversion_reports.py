@@ -8,7 +8,7 @@ from celery import Celery
 import workers.api as api
 import workers.config.celeryconfig as celeryconfig
 from workers.config import config
-from workers.conversion import get_conversion_output_dir, setup_reports_access
+from workers.conversion import get_conversion_output_dir
 
 app = Celery("tasks")
 app.config_from_object(celeryconfig)
@@ -34,7 +34,7 @@ def copy(celery_task, dataset_id_conversion_id, **kwargs):
     dst_reports = reports_target_dir / 'Reports'
 
     # Perform any operations that may be needed to grant users access to the reports directory.
-    setup_reports_access(reports_dir=dst_reports)
+    # setup_reports_access(reports_dir=dst_reports)
 
     if src_reports.exists():
         shutil.copytree(src_reports, dst_reports)

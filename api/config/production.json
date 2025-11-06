@@ -5,12 +5,12 @@
     "host": "0.0.0.0"
   },
   "workflow_server": {
-    "base_url": "http://172.19.0.4:5001"
+    "base_url": "https://core-dev1.sca.iu.edu/rhythm"
   },
   "auth": {
     "mode": "prod",
     "jwt": {
-      "iss": "bioloop-dev.sca.iu.edu",
+      "iss": "cmg-test.sca.iu.edu",
       "ttl_milliseconds": 3600000
     }
   }

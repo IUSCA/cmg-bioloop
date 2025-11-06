@@ -23,10 +23,10 @@ def get_genomic_qc_output_dir(conversion: dict) -> Path:
     genomic_qc_output_dir = conversion_output_dir / 'qc' / 'fastqc'
     return genomic_qc_output_dir
 
-def setup_reports_access(reports_dir: Path):
-  # todo - docker/dev modes?
-  if config['mode'] != 'production':
-    return
-  else:
-    reports_symlink_path = Path(config['paths']['conversion']['reports_access'])
-    reports_symlink_path.symlink_to(reports_dir, target_is_directory=True)
+# def setup_reports_access(reports_dir: Path):
+#   # todo - docker/dev modes?
+#   if config['mode'] != 'production':
+#     return
+#   else:
+#     reports_symlink_path = Path(config['paths']['conversion']['reports_access'])
+#     reports_symlink_path.symlink_to(reports_dir, target_is_directory=True)

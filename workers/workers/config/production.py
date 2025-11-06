@@ -27,6 +27,12 @@ config = {
             },
         },
         'download_dir': '/N/scratch/cmguser/cmg-bioloop/download',
+        'conversion': {
+          # /N/project/CMG-SCA/production/conversion is the path used in CMG-Production.
+          # 'reports': '/N/project/CMG-SCA/production/conversion', 
+          # '/opt/sca/cmg/api/public/reports' is the path used in CMG-Production.
+          # 'reports_access': '/opt/sca/cmg/api/public/reports', 
+        },
     },
     'registration': {
         'RAW_DATA': {
