@@ -771,47 +771,4 @@ router.get(
   }),
 );
 
-// Serve conversion reports directory with directory listing
-router.get(
-  '/:id/reports/*',
-  isPermittedTo('read'),
-  validate([
-    param('id').isInt({ min: 1 }).toInt(),
-  ]),
-  asyncHandler(async (req, res, next) => {
-    // #swagger.tags = ['Conversions']
-    const conversionId = req.params.id;
-
-    // Get the conversion to access its output directory
-    const conversion = await prisma.conversion.findUniqueOrThrow({
-      where: { id: conversionId },
-      include: {
-        dataset: true,
-        definition: true,
-      },
-    });
-
-    if (!conversion.definition.output_directory) {
-      return next(createError(404, 'Output directory not configured for this conversion'));
-    }
-
-    // Build the path to the conversion's output directory
-    const outputDir = conversion.definition.output_directory;
-    const conversionOutputPath = path.join(outputDir, String(conversionId), conversion.dataset.name);
-
-    // Serve static files from the conversion output directory with directory listing
-    const staticOptions = {
-      dotfiles: 'ignore',
-      etag: true,
-      index: false, // This enables directory listing
-      lastModified: true,
-      maxAge: '1d',
-      redirect: false,
-    };
-
-    // Use express.static to serve the directory
-    express.static(conversionOutputPath, staticOptions)(req, res, next);
-  }),
-);
-
 module.exports = router;
