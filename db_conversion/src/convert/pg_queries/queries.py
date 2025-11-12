@@ -482,7 +482,8 @@ create_all_tables = """
                   "additional_args" JSONB,
                   FOREIGN KEY ("dataset_id") REFERENCES "dataset"("id") ON DELETE CASCADE,
                   FOREIGN KEY ("definition_id") REFERENCES "conversion_definition"("id") ON DELETE RESTRICT,
-                  FOREIGN KEY ("initiator_id") REFERENCES "user"("id") ON DELETE SET NULL
+                  FOREIGN KEY ("initiator_id") REFERENCES "user"("id") ON DELETE SET NULL,
+                  "cmg_id" TEXT
                 );
                 
                 CREATE TABLE "argument_value" (

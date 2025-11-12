@@ -3,7 +3,7 @@ import os
 import pprint
 import sys
 from datetime import datetime
-from typing import Optional
+from typing import Optional, Union
 
 from bson import ObjectId
 from psycopg2.extensions import cursor
@@ -165,18 +165,20 @@ def _populate_pipeline_definitions(pg_cursor: cursor):
     # logger.info("Pipeline definitions population completed successfully!")
 
 def _insert_conversion(pg_cursor: cursor,
+                       cmg_id: Union[str, ObjectId],
                        definition_id: int,
                        dataset_id: int,
                        initiator_id: Optional[int],
                        initiated_at) -> int:
   # logger.info(f"Inserting conversion: {definition_id}, {dataset_id}, {initiator_id}, {initiated_at}")
+  cmg_id_value = str(cmg_id) if isinstance(cmg_id, ObjectId) else cmg_id
   pg_cursor.execute(
     """
-    INSERT INTO conversion (initiated_at, definition_id, workflow_id, dataset_id, initiator_id)
-    VALUES (%s, %s, %s, %s, %s)
+    INSERT INTO conversion (initiated_at, definition_id, workflow_id, dataset_id, initiator_id, cmg_id)
+    VALUES (%s, %s, %s, %s, %s, %s)
     RETURNING id
     """,
-    (initiated_at, definition_id, None, dataset_id, initiator_id)
+    (initiated_at, definition_id, None, dataset_id, initiator_id, cmg_id_value)
   )
   return pg_cursor.fetchone()['id']
 
@@ -272,6 +274,7 @@ def convert_conversions(pg_cursor: cursor, mongo_db: Database):
     # Insert conversion
     conversion_id = _insert_conversion(
       pg_cursor=pg_cursor,
+      cmg_id=conv.get('_id'),
       definition_id=definition_id,
       dataset_id=bioloop_src_dataset_id,
       initiator_id=initiator_id,
