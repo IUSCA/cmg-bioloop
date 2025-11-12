@@ -247,5 +247,8 @@
     "spaceranger-v3.0.1",
     "spaceranger-v1.3.1",
     "spaceranger-v1.1.0"
-  ]
+  ],
+  "conversion": {
+    "reports_directory": "/opt/sca/data/conversion/reports"
+  }
 }

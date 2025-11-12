@@ -60,7 +60,7 @@ qc
 backup
 
 !db/postgres
-!db/backups
+db/backups
 db/backups/*.sql
 db/backups/*.psql
 todo.md

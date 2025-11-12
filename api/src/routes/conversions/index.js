@@ -771,4 +771,41 @@ router.get(
   }),
 );
 
+router.get('/:id/reports',
+  isPermittedTo('read'),
+  validate([
+    param('id').isInt({ min: 1 }).toInt(),
+  ]),
+  asyncHandler(async (req, res, next) => {
+    // #swagger.tags = ['Conversions']
+  }),
+  asyncHandler(async (req, res, next) => {
+    console.log("getReports", req.params.id);
+
+    // #swagger.tags = ['Conversions']
+    let conversionId = req.params.id;
+
+    const conversion = await prisma.conversion.findUniqueOrThrow({
+      where: { id: conversionId },
+    });
+
+    const conversionTargetDatasetId = conversion.dataset_id;
+    const conversionTargetDataset = await prisma.dataset.findUniqueOrThrow({
+      where: { id: conversionTargetDatasetId },
+    });
+
+    const conversionTargetDatasetName = conversionTargetDataset.name;
+
+    conversionId = conversion.cmg_id || conversionId;
+    
+    const reportsPath = path.join(config.get('conversion.output_directory'), conversionId, conversionTargetDatasetName, 'Reports');
+
+    console.log('reportsPath', reportsPath);
+
+    return res.json({
+      reports_path: reportsPath,
+    })
+  }),
+);
+
 module.exports = router;

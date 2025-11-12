@@ -140,9 +140,26 @@ function openLogsModal() {
 }
 
 function openReports() {
+  console.log("openReports");
+
   const conversionId = props.conversionId;
-  const reportsUrl = `${window.location.origin}/conversions/${conversionId}/reports/Reports/html/`;
-  window.open(reportsUrl, "_blank");
+  console.log("conversionId", conversionId);
+  // const reportsUrl = `${window.location.origin}/conversions/${conversionId}/reports/Reports/html/`;
+
+  console.log("will call getReports");
+  conversionApiService.getReports(conversionId)
+    .then((res) => {
+      console.log("res", res);
+      const reportsUrl = res.data.reports_path;
+      console.log("reportsUrl", reportsUrl);
+      window.open(reportsUrl, "_blank");
+    })
+    .catch((err) => {
+      console.error("error", err);
+    })
+    .finally(() => {
+      console.log("finally");
+    });
 }
 
 function fetch_conversion(show_loading = false) {
