@@ -125,7 +125,7 @@ class MongoToPostgresConversionManager:
         logger.info("converting Sessions")
         convert_sessions(pg_cursor=pg_cursor, mongo_db=self.cmg_mongo_db)
         logger.info("Creating workflows")
-        create_workflows_for_past_stagings(pg_cursor=pg_cursor, mongo_db=self.cmg_mongo_db, rhythm_db=self.rhythm_mongo_db)
+        # create_workflows_for_past_stagings(pg_cursor=pg_cursor, mongo_db=self.cmg_mongo_db, rhythm_db=self.rhythm_mongo_db)
                 
         # # convert_content_to_about(cursor, self.mongo_db)
         # logger.info("converting Sessions")
