@@ -42,6 +42,7 @@ model dataset {
   conversions       conversion[]
   derived_from_conversions conversion_derived_dataset[]
   genomic_details dataset_genomic_attributes?
+  cmg_id          String?
 
   @@unique([name, type, is_deleted])
 }
