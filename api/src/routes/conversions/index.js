@@ -778,12 +778,9 @@ router.get('/:id/reports',
   ]),
   asyncHandler(async (req, res, next) => {
     // #swagger.tags = ['Conversions']
-  }),
-  asyncHandler(async (req, res, next) => {
-    console.log("getReports", req.params.id);
+    console.log('GET /conversions/:id/reports', req.params.id);
 
-    // #swagger.tags = ['Conversions']
-    let conversionId = req.params.id;
+    const conversionId = req.params.id;
 
     const conversion = await prisma.conversion.findUniqueOrThrow({
       where: { id: conversionId },
@@ -796,15 +793,22 @@ router.get('/:id/reports',
 
     const conversionTargetDatasetName = conversionTargetDataset.name;
 
-    conversionId = conversion.cmg_id || conversionId;
+    // Use cmg_id if available (for historic conversions), otherwise use the bioloop conversion id
+    const reportsDirName = conversion.cmg_id || String(conversionId);
     
-    const reportsPath = path.join(config.get('conversion.output_directory'), conversionId, conversionTargetDatasetName, 'Reports');
+    // Construct the URL path for accessing reports (unauthenticated endpoint)
+    const reportsUrlPath = `/api/reports/conversions/${conversionId}/files`;
 
-    console.log('reportsPath', reportsPath);
+    console.log('reportsDirName:', reportsDirName);
+    console.log('reportsUrlPath:', reportsUrlPath);
 
     return res.json({
-      reports_path: reportsPath,
-    })
+      conversion_id: conversionId,
+      cmg_id: conversion.cmg_id,
+      dataset_name: conversionTargetDatasetName,
+      reports_url: reportsUrlPath,
+      index_url: `${reportsUrlPath}/html/index.html`
+    });
   }),
 );
 

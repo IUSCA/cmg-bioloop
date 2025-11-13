@@ -53,7 +53,7 @@ class ConversionService {
 
   getReports(id) {
     console.log("getReports", id);
-    return api.get(`/reports/conversions/${id}`);
+    return api.get(`/conversions/${id}/reports`);
   }
 }
 
