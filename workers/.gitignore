@@ -91,18 +91,14 @@ env.sh
 # ignore the db file created by celery
 # related config in celeryconfig.py "worker_state_db"
 celery_state*
-
+conversions_worker_state*
 # celery worker pid file
-celery_worker.pid
-conversion_worker.pid
-
-celery_worker.state
-conversion_worker.state
+*.pid
+# Celery worker state file data
+*.db.dat
 
 # poetry
 # generated with "poetry export --without-hashes --format=requirements.txt > requirements.txt"
 workers/scripts/requirements.txt
 
 workers/scripts/get_size.py
-workers/config/production.py
-
