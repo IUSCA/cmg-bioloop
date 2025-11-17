@@ -15,7 +15,8 @@ app = Celery("tasks")
 app.config_from_object(celeryconfig)
 logger = get_task_logger(__name__)
 
-
+# This task is used to hydrate the file metadata of a previously-archived dataset.
+# The Dataset is expected to have been staged before running this task.
 def populate_file_metadata(celery_task, dataset_id, **kwargs):
     dataset = api.get_dataset(dataset_id=dataset_id)
     source = Path(dataset['staged_path']).resolve()
