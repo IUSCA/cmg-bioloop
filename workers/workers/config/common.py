@@ -190,25 +190,25 @@ config = {
           "name": "File Info Population",
           "steps": [
             {
-              "name": "inspect",
-              "task": "inspect_dataset"
+              "name": "populate file metadata",
+              "task": "populate_file_metadata"
             },
-            {
-              "name": "archive",
-              "task": "archive_dataset"
-            },
-            {
-              "name": "stage",
-              "task": "stage_dataset"
-            },
-            {
-              "name": "validate",
-              "task": "validate_dataset"
-            },
-            {
-              "name": "delete_source",
-              "task": "delete_source"
-            }
+            # {
+            #   "name": "archive",
+            #   "task": "archive_dataset"
+            # },
+            # {
+            #   "name": "stage",
+            #   "task": "stage_dataset"
+            # },
+            # {
+            #   "name": "validate",
+            #   "task": "validate_dataset"
+            # },
+            # {
+            #   "name": "delete_source",
+            #   "task": "delete_source"
+            # }
           ]
         }
     },
