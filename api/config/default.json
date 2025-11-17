@@ -187,6 +187,15 @@
           "queue": "conversion.cmg-test.sca.iu.edu.q"
         }
       ]
+    },
+    "file_info_population": {
+      "name": "File Info Population",
+      "steps": [
+        {
+          "name": "populate file metadata",
+          "task": "populate_file_metadata"
+        }
+      ]
     }
   },
   "dataset_types": [
