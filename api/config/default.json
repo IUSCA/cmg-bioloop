@@ -89,7 +89,6 @@
     { "name": "VCF", "id": "vcf" },
     { "name": "FASTQ", "id": "fastq" }
   ],
-  "browserCompatibleFormats": ["BAM", "VCF_GZ", "BIGWIG", "BED"],
   "fileExtensionMapping": {
     ".bam": "BAM",
     ".bam.bai": "BAI", 
@@ -105,7 +104,6 @@
     ".html": "HTML_REPORT",
     ".txt": "TEXT"
   },
-  "browserCompatibleExtensions": [".bam", ".bw", ".bigwig", ".vcf"],
   "download_server": {
     "base_url": ""
   },

@@ -753,7 +753,7 @@ function getFileFormatFromExtension(filePath) {
  * @param {Array} params.data - An array of file objects to add.
  */
 async function add_files({ dataset_id, data }) {
-  const isGenomeBrowserEnabled = config.get('enabledFeatures.genome_browser');
+  const isGenomeBrowserEnabled = config.get('enabled_features.genome_browser');
 
   const files = data.map((f) => {
     const fileData = {
@@ -821,19 +821,13 @@ async function add_files({ dataset_id, data }) {
     skipDuplicates: true,
   });
 
-  // Auto-create tracks for browser-compatible files if genome browser feature is enabled
+  // Auto-create tracks for files if genome browser feature is enabled
   if (isGenomeBrowserEnabled) {
-    const browserCompatibleFormats = config.get('browserCompatibleFormats');
-
     // Find files that should have tracks created
     const trackableFiles = await prisma.dataset_file.findMany({
       where: {
         dataset_id,
         filetype: 'file', // Only actual files, not directories
-        metadata: {
-          path: ['format'],
-          in: browserCompatibleFormats,
-        },
       },
       select: {
         id: true,
@@ -906,7 +900,7 @@ async function create(tx, data) {
     return;
   }
   // if it doesn't exist, create it
-  // console.log(`creating dataset`, JSON.stringify(data, null, 2));
+  console.log('creating dataset', JSON.stringify(data, null, 2));
   try {
     return await tx.dataset.create({
       data,

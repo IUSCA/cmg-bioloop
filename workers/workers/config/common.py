@@ -245,8 +245,8 @@ config = {
     ],
     'genomic_conversion': {
         'default_analysis_type': {
-            'enabled': False,  # Set to True to override default behavior
-            'value': None      # Set to desired Analysis Type (e.g., 'FASTQ_CLEANED')
+            'enabled': True,  # Set to True to override default behavior
+            'value': 'fastq'      # Set to desired Analysis Type (e.g., 'FASTQ_CLEANED')
         }
     },
     'file_info_population': {

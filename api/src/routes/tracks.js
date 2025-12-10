@@ -55,6 +55,7 @@ router.get(
     query('project_id').trim().optional(),
     query('name').trim().optional(),
     query('file_type').trim().optional(),
+    query('browser_compatible').isBoolean().toBoolean().optional(),
     query('genome_type').trim().optional(),
     query('genome_value').trim().optional(),
     query('limit').isInt({ min: 1 }).toInt().optional(),
@@ -133,30 +134,6 @@ router.get(
       const normalizedFileTypeFilter = normalizeFileTypeFilter(file_type);
       if (normalizedFileTypeFilter) {
         mergeDatasetFilter(filter_query, { file_type: normalizedFileTypeFilter });
-      }
-
-      // Filter by browser-compatible file extensions if browser_compatible flag is set
-      // This ensures only .bam, .bw, .bigwig, .vcf files are shown for session creation
-      if (req.query.browser_compatible === 'true' || req.query.browser_compatible === true) {
-        // Filter by file extension in dataset_file path or name
-        // This needs to be combined with existing dataset_file filters
-        const compatibleExtensions = config.get('browserCompatibleExtensions');
-        const browserExtensionFilter = {
-          OR: compatibleExtensions.flatMap((ext) => [
-            { path: { endsWith: ext } },
-            { name: { endsWith: ext } },
-          ]),
-        };
-
-        // Merge with existing dataset_file filter
-        if (filter_query.dataset_file) {
-          filter_query.dataset_file = {
-            ...filter_query.dataset_file,
-            ...browserExtensionFilter,
-          };
-        } else {
-          filter_query.dataset_file = browserExtensionFilter;
-        }
       }
 
       if (genome_type) {
@@ -723,26 +700,6 @@ router.get(
       const userFileTypeFilter = normalizeFileTypeFilter(file_type);
       if (userFileTypeFilter) {
         mergeDatasetFilter(filter_query, { file_type: userFileTypeFilter });
-      }
-
-      // Filter by browser-compatible file extensions if browser_compatible flag is set
-      if (req.query.browser_compatible === 'true' || req.query.browser_compatible === true) {
-        const compatibleExtensions = config.get('browserCompatibleExtensions');
-        const browserExtensionFilter = {
-          OR: compatibleExtensions.flatMap((ext) => [
-            { path: { endsWith: ext } },
-            { name: { endsWith: ext } },
-          ]),
-        };
-
-        if (filter_query.dataset_file) {
-          filter_query.dataset_file = {
-            ...filter_query.dataset_file,
-            ...browserExtensionFilter,
-          };
-        } else {
-          filter_query.dataset_file = browserExtensionFilter;
-        }
       }
 
       if (genome_type) {

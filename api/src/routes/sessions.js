@@ -63,14 +63,9 @@ function buildGenomeBrowserUrl(relativePath, token) {
 
 /**
  * Determines if a file is browser-compatible based on its extension
- * Supported formats: .bam, .bw, .bigwig, .vcf
+ * All files are now considered browser-compatible
  */
-const isBrowserCompatibleFile = (filePath) => {
-  if (!filePath) return false;
-  const lowerPath = filePath.toLowerCase();
-  const compatibleExtensions = config.get('browserCompatibleExtensions');
-  return compatibleExtensions.some((ext) => lowerPath.endsWith(ext));
-};
+const isBrowserCompatibleFile = (filePath) => true;
 
 /**
  * Determines WashU browser file type from file path/name

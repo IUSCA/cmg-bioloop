@@ -19,7 +19,6 @@
 </template>
 
 <script setup>
-import config from '@/config';
 import toast from '@/services/toast';
 import { useTracksStore } from '@/stores/tracks';
 import _ from 'lodash';
@@ -105,11 +104,6 @@ const batchingQuery = computed(() => {
 const fetchQuery = computed(() => {
   return {
     ...(searchTerm.value && { name: searchTerm.value }),
-    // Only show tracks with browser-compatible file types
-    // Supported: .bam, .bw, .bigwig, .vcf (NOT fastq)
-    file_type: config.browserCompatibleFileTypes,
-    // Filter by actual file extension for browser compatibility
-    browser_compatible: true,
     // Add genome filtering if provided
     ...(props.genomeType && { genome_type: props.genomeType }),
     ...(props.genomeValue && { genome_value: props.genomeValue }),

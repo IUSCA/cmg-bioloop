@@ -415,9 +415,6 @@ model instrument {
 model track {
   id              Int             @id @default(autoincrement())
   name            String
-  // todo - track genomeType and genomeValue on Dataset instead?
-  // genomeType      String
-  // genomeValue     String
   dataset_file_id Int             @unique
   dataset_file    dataset_file    @relation(fields: [dataset_file_id], references: [id], onDelete: Cascade)
   color           String?
