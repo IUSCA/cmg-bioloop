@@ -19,10 +19,11 @@
 </template>
 
 <script setup>
-import toast from "@/services/toast";
-import { useTracksStore } from "@/stores/tracks";
-import _ from "lodash";
-import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import config from '@/config';
+import toast from '@/services/toast';
+import { useTracksStore } from '@/stores/tracks';
+import _ from 'lodash';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 
 const PAGE_SIZE = 10;
 
@@ -32,7 +33,7 @@ const props = defineProps({
   },
   searchTerm: {
     type: String,
-    default: "",
+    default: '',
   },
   disabled: {
     type: Boolean,
@@ -48,15 +49,17 @@ const props = defineProps({
     type: Array,
     default: () => [],
   },
+  genomeType: {
+    type: String,
+    default: null,
+  },
+  genomeValue: {
+    type: String,
+    default: null,
+  },
 });
 
-const emit = defineEmits([
-  "clear",
-  "open",
-  "close",
-  "update:selected",
-  "update:searchTerm",
-]);
+const emit = defineEmits(['clear', 'open', 'close', 'update:selected', 'update:searchTerm']);
 
 const tracksStore = useTracksStore();
 
@@ -73,7 +76,7 @@ const searchTerm = computed({
     return props.searchTerm;
   },
   set: (val) => {
-    emit("update:searchTerm", val);
+    emit('update:searchTerm', val);
   },
 });
 
@@ -83,8 +86,8 @@ const searches = ref([]);
 const latestQuery = ref(null);
 
 const onSelect = (item) => {
-  emit("update:searchTerm", item.name);
-  emit("update:selected", item);
+  emit('update:searchTerm', item.name);
+  emit('update:selected', item);
 };
 
 const loadNextPage = () => {
@@ -102,8 +105,14 @@ const batchingQuery = computed(() => {
 const fetchQuery = computed(() => {
   return {
     ...(searchTerm.value && { name: searchTerm.value }),
-    // Only show tracks with file types that support genome browsers
-    file_type: ["bam", "vcf", "bigwig", "fastq"],
+    // Only show tracks with browser-compatible file types
+    // Supported: .bam, .bw, .bigwig, .vcf (NOT fastq)
+    file_type: config.browserCompatibleFileTypes,
+    // Filter by actual file extension for browser compatibility
+    browser_compatible: true,
+    // Add genome filtering if provided
+    ...(props.genomeType && { genome_type: props.genomeType }),
+    ...(props.genomeValue && { genome_value: props.genomeValue }),
     ...batchingQuery.value,
   };
 });
@@ -120,7 +129,7 @@ const searchTracks = ({
   logQuery = false,
 } = {}) => {
   // Debug: log the query being sent
-  console.log("Search query:", fetchQuery.value);
+  console.log('Search query:', fetchQuery.value);
 
   // Ensure that the same query is not being run a second time (which
   // is possible due to debounced searches). If it is, the search
@@ -146,7 +155,7 @@ const searchTracks = ({
         if (res.data.tracks.length === 0 && !appendToCurrentResults) {
           tracks.value = [];
           // Don't show error for empty results, just log it
-          console.log("No tracks found matching the criteria");
+          console.log('No tracks found matching the criteria');
         }
 
         resolveSearch(res.queryIndex);
@@ -160,7 +169,7 @@ const searchTracks = ({
         } else if (e.message) {
           toast.error(`Failed to load tracks: ${e.message}`);
         } else {
-          toast.error("Failed to load tracks. Please try again.");
+          toast.error('Failed to load tracks. Please try again.');
         }
 
         // Reset tracks on error
@@ -192,18 +201,18 @@ const performSearch = (searchIndex) => {
 };
 
 const onOpen = () => {
-  emit("open");
+  emit('open');
 };
 
 const onClose = () => {
-  emit("close");
+  emit('close');
 };
 
 const onClear = () => {
-  emit("clear");
+  emit('clear');
 };
 
-watch([searchTerm], () => {
+watch([searchTerm, () => props.genomeType, () => props.genomeValue], () => {
   searchIndex.value += 1;
   searches.value.push(searchIndex.value);
 

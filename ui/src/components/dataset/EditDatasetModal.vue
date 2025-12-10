@@ -12,7 +12,7 @@
     @cancel="hide"
   >
     <va-inner-loading :loading="loading">
-      <div>
+      <div class="space-y-4">
         <va-textarea
           label="Description"
           v-model="description"
@@ -22,6 +22,21 @@
           resize
         >
         </va-textarea>
+        
+        <!-- Analysis Type field for DATA_PRODUCT datasets when genome browser is enabled -->
+        <va-input
+          v-if="showAnalysisType"
+          v-model="analysisTypeInput"
+          label="Analysis Type"
+          placeholder="Enter analysis type (e.g., Raw Reads)"
+          clearable
+          class="w-full"
+          @blur="formatAnalysisTypeOnBlur"
+        >
+          <template #appendInner>
+            <va-icon name="info" size="small" />
+          </template>
+        </va-input>
       </div>
     </va-inner-loading>
   </va-modal>
@@ -31,6 +46,8 @@
 import config from "@/config";
 import DatasetService from "@/services/dataset";
 import toast from "@/services/toast";
+import { formatAnalysisType, humanizeAnalysisType } from "@/services/sessionUtils";
+import { computed, ref, watch } from "vue";
 
 const props = defineProps(["data"]);
 const emit = defineEmits(["update"]);
@@ -44,6 +61,31 @@ defineExpose({
 const visible = ref(false);
 const loading = ref(false);
 const description = ref(props.data.description);
+const analysisType = ref(props.data.metadata?.analysis_type || null);
+const analysisTypeInput = ref(humanizeAnalysisType(props.data.metadata?.analysis_type || ''));
+
+// Show Analysis Type field only for DATA_PRODUCT datasets when genome browser is enabled
+const showAnalysisType = computed(() => {
+  return props.data?.type === 'DATA_PRODUCT' && config.enabledFeatures?.genomeBrowser;
+});
+
+// Format analysis type input when user finishes typing
+const formatAnalysisTypeOnBlur = () => {
+  if (analysisTypeInput.value) {
+    const formatted = formatAnalysisType(analysisTypeInput.value);
+    analysisType.value = formatted;
+    analysisTypeInput.value = humanizeAnalysisType(formatted);
+  } else {
+    analysisType.value = null;
+  }
+};
+
+// Watch for changes in the input to update the formatted value
+watch(analysisTypeInput, (newValue) => {
+  if (!newValue) {
+    analysisType.value = null;
+  }
+});
 
 function hide() {
   loading.value = false;
@@ -57,11 +99,21 @@ function show() {
 function handleOk() {
   loading.value = true;
 
+  const updateData = {
+    description: description.value,
+  };
+
+  // Include analysis_type in metadata if it's a DATA_PRODUCT dataset with genome browser enabled
+  if (showAnalysisType.value) {
+    updateData.metadata = {
+      ...props.data.metadata,
+      analysis_type: analysisType.value,
+    };
+  }
+
   DatasetService.update({
     id: props.data.id,
-    updated_data: {
-      description: description.value,
-    },
+    updated_data: updateData,
   })
     .then(() => {
       emit("update");

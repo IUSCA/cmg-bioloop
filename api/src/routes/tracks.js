@@ -1,13 +1,49 @@
 const express = require('express');
-const { PrismaClient } = require('@prisma/client');
 const { query, param, body } = require('express-validator');
+const config = require('config');
+const prisma = require('@/db');
 const asyncHandler = require('../middleware/asyncHandler');
 const { accessControl } = require('../middleware/auth');
 const { has_project_assoc } = require('../services/project');
 
-const prisma = new PrismaClient();
-
 const router = express.Router();
+
+const normalizeFileTypeFilter = (fileTypeParam) => {
+  if (!fileTypeParam) return null;
+  if (Array.isArray(fileTypeParam)) {
+    return {
+      in: fileTypeParam,
+    };
+  }
+  if (typeof fileTypeParam === 'string' && fileTypeParam.includes(',')) {
+    const fileTypes = fileTypeParam.split(',').map((ft) => ft.trim()).filter(Boolean);
+    if (fileTypes.length === 0) {
+      return null;
+    }
+    return {
+      in: fileTypes,
+    };
+  }
+  return fileTypeParam;
+};
+
+const mergeDatasetFilter = (filterQuery, datasetCondition) => {
+  filterQuery.dataset_file = {
+    ...(filterQuery.dataset_file || {}),
+    dataset: {
+      ...(filterQuery.dataset_file?.dataset || {}),
+      ...datasetCondition,
+    },
+  };
+};
+
+const attachDatasetAnalysisType = (track) => {
+  if (track) {
+    const analysisType = track.dataset_file?.dataset?.metadata?.analysis_type ?? null;
+    track.analysis_type = analysisType;
+  }
+  return track;
+};
 
 // Middleware to check permissions
 const isPermittedTo = accessControl('tracks');
@@ -94,21 +130,32 @@ router.get(
         };
       }
 
-      if (file_type) {
-        // Handle array of file types
-        if (Array.isArray(file_type)) {
-          filter_query.file_type = {
-            in: file_type,
-          };
-        } else if (file_type.includes(',')) {
-          // Fallback for comma-separated string
-          const fileTypes = file_type.split(',').map((ft) => ft.trim());
-          filter_query.file_type = {
-            in: fileTypes,
+      const normalizedFileTypeFilter = normalizeFileTypeFilter(file_type);
+      if (normalizedFileTypeFilter) {
+        mergeDatasetFilter(filter_query, { file_type: normalizedFileTypeFilter });
+      }
+
+      // Filter by browser-compatible file extensions if browser_compatible flag is set
+      // This ensures only .bam, .bw, .bigwig, .vcf files are shown for session creation
+      if (req.query.browser_compatible === 'true' || req.query.browser_compatible === true) {
+        // Filter by file extension in dataset_file path or name
+        // This needs to be combined with existing dataset_file filters
+        const compatibleExtensions = config.get('browserCompatibleExtensions');
+        const browserExtensionFilter = {
+          OR: compatibleExtensions.flatMap((ext) => [
+            { path: { endsWith: ext } },
+            { name: { endsWith: ext } },
+          ]),
+        };
+
+        // Merge with existing dataset_file filter
+        if (filter_query.dataset_file) {
+          filter_query.dataset_file = {
+            ...filter_query.dataset_file,
+            ...browserExtensionFilter,
           };
         } else {
-          // Single file type
-          filter_query.file_type = file_type;
+          filter_query.dataset_file = browserExtensionFilter;
         }
       }
 
@@ -136,6 +183,7 @@ router.get(
                     id: true,
                     name: true,
                     type: true,
+                    metadata: true,
                     projects: {
                       select: {
                         project: {
@@ -161,6 +209,8 @@ router.get(
           where: filter_query,
         }),
       ]);
+
+      tracks.forEach(attachDatasetAnalysisType);
 
       res.status(200).json({
         metadata: { count },
@@ -225,7 +275,6 @@ router.post(
       const track = await prisma.track.create({
         data: {
           name,
-          file_type,
           genomeType: genome_type,
           genomeValue: genome_value,
           dataset_file_id,
@@ -243,6 +292,7 @@ router.post(
                   id: true,
                   name: true,
                   type: true,
+                  metadata: true,
                   projects: {
                     select: {
                       project: {
@@ -259,6 +309,29 @@ router.post(
           },
         },
       });
+
+      if (file_type) {
+        const datasetId = datasetFile.dataset?.id || datasetFile.dataset_id;
+        if (datasetId) {
+          await prisma.dataset.update({
+            where: { id: datasetId },
+            data: {
+              metadata: {
+                ...datasetFile.dataset?.metadata,
+                analysis_type: file_type,
+              },
+            },
+          });
+          if (track.dataset_file?.dataset) {
+            track.dataset_file.dataset.metadata = {
+              ...track.dataset_file.dataset.metadata,
+              analysis_type: file_type,
+            };
+          }
+        }
+      }
+
+      attachDatasetAnalysisType(track);
 
       res.status(201).json(track);
     } catch (error) {
@@ -358,6 +431,8 @@ router.get(
       return res.status(404).json({ error: 'Track not found or access denied' });
     }
 
+    attachDatasetAnalysisType(track);
+
     res.json(track);
   }),
 );
@@ -388,13 +463,10 @@ router.patch(
             select: {
               dataset: {
                 select: {
+                  id: true,
                   projects: {
                     select: {
-                      project: {
-                        select: {
-                          id: true,
-                        },
-                      },
+                      project_id: true,
                     },
                   },
                 },
@@ -423,7 +495,6 @@ router.patch(
       // Update the track
       const updateData = {};
       if (name !== undefined) updateData.name = name;
-      if (file_type !== undefined) updateData.file_type = file_type;
       if (genome_type !== undefined) updateData.genomeType = genome_type;
       if (genome_value !== undefined) updateData.genomeValue = genome_value;
 
@@ -443,6 +514,7 @@ router.patch(
                   id: true,
                   name: true,
                   type: true,
+                  metadata: true,
                   projects: {
                     select: {
                       project: {
@@ -459,6 +531,29 @@ router.patch(
           },
         },
       });
+
+      if (file_type !== undefined) {
+        const datasetId = existingTrack.dataset_file?.dataset?.id;
+        if (datasetId) {
+          await prisma.dataset.update({
+            where: { id: datasetId },
+            data: {
+              metadata: {
+                ...existingTrack.dataset_file?.dataset?.metadata,
+                analysis_type: file_type,
+              },
+            },
+          });
+          if (track.dataset_file?.dataset) {
+            track.dataset_file.dataset.metadata = {
+              ...track.dataset_file.dataset.metadata,
+              analysis_type: file_type,
+            };
+          }
+        }
+      }
+
+      attachDatasetAnalysisType(track);
 
       res.status(200).json(track);
     } catch (error) {
@@ -502,6 +597,7 @@ router.delete(
                   id: true,
                   name: true,
                   type: true,
+                  metadata: true,
                   projects: {
                     select: {
                       project: {
@@ -549,6 +645,7 @@ router.get(
     query('project_id').isString().optional(),
     query('name').trim().optional(),
     query('file_type').trim().optional(),
+    query('browser_compatible').isBoolean().toBoolean().optional(),
     query('genome_type').trim().optional(),
     query('genome_value').trim().optional(),
     query('limit').isInt({ min: 1 }).toInt().optional(),
@@ -561,6 +658,7 @@ router.get(
     const {
       project_id, name, file_type, genome_type, genome_value, limit, offset, sort_by, sort_order,
     } = req.query;
+    const { browser_compatible } = req.query;
 
     try {
       const user = await prisma.user.findUnique({
@@ -622,8 +720,29 @@ router.get(
         };
       }
 
-      if (file_type) {
-        filter_query.file_type = file_type;
+      const userFileTypeFilter = normalizeFileTypeFilter(file_type);
+      if (userFileTypeFilter) {
+        mergeDatasetFilter(filter_query, { file_type: userFileTypeFilter });
+      }
+
+      // Filter by browser-compatible file extensions if browser_compatible flag is set
+      if (req.query.browser_compatible === 'true' || req.query.browser_compatible === true) {
+        const compatibleExtensions = config.get('browserCompatibleExtensions');
+        const browserExtensionFilter = {
+          OR: compatibleExtensions.flatMap((ext) => [
+            { path: { endsWith: ext } },
+            { name: { endsWith: ext } },
+          ]),
+        };
+
+        if (filter_query.dataset_file) {
+          filter_query.dataset_file = {
+            ...filter_query.dataset_file,
+            ...browserExtensionFilter,
+          };
+        } else {
+          filter_query.dataset_file = browserExtensionFilter;
+        }
       }
 
       if (genome_type) {
@@ -650,6 +769,7 @@ router.get(
                     id: true,
                     name: true,
                     type: true,
+                    metadata: true,
                     projects: {
                       select: {
                         project: {
@@ -675,6 +795,8 @@ router.get(
           where: filter_query,
         }),
       ]);
+
+      tracks.forEach(attachDatasetAnalysisType);
 
       res.status(200).json({
         metadata: { count },

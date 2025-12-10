@@ -1,17 +1,90 @@
 const express = require('express');
-const { PrismaClient } = require('@prisma/client');
 const { body, query, param } = require('express-validator');
+const config = require('config');
 const logger = require('@/services/logger');
+const prisma = require('@/db');
 const asyncHandler = require('../middleware/asyncHandler');
 const { accessControl } = require('../middleware/auth');
 const datasetService = require('../services/dataset');
-
-const prisma = new PrismaClient();
+const authService = require('../services/auth');
 
 const router = express.Router();
 
 // Middleware to check permissions
 const isPermittedTo = accessControl('sessions');
+
+// Helper function to get analysis type from dataset metadata
+const getAnalysisType = (dataset) => dataset?.metadata?.analysis_type || null;
+
+/**
+ * Compute file's relative path for secure download
+ * @param {Object} dataset - Dataset object with metadata.stage_alias
+ * @param {Object} datasetFile - Dataset file object with path
+ * @returns {string} Relative path for secure download (e.g., "/staged_data/datasets/42/sample.bam")
+ */
+function getRelativeFilePathForGenomeBrowser({ dataset, datasetFile }) {
+  const stageAlias = dataset.metadata?.stage_alias || '';
+  const filePath = datasetFile.path || '';
+
+  const cleanedStageAlias = stageAlias.replace(/^\/+/, '');
+  const cleanedFilePath = filePath.replace(/^\/+/, '');
+
+  return `/${cleanedStageAlias}/${cleanedFilePath}`;
+}
+
+/**
+ * Get file-scoped token for genome browser access
+ * @param {string} relativePath - Relative path to the file
+ * @returns {Promise<string>} JWT token
+ */
+async function getGenomeBrowserFileToken(relativePath) {
+  // Use the same OAuth2 pattern as regular downloads but with file exposure scope
+  // The authService.get_file_exposure_token() uses the genome_browser OAuth2 client
+  const tokenResponse = await authService.get_file_exposure_token(relativePath);
+  return tokenResponse.accessToken;
+}
+
+/**
+ * Build secure download URL for genome browser
+ * @param {string} relativePath - Relative path to the file
+ * @param {string} token - JWT token
+ * @returns {string} Complete URL for secure download
+ */
+function buildGenomeBrowserUrl(relativePath, token) {
+  const baseUrl = config.get('secure_download.base_url'); // "http://localhost:3060"
+  const prefix = config.get('secure_download.genome_browser_path_prefix'); // "/files/expose"
+
+  const url = new URL(baseUrl);
+  url.pathname = `${prefix}${relativePath}`;
+  url.searchParams.set('token', token);
+
+  return url.toString();
+}
+
+/**
+ * Determines if a file is browser-compatible based on its extension
+ * Supported formats: .bam, .bw, .bigwig, .vcf
+ */
+const isBrowserCompatibleFile = (filePath) => {
+  if (!filePath) return false;
+  const lowerPath = filePath.toLowerCase();
+  const compatibleExtensions = config.get('browserCompatibleExtensions');
+  return compatibleExtensions.some((ext) => lowerPath.endsWith(ext));
+};
+
+/**
+ * Determines WashU browser file type from file path/name
+ */
+const getWashUFileType = (filePath) => {
+  if (!filePath) return 'unknown';
+  const lowerPath = filePath.toLowerCase();
+
+  // Map extensions to WashU types
+  if (lowerPath.endsWith('.bam')) return 'bam';
+  if (lowerPath.endsWith('.bw') || lowerPath.endsWith('.bigwig')) return 'bigwig';
+  if (lowerPath.endsWith('.vcf')) return 'vcf';
+  return 'unknown';
+};
 
 // GET /sessions - Get all sessions accessible to the current user
 router.get(
@@ -222,19 +295,20 @@ router.get(
 );
 
 // POST /sessions - Create a new session
+// Accepts track_ids directly (no auto-creation of tracks)
 router.post(
   '/',
   isPermittedTo('create'),
   [
     body('session_name').isString().notEmpty().trim(),
-    body('genome').isString().notEmpty().trim(),
-    body('genome_type').isString().notEmpty().trim(),
-    body('track_ids').isArray().optional(),
+    body('genome').isString().optional().trim(),
+    body('genome_type').isString().optional().trim(),
+    body('track_ids').isArray().notEmpty(),
     body('track_ids').custom((value) => {
-      if (value && !Array.isArray(value)) {
+      if (!Array.isArray(value)) {
         throw new Error('track_ids must be an array');
       }
-      if (value && value.some((id) => !Number.isInteger(id))) {
+      if (value.some((id) => !Number.isInteger(id))) {
         throw new Error('All track_ids must be integers');
       }
       return true;
@@ -243,78 +317,60 @@ router.post(
   ],
   asyncHandler(async (req, res) => {
     const {
-      session_name, genome, genome_type, track_ids = [], is_public = false,
+      session_name,
+      genome: providedGenome,
+      genome_type: providedGenomeType,
+      track_ids,
+      is_public = false,
     } = req.body;
 
-    // Validate that all tracks exist and are accessible to the user
-    if (track_ids.length > 0) {
-      let tracks;
-
-      // If user has admin/operator role, they can access all tracks
-      if (req.permission.granted) {
-        tracks = await prisma.track.findMany({
-          where: {
-            id: { in: track_ids },
-          },
+    // Fetch the specified tracks
+    const tracks = await prisma.track.findMany({
+      where: {
+        id: { in: track_ids },
+      },
+      include: {
+        dataset_file: {
           include: {
-            dataset_file: {
+            dataset: {
               include: {
-                dataset: true,
+                genomic_details: true,
               },
             },
           },
-        });
-      } else {
-        // Regular users can only access tracks from projects they're part of
-        tracks = await prisma.track.findMany({
-          where: {
-            id: { in: track_ids },
-            dataset_file: {
-              dataset: {
-                projects: {
-                  some: {
-                    project: {
-                      users: {
-                        some: { user_id: req.user.id },
-                      },
-                    },
-                  },
-                },
-              },
-            },
-          },
-          include: {
-            dataset_file: {
-              include: {
-                dataset: true,
-              },
-            },
-          },
-        });
-      }
+        },
+      },
+    });
 
-      if (tracks.length !== track_ids.length) {
-        return res.status(400).json({ error: 'Some tracks are not accessible' });
-      }
-
-      // Validate tracks for session compatibility
-      const validationResult = validateTracksForSession(tracks, genome_type, genome);
-      if (!validationResult.isValid) {
-        return res.status(400).json({ error: validationResult.error });
-      }
+    if (tracks.length !== track_ids.length) {
+      return res.status(400).json({ error: 'Some tracks are not accessible or not found' });
     }
+
+    // Validate tracks for session compatibility
+    const validationResult = validateTracksForSession(
+      tracks,
+      providedGenomeType,
+      providedGenome,
+    );
+    if (!validationResult.isValid) {
+      return res.status(400).json({ error: validationResult.error });
+    }
+
+    // Use provided genome values or leave empty (no auto-derivation)
+    const finalGenomeType = providedGenomeType || null;
+    const finalGenome = providedGenome || null;
 
     // Create session with tracks
     const session = await prisma.genome_browser_session.create({
       data: {
-        title: session_name, // Use session_name for the title
-        genome,
-        genome_type,
+        title: session_name,
+        genome: finalGenome,
+        genome_type: finalGenomeType,
         user_id: req.user.id,
         is_public,
         session_tracks: {
-          create: track_ids.map((track_id, index) => ({
-            track_id,
+          create: tracks.map((track, index) => ({
+            track_id: track.id,
             order: index,
           })),
         },
@@ -333,7 +389,11 @@ router.post(
               include: {
                 dataset_file: {
                   include: {
-                    dataset: true,
+                    dataset: {
+                      include: {
+                        genomic_details: true,
+                      },
+                    },
                   },
                 },
               },
@@ -341,7 +401,6 @@ router.post(
           },
           orderBy: { order: 'asc' },
         },
-
       },
     });
 
@@ -397,9 +456,13 @@ router.get(
 
     // If user has admin/operator role, they can see any session
     // Otherwise, check access permissions
-    const hasAccess = req.permission.granted
+    const canAccess = req.permission.granted
       || session.user_id === req.user.id
       || session.is_public;
+
+    if (!canAccess) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
 
     // Increment access count
     await prisma.genome_browser_session.update({
@@ -585,9 +648,11 @@ router.delete(
   }),
 );
 
-// GET /sessions/:id/datahub
+// GET /sessions/:id/datahub - Export session tracks in WashU browser format
+// This endpoint is only accessible to admin/operator roles
 router.get(
   '/:id/datahub',
+  isPermittedTo('read'), // Only admin/operator can access WashU browser integration
   [param('id').isInt().toInt()],
   asyncHandler(async (req, res) => {
     const sessionId = req.params.id;
@@ -602,12 +667,17 @@ router.get(
                 include: {
                   dataset_file: {
                     include: {
-                      dataset: true,
+                      dataset: {
+                        include: {
+                          genomic_details: true,
+                        },
+                      },
                     },
                   },
                 },
               },
             },
+            orderBy: { order: 'asc' },
           },
         },
       });
@@ -616,40 +686,62 @@ router.get(
         return res.status(404).json({ error: 'Session not found' });
       }
 
-      // Convert to DataHub format
-      const tracks = session.session_tracks.map((st) => {
-        const { track } = st;
-        const dataset = track.dataset_file?.dataset;
+      // Convert to WashU DataHub format using secure_download
+      // Filter tracks to only include browser-compatible files
+      const tracks = await Promise.all(
+        session.session_tracks
+          .filter((st) => {
+            const filePath = st.track.dataset_file?.path || st.track.dataset_file?.name || '';
+            return isBrowserCompatibleFile(filePath);
+          })
+          .map(async (st) => {
+            const { track } = st;
+            const { dataset_file: datasetFile } = track;
+            const { dataset } = datasetFile;
+            const filePath = datasetFile?.path || datasetFile?.name || '';
 
-        // Determine file type and URL
-        let fileType = 'unknown';
-        let url = '';
+            // Determine file type from extension
+            const fileType = getWashUFileType(filePath);
 
-        if (track.file_type === 'bam') {
-          fileType = 'bam';
-          url = `${process.env.API_BASE_URL}/files/${track.dataset_file_id}`;
-        } else if (track.file_type === 'bigwig') {
-          fileType = 'bigwig';
-          url = `${process.env.API_BASE_URL}/files/${track.dataset_file_id}`;
-        } else if (track.file_type === 'vcf') {
-          fileType = 'vcf';
-          url = `${process.env.API_BASE_URL}/files/${track.dataset_file_id}`;
-        }
+            // Get genome info from dataset (since genome is associated with dataset in bioloop)
+            const genomeInfo = dataset?.genomic_details;
+            const genomeType = genomeInfo?.genome_type || session.genome_type || '';
+            const genomeValue = genomeInfo?.genome_value || session.genome || '';
 
-        return {
-          name: track.name,
-          type: fileType,
-          url,
-          color: st.color || '#000000',
-          height: 50,
-          genome: `${track.genomeType}_${track.genomeValue}`,
-          dataset: dataset?.name || 'Unknown',
-        };
-      });
+            // Generate secure download URL for WashU browser
+            try {
+              const relativePath = getRelativeFilePathForGenomeBrowser({ dataset, datasetFile });
+              const token = await getGenomeBrowserFileToken(relativePath);
+              const url = buildGenomeBrowserUrl(relativePath, token);
 
-      res.json(tracks);
+              // Track display name (use session track title if available, else track name)
+              const trackName = st.title || track.name || datasetFile.name || 'Unnamed Track';
+
+              return {
+                type: fileType,
+                name: trackName,
+                options: {
+                  color: st.color || '#2669a3',
+                  height: 100,
+                },
+                showOnHubLoad: true,
+                url,
+                // Include genome info if available (for reference, WashU uses genome from URL params)
+                ...(genomeType && genomeValue ? { genome: `${genomeType}_${genomeValue}` } : {}),
+              };
+            } catch (error) {
+              logger.error(`Failed to generate secure URL for file ${datasetFile.id}:`, error);
+              return null; // Skip this track if URL generation fails
+            }
+          }),
+      );
+
+      // Filter out any null tracks (failed URL generation)
+      const validTracks = tracks.filter(Boolean);
+
+      res.json(validTracks);
     } catch (error) {
-      console.error('Error exporting DataHub:', error);
+      logger.error('Error exporting DataHub:', error);
       res.status(500).json({ error: 'Failed to export DataHub' });
     }
   }),
@@ -807,8 +899,13 @@ router.get(
 
       // Apply search filter
       if (search) {
-        projects = projects.filter((project) => project.name.toLowerCase().includes(search.toLowerCase())
-          || (project.description && project.description.toLowerCase().includes(search.toLowerCase())));
+        const searchLower = search.toLowerCase();
+        projects = projects.filter((project) => {
+          const nameMatch = project.name.toLowerCase().includes(searchLower);
+          const descMatch = project.description
+            && project.description.toLowerCase().includes(searchLower);
+          return nameMatch || descMatch;
+        });
       }
 
       // Apply sorting
@@ -817,9 +914,13 @@ router.get(
         const bVal = b[sort_by];
 
         if (sort_order === 'asc') {
-          return aVal < bVal ? -1 : aVal > bVal ? 1 : 0;
+          if (aVal < bVal) return -1;
+          if (aVal > bVal) return 1;
+          return 0;
         }
-        return aVal > bVal ? -1 : aVal < bVal ? 1 : 0;
+        if (aVal > bVal) return -1;
+        if (aVal < bVal) return 1;
+        return 0;
       });
 
       // Apply pagination
@@ -845,49 +946,58 @@ router.get(
 
 // Track validation functions
 const validateTracksForSession = (tracks, sessionGenomeType, sessionGenome) => {
-  // Validation 1: Check file type consistency (MANDATORY)
+  if (!tracks || tracks.length === 0) {
+    return { isValid: false, error: 'No tracks provided for validation' };
+  }
+
   const firstTrack = tracks[0];
-  for (const track of tracks) {
-    if (track.file_type !== firstTrack.file_type) {
-      return {
-        isValid: false,
-        error: `Cannot mix different file types. Track "${firstTrack.name}" has "${firstTrack.file_type}", track "${track.name}" has "${track.file_type}". Please create separate sessions.`,
-      };
-    }
-  }
+  const firstGenomeDetails = firstTrack?.dataset_file?.dataset?.genomic_details;
 
-  // Validation 2: Check genome type consistency (MANDATORY)
-  for (const track of tracks) {
-    if (track.genomeType !== firstTrack.genomeType) {
-      return {
-        isValid: false,
-        error: `Cannot mix different genome types. Track "${firstTrack.name}" has "${firstTrack.genomeType}", track "${track.name}" has "${track.genomeType}". Please create separate sessions.`,
-      };
-    }
-  }
-
-  // Validation 3: Check genome value consistency
-  for (const track of tracks) {
-    if (track.genomeValue !== firstTrack.genomeValue) {
-      return {
-        isValid: false,
-        error: `Cannot mix different genome assemblies. Track "${firstTrack.name}" has "${firstTrack.genomeValue}", track "${track.name}" has "${track.genomeValue}". Please create separate sessions or manually select one assembly.`,
-      };
-    }
-  }
-
-  // Validation 4: Check if session genome matches track genomes
-  if (sessionGenomeType && sessionGenomeType !== firstTrack.genomeType) {
+  // Validation 1: Check genome type consistency (MANDATORY)
+  const inconsistentGenomeType = tracks.find((track) => {
+    const genomeDetails = track?.dataset_file?.dataset?.genomic_details;
+    return genomeDetails?.genome_type !== firstGenomeDetails?.genome_type;
+  });
+  if (inconsistentGenomeType) {
+    const inconsistentGenomeDetails = inconsistentGenomeType?.dataset_file?.dataset?.genomic_details;
     return {
       isValid: false,
-      error: `Session genome type "${sessionGenomeType}" does not match track genome type "${firstTrack.genomeType}"`,
+      error: `Cannot mix different genome types. Track "${firstTrack.name}" `
+        + `has "${firstGenomeDetails?.genome_type || 'unknown'}", track "${inconsistentGenomeType.name}" `
+        + `has "${inconsistentGenomeDetails?.genome_type || 'unknown'}". Please create separate sessions.`,
     };
   }
 
-  if (sessionGenome && sessionGenome !== firstTrack.genomeValue) {
+  // Validation 2: Check genome value consistency
+  const inconsistentGenomeValue = tracks.find((track) => {
+    const genomeDetails = track?.dataset_file?.dataset?.genomic_details;
+    return genomeDetails?.genome_value !== firstGenomeDetails?.genome_value;
+  });
+  if (inconsistentGenomeValue) {
+    const inconsistentGenomeDetails = inconsistentGenomeValue?.dataset_file?.dataset?.genomic_details;
     return {
       isValid: false,
-      error: `Session genome assembly "${sessionGenome}" does not match track genome assembly "${firstTrack.genomeValue}"`,
+      error: `Cannot mix different genome assemblies. Track "${firstTrack.name}" `
+        + `has "${firstGenomeDetails?.genome_value || 'unknown'}", track "${inconsistentGenomeValue.name}" `
+        + `has "${inconsistentGenomeDetails?.genome_value || 'unknown'}". `
+        + 'Please create separate sessions or manually select one assembly.',
+    };
+  }
+
+  // Validation 3: Check if session genome matches track genomes
+  if (sessionGenomeType && sessionGenomeType !== firstGenomeDetails?.genome_type) {
+    return {
+      isValid: false,
+      error: `Session genome type "${sessionGenomeType}" `
+        + `does not match track genome type "${firstGenomeDetails?.genome_type || 'unknown'}"`,
+    };
+  }
+
+  if (sessionGenome && sessionGenome !== firstGenomeDetails?.genome_value) {
+    return {
+      isValid: false,
+      error: `Session genome assembly "${sessionGenome}" `
+        + `does not match track genome assembly "${firstGenomeDetails?.genome_value || 'unknown'}"`,
     };
   }
 
@@ -924,7 +1034,7 @@ router.get(
       const dataset = track_file?.dataset;
       return {
         name: track.name,
-        type: dataset.file_type,
+        type: getAnalysisType(dataset) || 'unknown',
         options: {
           color: st.color,
           height: 100,
@@ -936,10 +1046,12 @@ router.get(
       };
     });
 
-    console.log('tracks');
-    console.log(tracks);
     res.json(tracks);
   }),
 );
+
+// NOTE: The old /sessions/:session_id/files/:file_id endpoint has been removed
+// Files are now served securely via the secure_download microservice at /genome-browser/*
+// with proper token-based authorization
 
 module.exports = router;

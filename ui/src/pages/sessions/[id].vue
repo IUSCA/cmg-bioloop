@@ -37,7 +37,7 @@
                     :name="session.is_public ? 'public' : 'lock'"
                     :color="session.is_public ? 'success' : 'warning'"
                   />
-                  <span>{{ session.is_public ? "Public" : "Private" }}</span>
+                  <span>{{ session.is_public ? 'Public' : 'Private' }}</span>
                 </div>
               </div>
               <div class="flex justify-between">
@@ -111,19 +111,16 @@
                   disable-client-side-sorting
                 >
                   <template #cell(name)="{ rowData }">
-                    <router-link
-                      :to="`/tracks/${rowData.id}`"
-                      class="va-link font-medium"
-                    >
+                    <router-link :to="`/tracks/${rowData.id}`" class="va-link font-medium">
                       {{ rowData.name }}
                     </router-link>
                   </template>
 
-                  <template #cell(file_type)="{ rowData }">
+                  <template #cell(analysis_type)="{ rowData }">
                     <va-chip
                       size="small"
-                      :color="trackService._getTrackColor(rowData.file_type)"
-                      >{{ rowData.file_type }}</va-chip
+                      :color="trackService._getTrackColor(rowData.analysis_type)"
+                      >{{ rowData.analysis_type || 'Not specified' }}</va-chip
                     >
                   </template>
 
@@ -132,9 +129,7 @@
                   </template>
 
                   <template #cell(genomeValue)="{ rowData }">
-                    <va-chip size="small" outline>{{
-                      rowData.genomeValue
-                    }}</va-chip>
+                    <va-chip size="small" outline>{{ rowData.genomeValue }}</va-chip>
                   </template>
 
                   <template #cell(dataset_name)="{ rowData }">
@@ -242,14 +237,14 @@
 </template>
 
 <script setup>
-import api from "@/services/api";
-import * as datetime from "@/services/datetime";
-import toast from "@/services/toast";
-import trackService from "@/services/track";
-import { useAuthStore } from "@/stores/auth";
-import { useNavStore } from "@/stores/nav";
-import { useSessionsStore } from "@/stores/sessions";
-import config from "@/config";
+import config from '@/config';
+import api from '@/services/api';
+import * as datetime from '@/services/datetime';
+import toast from '@/services/toast';
+import trackService from '@/services/track';
+import { useAuthStore } from '@/stores/auth';
+import { useNavStore } from '@/stores/nav';
+import { useSessionsStore } from '@/stores/sessions';
 
 const route = useRoute();
 const router = useRouter();
@@ -279,29 +274,34 @@ const canDeleteSession = computed(() => {
 
 const hasUnstagedTracks = computed(() => {
   if (!session.value?.session_tracks) return false;
-  return session.value.session_tracks.some(
-    (st) => !st.track.dataset_file?.dataset?.is_staged,
-  );
+  return session.value.session_tracks.some((st) => !st.track.dataset_file?.dataset?.is_staged);
 });
 
 const unstagedTracks = computed(() => {
   if (!session.value?.session_tracks) return [];
-  return session.value.session_tracks.filter(
-    (st) => !st.track.dataset_file?.dataset?.is_staged,
-  );
+  return session.value.session_tracks.filter((st) => !st.track.dataset_file?.dataset?.is_staged);
 });
 
 const _stagedTracksCount = computed(() => {
   if (!session.value?.session_tracks) return 0;
-  return session.value.session_tracks.filter(
-    (st) => st.track.dataset_file?.dataset?.is_staged,
-  ).length;
+  return session.value.session_tracks.filter((st) => st.track.dataset_file?.dataset?.is_staged)
+    .length;
 });
 
 const genomeBrowserUrl = computed(() => {
+  if (!session.value) return '';
+
   const genomeBrowserBaseUrl = config.genomeBrowserUrl;
-  const sessionTracksUrl = `/sessions/${session.value.id}/tracks`;
-  return `${genomeBrowserBaseUrl}/?genome=${session.value.genome}&hub=${sessionTracksUrl}`;
+  // Use /datahub endpoint which returns WashU-compatible format
+  const protocol = window.location.protocol;
+  const host = window.location.host;
+  const apiBaseUrl = `${protocol}//${host}`;
+  const sessionDataHubUrl = `${apiBaseUrl}/api/sessions/${session.value.id}/datahub`;
+
+  // Get genome from session or from first track's dataset
+  const genome = session.value.genome || session.value.genome_value || '';
+
+  return `${genomeBrowserBaseUrl}/?genome=${genome}&hub=${encodeURIComponent(sessionDataHubUrl)}`;
 });
 
 const associatedTracks = computed(() => {
@@ -311,36 +311,36 @@ const associatedTracks = computed(() => {
 
 const trackColumns = [
   {
-    key: "name",
-    label: "Name",
+    key: 'name',
+    label: 'Name',
     sortable: true,
-    width: "35%",
-    thAlign: "left",
-    tdAlign: "left",
+    width: '35%',
+    thAlign: 'left',
+    tdAlign: 'left',
   },
   {
-    key: "file_type",
-    label: "File Type",
+    key: 'analysis_type',
+    label: 'Analysis Type',
     sortable: true,
-    width: "25%",
+    width: '25%',
   },
   {
-    key: "genomeType",
-    label: "Genome Type",
+    key: 'genomeType',
+    label: 'Genome Type',
     sortable: true,
-    width: "25%",
+    width: '25%',
   },
   {
-    key: "genomeValue",
-    label: "Genome Value",
+    key: 'genomeValue',
+    label: 'Genome Value',
     sortable: true,
-    width: "25%",
+    width: '25%',
   },
   {
-    key: "dataset_name",
-    label: "Dataset Name",
+    key: 'dataset_name',
+    label: 'Dataset Name',
     sortable: true,
-    width: "25%",
+    width: '25%',
   },
   // {
   //   key: "is_staged",
@@ -355,32 +355,32 @@ const trackColumns = [
   //   width: "25%",
   // },
   {
-    key: "created_at",
-    label: "Created",
+    key: 'created_at',
+    label: 'Created',
     sortable: true,
-    width: "25%",
+    width: '25%',
   },
 ];
 
 // Project table columns
 const projectColumns = [
   {
-    key: "name",
-    label: "Project Name",
+    key: 'name',
+    label: 'Project Name',
     sortable: true,
-    width: "40%",
+    width: '40%',
   },
   {
-    key: "description",
-    label: "Description",
+    key: 'description',
+    label: 'Description',
     sortable: false,
-    width: "40%",
+    width: '40%',
   },
   {
-    key: "created_at",
-    label: "Created",
+    key: 'created_at',
+    label: 'Created',
     sortable: true,
-    width: "20%",
+    width: '20%',
   },
 ];
 
@@ -388,14 +388,14 @@ const projectColumns = [
 const deleteSession = async () => {
   if (!session.value) return;
 
-  if (confirm("Are you sure you want to delete this session?")) {
+  if (confirm('Are you sure you want to delete this session?')) {
     try {
       await sessionsStore.deleteSession(session.value.id);
-      toast.success("Session deleted successfully");
-      router.push("/sessions");
+      toast.success('Session deleted successfully');
+      router.push('/sessions');
     } catch (error) {
-      console.error("Failed to delete session:", error);
-      toast.error("Failed to delete session");
+      console.error('Failed to delete session:', error);
+      toast.error('Failed to delete session');
     }
   }
 };
@@ -406,12 +406,12 @@ const exportDataHub = async () => {
 
     // Create a blob with the DataHub JSON data
     const blob = new Blob([JSON.stringify(response.data, null, 2)], {
-      type: "application/json",
+      type: 'application/json',
     });
 
     // Create download link
     const url = window.URL.createObjectURL(blob);
-    const link = document.createElement("a");
+    const link = document.createElement('a');
     link.href = url;
     link.download = `session-${session.value.id}-datahub.json`;
     document.body.appendChild(link);
@@ -419,10 +419,10 @@ const exportDataHub = async () => {
     document.body.removeChild(link);
     window.URL.revokeObjectURL(url);
 
-    toast.success("DataHub export downloaded successfully");
+    toast.success('DataHub export downloaded successfully');
   } catch (error) {
-    console.error("Failed to export DataHub:", error);
-    toast.error("Failed to export DataHub");
+    console.error('Failed to export DataHub:', error);
+    toast.error('Failed to export DataHub');
   }
 };
 
@@ -436,17 +436,17 @@ const requestStaging = async () => {
     if (response.data.datasets && response.data.datasets.length > 0) {
       // Show which datasets need staging
       toast.info(
-        `${response.data.datasets.length} datasets need staging. Use the dataset staging workflow to stage them individually.`,
+        `${response.data.datasets.length} datasets need staging. Use the dataset staging workflow to stage them individually.`
       );
 
       // You could also navigate to a datasets page or show a modal with staging options
-      console.log("Datasets that need staging:", response.data.datasets);
+      console.log('Datasets that need staging:', response.data.datasets);
     } else {
-      toast.success("All datasets are already staged");
+      toast.success('All datasets are already staged');
     }
   } catch (error) {
-    console.error("Failed to check staging status:", error);
-    toast.error("Failed to check staging status");
+    console.error('Failed to check staging status:', error);
+    toast.error('Failed to check staging status');
   } finally {
     requestingStaging.value = false;
   }
@@ -455,7 +455,7 @@ const requestStaging = async () => {
 const loadSession = async () => {
   const sessionId = parseInt(route.params.id);
   if (isNaN(sessionId)) {
-    router.push("/sessions");
+    router.push('/sessions');
     return;
   }
 
@@ -467,8 +467,8 @@ const loadSession = async () => {
     if (session.value) {
       nav.setNavItems([
         {
-          label: "Sessions",
-          to: "/sessions",
+          label: 'Sessions',
+          to: '/sessions',
         },
         {
           label: session.value.title,
@@ -488,7 +488,7 @@ const loadSessionProjects = async () => {
     const response = await api.get(`/sessions/${session.value.id}/projects`);
     sessionProjects.value = response.data.projects;
   } catch (error) {
-    console.error("Failed to load session projects:", error);
+    console.error('Failed to load session projects:', error);
     sessionProjects.value = [];
   } finally {
     projectsLoading.value = false;
@@ -496,7 +496,7 @@ const loadSessionProjects = async () => {
 };
 
 const handleSessionUpdated = (updatedSession) => {
-  toast.success("Session updated successfully");
+  toast.success('Session updated successfully');
   // Refresh the session data
   loadSession();
 };
@@ -505,7 +505,7 @@ const openInGenomeBrowser = () => {
   if (!session.value) return;
 
   // Open in new tab
-  window.open(genomeBrowserUrl.value, "_blank");
+  window.open(genomeBrowserUrl.value, '_blank');
 };
 
 // Lifecycle
@@ -517,5 +517,5 @@ onMounted(() => {
 <route lang="yaml">
 meta:
   title: Session Details
-  requiresRoles: ["operator", "admin"]
+  requiresRoles: ['operator', 'admin']
 </route>

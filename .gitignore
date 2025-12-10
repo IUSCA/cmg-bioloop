@@ -86,3 +86,5 @@ curl_cmds
 .cursorrules
 
 backup_*
+
+startup_output.md

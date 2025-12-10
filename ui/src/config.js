@@ -110,6 +110,16 @@ const exports = {
     { name: "VCF", id: "vcf" },
     { name: "FASTQ", id: "fastq" },
   ],
+  browserCompatibleFileTypes: ['bam', 'vcf', 'bigwig'],
+  fileTypeOptions: [
+    { text: "BAM", value: "bam" },
+    { text: "BigWig", value: "bigwig" }, 
+    { text: "VCF", value: "vcf" },
+    { text: "BED", value: "bed" },
+    { text: "GTF", value: "gtf" },
+    { text: "FASTQ", value: "fastq" },
+    { text: "FASTA", value: "fasta" }
+  ],
   restricted_import_dirs: {
     slateScratch: {
       paths:

@@ -18,6 +18,7 @@ const asyncHandler = require('@/middleware/asyncHandler');
 const { accessControl } = require('@/middleware/auth');
 const { validate } = require('@/middleware/validators');
 const datasetService = require('@/services/dataset');
+const { formatAnalysisType } = require('@/utils/sessionUtils');
 const authService = require('@/services/auth');
 const CONSTANTS = require('@/constants');
 const logger = require('@/services/logger');
@@ -603,6 +604,10 @@ router.patch(
     }
 
     const { metadata, ...data } = _.omitBy(_.isUndefined)(req.body);
+    // Format analysis_type if it exists in metadata
+    if (metadata?.analysis_type) {
+      metadata.analysis_type = formatAnalysisType(metadata.analysis_type);
+    }
     data.metadata = _.merge(datasetToUpdate?.metadata)(metadata); // deep merge
 
     if (req.body.bundle) {
@@ -647,27 +652,6 @@ router.post(
     }));
     datasetService.add_files({ dataset_id: req.params.id, data });
 
-    res.sendStatus(200);
-  }),
-);
-
-router.post(
-  '/:id/tracks',
-  isPermittedTo('update'),
-  validate([
-    param('id').isInt().toInt(),
-    body('files').isArray().notEmpty(),
-  ]),
-  asyncHandler(async (req, res, next) => {
-    // #swagger.tags = ['datasets']
-    // #swagger.summary = Associate files to a dataset as tracks
-    await prisma.transaction(async (tx) => {
-      await tx.track.createMany({
-        data: req.body.files.map((f) => ({
-          dataset_file_id: f.id,
-        })),
-      });
-    });
     res.sendStatus(200);
   }),
 );

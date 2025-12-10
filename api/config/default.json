@@ -67,9 +67,18 @@
       "client_secret": "",
       "scope_prefix": "download_file:"
     },
+    "genome_browser": {
+      "client_id": "",
+      "client_secret": "",
+      "scope_prefix": "genome_browser_file:"
+    },
     "upload": {
       "scope_prefix": "upload_file:"
     }
+  },
+  "secure_download": {
+    "base_url": "http://localhost:3060",
+    "genome_browser_path_prefix": "/files/expose"
   },
   "upload": {
     "path": ""
@@ -80,6 +89,23 @@
     { "name": "VCF", "id": "vcf" },
     { "name": "FASTQ", "id": "fastq" }
   ],
+  "browserCompatibleFormats": ["BAM", "VCF_GZ", "BIGWIG", "BED"],
+  "fileExtensionMapping": {
+    ".bam": "BAM",
+    ".bam.bai": "BAI", 
+    ".bai": "BAI",
+    ".vcf.gz": "VCF_GZ",
+    ".vcf.gz.tbi": "TBI",
+    ".tbi": "TBI", 
+    ".bw": "BIGWIG",
+    ".bigwig": "BIGWIG",
+    ".bed": "BED",
+    ".fastq.gz": "FASTQ_GZ",
+    ".fq.gz": "FASTQ_GZ",
+    ".html": "HTML_REPORT",
+    ".txt": "TEXT"
+  },
+  "browserCompatibleExtensions": [".bam", ".bw", ".bigwig", ".vcf"],
   "download_server": {
     "base_url": ""
   },
@@ -235,7 +261,8 @@
     "upload": true,
     "fs": true,
     "downloads": true,
-    "signup": true
+    "signup": true,
+    "genome_browser": true
   },
   "institution_types": [
     "Commercial",

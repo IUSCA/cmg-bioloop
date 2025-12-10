@@ -33,10 +33,7 @@
           placeholder="All genomes"
           class="w-48"
         />
-        <va-checkbox
-          v-model="showOnlyStaged"
-          label="Show only staged tracks"
-        />
+        <va-checkbox v-model="showOnlyStaged" label="Show only staged tracks" />
       </div>
     </va-collapse>
 
@@ -51,27 +48,14 @@
         class="mb-4"
       >
         <template #cell(selected)="{ item }">
-          <va-checkbox
-            v-model="item.selected"
-            @update:model-value="toggleTrackSelection(item)"
-          />
+          <va-checkbox v-model="item.selected" @update:model-value="toggleTrackSelection(item)" />
         </template>
-        
+
         <template #cell(filename)="{ item }">
           <div class="flex items-center gap-2">
             <span>{{ item.filename || item.name }}</span>
-            <va-badge
-              v-if="!item.is_staged"
-              color="warning"
-              text="Not staged"
-              size="small"
-            />
-            <va-badge
-              v-else
-              color="success"
-              text="Available"
-              size="small"
-            />
+            <va-badge v-if="!item.is_staged" color="warning" text="Not staged" size="small" />
+            <va-badge v-else color="success" text="Available" size="small" />
           </div>
         </template>
 
@@ -80,11 +64,8 @@
         </template>
 
         <template #cell(file_type)="{ item }">
-          <va-chip
-            :color="getFileTypeColor(item.file_type)"
-            size="small"
-          >
-            {{ item.file_type?.toUpperCase() || 'Unknown' }}
+          <va-chip :color="getFileTypeColor(item.file_type)" size="small">
+            {{ item.file_type?.toUpperCase() || '' }}
           </va-chip>
         </template>
 
@@ -115,11 +96,7 @@
             {{ stagedCount }} available, {{ notStagedCount }} need staging
           </p>
         </div>
-        <va-button
-          @click="clearSelection"
-          preset="secondary"
-          size="small"
-        >
+        <va-button @click="clearSelection" preset="secondary" size="small">
           Clear Selection
         </va-button>
       </div>
@@ -128,10 +105,10 @@
 </template>
 
 <script setup>
-import { GENOME_TYPES } from '@/constants'
-import { useTracksStore } from '@/stores/tracks'
-import { formatFileSize } from '@/utils/fileSize'
-import { computed, onMounted, ref } from 'vue'
+import { GENOME_TYPES } from '@/constants';
+import { useTracksStore } from '@/stores/tracks';
+import { formatFileSize } from '@/utils/fileSize';
+import { computed, onMounted, ref } from 'vue';
 
 // Props
 const props = defineProps({
@@ -139,22 +116,22 @@ const props = defineProps({
     type: [String, Number],
     default: null,
   },
-})
+});
 
 // Emits
-const emit = defineEmits(['tracksSelected'])
+const emit = defineEmits(['tracksSelected']);
 
 // Store
-const tracksStore = useTracksStore()
+const tracksStore = useTracksStore();
 
 // Reactive data
-const searchQuery = ref('')
-const selectedFileType = ref('')
-const selectedGenomeType = ref('')
-const showOnlyStaged = ref(false)
-const showFilters = ref(false)
-const selectedTracks = ref([])
-const loading = ref(false)
+const searchQuery = ref('');
+const selectedFileType = ref('');
+const selectedGenomeType = ref('');
+const showOnlyStaged = ref(false);
+const showFilters = ref(false);
+const selectedTracks = ref([]);
+const loading = ref(false);
 
 // Computed properties
 const fileTypeOptions = computed(() => [
@@ -163,54 +140,53 @@ const fileTypeOptions = computed(() => [
   { text: 'BigWig', value: 'bigwig' },
   { text: 'VCF', value: 'vcf' },
   { text: 'BigWig (bw)', value: 'bw' },
-])
+]);
 
 const genomeTypeOptions = computed(() => [
   { text: 'All genomes', value: '' },
-  ...Object.keys(GENOME_TYPES).map(key => ({
+  ...Object.keys(GENOME_TYPES).map((key) => ({
     text: key.charAt(0).toUpperCase() + key.slice(1), // Capitalize first letter
     value: key,
   })),
-])
+]);
 
 const filteredTracks = computed(() => {
-  let tracks = tracksStore.tracks
+  let tracks = tracksStore.tracks;
 
   // Apply search filter
   if (searchQuery.value) {
-    const query = searchQuery.value.toLowerCase()
-    tracks = tracks.filter(track => 
-      track.name.toLowerCase().includes(query) ||
-      (track.filename && track.filename.toLowerCase().includes(query)) ||
-      track.dataset?.name.toLowerCase().includes(query)
-    )
+    const query = searchQuery.value.toLowerCase();
+    tracks = tracks.filter(
+      (track) =>
+        track.name.toLowerCase().includes(query) ||
+        (track.filename && track.filename.toLowerCase().includes(query)) ||
+        track.dataset?.name.toLowerCase().includes(query)
+    );
   }
 
   // Apply file type filter
   if (selectedFileType.value) {
-    tracks = tracks.filter(track => track.file_type === selectedFileType.value)
+    tracks = tracks.filter((track) => track.file_type === selectedFileType.value);
   }
 
   // Apply genome type filter
   if (selectedGenomeType.value) {
-    tracks = tracks.filter(track => track.genomeType === selectedGenomeType.value)
+    tracks = tracks.filter((track) => track.genomeType === selectedGenomeType.value);
   }
 
   // Apply staging filter
   if (showOnlyStaged.value) {
-    tracks = tracks.filter(track => track.is_staged)
+    tracks = tracks.filter((track) => track.is_staged);
   }
 
-  return tracks
-})
+  return tracks;
+});
 
-const stagedCount = computed(() => 
-  selectedTracks.value.filter(track => track.is_staged).length
-)
+const stagedCount = computed(() => selectedTracks.value.filter((track) => track.is_staged).length);
 
-const notStagedCount = computed(() => 
-  selectedTracks.value.filter(track => !track.is_staged).length
-)
+const notStagedCount = computed(
+  () => selectedTracks.value.filter((track) => !track.is_staged).length
+);
 
 // Table columns
 const columns = [
@@ -256,7 +232,7 @@ const columns = [
     sortable: true,
     width: '15%',
   },
-]
+];
 
 // Methods
 const getFileTypeColor = (fileType) => {
@@ -265,47 +241,47 @@ const getFileTypeColor = (fileType) => {
     bigwig: 'success',
     bw: 'success',
     vcf: 'warning',
-  }
-  return colors[fileType] || 'secondary'
-}
+  };
+  return colors[fileType] || 'secondary';
+};
 
 const toggleTrackSelection = (track) => {
-  const index = selectedTracks.value.findIndex(t => t.id === track.id)
+  const index = selectedTracks.value.findIndex((t) => t.id === track.id);
   if (index > -1) {
-    selectedTracks.value.splice(index, 1)
+    selectedTracks.value.splice(index, 1);
   } else {
-    selectedTracks.value.push(track)
+    selectedTracks.value.push(track);
   }
-  emitSelection()
-}
+  emitSelection();
+};
 
 const clearSelection = () => {
-  selectedTracks.value = []
-  emitSelection()
-}
+  selectedTracks.value = [];
+  emitSelection();
+};
 
 const emitSelection = () => {
-  emit('tracksSelected', selectedTracks.value)
-}
+  emit('tracksSelected', selectedTracks.value);
+};
 
 const loadTracks = async () => {
-  loading.value = true
+  loading.value = true;
   try {
     await tracksStore.fetchTracks({
       project_id: props.projectId,
       limit: 1000, // Get more tracks for selection
-    })
+    });
   } catch (error) {
-    console.error('Error loading tracks:', error)
+    console.error('Error loading tracks:', error);
   } finally {
-    loading.value = false
+    loading.value = false;
   }
-}
+};
 
 // Lifecycle
 onMounted(() => {
-  loadTracks()
-})
+  loadTracks();
+});
 </script>
 
 <style scoped>
@@ -316,4 +292,4 @@ onMounted(() => {
 .selection-summary {
   border: 1px solid #dbeafe;
 }
-</style> 
+</style>

@@ -64,10 +64,11 @@ def get_product_track_files(product_id: int) -> list[int]:
         files: list[dict] = product_details.get('files', [])
         
         # Filter files that match the name pattern and create payload format
+        trackable_extensions = config['trackable_extensions']
         matching_files_ids: list[dict] = [
             {'id': file['id']} 
             for file in files 
-            if file['name'].endswith('bam') or file['name'].endswith('bw') or file['name'].endswith('vcf') or file['name'].endswith('bigwig')
+            if any(file['name'].endswith(ext.lstrip('.')) for ext in trackable_extensions)
         ]
         
         print(f"Found {len(matching_files_ids)} matching files for product {product_id}")
@@ -141,6 +142,13 @@ def derive_data_products(celery_task, dataset_id: int, conversion_id: int):
             "type": "DATA_PRODUCT",
             "origin_path": str(output_dir),
         }
+        
+        # Add analysis_type if configured to override default behavior
+        analysis_type_config = config.get('genomic_conversion', {}).get('default_analysis_type', {})
+        if analysis_type_config.get('enabled', False) and analysis_type_config.get('value'):
+            product_payload["metadata"] = {
+                "analysis_type": analysis_type_config['value']
+            }
         data_products_to_create.append(product_payload)
     
     # Create all data products using bulk API

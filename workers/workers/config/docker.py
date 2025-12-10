@@ -38,7 +38,7 @@ config = {
         'DATA_PRODUCT': {
             'source_dir': '/opt/sca/data/origin/data_products',
         },
-        'recency_threshold_seconds': 0,
+        'recency_threshold_seconds': 60,
         'minimum_dataset_size': TEN_MEGABYTES,
     },
 }

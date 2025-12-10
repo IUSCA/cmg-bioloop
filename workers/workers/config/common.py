@@ -33,6 +33,7 @@ config = {
     # cspell: disable-next-line
     'genome_file_types': ['.cbcl', '.bcl', '.bcl.gz', '.bgzf', '.fastq.gz', '.bam', '.bam.bai', '.vcf.gz',
                           '.vcf.gz.tbi', '.vcf'],
+    'trackable_extensions': ['.bam', '.bw', '.bigwig', '.vcf'],
     'api': {
         'base_url': API_BASE_URL,
         'auth_token': APP_API_TOKEN,
@@ -242,6 +243,12 @@ config = {
         'cellranger-atac', 'spaceranger-v3.0.1', 'spaceranger-v1.3.1', 
         'spaceranger-v1.1.0'
     ],
+    'genomic_conversion': {
+        'default_analysis_type': {
+            'enabled': False,  # Set to True to override default behavior
+            'value': None      # Set to desired Analysis Type (e.g., 'FASTQ_CLEANED')
+        }
+    },
     'file_info_population': {
         'batch_size': 10,
         'max_download_size_tb': 10,

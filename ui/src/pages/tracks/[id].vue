@@ -23,12 +23,12 @@
                 <span>{{ track.name }}</span>
               </div>
               <div class="flex justify-between">
-                <span class="font-medium">File Type</span>
+                <span class="font-medium">Analysis Type</span>
                 <va-chip
-                  :color="trackService._getTrackColor(track.file_type)"
+                  :color="trackService._getTrackColor(track.analysis_type)"
                   size="small"
                 >
-                  {{ track.file_type?.toUpperCase() || "Unknown" }}
+                  {{ track.analysis_type?.toUpperCase() || "Not specified" }}
                 </va-chip>
               </div>
               <div class="flex justify-between">

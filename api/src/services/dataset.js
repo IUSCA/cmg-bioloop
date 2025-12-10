@@ -723,6 +723,27 @@ async function search_files({
 }
 
 /**
+ * Determines file format from file extension for genome browser compatibility
+ * @param {string} filePath - The file path or name
+ * @returns {string|null} - The normalized file format or null
+ */
+function getFileFormatFromExtension(filePath) {
+  if (!filePath) return null;
+
+  const lowerPath = filePath.toLowerCase();
+  const extensionMapping = config.get('fileExtensionMapping');
+
+  // Check each extension mapping from config
+  const matchingExtension = Object.entries(extensionMapping).find(([extension]) => lowerPath.endsWith(extension.toLowerCase()));
+
+  if (matchingExtension) {
+    return matchingExtension[1];
+  }
+
+  return null; // Unknown format
+}
+
+/**
  * Adds files to a dataset.
  *
  * @async
@@ -732,11 +753,28 @@ async function search_files({
  * @param {Array} params.data - An array of file objects to add.
  */
 async function add_files({ dataset_id, data }) {
-  const files = data.map((f) => ({
-    dataset_id,
-    name: path.parse(f.path).base,
-    ...f,
-  }));
+  const isGenomeBrowserEnabled = config.get('enabledFeatures.genome_browser');
+
+  const files = data.map((f) => {
+    const fileData = {
+      dataset_id,
+      name: path.parse(f.path).base,
+      ...f,
+    };
+
+    // Populate format metadata if genome browser feature is enabled
+    if (isGenomeBrowserEnabled) {
+      const format = getFileFormatFromExtension(f.path);
+      if (format) {
+        fileData.metadata = {
+          ...fileData.metadata,
+          format,
+        };
+      }
+    }
+
+    return fileData;
+  });
 
   // create a file tree using graph data structure
   const graph = new FileGraph(files.map((f) => f.path));
@@ -782,6 +820,55 @@ async function add_files({ dataset_id, data }) {
     data: edges,
     skipDuplicates: true,
   });
+
+  // Auto-create tracks for browser-compatible files if genome browser feature is enabled
+  if (isGenomeBrowserEnabled) {
+    const browserCompatibleFormats = config.get('browserCompatibleFormats');
+
+    // Find files that should have tracks created
+    const trackableFiles = await prisma.dataset_file.findMany({
+      where: {
+        dataset_id,
+        filetype: 'file', // Only actual files, not directories
+        metadata: {
+          path: ['format'],
+          in: browserCompatibleFormats,
+        },
+      },
+      select: {
+        id: true,
+        name: true,
+        path: true,
+      },
+    });
+
+    // Get existing tracks to avoid duplicates
+    const existingTracks = await prisma.track.findMany({
+      where: {
+        dataset_file_id: { in: trackableFiles.map((f) => f.id) },
+      },
+      select: {
+        dataset_file_id: true,
+      },
+    });
+
+    const existingTrackFileIds = new Set(existingTracks.map((t) => t.dataset_file_id));
+
+    // Create tracks for trackable files that don't already have tracks
+    const tracksToCreate = trackableFiles
+      .filter((file) => !existingTrackFileIds.has(file.id))
+      .map((file) => ({
+        name: file.name || path.parse(file.path).base || 'Unnamed Track',
+        dataset_file_id: file.id,
+      }));
+
+    if (tracksToCreate.length > 0) {
+      await prisma.track.createMany({
+        data: tracksToCreate,
+        skipDuplicates: true,
+      });
+    }
+  }
 }
 
 /**

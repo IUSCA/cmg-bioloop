@@ -59,6 +59,12 @@
         <!--            {{ datasetCreatorDisplayed }}-->
         <!--          </td>-->
         <!--        </tr>-->
+        <tr v-if="showAnalysisType">
+          <td>Analysis Type</td>
+          <td>
+            {{ humanizeAnalysisType(props.dataset.metadata?.analysis_type) || 'Not specified' }}
+          </td>
+        </tr>
         <tr>
           <td>Description</td>
           <td>
@@ -75,11 +81,20 @@
 <script setup>
 import * as datetime from "@/services/datetime";
 import { formatBytes } from "@/services/utils";
+import { humanizeAnalysisType } from "@/services/sessionUtils";
 import { useAuthStore } from "@/stores/auth";
+import config from "@/config";
+import { computed } from "vue";
 
 const props = defineProps({ dataset: Object });
 
 const auth = useAuthStore();
+
+// Show Analysis Type only for DATA_PRODUCT datasets when genome browser is enabled
+const showAnalysisType = computed(() => {
+  return props.dataset?.type === 'DATA_PRODUCT' && config.enabledFeatures?.genomeBrowser;
+});
+
 
 // const datasetCreateLog = computed(() => {
 //   return (props.dataset?.audit_logs || []).find((e) => !!e.create_method);
