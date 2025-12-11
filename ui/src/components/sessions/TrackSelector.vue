@@ -64,8 +64,8 @@
         </template>
 
         <template #cell(file_type)="{ item }">
-          <va-chip :color="getFileTypeColor(item.file_type)" size="small">
-            {{ item.file_type?.toUpperCase() || '' }}
+          <va-chip v-if="item.file_type" :color="getFileTypeColor(item.file_type)" size="small">
+            {{ item.file_type?.toUpperCase() }}
           </va-chip>
         </template>
 

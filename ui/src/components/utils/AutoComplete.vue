@@ -95,6 +95,7 @@
             :data-testid="`${props.dataTestId}--load-more-results-li`"
           >
             <button
+              type="button"
               class="cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 p-2 rounded w-full text-left"
               @click="loadMore"
             >

@@ -62,7 +62,7 @@
         <tr v-if="showAnalysisType">
           <td>Analysis Type</td>
           <td>
-            {{ humanizeAnalysisType(props.dataset.metadata?.analysis_type) || 'Not specified' }}
+            {{ humanizeAnalysisType(props.dataset?.metadata?.analysis_type) }}
           </td>
         </tr>
         <tr>
@@ -79,12 +79,12 @@
 </template>
 
 <script setup>
-import * as datetime from "@/services/datetime";
-import { formatBytes } from "@/services/utils";
-import { humanizeAnalysisType } from "@/services/sessionUtils";
-import { useAuthStore } from "@/stores/auth";
-import config from "@/config";
-import { computed } from "vue";
+import config from '@/config';
+import * as datetime from '@/services/datetime';
+import { humanizeAnalysisType } from '@/services/sessionUtils';
+import { formatBytes } from '@/services/utils';
+import { useAuthStore } from '@/stores/auth';
+import { computed } from 'vue';
 
 const props = defineProps({ dataset: Object });
 
@@ -94,7 +94,6 @@ const auth = useAuthStore();
 const showAnalysisType = computed(() => {
   return props.dataset?.type === 'DATA_PRODUCT' && config.enabledFeatures?.genomeBrowser;
 });
-
 
 // const datasetCreateLog = computed(() => {
 //   return (props.dataset?.audit_logs || []).find((e) => !!e.create_method);

@@ -5,12 +5,12 @@
       <!-- search bar -->
       <div class="flex-1" v-if="activeFilters.length === 0">
         <va-input
-          v-model="inclusive_query"
+          :model-value="inclusive_query"
           class="w-full"
           placeholder="Search Sessions by title"
           outline
           clearable
-          @input="handleSearch"
+          @update:model-value="handleMainFilter"
         >
           <template #prependInner>
             <Icon icon="material-symbols:search" class="text-xl" />
@@ -19,11 +19,7 @@
       </div>
 
       <!-- Filter button -->
-      <va-button
-        @click="showSearchModal = true"
-        preset="primary"
-        class="flex-none"
-      >
+      <va-button @click="showSearchModal = true" preset="primary" class="flex-none">
         <i-mdi-filter />
         <span> Filters </span>
       </va-button>
@@ -39,12 +35,7 @@
 
       <!-- Create Session button -->
       <div class="flex-none">
-        <va-button
-          icon="add"
-          class="px-1"
-          color="success"
-          @click="router.push('/sessions/new')"
-        >
+        <va-button icon="add" class="px-1" color="success" @click="router.push('/sessions/new')">
           Create Session
         </va-button>
       </div>
@@ -68,13 +59,13 @@
       </template>
 
       <template #cell(genome)="{ rowData }">
-        <va-chip outline size="small" preset="primary">
+        <va-chip v-if="rowData.genome" outline size="small" preset="primary">
           {{ rowData.genome }}
         </va-chip>
       </template>
 
       <template #cell(genome_type)="{ rowData }">
-        <va-chip size="small" preset="secondary">
+        <va-chip v-if="rowData.genome_type" size="small" preset="secondary">
           {{ rowData.genome_type }}
         </va-chip>
       </template>
@@ -98,30 +89,12 @@
       </template>
 
       <template #cell(actions)="{ rowData }">
-        <div class="flex gap-1">
-          <va-button
-            preset="plain"
-            class="flex-auto"
-            @click="viewSession(rowData)"
-          >
-            <va-icon name="visibility" />
-          </va-button>
-
-          <va-button
-            v-if="canEditSession(rowData)"
-            preset="plain"
-            class="flex-auto"
-            @click="editSession(rowData)"
-          >
-            <va-icon name="edit" />
-          </va-button>
-
+        <div class="flex gap-1 justify-end">
           <va-button
             v-if="canDeleteSession(rowData)"
             preset="plain"
-            class="flex-auto"
             color="danger"
-            @click="deleteSession(rowData)"
+            @click="openDeleteModal(rowData)"
           >
             <va-icon name="delete" />
           </va-button>
@@ -137,25 +110,21 @@
       @reset="resetFilters"
     />
 
-    <!-- Edit Modal -->
-    <edit-session-modal
-      v-model="showEditModal"
-      :session="editingSession"
-      @updated="handleSessionUpdated"
-    />
+    <!-- Delete Modal -->
+    <DeleteSessionModal ref="deleteModal" :data="selectedForDeletion" @update="fetchSessions" />
   </div>
 </template>
 
 <script setup>
-import EditSessionModal from "@/components/sessions/EditSessionModal.vue";
-import SessionSearchFilters from "@/components/sessions/SessionSearchFilters.vue";
-import SessionSearchModal from "@/components/sessions/SessionSearchModal.vue";
-import { date } from "@/services/datetime";
-import { useAuthStore } from "@/stores/auth";
-import { useSessionsStore } from "@/stores/sessions";
-import { useDebounceFn } from "@vueuse/core";
-import { computed, onMounted, ref, watch } from "vue";
-import { useRouter } from "vue-router";
+import DeleteSessionModal from '@/components/sessions/DeleteSessionModal.vue';
+import SessionSearchFilters from '@/components/sessions/SessionSearchFilters.vue';
+import SessionSearchModal from '@/components/sessions/SessionSearchModal.vue';
+import { date } from '@/services/datetime';
+import { useAuthStore } from '@/stores/auth';
+import { useSessionsStore } from '@/stores/sessions';
+import { useDebounceFn } from '@vueuse/core';
+import { computed, onMounted, ref, watch } from 'vue';
+import { useRouter } from 'vue-router';
 
 const router = useRouter();
 const sessionsStore = useSessionsStore();
@@ -163,37 +132,35 @@ const auth = useAuthStore();
 
 // Reactive state
 const showSearchModal = ref(false);
-const showEditModal = ref(false);
-const editingSession = ref(null);
-const inclusive_query = ref("");
+const inclusive_query = ref('');
 
 // Query parameters
 const query = ref({
   page: 1,
   page_size: 25,
-  sort_by: "created_at",
-  sort_order: "desc",
+  sort_by: 'created_at',
+  sort_order: 'desc',
 });
 
 // Filters
 const filters = ref({
-  title: "",
-  genome: "",
-  genome_type: "",
+  title: '',
+  genome: '',
+  genome_type: '',
 });
 
 // Default values function for query persistence
 const defaultParams = () => ({
   page: 1,
   page_size: 25,
-  sort_by: "created_at",
-  sort_order: "desc",
+  sort_by: 'created_at',
+  sort_order: 'desc',
 });
 
 const defaultFilters = () => ({
-  title: "",
-  genome: "",
-  genome_type: "",
+  title: '',
+  genome: '',
+  genome_type: '',
 });
 
 // Computed
@@ -201,12 +168,12 @@ const sessions = computed(() => sessionsStore.sessions);
 const loading = computed(() => sessionsStore.loading);
 const metadata = computed(() => sessionsStore.metadata);
 
-console.log("sessions", sessions.value);
+console.log('sessions', sessions.value);
 
 const activeFilters = computed(() => {
   const active = [];
   Object.entries(filters.value).forEach(([key, value]) => {
-    if (value && value.trim() !== "") {
+    if (value && value.trim() !== '') {
       active.push({ key, value });
     }
   });
@@ -216,70 +183,61 @@ const activeFilters = computed(() => {
 // Table columns configuration
 const columns = [
   {
-    key: "title",
-    label: "Title",
+    key: 'title',
+    label: 'Title',
     sortable: true,
-    thStyle:
-      "white-space: pre-wrap; word-wrap: break-word; word-break: break-word;",
-    tdStyle:
-      "white-space: pre-wrap; word-wrap: break-word; word-break: break-word;",
-    align: "left",
+    width: '29%',
+    thStyle: 'white-space: pre-wrap; word-wrap: break-word; word-break: break-word;',
+    tdStyle: 'white-space: pre-wrap; word-wrap: break-word; word-break: break-word;',
+    align: 'left',
   },
   {
-    key: "genome_type",
-    label: "Genome Type",
+    key: 'genome_type',
+    label: 'Genome Type',
     sortable: true,
-    width: "15%",
+    width: '15%',
   },
   {
-    key: "genome",
-    label: "Genome",
+    key: 'genome',
+    label: 'Genome',
     sortable: true,
-    width: "15%",
+    width: '15%',
   },
   {
-    key: "tracks_count",
-    label: "Tracks",
+    key: 'tracks_count',
+    label: 'Tracks',
     sortable: false,
-    width: "10%",
-    thStyle:
-      "white-space: pre-wrap; word-wrap: break-word; word-break: break-word;",
-    tdStyle:
-      "white-space: pre-wrap; word-wrap: break-word; word-break: break-word;",
+    width: '10%',
+    thStyle: 'white-space: pre-wrap; word-wrap: break-word; word-break: break-word;',
+    tdStyle: 'white-space: pre-wrap; word-wrap: break-word; word-break: break-word;',
   },
   {
-    key: "user",
-    label: "Created By",
+    key: 'user',
+    label: 'Created By',
     sortable: false,
-    width: "15%",
-    thStyle:
-      "white-space: pre-wrap; word-wrap: break-word; word-break: break-word;",
-    tdStyle:
-      "white-space: pre-wrap; word-wrap: break-word; word-break: break-word;",
+    width: '15%',
+    thStyle: 'white-space: pre-wrap; word-wrap: break-word; word-break: break-word;',
+    tdStyle: 'white-space: pre-wrap; word-wrap: break-word; word-break: break-word;',
   },
   {
-    key: "created_at",
-    label: "Created",
+    key: 'created_at',
+    label: 'Created',
     sortable: true,
-    width: "10%",
-    thStyle:
-      "white-space: pre-wrap; word-wrap: break-word; word-break: break-word;",
-    tdStyle:
-      "white-space: pre-wrap; word-wrap: break-word; word-break: break-word;",
+    width: '10%',
+    thStyle: 'white-space: pre-wrap; word-wrap: break-word; word-break: break-word;',
+    tdStyle: 'white-space: pre-wrap; word-wrap: break-word; word-break: break-word;',
   },
   {
-    key: "actions",
-    label: "Actions",
+    key: 'actions',
+    label: 'Actions',
     sortable: false,
-    align: "right",
-    width: "6%",
+    thAlign: 'right',
+    tdAlign: 'right',
+    width: '6%',
   },
 ];
 
 // Methods
-const canEditSession = (session) => {
-  return session.user_id === auth.user?.id;
-};
 
 const canDeleteSession = (session) => {
   return session.user_id === auth.user?.id;
@@ -297,10 +255,15 @@ const fetchSessions = async () => {
     };
 
     await sessionsStore.fetchSessions(params);
-    console.log("sessions", sessions.value);
+    console.log('sessions', sessions.value);
   } catch (error) {
-    console.error("Error fetching sessions:", error);
+    console.error('Error fetching sessions:', error);
   }
+};
+
+const handleMainFilter = (value) => {
+  inclusive_query.value = value;
+  query.value.page = 1; // Reset to first page when searching
 };
 
 const handleSearch = useDebounceFn(() => {
@@ -326,15 +289,15 @@ const applyFilters = (newFilters) => {
 
 const resetFilters = () => {
   filters.value = { ...defaultFilters() };
-  inclusive_query.value = "";
+  inclusive_query.value = '';
   query.value.page = 1; // Reset to first page when resetting
   showSearchModal.value = false;
 };
 
 const removeFilter = (key) => {
-  filters.value[key] = "";
-  if (key === "title") {
-    inclusive_query.value = "";
+  filters.value[key] = '';
+  if (key === 'title') {
+    inclusive_query.value = '';
   }
   query.value.page = 1; // Reset to first page when removing filter
 };
@@ -348,29 +311,13 @@ const viewSession = (session) => {
   router.push(`/sessions/${session.id}`);
 };
 
-const editSession = (session) => {
-  editingSession.value = session;
-  showEditModal.value = true;
-};
+const deleteModal = ref(null);
+const selectedForDeletion = ref({});
 
-const deleteSession = async (session) => {
-  if (
-    confirm(`Are you sure you want to delete the session "${session.title}"?`)
-  ) {
-    try {
-      await sessionsStore.deleteSession(session.id);
-      await fetchSessions(); // Refresh the list
-    } catch (error) {
-      console.error("Error deleting session:", error);
-    }
-  }
-};
-
-const handleSessionUpdated = () => {
-  showEditModal.value = false;
-  editingSession.value = null;
-  fetchSessions(); // Refresh the list
-};
+function openDeleteModal(session) {
+  selectedForDeletion.value = session;
+  deleteModal.value.show();
+}
 
 // Watch for changes in query and filters
 watch(
@@ -378,7 +325,7 @@ watch(
   () => {
     fetchSessions();
   },
-  { deep: true },
+  { deep: true }
 );
 
 // Initial load
@@ -390,6 +337,6 @@ onMounted(() => {
 <route lang="yaml">
 meta:
   title: Sessions
-  requiresRoles: ["operator", "admin"]
-  nav: [{ label: "Sessions" }]
+  requiresRoles: ['operator', 'admin']
+  nav: [{ label: 'Sessions' }]
 </route>

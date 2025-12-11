@@ -62,12 +62,6 @@ function buildGenomeBrowserUrl(relativePath, token) {
 }
 
 /**
- * Determines if a file is browser-compatible based on its extension
- * All files are now considered browser-compatible
- */
-const isBrowserCompatibleFile = (filePath) => true;
-
-/**
  * Determines WashU browser file type from file path/name
  */
 const getWashUFileType = (filePath) => {
@@ -286,6 +280,25 @@ router.get(
         count: total,
       },
     });
+  }),
+);
+
+// GET /sessions/check-name/:name - Check if session name exists for current user
+router.get(
+  '/check-name/:name',
+  isPermittedTo('create'),
+  [param('name').isString().notEmpty().trim()],
+  asyncHandler(async (req, res) => {
+    const { name } = req.params;
+
+    const existingSession = await prisma.genome_browser_session.findFirst({
+      where: {
+        title: name,
+        user_id: req.user.id,
+      },
+    });
+
+    res.json({ exists: !!existingSession });
   }),
 );
 
@@ -685,10 +698,6 @@ router.get(
       // Filter tracks to only include browser-compatible files
       const tracks = await Promise.all(
         session.session_tracks
-          .filter((st) => {
-            const filePath = st.track.dataset_file?.path || st.track.dataset_file?.name || '';
-            return isBrowserCompatibleFile(filePath);
-          })
           .map(async (st) => {
             const { track } = st;
             const { dataset_file: datasetFile } = track;

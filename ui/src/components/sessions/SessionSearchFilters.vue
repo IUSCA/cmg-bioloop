@@ -1,44 +1,54 @@
 <template>
-  <div class="session-search-filters mb-4">
-    <div class="flex items-center gap-2 flex-wrap">
-      <span class="text-sm text-gray-600">Active filters:</span>
-      
-      <va-chip
-        v-if="filters.title"
-        size="small"
-        removable
-        @remove="$emit('remove-filter', 'title')"
-      >
-        Title: {{ filters.title }}
-      </va-chip>
-      
-      <va-chip
-        v-if="filters.genome"
-        size="small"
-        removable
-        @remove="$emit('remove-filter', 'genome')"
-      >
-        Genome: {{ filters.genome }}
-      </va-chip>
-      
-      <va-chip
-        v-if="filters.genome_type"
-        size="small"
-        removable
-        @remove="$emit('remove-filter', 'genome_type')"
-      >
-        Genome Type: {{ filters.genome_type }}
-      </va-chip>
-      
-      <va-button
-        v-if="hasActiveFilters"
-        preset="plain"
-        size="small"
-        @click="$emit('clear-all')"
-      >
-        Clear all
-      </va-button>
-    </div>
+  <div class="flex gap-2 flex-grow items-center">
+    <!-- title filter -->
+    <va-chip
+      class="flex-none"
+      closeable
+      outline
+      v-if="filters.title"
+      @click="emit('open')"
+      @update:model-value="removeFilter('title')"
+    >
+      Title: &nbsp;
+      <span class="font-semibold"> {{ filters.title }} </span>
+    </va-chip>
+
+    <!-- genome filter -->
+    <va-chip
+      class="flex-none"
+      closeable
+      outline
+      v-if="filters.genome"
+      @click="emit('open')"
+      @update:model-value="removeFilter('genome')"
+    >
+      Genome: &nbsp;
+      <span class="font-semibold"> {{ filters.genome }} </span>
+    </va-chip>
+
+    <!-- genome_type filter -->
+    <va-chip
+      class="flex-none"
+      closeable
+      outline
+      v-if="filters.genome_type"
+      @click="emit('open')"
+      @update:model-value="removeFilter('genome_type')"
+    >
+      Genome Type: &nbsp;
+      <span class="font-semibold"> {{ filters.genome_type }} </span>
+    </va-chip>
+
+    <!-- reset search -->
+    <va-button
+      @click="clearAll"
+      preset="secondary"
+      round
+      class="flex-none ml-auto"
+      v-if="hasActiveFilters"
+    >
+      <span class="text-sm"> Reset </span>
+    </va-button>
   </div>
 </template>
 
@@ -46,12 +56,30 @@
 import { computed } from 'vue';
 
 const props = defineProps({
-  filters: { type: Object, required: true },
+  filters: {
+    type: Object,
+    required: true,
+    default: () => ({
+      title: '',
+      genome: '',
+      genome_type: '',
+    }),
+  },
 });
 
-defineEmits(['remove-filter', 'clear-all']);
+const emit = defineEmits(["search", "open", "remove-filter", "clear-all"]);
 
+// Computed
 const hasActiveFilters = computed(() => {
-  return Object.values(props.filters).some(value => value && value.trim() !== '');
+  return Object.values(props.filters).some(value => value && value !== '');
 });
+
+// Methods
+function removeFilter(field) {
+  emit('remove-filter', field);
+}
+
+function clearAll() {
+  emit('clear-all');
+}
 </script> 

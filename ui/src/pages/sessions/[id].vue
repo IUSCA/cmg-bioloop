@@ -15,7 +15,15 @@
           <!-- Session Info -->
           <va-card>
             <va-card-title>
-              <span class="text-lg"> Session Details </span>
+              <div class="flex flex-nowrap items-center w-full">
+                <span class="flex-auto text-lg"> Session Details </span>
+                <AddEditButton
+                  class="flex-none"
+                  edit
+                  @click.stop="showEditModal = true"
+                  v-if="canEditSession"
+                />
+              </div>
             </va-card-title>
             <va-card-content class="space-y-4">
               <div class="flex justify-between">
@@ -24,11 +32,11 @@
               </div>
               <div class="flex justify-between">
                 <span class="font-medium">Genome Type</span>
-                <va-chip size="small">{{ session.genome_type }}</va-chip>
+                <va-chip v-if="session.genome_type" size="small">{{ session.genome_type }}</va-chip>
               </div>
               <div class="flex justify-between">
                 <span class="font-medium">Genome Value</span>
-                <va-chip outline size="small">{{ session.genome }}</va-chip>
+                <va-chip v-if="session.genome" outline size="small">{{ session.genome }}</va-chip>
               </div>
               <div class="flex justify-between">
                 <span class="font-medium">Visibility</span>
@@ -72,10 +80,12 @@
 
                 <!-- Delete Session Action Button-->
                 <va-button
+                  v-if="canDeleteSession"
                   color="danger"
                   border-color="danger"
                   class="flex-initial"
                   preset="secondary"
+                  @click="deleteSession"
                 >
                   <i-mdi-delete class="pr-2 text-2xl" />
                   Delete Session
@@ -100,7 +110,16 @@
         <div class="grid grid-cols-1 gap-3">
           <va-card>
             <va-card-title>
-              <span class="text-lg">Associated Tracks</span>
+              <div class="flex flex-nowrap items-center w-full">
+                <span class="flex-auto text-lg">Associated Tracks</span>
+                <AddEditButton
+                  class="flex-none"
+                  show-text
+                  :edit="associatedTracks?.length > 0"
+                  @click="showTracksModal = true"
+                  v-if="canEditSession"
+                />
+              </div>
             </va-card-title>
             <va-card-content>
               <div v-if="associatedTracks?.length" class="space-y-4">
@@ -118,18 +137,23 @@
 
                   <template #cell(analysis_type)="{ rowData }">
                     <va-chip
+                      v-if="rowData?.analysis_type"
                       size="small"
                       :color="trackService._getTrackColor(rowData.analysis_type)"
-                      >{{ rowData.analysis_type || 'Not specified' }}</va-chip
+                      >{{ rowData?.analysis_type }}</va-chip
                     >
                   </template>
 
                   <template #cell(genomeType)="{ rowData }">
-                    <va-chip size="small">{{ rowData.genomeType }}</va-chip>
+                    <va-chip v-if="rowData.genomeType" size="small">
+                      {{ rowData.genomeType }}
+                    </va-chip>
                   </template>
 
                   <template #cell(genomeValue)="{ rowData }">
-                    <va-chip size="small" outline>{{ rowData.genomeValue }}</va-chip>
+                    <va-chip v-if="rowData.genomeValue" size="small" outline>
+                      {{ rowData.genomeValue }}
+                    </va-chip>
                   </template>
 
                   <template #cell(dataset_name)="{ rowData }">
@@ -233,15 +257,152 @@
       :session="session"
       @updated="handleSessionUpdated"
     />
+
+    <!-- Edit Session Modal -->
+    <va-modal
+      v-model="showEditModal"
+      title="Edit Session Details"
+      size="small"
+      no-outside-dismiss
+      fixed-layout
+      ok-text="Update"
+      @ok="updateSession"
+      @cancel="showEditModal = false"
+    >
+      <va-inner-loading :loading="updating">
+        <div class="space-y-4">
+          <va-input
+            v-model="editForm.title"
+            label="Session Title"
+            class="w-full"
+            :rules="[(value) => !!value || 'Session title is required']"
+          />
+
+          <va-input v-model="editForm.genome_type" label="Genome Type" class="w-full" clearable />
+
+          <va-input v-model="editForm.genome" label="Genome Value" class="w-full" clearable />
+
+          <va-checkbox v-model="editForm.is_public" label="Make session public" />
+        </div>
+      </va-inner-loading>
+    </va-modal>
+
+    <!-- Edit Tracks Modal -->
+    <va-modal
+      v-model="showTracksModal"
+      title="Manage Session Tracks"
+      size="large"
+      hide-default-actions
+      no-outside-dismiss
+    >
+      <div class="space-y-4">
+        <p class="text-sm text-gray-600">Select tracks from Data Products for this session.</p>
+
+        <TracksAsyncAutoComplete
+          v-model:search-term="trackSearch"
+          label="Search and Add Tracks"
+          placeholder="Search tracks by name"
+          multiple
+          @select="handleTrackSelect"
+        />
+
+        <!-- Selected tracks table -->
+        <div v-if="selectedTracks.length > 0" class="space-y-3">
+          <div class="flex items-center justify-between">
+            <div>
+              {{ selectedTracks.length }} track{{ selectedTracks.length !== 1 ? 's' : '' }}
+              selected
+            </div>
+          </div>
+
+          <va-scroll-container vertical style="max-height: 300px">
+            <va-data-table
+              :items="selectedTracksTableData"
+              :columns="selectedTracksColumns"
+              :loading="false"
+              disable-client-side-sorting
+            >
+              <template #cell(name)="{ value, rowData }">
+                <div class="text-sm">
+                  <router-link
+                    v-if="rowData.id"
+                    :to="`/tracks/${rowData.id}`"
+                    target="_blank"
+                    class="text-primary hover:underline"
+                  >
+                    {{ value }}
+                  </router-link>
+                  <span v-else>{{ value }}</span>
+                </div>
+              </template>
+
+              <template #cell(genome)="{ rowData }">
+                <div class="text-sm">
+                  {{
+                    (rowData.genome_type || '') +
+                    (rowData.genome_type && rowData.genome_value ? ' ' : '') +
+                    (rowData.genome_value || '')
+                  }}
+                </div>
+              </template>
+
+              <template #cell(dataset)="{ rowData }">
+                <div class="text-sm">
+                  <router-link
+                    v-if="rowData.dataset?.id"
+                    :to="`/datasets/${rowData.dataset.id}`"
+                    target="_blank"
+                    class="text-primary hover:underline"
+                  >
+                    {{ rowData.dataset.name || '' }}
+                  </router-link>
+                  <span v-else>{{ rowData.dataset?.name || '' }}</span>
+                </div>
+              </template>
+
+              <template #cell(size)="{ rowData }">
+                <div class="text-sm">
+                  {{ formatBytes(rowData.size) }}
+                </div>
+              </template>
+
+              <template #cell(actions)="{ rowData }">
+                <va-button size="small" plain color="danger" @click="removeTrack(rowData.id)">
+                  <va-icon name="delete" />
+                </va-button>
+              </template>
+            </va-data-table>
+          </va-scroll-container>
+        </div>
+
+        <div class="flex justify-end gap-3 pt-4">
+          <va-button preset="secondary" @click="showTracksModal = false"> Cancel </va-button>
+          <va-button preset="primary" :loading="updatingTracks" @click="updateSessionTracks">
+            Update Tracks
+          </va-button>
+        </div>
+      </div>
+    </va-modal>
+
+    <!-- Delete Session Modal -->
+    <DeleteSessionModal
+      ref="sessionDeleteModal"
+      :data="session"
+      @update="router.push('/sessions')"
+    />
   </div>
 </template>
 
 <script setup>
+import DeleteSessionModal from '@/components/sessions/DeleteSessionModal.vue';
+import TracksAsyncAutoComplete from '@/components/tracks/TracksAsyncAutoComplete.vue';
+import AddEditButton from '@/components/utils/buttons/AddEditButton.vue';
 import config from '@/config';
 import api from '@/services/api';
 import * as datetime from '@/services/datetime';
 import toast from '@/services/toast';
 import trackService from '@/services/track';
+import { formatBytes } from '@/services/utils';
 import { useAuthStore } from '@/stores/auth';
 import { useNavStore } from '@/stores/nav';
 import { useSessionsStore } from '@/stores/sessions';
@@ -258,6 +419,17 @@ const showEditModal = ref(false);
 const requestingStaging = ref(false);
 const projectsLoading = ref(false);
 const sessionProjects = ref([]);
+const updating = ref(false);
+const editForm = ref({
+  title: '',
+  genome_type: '',
+  genome: '',
+  is_public: false,
+});
+const showTracksModal = ref(false);
+const updatingTracks = ref(false);
+const selectedTracks = ref([]);
+const trackSearch = ref('');
 
 // Computed
 const session = computed(() => sessionsStore.currentSession);
@@ -275,6 +447,51 @@ const canDeleteSession = computed(() => {
 const hasUnstagedTracks = computed(() => {
   if (!session.value?.session_tracks) return false;
   return session.value.session_tracks.some((st) => !st.track.dataset_file?.dataset?.is_staged);
+});
+
+// Table columns for selected tracks in modal
+const selectedTracksColumns = [
+  {
+    key: 'name',
+    label: 'Track Name',
+    sortable: true,
+    width: '30%',
+  },
+  {
+    key: 'genome',
+    label: 'Genome',
+    sortable: true,
+    width: '25%',
+  },
+  {
+    key: 'dataset',
+    label: 'Dataset',
+    sortable: true,
+    width: '25%',
+  },
+  {
+    key: 'size',
+    label: 'Size',
+    sortable: true,
+    width: '10%',
+  },
+  {
+    key: 'actions',
+    label: 'Actions',
+    sortable: false,
+    width: '10%',
+  },
+];
+
+const selectedTracksTableData = computed(() => {
+  return selectedTracks.value.map((track) => ({
+    ...track,
+    name: track.name || '',
+    genome_type: track.dataset_file?.dataset?.genomic_details?.genome_type || null,
+    genome_value: track.dataset_file?.dataset?.genomic_details?.genome_value || null,
+    dataset: track.dataset_file?.dataset || null,
+    size: track.dataset_file?.size || null,
+  }));
 });
 
 const unstagedTracks = computed(() => {
@@ -314,7 +531,7 @@ const trackColumns = [
     key: 'name',
     label: 'Name',
     sortable: true,
-    width: '35%',
+    width: '25%',
     thAlign: 'left',
     tdAlign: 'left',
   },
@@ -322,25 +539,25 @@ const trackColumns = [
     key: 'analysis_type',
     label: 'Analysis Type',
     sortable: true,
-    width: '25%',
+    width: '15%',
   },
   {
     key: 'genomeType',
     label: 'Genome Type',
     sortable: true,
-    width: '25%',
+    width: '12%',
   },
   {
     key: 'genomeValue',
     label: 'Genome Value',
     sortable: true,
-    width: '25%',
+    width: '13%',
   },
   {
     key: 'dataset_name',
     label: 'Dataset Name',
     sortable: true,
-    width: '25%',
+    width: '20%',
   },
   // {
   //   key: "is_staged",
@@ -358,7 +575,9 @@ const trackColumns = [
     key: 'created_at',
     label: 'Created',
     sortable: true,
-    width: '25%',
+    width: '15%',
+    thAlign: 'right',
+    tdAlign: 'right',
   },
 ];
 
@@ -385,19 +604,11 @@ const projectColumns = [
 ];
 
 // Methods
+const sessionDeleteModal = ref(null);
+
 const deleteSession = async () => {
   if (!session.value) return;
-
-  if (confirm('Are you sure you want to delete this session?')) {
-    try {
-      await sessionsStore.deleteSession(session.value.id);
-      toast.success('Session deleted successfully');
-      router.push('/sessions');
-    } catch (error) {
-      console.error('Failed to delete session:', error);
-      toast.error('Failed to delete session');
-    }
-  }
+  sessionDeleteModal.value.show();
 };
 
 const exportDataHub = async () => {
@@ -507,6 +718,70 @@ const openInGenomeBrowser = () => {
   // Open in new tab
   window.open(genomeBrowserUrl.value, '_blank');
 };
+
+const updateSession = async () => {
+  updating.value = true;
+  try {
+    await sessionsStore.updateSession(session.value.id, editForm.value);
+    toast.success('Session updated successfully');
+    showEditModal.value = false;
+  } catch (error) {
+    console.error('Failed to update session:', error);
+    toast.error('Failed to update session');
+  } finally {
+    updating.value = false;
+  }
+};
+
+const handleTrackSelect = (track) => {
+  // Add track to selected tracks if not already present
+  const existingIndex = selectedTracks.value.findIndex((t) => t.id === track.id);
+  if (existingIndex === -1) {
+    selectedTracks.value.push(track);
+  }
+};
+
+const removeTrack = (trackId) => {
+  const index = selectedTracks.value.findIndex((t) => t.id === trackId);
+  if (index > -1) {
+    selectedTracks.value.splice(index, 1);
+  }
+};
+
+const updateSessionTracks = async () => {
+  updatingTracks.value = true;
+  try {
+    const trackIds = selectedTracks.value.map((track) => track.id);
+    await sessionsStore.updateSession(session.value.id, { track_ids: trackIds });
+    toast.success('Session tracks updated successfully');
+    showTracksModal.value = false;
+    await loadSession(); // Reload session data
+  } catch (error) {
+    console.error('Failed to update session tracks:', error);
+    toast.error('Failed to update session tracks');
+  } finally {
+    updatingTracks.value = false;
+  }
+};
+
+// Watch for modal opening to initialize form
+watch(showEditModal, (isOpen) => {
+  if (isOpen && session.value) {
+    editForm.value = {
+      title: session.value.title || '',
+      genome_type: session.value.genome_type || '',
+      genome: session.value.genome || '',
+      is_public: session.value.is_public || false,
+    };
+  }
+});
+
+// Watch for tracks modal opening to initialize selected tracks
+watch(showTracksModal, (isOpen) => {
+  if (isOpen && session.value?.session_tracks) {
+    selectedTracks.value = session.value.session_tracks.map((st) => st.track);
+  }
+});
 
 // Lifecycle
 onMounted(() => {
