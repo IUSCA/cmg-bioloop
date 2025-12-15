@@ -261,10 +261,11 @@ const fetchSessions = async () => {
   }
 };
 
-const handleMainFilter = (value) => {
+const handleMainFilter = useDebounceFn((value) => {
   inclusive_query.value = value;
   query.value.page = 1; // Reset to first page when searching
-};
+  fetchSessions();
+}, 300);
 
 const handleSearch = useDebounceFn(() => {
   query.value.page = 1; // Reset to first page when searching

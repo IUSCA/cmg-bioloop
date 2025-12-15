@@ -1,12 +1,5 @@
 <template>
   <div class="create-session p-6">
-    <!-- Breadcrumbs -->
-    <div class="flex items-center space-x-2 text-sm mb-6">
-      <router-link to="/sessions" class="hover:underline">Sessions</router-link>
-      <span>/</span>
-      <span>Create New Session</span>
-    </div>
-
     <div class="max-w-4xl mx-auto">
       <!-- <h1 class="text-3xl font-bold mb-6">Create New Genome Browser Session</h1> -->
 
