@@ -251,13 +251,6 @@
       <!-- Genome Browser Integration -->
     </div>
 
-    <!-- Edit Modal -->
-    <edit-session-modal
-      v-model="showEditModal"
-      :session="session"
-      @updated="handleSessionUpdated"
-    />
-
     <!-- Edit Session Modal -->
     <va-modal
       v-model="showEditModal"
