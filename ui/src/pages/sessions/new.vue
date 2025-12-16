@@ -161,7 +161,7 @@
 
 <script setup>
 import TracksAsyncAutoComplete from '@/components/tracks/TracksAsyncAutoComplete.vue';
-import api from '@/services/api';
+import sessionService from '@/services/session';
 import toast from '@/services/toast';
 import { formatBytes } from '@/services/utils';
 import { useSessionsStore } from '@/stores/sessions';
@@ -241,7 +241,7 @@ const validateSessionNameUnique = async (value) => {
     return true; // Let the required validation handle empty values
   }
   try {
-    const response = await api.get(`/sessions/check-name/${encodeURIComponent(value.trim())}`);
+    const response = await sessionService.checkName(value);
     if (response.data.exists) {
       return 'A session with this name already exists';
     }

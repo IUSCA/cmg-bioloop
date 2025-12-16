@@ -20,6 +20,7 @@ const {
 // Register application
 const app = express();
 
+// TEMPORARY: Debug logging for datahub endpoint
 // remove fingerprinting header
 app.disable('x-powered-by');
 

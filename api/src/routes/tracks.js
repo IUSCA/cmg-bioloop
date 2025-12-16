@@ -144,6 +144,18 @@ router.get(
         filter_query.genomeValue = genome_value;
       }
 
+      // Filter by PRIMARY role if genome browser feature is enabled
+      const isGenomeBrowserEnabled = config.get('enabled_features.genome_browser');
+      if (isGenomeBrowserEnabled) {
+        filter_query.dataset_file = {
+          ...(filter_query.dataset_file || {}),
+          metadata: {
+            path: ['role'],
+            equals: 'PRIMARY',
+          },
+        };
+      }
+
       const [tracks, count] = await prisma.$transaction([
         prisma.track.findMany({
           where: filter_query,
@@ -155,6 +167,7 @@ router.get(
                 path: true,
                 size: true,
                 filetype: true,
+                metadata: true,
                 dataset: {
                   select: {
                     id: true,
@@ -196,8 +209,6 @@ router.get(
     } catch (error) {
       console.error(error);
       res.status(500).json({ error: 'Failed to fetch tracks' });
-    } finally {
-      await prisma.$disconnect();
     }
   }),
 );
@@ -314,8 +325,6 @@ router.post(
     } catch (error) {
       console.error(error);
       res.status(500).json({ error: 'Failed to create track' });
-    } finally {
-      await prisma.$disconnect();
     }
   }),
 );
@@ -536,8 +545,6 @@ router.patch(
     } catch (error) {
       console.error(error);
       res.status(500).json({ error: 'Failed to update track' });
-    } finally {
-      await prisma.$disconnect();
     }
   }),
 );
@@ -607,8 +614,6 @@ router.delete(
     } catch (error) {
       console.error(error);
       res.status(500).json({ error: 'Failed to delete track' });
-    } finally {
-      await prisma.$disconnect();
     }
   }),
 );
@@ -710,6 +715,18 @@ router.get(
         filter_query.genomeValue = genome_value;
       }
 
+      // Filter by PRIMARY role if genome browser feature is enabled
+      const isGenomeBrowserEnabledForUser = config.get('enabled_features.genome_browser');
+      if (isGenomeBrowserEnabledForUser) {
+        filter_query.dataset_file = {
+          ...(filter_query.dataset_file || {}),
+          metadata: {
+            path: ['role'],
+            equals: 'PRIMARY',
+          },
+        };
+      }
+
       const [tracks, count] = await prisma.$transaction([
         prisma.track.findMany({
           where: filter_query,
@@ -721,6 +738,7 @@ router.get(
                 path: true,
                 size: true,
                 filetype: true,
+                metadata: true,
                 dataset: {
                   select: {
                     id: true,
@@ -762,8 +780,6 @@ router.get(
     } catch (error) {
       console.error(error);
       res.status(500).json({ error: 'Failed to fetch tracks' });
-    } finally {
-      await prisma.$disconnect();
     }
   }),
 );

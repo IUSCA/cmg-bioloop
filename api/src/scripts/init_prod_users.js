@@ -118,5 +118,5 @@ main()
 /**
  * docker compose -f docker-compose-prod.yml exec -T postgres bash -c \
   'pg_restore -U $POSTGRES_USER -d $POSTGRES_DB -n public --data-only /opt/sca/backups/public_data.dump'
- * 
+ *
  */

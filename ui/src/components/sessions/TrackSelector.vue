@@ -269,7 +269,8 @@ const loadTracks = async () => {
   try {
     await tracksStore.fetchTracks({
       project_id: props.projectId,
-      limit: 1000, // Get more tracks for selection
+      limit: 25,
+      offset: 0,
     });
   } catch (error) {
     console.error('Error loading tracks:', error);

@@ -256,6 +256,35 @@ const exports = {
       genomes: ['TbruceiTREU927', 'TbruceiLister427'],
     },
   },
+  genomeBrowser: {
+    // File roles
+    fileRoles: {
+      PRIMARY: 'PRIMARY',
+      INDEX: 'INDEX',
+    },
+    // Browser-compatible formats (for display/filtering)
+    browserCompatibleFormats: [
+      'BAM',
+      'CRAM',
+      'VCF_GZ',
+      'BIGWIG',
+      'BIGBED',
+      'FRAGMENTS_TSV_GZ',
+      'BED_GZ',
+    ],
+    // Index formats
+    indexFormats: ['BAI', 'CRAI', 'TBI', 'CSI'],
+    // Primary track formats
+    primaryTrackFormats: [
+      'BAM',
+      'CRAM',
+      'VCF_GZ',
+      'BED_GZ',
+      'BIGWIG',
+      'BIGBED',
+      'FRAGMENTS_TSV_GZ',
+    ],
+  },
 };
 
 export default exports;

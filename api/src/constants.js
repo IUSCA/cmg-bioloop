@@ -139,6 +139,71 @@ const auth = {
   },
 };
 
+// Genome Browser - File Roles
+const FILE_ROLES = {
+  PRIMARY: 'PRIMARY',
+  INDEX: 'INDEX',
+};
+
+// Genome Browser - Index types by main format
+const INDEX_TYPES_BY_MAIN_FORMAT = {
+  // Alignment
+  BAM: ['BAI', 'CRAI'],
+  CRAM: ['CRAI'],
+
+  // Variants
+  VCF_GZ: ['TBI', 'CSI'],
+
+  // Tabix-indexed tabular
+  BED_GZ: ['TBI', 'CSI'],
+  GFF_GZ: ['TBI', 'CSI'],
+  GTF_GZ: ['TBI', 'CSI'],
+  TSV_GZ: ['TBI', 'CSI'],
+
+  // 10x ATAC
+  FRAGMENTS_TSV_GZ: ['TBI'],
+
+  // Big binary formats (self-indexed)
+  BIGWIG: [],
+  BIGBED: [],
+
+  // Others: no sidecar index
+  FASTQ: [],
+  FASTQ_GZ: [],
+  CSV: [],
+  TSV: [],
+  JSON: [],
+  HTML: [],
+  PDF: [],
+  LOG: [],
+  CHECKSUM: [],
+};
+
+// Genome Browser - Formats that are index files
+const INDEX_FORMATS = ['BAI', 'CRAI', 'TBI', 'CSI'];
+
+// Genome Browser - Track-capable primary formats
+const PRIMARY_TRACK_FORMATS = [
+  'BAM',
+  'CRAM',
+  'VCF_GZ',
+  'BED_GZ',
+  'BIGWIG',
+  'BIGBED',
+  'FRAGMENTS_TSV_GZ',
+];
+
+// Genome Browser - Browser-compatible formats (for filtering in track selection)
+const BROWSER_COMPATIBLE_FORMATS = [
+  'BAM',
+  'CRAM',
+  'VCF_GZ',
+  'BIGWIG',
+  'BIGBED',
+  'FRAGMENTS_TSV_GZ',
+  'BED_GZ',
+];
+
 module.exports = {
   INCLUDE_FILES,
   INCLUDE_STATES,
@@ -151,4 +216,9 @@ module.exports = {
   UPLOAD_STATUSES,
   WORKFLOWS,
   DATASET_STATES,
+  FILE_ROLES,
+  INDEX_TYPES_BY_MAIN_FORMAT,
+  INDEX_FORMATS,
+  PRIMARY_TRACK_FORMATS,
+  BROWSER_COMPATIBLE_FORMATS,
 };

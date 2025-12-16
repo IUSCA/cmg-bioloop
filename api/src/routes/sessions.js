@@ -1,14 +1,17 @@
 const express = require('express');
 const { body, query, param } = require('express-validator');
 const config = require('config');
+const cors = require('cors');
 const logger = require('@/services/logger');
 const prisma = require('@/db');
 const asyncHandler = require('../middleware/asyncHandler');
-const { accessControl } = require('../middleware/auth');
+const { accessControl, authenticateWithQueryToken } = require('../middleware/auth');
 const datasetService = require('../services/dataset');
 const authService = require('../services/auth');
+const { findIndexFileForPrimary } = require('../utils/genomeBrowserUtils');
 
 const router = express.Router();
+const datahubRouter = express.Router();
 
 // Middleware to check permissions
 const isPermittedTo = accessControl('sessions');
@@ -656,98 +659,158 @@ router.delete(
   }),
 );
 
-// GET /sessions/:id/datahub - Export session tracks in WashU browser format
-// This endpoint is only accessible to admin/operator roles
+// GET /sessions/:id/datahub-token - Get a token for accessing the datahub endpoint
+// This allows the UI to generate a URL with embedded token for external genome browsers
 router.get(
-  '/:id/datahub',
-  isPermittedTo('read'), // Only admin/operator can access WashU browser integration
+  '/:id/datahub-token',
+  isPermittedTo('read'),
   [param('id').isInt().toInt()],
   asyncHandler(async (req, res) => {
     const sessionId = req.params.id;
 
-    try {
-      const session = await prisma.genome_browser_session.findUnique({
-        where: { id: sessionId },
-        include: {
-          session_tracks: {
-            include: {
-              track: {
-                include: {
-                  dataset_file: {
-                    include: {
-                      dataset: {
-                        include: {
-                          genomic_details: true,
-                        },
+    // Verify session exists and user has access
+    const session = await prisma.genome_browser_session.findUnique({
+      where: { id: sessionId },
+      select: { id: true },
+    });
+
+    if (!session) {
+      return res.status(404).json({ error: 'Session not found' });
+    }
+
+    // Generate a JWT token specifically for datahub access
+    // Token includes user info so datahub endpoint can validate permissions
+    // Uses default JWT TTL from config: 1 hour (prod), 7 days (dev)
+    const token = authService.issueJWT({
+      userProfile: req.user,
+    });
+
+    res.json({ token });
+  }),
+);
+
+// OPTIONS handler for CORS preflight on datahub endpoint
+datahubRouter.options('/:id/datahub', cors());
+
+// GET /sessions/:id/datahub - Export session tracks in WashU browser format
+// Accessible via token in query parameter (for external genome browsers)
+datahubRouter.get(
+  '/:id/datahub',
+  cors(), // Enable CORS for WashU browser
+  authenticateWithQueryToken, // Accept token from query parameter
+  isPermittedTo('read'), // Check user permissions
+  [param('id').isInt().toInt()],
+  asyncHandler(async (req, res) => {
+    const sessionId = req.params.id;
+
+    const session = await prisma.genome_browser_session.findUnique({
+      where: { id: sessionId },
+      include: {
+        session_tracks: {
+          include: {
+            track: {
+              include: {
+                dataset_file: {
+                  include: {
+                    dataset: {
+                      include: {
+                        genomic_details: true,
                       },
                     },
                   },
                 },
               },
             },
-            orderBy: { order: 'asc' },
           },
+          orderBy: { order: 'asc' },
         },
-      });
+      },
+    });
 
-      if (!session) {
-        return res.status(404).json({ error: 'Session not found' });
-      }
-
-      // Convert to WashU DataHub format using secure_download
-      // Filter tracks to only include browser-compatible files
-      const tracks = await Promise.all(
-        session.session_tracks
-          .map(async (st) => {
-            const { track } = st;
-            const { dataset_file: datasetFile } = track;
-            const { dataset } = datasetFile;
-            const filePath = datasetFile?.path || datasetFile?.name || '';
-
-            // Determine file type from extension
-            const fileType = getWashUFileType(filePath);
-
-            // Get genome info from dataset (since genome is associated with dataset in bioloop)
-            const genomeInfo = dataset?.genomic_details;
-            const genomeType = genomeInfo?.genome_type || session.genome_type || '';
-            const genomeValue = genomeInfo?.genome_value || session.genome || '';
-
-            // Generate secure download URL for WashU browser
-            try {
-              const relativePath = getRelativeFilePathForGenomeBrowser({ dataset, datasetFile });
-              const token = await getGenomeBrowserFileToken(relativePath);
-              const url = buildGenomeBrowserUrl(relativePath, token);
-
-              // Track display name (use session track title if available, else track name)
-              const trackName = st.title || track.name || datasetFile.name || 'Unnamed Track';
-
-              return {
-                type: fileType,
-                name: trackName,
-                options: {
-                  color: st.color || '#2669a3',
-                  height: 100,
-                },
-                showOnHubLoad: true,
-                url,
-                // Include genome info if available (for reference, WashU uses genome from URL params)
-                ...(genomeType && genomeValue ? { genome: `${genomeType}_${genomeValue}` } : {}),
-              };
-            } catch (error) {
-              logger.error(`Failed to generate secure URL for file ${datasetFile.id}:`, error);
-              return null; // Skip this track if URL generation fails
-            }
-          }),
-      );
-
-      // Filter out any null tracks (failed URL generation)
-      const validTracks = tracks.filter(Boolean);
-
-      res.json(validTracks);
-    } catch (error) {
-      logger.error('Error exporting DataHub:', error);
-      res.status(500).json({ error: 'Failed to export DataHub' });
+    if (!session) {
+      return res.status(404).json({ error: 'Session not found' });
     }
+
+    // Collect all unique dataset IDs to fetch their files (for finding index files)
+    const datasetIds = [...new Set(session.session_tracks.map((st) => st.track.dataset_file.dataset.id))];
+
+    // Fetch all dataset files for these datasets (to find index files)
+    const allDatasetFiles = await prisma.dataset_file.findMany({
+      where: {
+        dataset_id: { in: datasetIds },
+      },
+      select: {
+        id: true,
+        path: true,
+        metadata: true,
+        dataset_id: true,
+      },
+    });
+
+    // Group dataset files by dataset_id for easier lookup
+    const filesByDataset = allDatasetFiles.reduce((acc, file) => {
+      if (!acc[file.dataset_id]) {
+        acc[file.dataset_id] = [];
+      }
+      acc[file.dataset_id].push(file);
+      return acc;
+    }, {});
+
+    // Convert to WashU DataHub format using secure_download
+    // Include index files where available
+    const tracks = await Promise.all(
+      session.session_tracks
+        .map(async (st) => {
+          const { track } = st;
+          const { dataset_file: datasetFile } = track;
+          const { dataset } = datasetFile;
+          const filePath = datasetFile?.path || datasetFile?.name || '';
+
+          // Determine file type from extension
+          const fileType = getWashUFileType(filePath);
+
+          // Get genome info from dataset (since genome is associated with dataset in bioloop)
+          const genomeInfo = dataset?.genomic_details;
+          const genomeType = genomeInfo?.genome_type || session.genome_type || '';
+          const genomeValue = genomeInfo?.genome_value || session.genome || '';
+
+          // Generate secure download URL for WashU browser
+          const relativePath = getRelativeFilePathForGenomeBrowser({ dataset, datasetFile });
+          const token = await getGenomeBrowserFileToken(relativePath);
+          const url = buildGenomeBrowserUrl(relativePath, token);
+
+          // Track display name (use session track title if available, else track name)
+          const trackName = st.title || track.name || datasetFile.name || 'Unnamed Track';
+
+          const trackConfig = {
+            type: fileType,
+            name: trackName,
+            options: {
+              color: st.color || '#2669a3',
+              height: 100,
+            },
+            showOnHubLoad: true,
+            url,
+            // Include genome info if available (for reference, WashU uses genome from URL params)
+            ...(genomeType && genomeValue ? { genome: `${genomeType}_${genomeValue}` } : {}),
+          };
+
+          // Find and attach index file if it exists
+          const datasetFilesForThisDataset = filesByDataset[dataset.id] || [];
+          const indexFile = findIndexFileForPrimary(datasetFilesForThisDataset, datasetFile);
+
+          if (indexFile) {
+            const indexRelativePath = getRelativeFilePathForGenomeBrowser({ dataset, datasetFile: indexFile });
+            const indexToken = await getGenomeBrowserFileToken(indexRelativePath);
+            const indexUrl = buildGenomeBrowserUrl(indexRelativePath, indexToken);
+            trackConfig.indexURL = indexUrl;
+          }
+
+          return trackConfig;
+        }),
+    );
+
+    res.json(tracks);
   }),
 );
 
@@ -758,52 +821,47 @@ router.post(
   asyncHandler(async (req, res) => {
     const sessionId = req.params.id;
 
-    try {
-      const session = await prisma.genome_browser_session.findUnique({
-        where: { id: sessionId },
-        include: {
-          session_tracks: {
-            include: {
-              track: {
-                include: {
-                  dataset_file: {
-                    include: {
-                      dataset: true,
-                    },
+    const session = await prisma.genome_browser_session.findUnique({
+      where: { id: sessionId },
+      include: {
+        session_tracks: {
+          include: {
+            track: {
+              include: {
+                dataset_file: {
+                  include: {
+                    dataset: true,
                   },
                 },
               },
             },
           },
         },
-      });
+      },
+    });
 
-      if (!session) {
-        return res.status(404).json({ error: 'Session not found' });
-      }
-
-      // Get unique datasets that need staging
-      const datasetsToStage = [...new Set(
-        session.session_tracks
-          .filter((st) => !st.track.dataset_file?.dataset?.is_staged)
-          .map((st) => st.track.dataset_file?.dataset?.id)
-          .filter(Boolean),
-      )];
-
-      if (datasetsToStage.length === 0) {
-        return res.json({ message: 'All datasets are already staged' });
-      }
-
-      // Return the datasets that need staging so the frontend can call the staging workflow
-      res.json({
-        message: 'Datasets need staging',
-        datasets: datasetsToStage,
-        note: 'Use the dataset staging workflow to stage these datasets individually',
-      });
-    } catch (error) {
-      console.error('Error checking staging status:', error);
-      res.status(500).json({ error: 'Failed to check staging status' });
+    if (!session) {
+      return res.status(404).json({ error: 'Session not found' });
     }
+
+    // Get unique datasets that need staging
+    const datasetsToStage = [...new Set(
+      session.session_tracks
+        .filter((st) => !st.track.dataset_file?.dataset?.is_staged)
+        .map((st) => st.track.dataset_file?.dataset?.id)
+        .filter(Boolean),
+    )];
+
+    if (datasetsToStage.length === 0) {
+      return res.json({ message: 'All datasets are already staged' });
+    }
+
+    // Return the datasets that need staging so the frontend can call the staging workflow
+    res.json({
+      message: 'Datasets need staging',
+      datasets: datasetsToStage,
+      note: 'Use the dataset staging workflow to stage these datasets individually',
+    });
   }),
 );
 
@@ -829,38 +887,36 @@ router.get(
       search,
     } = req.query;
 
-    try {
-      // First, get the session to verify it exists and user has access
-      let sessionWhere;
-      if (req.permission.granted) {
-        // Admin/operator can see any session
-        sessionWhere = { id };
-      } else {
-        // Regular users can only see their own sessions and public ones
-        sessionWhere = {
-          id,
-          OR: [
-            { user_id: req.user.id }, // User's own sessions
-            { is_public: true }, // Public sessions
-          ],
-        };
-      }
+    // First, get the session to verify it exists and user has access
+    let sessionWhere;
+    if (req.permission.granted) {
+      // Admin/operator can see any session
+      sessionWhere = { id };
+    } else {
+      // Regular users can only see their own sessions and public ones
+      sessionWhere = {
+        id,
+        OR: [
+          { user_id: req.user.id }, // User's own sessions
+          { is_public: true }, // Public sessions
+        ],
+      };
+    }
 
-      const session = await prisma.genome_browser_session.findFirst({
-        where: sessionWhere,
-        include: {
-          session_tracks: {
-            include: {
-              track: {
-                include: {
-                  dataset_file: {
-                    include: {
-                      dataset: {
-                        include: {
-                          projects: {
-                            include: {
-                              project: true,
-                            },
+    const session = await prisma.genome_browser_session.findFirst({
+      where: sessionWhere,
+      include: {
+        session_tracks: {
+          include: {
+            track: {
+              include: {
+                dataset_file: {
+                  include: {
+                    dataset: {
+                      include: {
+                        projects: {
+                          include: {
+                            project: true,
                           },
                         },
                       },
@@ -871,80 +927,77 @@ router.get(
             },
           },
         },
-      });
+      },
+    });
 
-      if (!session) {
-        return res.status(404).json({ error: 'Session not found or access denied' });
-      }
+    if (!session) {
+      return res.status(404).json({ error: 'Session not found or access denied' });
+    }
 
-      // Extract unique projects from session tracks
-      const projectMap = new Map();
+    // Extract unique projects from session tracks
+    const projectMap = new Map();
 
-      session.session_tracks.forEach((sessionTrack) => {
-        const dataset = sessionTrack.track.dataset_file?.dataset;
-        if (dataset?.projects) {
-          dataset.projects.forEach((projectAssoc) => {
-            const { project } = projectAssoc;
-            if (!projectMap.has(project.id)) {
-              projectMap.set(project.id, {
-                id: project.id,
-                name: project.name,
-                slug: project.slug,
-                description: project.description,
-                created_at: project.created_at,
-                updated_at: project.updated_at,
-              });
-            }
-          });
-        }
-      });
-
-      let projects = Array.from(projectMap.values());
-
-      // Apply search filter
-      if (search) {
-        const searchLower = search.toLowerCase();
-        projects = projects.filter((project) => {
-          const nameMatch = project.name.toLowerCase().includes(searchLower);
-          const descMatch = project.description
-            && project.description.toLowerCase().includes(searchLower);
-          return nameMatch || descMatch;
+    session.session_tracks.forEach((sessionTrack) => {
+      const dataset = sessionTrack.track.dataset_file?.dataset;
+      if (dataset?.projects) {
+        dataset.projects.forEach((projectAssoc) => {
+          const { project } = projectAssoc;
+          if (!projectMap.has(project.id)) {
+            projectMap.set(project.id, {
+              id: project.id,
+              name: project.name,
+              slug: project.slug,
+              description: project.description,
+              created_at: project.created_at,
+              updated_at: project.updated_at,
+            });
+          }
         });
       }
+    });
 
-      // Apply sorting
-      projects.sort((a, b) => {
-        const aVal = a[sort_by];
-        const bVal = b[sort_by];
+    let projects = Array.from(projectMap.values());
 
-        if (sort_order === 'asc') {
-          if (aVal < bVal) return -1;
-          if (aVal > bVal) return 1;
-          return 0;
-        }
-        if (aVal > bVal) return -1;
-        if (aVal < bVal) return 1;
-        return 0;
+    // Apply search filter
+    if (search) {
+      const searchLower = search.toLowerCase();
+      projects = projects.filter((project) => {
+        const nameMatch = project.name.toLowerCase().includes(searchLower);
+        const descMatch = project.description
+            && project.description.toLowerCase().includes(searchLower);
+        return nameMatch || descMatch;
       });
-
-      // Apply pagination
-      const total = projects.length;
-      const paginatedProjects = projects.slice(offset, offset + limit);
-
-      res.json({
-        projects: paginatedProjects,
-        metadata: {
-          count: total,
-          limit,
-          offset,
-          sort_by,
-          sort_order,
-        },
-      });
-    } catch (error) {
-      console.error('Error fetching session projects:', error);
-      res.status(500).json({ error: 'Failed to fetch session projects' });
     }
+
+    // Apply sorting
+    projects.sort((a, b) => {
+      const aVal = a[sort_by];
+      const bVal = b[sort_by];
+
+      if (sort_order === 'asc') {
+        if (aVal < bVal) return -1;
+        if (aVal > bVal) return 1;
+        return 0;
+      }
+      if (aVal > bVal) return -1;
+      if (aVal < bVal) return 1;
+      return 0;
+    });
+
+    // Apply pagination
+    const total = projects.length;
+    const paginatedProjects = projects.slice(offset, offset + limit);
+
+    res.json({
+      projects: paginatedProjects,
+      metadata: {
+        count: total,
+        limit,
+        offset,
+        sort_by,
+        sort_order,
+      },
+    });
   }),
 );
 
@@ -1058,4 +1111,9 @@ router.get(
 // Files are now served securely via the secure_download microservice at /genome-browser/*
 // with proper token-based authorization
 
+// Export main router for all authenticated routes
 module.exports = router;
+
+// Export datahub router separately - this needs to be mounted BEFORE global authenticate middleware
+// to allow query parameter token authentication
+module.exports.datahubRouter = datahubRouter;

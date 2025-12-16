@@ -771,7 +771,8 @@ router.get(
   }),
 );
 
-router.get('/:id/reports',
+router.get(
+  '/:id/reports',
   isPermittedTo('read'),
   validate([
     param('id').isInt({ min: 1 }).toInt(),
@@ -795,7 +796,7 @@ router.get('/:id/reports',
 
     // Use cmg_id if available (for historic conversions), otherwise use the bioloop conversion id
     const reportsDirName = conversion.cmg_id || String(conversionId);
-    
+
     // Construct the URL path for accessing reports (unauthenticated endpoint)
     const reportsUrlPath = `/api/reports/conversions/${conversionId}/files`;
 
@@ -807,7 +808,7 @@ router.get('/:id/reports',
       cmg_id: conversion.cmg_id,
       dataset_name: conversionTargetDatasetName,
       reports_url: reportsUrlPath,
-      index_url: `${reportsUrlPath}/html/index.html`
+      index_url: `${reportsUrlPath}/html/index.html`,
     });
   }),
 );

@@ -85,7 +85,7 @@ const build_include_object = ({
 
 router.get(
   '/all',
-  isPermittedTo('read'),
+  // isPermittedTo('read'),
   validate([
     query('take').default(25).isInt().toInt(),
     query('skip').default(0).isInt({ min: 0 }).toInt(),
@@ -183,11 +183,11 @@ router.get(
 
     // Build the where condition - only check id field if input looks like a UUID
     const whereConditions = [];
-    
+
     if (validateUuid(req.params.id)) {
       whereConditions.push({ id: req.params.id });
     }
-    
+
     whereConditions.push({ slug: req.params.id });
 
     const project = await prisma.project.findFirstOrThrow({
@@ -472,11 +472,11 @@ router.get(
 
     // temporary fix:  won't be needed once Database is being initialized via Prisma
     const whereConditions = [];
-    
+
     if (validateUuid(req.params.id)) {
       whereConditions.push({ id: req.params.id });
     }
-    
+
     whereConditions.push({ slug: req.params.id });
 
     const project = await prisma.project.findFirstOrThrow({

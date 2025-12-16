@@ -16,6 +16,7 @@ const workflowService = require('./workflow');
 const logger = require('./logger');
 
 const { log_axios_error } = require('../utils');
+const { normalizeFormatFromPath, getRoleFromFormat } = require('../utils/genomeBrowserUtils');
 const {
   DONE_STATUSES, INCLUDE_STATES, INCLUDE_WORKFLOWS, INCLUDE_AUDIT_LOGS,
 } = require('../constants');
@@ -723,27 +724,6 @@ async function search_files({
 }
 
 /**
- * Determines file format from file extension for genome browser compatibility
- * @param {string} filePath - The file path or name
- * @returns {string|null} - The normalized file format or null
- */
-function getFileFormatFromExtension(filePath) {
-  if (!filePath) return null;
-
-  const lowerPath = filePath.toLowerCase();
-  const extensionMapping = config.get('fileExtensionMapping');
-
-  // Check each extension mapping from config
-  const matchingExtension = Object.entries(extensionMapping).find(([extension]) => lowerPath.endsWith(extension.toLowerCase()));
-
-  if (matchingExtension) {
-    return matchingExtension[1];
-  }
-
-  return null; // Unknown format
-}
-
-/**
  * Adds files to a dataset.
  *
  * @async
@@ -762,13 +742,15 @@ async function add_files({ dataset_id, data }) {
       ...f,
     };
 
-    // Populate format metadata if genome browser feature is enabled
+    // Populate format and role metadata if genome browser feature is enabled
     if (isGenomeBrowserEnabled) {
-      const format = getFileFormatFromExtension(f.path);
+      const format = normalizeFormatFromPath(f.path);
       if (format) {
+        const role = getRoleFromFormat(format);
         fileData.metadata = {
           ...fileData.metadata,
           format,
+          ...(role && { role }),
         };
       }
     }
@@ -821,18 +803,23 @@ async function add_files({ dataset_id, data }) {
     skipDuplicates: true,
   });
 
-  // Auto-create tracks for files if genome browser feature is enabled
+  // Auto-create tracks for PRIMARY files if genome browser feature is enabled
   if (isGenomeBrowserEnabled) {
-    // Find files that should have tracks created
+    // Find files that should have tracks created (PRIMARY role only)
     const trackableFiles = await prisma.dataset_file.findMany({
       where: {
         dataset_id,
         filetype: 'file', // Only actual files, not directories
+        metadata: {
+          path: ['role'],
+          equals: 'PRIMARY',
+        },
       },
       select: {
         id: true,
         name: true,
         path: true,
+        metadata: true,
       },
     });
 

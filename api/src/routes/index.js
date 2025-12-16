@@ -3,6 +3,7 @@ const express = require('express');
 const { authenticate } = require('../middleware/auth');
 const featureService = require('../services/features');
 const uploadRouter = require('./datasets/uploads');
+const { datahubRouter } = require('./sessions');
 
 const router = express.Router();
 
@@ -13,6 +14,10 @@ router.use('/auth', require('./auth/index'));
 router.use('/reports', require('./reports'));
 router.use('/about', require('./about'));
 router.use('/env', require('./env'));
+
+// Mount datahub routes BEFORE global authenticate middleware
+// These routes use query parameter tokens for external genome browsers
+router.use('/sessions', datahubRouter);
 
 // From this point on, all routes require authentication.
 router.use(authenticate);

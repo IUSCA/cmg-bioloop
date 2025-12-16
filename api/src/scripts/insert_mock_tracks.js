@@ -21,7 +21,7 @@ const mockData = {
   },
 
   // Common bioinformatics file types (only allowed types for sessions)
-  fileTypes: config.get('trackFileTypes').map(type => type.id),
+  fileTypes: config.get('trackFileTypes').map((type) => type.id),
 
   // Track names for different types of data
   trackNames: {
@@ -298,7 +298,7 @@ async function createTracks(datasetFiles, tx = prisma) {
   const tracks = [];
 
   // Only create tracks for certain file types (only allowed types for sessions)
-  const trackableFileTypes = config.get('trackFileTypes').map(type => type.id);
+  const trackableFileTypes = config.get('trackFileTypes').map((type) => type.id);
   const trackableFiles = datasetFiles.filter((file) => trackableFileTypes.includes(file.filetype));
 
   await Promise.all(trackableFiles.map(async (datasetFile) => {

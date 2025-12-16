@@ -8,7 +8,7 @@ function formatAnalysisType(text) {
   if (!text || typeof text !== 'string') {
     return null;
   }
-  
+
   return text
     .trim()
     .toUpperCase()

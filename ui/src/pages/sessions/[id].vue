@@ -391,8 +391,8 @@ import DeleteSessionModal from '@/components/sessions/DeleteSessionModal.vue';
 import TracksAsyncAutoComplete from '@/components/tracks/TracksAsyncAutoComplete.vue';
 import AddEditButton from '@/components/utils/buttons/AddEditButton.vue';
 import config from '@/config';
-import api from '@/services/api';
 import * as datetime from '@/services/datetime';
+import sessionService from '@/services/session';
 import toast from '@/services/toast';
 import trackService from '@/services/track';
 import { formatBytes } from '@/services/utils';
@@ -499,14 +499,14 @@ const _stagedTracksCount = computed(() => {
 });
 
 const genomeBrowserUrl = computed(() => {
-  if (!session.value) return '';
+  if (!session.value || !auth.datahubToken) return '';
 
   const genomeBrowserBaseUrl = config.genomeBrowserUrl;
-  // Use /datahub endpoint which returns WashU-compatible format
+  // Use /datahub endpoint which returns WashU-compatible format with token
   const protocol = window.location.protocol;
   const host = window.location.host;
   const apiBaseUrl = `${protocol}//${host}`;
-  const sessionDataHubUrl = `${apiBaseUrl}/api/sessions/${session.value.id}/datahub`;
+  const sessionDataHubUrl = `${apiBaseUrl}/api/sessions/${session.value.id}/datahub?token=${auth.datahubToken}`;
 
   // Get genome from session or from first track's dataset
   const genome = session.value.genome || session.value.genome_value || '';
@@ -606,7 +606,7 @@ const deleteSession = async () => {
 
 const exportDataHub = async () => {
   try {
-    const response = await api.get(`/sessions/${session.value.id}/datahub`);
+    const response = await sessionService.getDatahub(session.value.id);
 
     // Create a blob with the DataHub JSON data
     const blob = new Blob([JSON.stringify(response.data, null, 2)], {
@@ -635,7 +635,7 @@ const requestStaging = async () => {
 
   requestingStaging.value = true;
   try {
-    const response = await api.post(`/sessions/${session.value.id}/stage`);
+    const response = await sessionService.stage(session.value.id);
 
     if (response.data.datasets && response.data.datasets.length > 0) {
       // Show which datasets need staging
@@ -689,7 +689,7 @@ const loadSessionProjects = async () => {
 
   projectsLoading.value = true;
   try {
-    const response = await api.get(`/sessions/${session.value.id}/projects`);
+    const response = await sessionService.getProjects(session.value.id);
     sessionProjects.value = response.data.projects;
   } catch (error) {
     console.error('Failed to load session projects:', error);
@@ -707,6 +707,16 @@ const handleSessionUpdated = (updatedSession) => {
 
 const openInGenomeBrowser = () => {
   if (!session.value) return;
+
+  if (!auth.datahubToken) {
+    toast.error('Genome browser access token not ready. Please wait a moment and try again.');
+    return;
+  }
+
+  if (!genomeBrowserUrl.value) {
+    toast.error('Unable to generate genome browser URL');
+    return;
+  }
 
   // Open in new tab
   window.open(genomeBrowserUrl.value, '_blank');
@@ -777,8 +787,15 @@ watch(showTracksModal, (isOpen) => {
 });
 
 // Lifecycle
-onMounted(() => {
-  loadSession();
+onMounted(async () => {
+  await loadSession();
+  if (session.value) {
+    auth.setupDatahubTokenRefresh({ sessionId: session.value.id });
+  }
+});
+
+onUnmounted(() => {
+  auth.cleanupDatahubTokenRefresh();
 });
 </script>
 

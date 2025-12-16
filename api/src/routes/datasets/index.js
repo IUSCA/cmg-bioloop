@@ -923,6 +923,7 @@ router.get(
       const download_url = await datasetService.get_download_url({ dataset, file });
       res.json(download_url);
     } catch (e) {
+      console.error('Download URL generation failed:', e);
       next(createError.NotFound('Dataset is not prepared for download'));
     }
   }),

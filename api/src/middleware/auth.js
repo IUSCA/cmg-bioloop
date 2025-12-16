@@ -30,6 +30,40 @@ function authenticate(req, res, next) {
   next();
 }
 
+/**
+ * Authenticate middleware that accepts tokens from query parameters or headers
+ * Used for external applications (like genome browsers) that can't set headers
+ */
+function authenticateWithQueryToken(req, res, next) {
+  const invalid_token_err = createError.Unauthorized('Authentication failed. Token is not valid.');
+
+  // Try to get token from query parameter first, then from header
+  let token = req.query?.token;
+  if (!token) {
+    const authHeader = req.headers.authorization;
+    if (!authHeader) {
+      return next(createError.Unauthorized('Authentication failed. Token not found.'));
+    }
+    if (!authHeader.startsWith('Bearer ')) {
+      return next(invalid_token_err);
+    }
+    token = authHeader.split(' ')[1];
+  }
+
+  // Validate the token
+  try {
+    const auth = authService.checkJWT(token);
+    if (!auth) return next(invalid_token_err);
+
+    req.user = auth.profile;
+    req.token = auth; // Store full decoded token for scope validation if needed
+    next();
+  } catch (error) {
+    logger.error('Token validation error:', error);
+    next(invalid_token_err);
+  }
+}
+
 // function checkRole(role) {
 //   // role can be a string indicating single role or an array of strings
 //   // to check for multiple roles
@@ -176,6 +210,7 @@ const loginHandler = asyncHandler(async (req, res, next) => {
 
 module.exports = {
   authenticate,
+  authenticateWithQueryToken,
   accessControl,
   getPermission,
   loginHandler,

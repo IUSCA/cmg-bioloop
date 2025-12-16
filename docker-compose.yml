@@ -242,7 +242,9 @@ services:
   # You must clone the signet repo and place it in the signet folder
   signet:
     restart: unless-stopped
-    image: harbor.sca.iu.edu/signet/signet:latest
+    build:
+      context: /Users/ripandey/dev/signet
+      dockerfile: Dockerfile
     expose:
       - 5050
     env_file:
