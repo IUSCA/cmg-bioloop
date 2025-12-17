@@ -921,6 +921,7 @@ router.get(
 
     try {
       const download_url = await datasetService.get_download_url({ dataset, file });
+      console.log('download_url', download_url);
       res.json(download_url);
     } catch (e) {
       console.error('Download URL generation failed:', e);

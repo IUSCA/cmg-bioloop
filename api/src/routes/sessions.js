@@ -778,6 +778,7 @@ datahubRouter.get(
           const relativePath = getRelativeFilePathForGenomeBrowser({ dataset, datasetFile });
           const token = await getGenomeBrowserFileToken(relativePath);
           const url = buildGenomeBrowserUrl(relativePath, token);
+          console.log('url', url);
 
           // Track display name (use session track title if available, else track name)
           const trackName = st.title || track.name || datasetFile.name || 'Unnamed Track';

@@ -130,8 +130,8 @@ router.get(
     }
 
     // 6. Set headers (CORS + generic content-type)
-    // res.set('Access-Control-Allow-Origin', '*');
-    // res.set('Access-Control-Allow-Headers', 'Range, Authorization, Content-Type');
+    res.set('Access-Control-Allow-Origin', '*');
+    res.set('Access-Control-Allow-Headers', 'Range, Authorization, Content-Type');
     res.set('Access-Control-Expose-Headers', 'Content-Range, Accept-Ranges, Content-Length');
     // res.set('Access-Control-Allow-Methods', 'GET, OPTIONS'); // Allow OPTIONS for preflight requests
     res.set('Content-Type', getMimeType(resolvedFull));
