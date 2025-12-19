@@ -12,12 +12,10 @@ export const useAuthStore = defineStore('auth', () => {
   const user = ref(useLocalStorage('user', {}));
   const token = ref(useLocalStorage('token', ''));
   const uploadToken = ref(useLocalStorage('uploadToken', ''));
-  const datahubToken = ref(useLocalStorage('datahubToken', ''));
   const loggedIn = ref(false);
   const signupToken = ref(useLocalStorage('signup_token', ''));
   const signupEmail = ref('');
   let refreshTokenTimer = null;
-  let datahubTokenRefreshTimer = null;
   const canOperate = computed(() => {
     return hasRole('operator') || hasRole('admin');
   });
@@ -44,11 +42,6 @@ export const useAuthStore = defineStore('auth', () => {
     user.value = {};
     token.value = '';
     uploadToken.value = '';
-    datahubToken.value = '';
-    if (datahubTokenRefreshTimer) {
-      clearInterval(datahubTokenRefreshTimer);
-      datahubTokenRefreshTimer = null;
-    }
   }
 
   /**
@@ -212,62 +205,6 @@ export const useAuthStore = defineStore('auth', () => {
     });
   };
 
-  const refreshDatahubToken = async ({ sessionId }) => {
-    const payload = datahubToken.value ? jwtDecode(datahubToken.value) : null;
-    const expiresAt = payload ? new Date(payload.exp * 1000) : null;
-    const now = new Date();
-
-    let willRefreshDatahubToken = false;
-    if (expiresAt && now < expiresAt) {
-      const datahubTokenExpiresInSeconds = (expiresAt - now) / 1000;
-      // Refresh if token expires in less than 5 minutes
-      willRefreshDatahubToken = datahubTokenExpiresInSeconds < 5 * 60;
-    } else {
-      willRefreshDatahubToken = true;
-    }
-
-    if (willRefreshDatahubToken) {
-      const sessionService = await import('@/services/session');
-      return sessionService.default
-        .getDatahubToken(sessionId)
-        .then((res) => {
-          datahubToken.value = res.data.token;
-          return datahubToken.value;
-        })
-        .catch((err) => {
-          console.error('Failed to refresh datahub token', err);
-          throw err;
-        });
-    }
-    return datahubToken.value;
-  };
-
-  const setupDatahubTokenRefresh = ({ sessionId }) => {
-    // Clear any existing interval
-    if (datahubTokenRefreshTimer) {
-      clearInterval(datahubTokenRefreshTimer);
-      datahubTokenRefreshTimer = null;
-    }
-
-    // Fetch initial token
-    refreshDatahubToken({ sessionId });
-
-    // Refresh token every 5 minutes
-    datahubTokenRefreshTimer = setInterval(
-      () => {
-        refreshDatahubToken({ sessionId });
-      },
-      5 * 60 * 1000
-    );
-  };
-
-  const cleanupDatahubTokenRefresh = () => {
-    if (datahubTokenRefreshTimer) {
-      clearInterval(datahubTokenRefreshTimer);
-      datahubTokenRefreshTimer = null;
-    }
-  };
-
   const isFeatureEnabled = (featureKey) => {
     return utils.isFeatureEnabled({ featureKey, hasRole });
   };
@@ -287,10 +224,6 @@ export const useAuthStore = defineStore('auth', () => {
     env,
     setEnv,
     refreshUploadToken,
-    refreshDatahubToken,
-    setupDatahubTokenRefresh,
-    cleanupDatahubTokenRefresh,
-    datahubToken,
     isFeatureEnabled,
     withHandledVerifyResponse,
     signupEmail,

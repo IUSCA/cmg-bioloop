@@ -1,17 +1,20 @@
 const express = require('express');
 const { body, query, param } = require('express-validator');
 const config = require('config');
-const cors = require('cors');
+const fs = require('fs');
+const path = require('path');
+const createError = require('http-errors');
 const logger = require('@/services/logger');
 const prisma = require('@/db');
 const asyncHandler = require('../middleware/asyncHandler');
-const { accessControl, authenticateWithQueryToken } = require('../middleware/auth');
+const { accessControl, authenticateWithCookie } = require('../middleware/auth');
 const datasetService = require('../services/dataset');
-const authService = require('../services/auth');
 const { findIndexFileForPrimary } = require('../utils/genomeBrowserUtils');
 
 const router = express.Router();
-const datahubRouter = express.Router();
+const fileExposureRouter = express.Router();
+
+const DATA_ROOT = config.get('data_root');
 
 // Middleware to check permissions
 const isPermittedTo = accessControl('sessions');
@@ -20,62 +23,50 @@ const isPermittedTo = accessControl('sessions');
 const getAnalysisType = (dataset) => dataset?.metadata?.analysis_type || null;
 
 /**
- * Compute file's relative path for secure download
+ * Compute file's relative path for file exposure
  * @param {Object} dataset - Dataset object with metadata.stage_alias
  * @param {Object} datasetFile - Dataset file object with path
- * @returns {string} Relative path for secure download (e.g., "/staged_data/datasets/42/sample.bam")
+ * @returns {string} Relative path (e.g., "staged/data_products/hash/file.bam")
  */
-function getRelativeFilePathForGenomeBrowser({ dataset, datasetFile }) {
+function getRelativeFilePath({ dataset, datasetFile }) {
   const stageAlias = dataset.metadata?.stage_alias || '';
   const filePath = datasetFile.path || '';
 
-  const cleanedStageAlias = stageAlias.replace(/^\/+/, '');
+  const cleanedStageAlias = stageAlias.replace(/^\/+/, '').replace(/\/+$/, '');
   const cleanedFilePath = filePath.replace(/^\/+/, '');
 
-  return `/${cleanedStageAlias}/${cleanedFilePath}`;
+  return cleanedStageAlias ? `${cleanedStageAlias}/${cleanedFilePath}` : cleanedFilePath;
 }
 
 /**
- * Get file-scoped token for genome browser access
+ * Build file exposure URL for IGV (session-scoped, relative)
+ * @param {number} sessionId - Session ID
  * @param {string} relativePath - Relative path to the file
- * @returns {Promise<string>} JWT token
+ * @returns {string} Relative API URL
  */
-async function getGenomeBrowserFileToken(relativePath) {
-  // Use the same OAuth2 pattern as regular downloads but with file exposure scope
-  // The authService.get_file_exposure_token() uses the genome_browser OAuth2 client
-  const tokenResponse = await authService.get_file_exposure_token(relativePath);
-  return tokenResponse.accessToken;
+function buildFileExposureUrl(sessionId, relativePath) {
+  const cleanedPath = relativePath.replace(/^\/+/, '');
+  return `/api/sessions/${sessionId}/files/expose/${cleanedPath}`;
 }
 
 /**
- * Build secure download URL for genome browser
- * @param {string} relativePath - Relative path to the file
- * @param {string} token - JWT token
- * @returns {string} Complete URL for secure download
+ * Determines IGV track type from file path/name
+ * @param {string} filePath - File path or name
+ * @returns {string} IGV track type
  */
-function buildGenomeBrowserUrl(relativePath, token) {
-  const baseUrl = config.get('secure_download.base_url'); // "http://localhost:3060"
-  const prefix = config.get('secure_download.genome_browser_path_prefix'); // "/files/expose"
-
-  const url = new URL(baseUrl);
-  url.pathname = `${prefix}${relativePath}`;
-  url.searchParams.set('token', token);
-
-  return url.toString();
-}
-
-/**
- * Determines WashU browser file type from file path/name
- */
-const getWashUFileType = (filePath) => {
-  if (!filePath) return 'unknown';
+const getIGVFileType = (filePath) => {
+  if (!filePath) return null;
   const lowerPath = filePath.toLowerCase();
 
-  // Map extensions to WashU types
-  if (lowerPath.endsWith('.bam')) return 'bam';
-  if (lowerPath.endsWith('.bw') || lowerPath.endsWith('.bigwig')) return 'bigwig';
-  if (lowerPath.endsWith('.vcf')) return 'vcf';
-  return 'unknown';
+  // Map extensions to IGV types
+  if (lowerPath.endsWith('.bam')) return 'alignment';
+  if (lowerPath.endsWith('.bw') || lowerPath.endsWith('.bigwig')) return 'wig';
+  if (lowerPath.endsWith('.vcf') || lowerPath.endsWith('.vcf.gz')) return 'variant';
+  if (lowerPath.endsWith('.bed')) return 'annotation';
+  if (lowerPath.endsWith('.gff') || lowerPath.endsWith('.gff3')) return 'annotation';
+  if (lowerPath.endsWith('.gtf')) return 'annotation';
+
+  return null;
 };
 
 // GET /sessions - Get all sessions accessible to the current user
@@ -659,10 +650,10 @@ router.delete(
   }),
 );
 
-// GET /sessions/:id/datahub-token - Get a token for accessing the datahub endpoint
-// This allows the UI to generate a URL with embedded token for external genome browsers
-router.get(
-  '/:id/datahub-token',
+// POST /sessions/:id/set-file-cookie - Set authentication cookie for file access
+// Called by frontend before initializing IGV browser
+router.post(
+  '/:id/set-file-cookie',
   isPermittedTo('read'),
   [param('id').isInt().toInt()],
   asyncHandler(async (req, res) => {
@@ -678,27 +669,32 @@ router.get(
       return res.status(404).json({ error: 'Session not found' });
     }
 
-    // Generate a JWT token specifically for datahub access
-    // Token includes user info so datahub endpoint can validate permissions
-    // Uses default JWT TTL from config: 1 hour (prod), 7 days (dev)
-    const token = authService.issueJWT({
-      userProfile: req.user,
+    // Get the JWT token from the Authorization header
+    const authHeader = req.headers.authorization || '';
+    if (!authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ error: 'No authorization token provided' });
+    }
+    const token = authHeader.split(' ')[1];
+
+    // Set the auth cookie for file exposure
+    // Cookie is scoped to this specific session's file exposure endpoint
+    res.cookie('bioloop_auth', token, {
+      httpOnly: true,
+      secure: config.get('mode') === 'production', // HTTPS only in production
+      sameSite: 'lax',
+      path: `/api/sessions/${sessionId}/files/expose`,
+      maxAge: 15 * 60 * 1000, // 15 minutes
     });
 
-    res.json({ token });
+    res.json({ message: 'Cookie set successfully' });
   }),
 );
 
-// OPTIONS handler for CORS preflight on datahub endpoint
-datahubRouter.options('/:id/datahub', cors());
-
-// GET /sessions/:id/datahub - Export session tracks in WashU browser format
-// Accessible via token in query parameter (for external genome browsers)
-datahubRouter.get(
+// GET /sessions/:id/datahub - Export session tracks in IGV browser format
+// Returns track configurations with relative URLs for same-origin file access
+router.get(
   '/:id/datahub',
-  cors(), // Enable CORS for WashU browser
-  authenticateWithQueryToken, // Accept token from query parameter
-  isPermittedTo('read'), // Check user permissions
+  isPermittedTo('read'),
   [param('id').isInt().toInt()],
   asyncHandler(async (req, res) => {
     const sessionId = req.params.id;
@@ -756,62 +752,320 @@ datahubRouter.get(
       return acc;
     }, {});
 
-    // Convert to WashU DataHub format using secure_download
-    // Include index files where available
-    const tracks = await Promise.all(
-      session.session_tracks
-        .map(async (st) => {
-          const { track } = st;
-          const { dataset_file: datasetFile } = track;
-          const { dataset } = datasetFile;
-          const filePath = datasetFile?.path || datasetFile?.name || '';
+    // Get genome info for IGV
+    const firstTrack = session.session_tracks[0];
+    const firstDataset = firstTrack?.track?.dataset_file?.dataset;
+    const genomeInfo = firstDataset?.genomic_details;
+    const genomeValue = genomeInfo?.genome_value || session.genome || '';
 
-          // Determine file type from extension
-          const fileType = getWashUFileType(filePath);
+    // Convert genome info to IGV genome reference (e.g., "hg38", "hg19", "mm10")
+    const genome = genomeValue;
 
-          // Get genome info from dataset (since genome is associated with dataset in bioloop)
-          const genomeInfo = dataset?.genomic_details;
-          const genomeType = genomeInfo?.genome_type || session.genome_type || '';
-          const genomeValue = genomeInfo?.genome_value || session.genome || '';
+    // Convert to IGV track format with relative URLs (same-origin)
+    // No tokens needed - authentication via HttpOnly cookies
+    const tracks = session.session_tracks
+      .map((st) => {
+        const { track } = st;
+        const { dataset_file: datasetFile } = track;
+        const { dataset } = datasetFile;
+        const filePath = datasetFile?.path || datasetFile?.name || '';
 
-          // Generate secure download URL for WashU browser
-          const relativePath = getRelativeFilePathForGenomeBrowser({ dataset, datasetFile });
-          const token = await getGenomeBrowserFileToken(relativePath);
-          const url = buildGenomeBrowserUrl(relativePath, token);
-          console.log('url', url);
+        // Determine IGV file type from extension
+        const fileType = getIGVFileType(filePath);
+        if (!fileType) {
+          logger.warn(`Unsupported file type for IGV: ${filePath}`);
+          return null;
+        }
 
-          // Track display name (use session track title if available, else track name)
-          const trackName = st.title || track.name || datasetFile.name || 'Unnamed Track';
+        // Build relative URL for file exposure (session-scoped)
+        const relativePath = getRelativeFilePath({ dataset, datasetFile });
+        const url = buildFileExposureUrl(sessionId, relativePath);
 
-          const trackConfig = {
-            type: fileType,
-            name: trackName,
-            options: {
-              color: st.color || '#2669a3',
-              height: 100,
+        // Track display name (use session track title if available, else track name)
+        const trackName = st.title || track.name || datasetFile.name || 'Unnamed Track';
+
+        const trackConfig = {
+          type: fileType,
+          format: fileType,
+          name: trackName,
+          url,
+          color: st.color || '#2669a3',
+          height: 100,
+        };
+
+        // Find and attach index file if it exists (for BAM/VCF files)
+        const datasetFilesForThisDataset = filesByDataset[dataset.id] || [];
+        const indexFile = findIndexFileForPrimary(datasetFilesForThisDataset, datasetFile);
+
+        if (indexFile) {
+          const indexRelativePath = getRelativeFilePath({ dataset, datasetFile: indexFile });
+          const indexUrl = buildFileExposureUrl(sessionId, indexRelativePath);
+          trackConfig.indexURL = indexUrl;
+        }
+
+        return trackConfig;
+      })
+      .filter(Boolean); // Remove null entries for unsupported file types
+
+    res.json({
+      genome, // IGV genome reference
+      tracks,
+    });
+  }),
+);
+
+// GET /sessions/:id/files/expose/* - Expose genomic files for IGV browser
+// Authenticated via HttpOnly cookie, scoped to this session
+// Supports HTTP Range requests for efficient file streaming
+// This route is mounted BEFORE global authentication to use cookie-based auth
+fileExposureRouter.get(
+  '/:id/files/expose/*',
+  authenticateWithCookie, // Cookie-based auth
+  [param('id').isInt().toInt()],
+  asyncHandler(async (req, res, next) => {
+    const sessionId = req.params.id;
+    const requestedPath = req.params[0] || ''; // Everything after /files/expose/
+
+    logger.info('[FILE EXPOSE] Request received', {
+      sessionId,
+      requestedPath,
+      user: req.user?.username,
+      userId: req.user?.id,
+      rangeHeader: req.headers.range || 'none',
+    });
+
+    // Verify user has access to this session
+    const session = await prisma.genome_browser_session.findUnique({
+      where: { id: sessionId },
+      select: {
+        id: true,
+        user_id: true,
+        session_tracks: {
+          include: {
+            track: {
+              include: {
+                dataset_file: {
+                  include: {
+                    dataset: {
+                      select: {
+                        id: true,
+                        metadata: true,
+                      },
+                    },
+                  },
+                },
+              },
             },
-            showOnHubLoad: true,
-            url,
-            // Include genome info if available (for reference, WashU uses genome from URL params)
-            ...(genomeType && genomeValue ? { genome: `${genomeType}_${genomeValue}` } : {}),
-          };
+          },
+        },
+      },
+    });
 
-          // Find and attach index file if it exists
-          const datasetFilesForThisDataset = filesByDataset[dataset.id] || [];
-          const indexFile = findIndexFileForPrimary(datasetFilesForThisDataset, datasetFile);
+    if (!session) {
+      logger.warn('[FILE EXPOSE] Session not found', { sessionId });
+      return next(createError.NotFound('Session not found'));
+    }
 
-          if (indexFile) {
-            const indexRelativePath = getRelativeFilePathForGenomeBrowser({ dataset, datasetFile: indexFile });
-            const indexToken = await getGenomeBrowserFileToken(indexRelativePath);
-            const indexUrl = buildGenomeBrowserUrl(indexRelativePath, indexToken);
-            trackConfig.indexURL = indexUrl;
-          }
+    logger.info('[FILE EXPOSE] Session found', {
+      sessionId,
+      sessionUserId: session.user_id,
+      trackCount: session.session_tracks.length,
+    });
 
-          return trackConfig;
+    // Check if user owns the session or has access
+    if (session.user_id !== req.user.id && !req.user.roles?.includes('admin')) {
+      logger.warn('[FILE EXPOSE] Access denied', {
+        sessionId,
+        sessionUserId: session.user_id,
+        requestUserId: req.user.id,
+      });
+      return next(createError.Forbidden('Access denied to this session'));
+    }
+
+    // Verify the requested file belongs to this session's tracks
+    const cleanedRequestedPath = requestedPath.replace(/^\/+/, '');
+
+    const matchedTrack = session.session_tracks.find((st) => {
+      const { dataset } = st.track.dataset_file;
+      const datasetFile = st.track.dataset_file;
+      const relativePath = getRelativeFilePath({ dataset, datasetFile });
+      const cleanedRelativePath = relativePath.replace(/^\/+/, '');
+      return cleanedRelativePath === cleanedRequestedPath;
+    });
+
+    if (!matchedTrack) {
+      logger.warn('[FILE EXPOSE] File not found in session tracks', {
+        sessionId,
+        requestedPath: cleanedRequestedPath,
+        availableTracks: session.session_tracks.map((st) => {
+          const { dataset } = st.track.dataset_file;
+          const datasetFile = st.track.dataset_file;
+          return getRelativeFilePath({ dataset, datasetFile });
         }),
-    );
+      });
+      return next(createError.NotFound('File not found in this session'));
+    }
 
-    res.json(tracks);
+    const matchedFile = matchedTrack.track.dataset_file;
+    const matchedDataset = matchedTrack.track.dataset_file.dataset;
+
+    logger.info('[FILE EXPOSE] File matched in session', {
+      sessionId,
+      trackId: matchedTrack.track.id,
+      datasetId: matchedDataset.id,
+      fileId: matchedFile.id,
+      fileName: matchedFile.name,
+    });
+
+    // Construct full file path
+    const stageAlias = matchedDataset.metadata?.stage_alias || '';
+    const filePath = matchedFile.path || '';
+    const cleanedStageAlias = stageAlias.replace(/^\/+/, '').replace(/\/+$/, '');
+    const cleanedFilePath = filePath.replace(/^\/+/, '');
+    const fullRelativePath = cleanedStageAlias ? `${cleanedStageAlias}/${cleanedFilePath}` : cleanedFilePath;
+
+    const fullPath = path.join(DATA_ROOT, fullRelativePath);
+    const resolvedRoot = path.resolve(DATA_ROOT);
+    const resolvedFull = path.resolve(fullPath);
+
+    logger.info('[FILE EXPOSE] File path constructed', {
+      dataRoot: DATA_ROOT,
+      stageAlias,
+      filePath,
+      fullRelativePath,
+      fullPath,
+      resolvedFull,
+    });
+
+    // Security: Prevent path traversal
+    if (!resolvedFull.startsWith(resolvedRoot)) {
+      logger.error('Path traversal attempt detected', {
+        requested: fullPath,
+        resolved: resolvedFull,
+        root: resolvedRoot,
+      });
+      return next(createError.BadRequest('Invalid file path'));
+    }
+
+    // Check file exists (will throw if not found)
+    await fs.promises.access(resolvedFull, fs.constants.F_OK);
+
+    // Get file stats
+    const fileStats = await fs.promises.stat(resolvedFull);
+    logger.info('[FILE EXPOSE] File exists and accessible', {
+      resolvedFull,
+      fileSize: fileStats.size,
+      fileSizeFormatted: `${(fileStats.size / 1024 / 1024).toFixed(2)} MB`,
+      isFile: fileStats.isFile(),
+      isDirectory: fileStats.isDirectory(),
+    });
+
+    // Set headers
+    const ext = path.extname(resolvedFull).toLowerCase();
+    const mimeTypes = {
+      '.bam': 'application/octet-stream',
+      '.bai': 'application/octet-stream',
+      '.bw': 'application/octet-stream',
+      '.bigwig': 'application/octet-stream',
+      '.vcf': 'text/plain',
+      '.gz': 'application/gzip',
+      '.bed': 'text/plain',
+      '.gff': 'text/plain',
+      '.gff3': 'text/plain',
+      '.gtf': 'text/plain',
+    };
+    const contentType = mimeTypes[ext] || 'application/octet-stream';
+
+    res.set('Content-Type', contentType);
+    res.set('Accept-Ranges', 'bytes');
+    res.set('Access-Control-Allow-Origin', '*');
+    res.set('Access-Control-Expose-Headers', 'Content-Range, Accept-Ranges, Content-Length');
+
+    // Handle Range requests (required for IGV)
+    const { range } = req.headers;
+    if (range) {
+      const stats = await fs.promises.stat(resolvedFull);
+      const fileSize = stats.size;
+      const parts = range.replace(/bytes=/, '').split('-');
+      const start = parseInt(parts[0], 10);
+      const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
+      const chunksize = (end - start) + 1;
+      const percentOfFile = ((chunksize / fileSize) * 100).toFixed(2);
+
+      logger.info('[FILE EXPOSE] Streaming range request', {
+        resolvedFull,
+        rangeHeader: range,
+        start,
+        end,
+        chunksize,
+        fileSize,
+        percentOfFile: `${percentOfFile}%`,
+      });
+
+      res.status(206); // Partial Content
+      res.set('Content-Range', `bytes ${start}-${end}/${fileSize}`);
+      res.set('Content-Length', chunksize);
+
+      const fileStream = fs.createReadStream(resolvedFull, { start, end });
+
+      fileStream.on('open', () => {
+        logger.info('[FILE EXPOSE] Stream opened (range)', { start, end });
+      });
+
+      fileStream.on('error', (err) => {
+        logger.error('[FILE EXPOSE] Error streaming file range', {
+          error: err.message,
+          resolvedFull,
+          start,
+          end,
+        });
+        if (!res.headersSent) {
+          next(createError.InternalServerError('Error streaming file'));
+        }
+      });
+
+      fileStream.on('end', () => {
+        logger.info('[FILE EXPOSE] Stream completed (range)', {
+          resolvedFull,
+          start,
+          end,
+          bytesStreamed: chunksize,
+        });
+      });
+
+      fileStream.pipe(res);
+    } else {
+      // Stream full file
+      logger.info('[FILE EXPOSE] Streaming full file', {
+        resolvedFull,
+        fileSize: fileStats.size,
+      });
+
+      const fileStream = fs.createReadStream(resolvedFull);
+
+      fileStream.on('open', () => {
+        logger.info('[FILE EXPOSE] Stream opened (full file)');
+      });
+
+      fileStream.on('error', (err) => {
+        logger.error('[FILE EXPOSE] Error streaming file', {
+          error: err.message,
+          resolvedFull,
+        });
+        if (!res.headersSent) {
+          next(createError.InternalServerError('Error streaming file'));
+        }
+      });
+
+      fileStream.on('end', () => {
+        logger.info('[FILE EXPOSE] Stream completed (full file)', {
+          resolvedFull,
+          bytesStreamed: fileStats.size,
+        });
+      });
+
+      fileStream.pipe(res);
+    }
   }),
 );
 
@@ -1112,9 +1366,9 @@ router.get(
 // Files are now served securely via the secure_download microservice at /genome-browser/*
 // with proper token-based authorization
 
-// Export main router for all authenticated routes
+// Export main router for authenticated routes
 module.exports = router;
 
-// Export datahub router separately - this needs to be mounted BEFORE global authenticate middleware
-// to allow query parameter token authentication
-module.exports.datahubRouter = datahubRouter;
+// Export file exposure router separately - this needs to be mounted BEFORE global authenticate middleware
+// to allow cookie-based authentication
+module.exports.fileExposureRouter = fileExposureRouter;

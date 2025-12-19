@@ -88,12 +88,12 @@ class SessionService {
   }
 
   /**
-   * Get a token for accessing the datahub endpoint
+   * Set authentication cookie for file access in IGV
    * @param {number} id - Session ID
-   * @returns {Promise<Object>} { token: string }
+   * @returns {Promise<Object>} Response
    */
-  getDatahubToken(id) {
-    return api.get(`/sessions/${id}/datahub-token`);
+  setFileCookie(id) {
+    return api.post(`/sessions/${id}/set-file-cookie`);
   }
 
   /**

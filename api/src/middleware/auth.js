@@ -64,6 +64,26 @@ function authenticateWithQueryToken(req, res, next) {
   }
 }
 
+/**
+ * Cookie-based authentication middleware for file exposure
+ * Reads JWT from 'bioloop_auth' cookie and validates it
+ */
+function authenticateWithCookie(req, res, next) {
+  const cookie = req.cookies?.bioloop_auth;
+
+  if (!cookie) {
+    return next(createError.Unauthorized('Authentication cookie not found'));
+  }
+
+  const auth = authService.checkJWT(cookie);
+  if (!auth) {
+    return next(createError.Unauthorized('Invalid authentication cookie'));
+  }
+
+  req.user = auth.profile;
+  next();
+}
+
 // function checkRole(role) {
 //   // role can be a string indicating single role or an array of strings
 //   // to check for multiple roles
@@ -211,6 +231,7 @@ const loginHandler = asyncHandler(async (req, res, next) => {
 module.exports = {
   authenticate,
   authenticateWithQueryToken,
+  authenticateWithCookie,
   accessControl,
   getPermission,
   loginHandler,

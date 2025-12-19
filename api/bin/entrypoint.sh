@@ -70,7 +70,7 @@ if [ "${OAUTH_DOWNLOAD_CLIENT_ID}" = "xxx" ] || [ "${OAUTH_DOWNLOAD_CLIENT_SECRE
     --url http://signet:5050/create_client \
     --header 'Content-Type: application/x-www-form-urlencoded' \
     --data client_name=localhost_download \
-    --data scope=download_file\ upload_file\ genome_browser_file \
+    --data scope=download_file\ upload_file \
     --data client_uri=localhost \
     --data token_endpoint_auth_method=client_secret_basic \
     --data grant_type=client_credentials)

@@ -66,16 +66,17 @@
             </va-card-title>
             <va-card-content class="flex items-center justify-center py-8">
               <div class="flex gap-3">
-                <!-- Open in Genome Browser Action Button-->
+                <!-- View in IGV Browser Action Button-->
                 <va-button
                   color="primary"
                   border-color="primary"
                   preset="secondary"
                   class="flex-initial"
-                  @click="openInGenomeBrowser"
+                  @click="viewInIGV"
+                  :loading="igvLoading"
                 >
-                  <i-mdi-open-in-new class="pr-2 text-2xl" />
-                  Open in Genome Browser
+                  <i-mdi-dna class="pr-2 text-2xl" />
+                  View in IGV Browser
                 </va-button>
 
                 <!-- Delete Session Action Button-->
@@ -383,6 +384,20 @@
       :data="session"
       @update="router.push('/sessions')"
     />
+
+    <!-- IGV Browser Modal -->
+    <va-modal
+      v-model="showIGV"
+      title="IGV Genome Browser"
+      fullscreen
+      hide-default-actions
+      no-padding
+      @close="closeIGV"
+    >
+      <div class="h-full flex flex-col">
+        <div id="igv-container" class="flex-1" style="min-height: 600px"></div>
+      </div>
+    </va-modal>
   </div>
 </template>
 
@@ -390,7 +405,6 @@
 import DeleteSessionModal from '@/components/sessions/DeleteSessionModal.vue';
 import TracksAsyncAutoComplete from '@/components/tracks/TracksAsyncAutoComplete.vue';
 import AddEditButton from '@/components/utils/buttons/AddEditButton.vue';
-import config from '@/config';
 import * as datetime from '@/services/datetime';
 import sessionService from '@/services/session';
 import toast from '@/services/toast';
@@ -399,6 +413,7 @@ import { formatBytes } from '@/services/utils';
 import { useAuthStore } from '@/stores/auth';
 import { useNavStore } from '@/stores/nav';
 import { useSessionsStore } from '@/stores/sessions';
+import { nextTick } from 'vue';
 
 const route = useRoute();
 const router = useRouter();
@@ -407,7 +422,7 @@ const auth = useAuthStore();
 const nav = useNavStore();
 
 // Reactive state
-const editModal = ref();
+const _editModal = ref();
 const showEditModal = ref(false);
 const requestingStaging = ref(false);
 const projectsLoading = ref(false);
@@ -427,7 +442,7 @@ const trackSearch = ref('');
 // Computed
 const session = computed(() => sessionsStore.currentSession);
 const loading = computed(() => sessionsStore.loading);
-const error = computed(() => sessionsStore.error);
+const _error = computed(() => sessionsStore.error);
 
 const canEditSession = computed(() => {
   return session.value?.user_id === auth.user?.id;
@@ -437,7 +452,7 @@ const canDeleteSession = computed(() => {
   return session.value?.user_id === auth.user?.id;
 });
 
-const hasUnstagedTracks = computed(() => {
+const _hasUnstagedTracks = computed(() => {
   if (!session.value?.session_tracks) return false;
   return session.value.session_tracks.some((st) => !st.track.dataset_file?.dataset?.is_staged);
 });
@@ -487,7 +502,7 @@ const selectedTracksTableData = computed(() => {
   }));
 });
 
-const unstagedTracks = computed(() => {
+const _unstagedTracks = computed(() => {
   if (!session.value?.session_tracks) return [];
   return session.value.session_tracks.filter((st) => !st.track.dataset_file?.dataset?.is_staged);
 });
@@ -498,21 +513,10 @@ const _stagedTracksCount = computed(() => {
     .length;
 });
 
-const genomeBrowserUrl = computed(() => {
-  if (!session.value || !auth.datahubToken) return '';
-
-  const genomeBrowserBaseUrl = config.genomeBrowserUrl;
-  // Use /datahub endpoint which returns WashU-compatible format with token
-  const protocol = window.location.protocol;
-  const host = window.location.host;
-  const apiBaseUrl = `${protocol}//${host}`;
-  const sessionDataHubUrl = `${apiBaseUrl}/api/sessions/${session.value.id}/datahub?token=${auth.datahubToken}`;
-
-  // Get genome from session or from first track's dataset
-  const genome = session.value.genome || session.value.genome_value || '';
-
-  return `${genomeBrowserBaseUrl}/?genome=${genome}&hub=${encodeURIComponent(sessionDataHubUrl)}`;
-});
+// IGV Browser state
+const showIGV = ref(false);
+const igvLoading = ref(false);
+let igvBrowser = null;
 
 const associatedTracks = computed(() => {
   if (!session.value?.session_tracks) return [];
@@ -575,7 +579,7 @@ const trackColumns = [
 ];
 
 // Project table columns
-const projectColumns = [
+const _projectColumns = [
   {
     key: 'name',
     label: 'Project Name',
@@ -604,7 +608,7 @@ const deleteSession = async () => {
   sessionDeleteModal.value.show();
 };
 
-const exportDataHub = async () => {
+const _exportDataHub = async () => {
   try {
     const response = await sessionService.getDatahub(session.value.id);
 
@@ -630,7 +634,7 @@ const exportDataHub = async () => {
   }
 };
 
-const requestStaging = async () => {
+const _requestStaging = async () => {
   if (!session.value) return;
 
   requestingStaging.value = true;
@@ -699,27 +703,107 @@ const loadSessionProjects = async () => {
   }
 };
 
-const handleSessionUpdated = (updatedSession) => {
+const _handleSessionUpdated = (_updatedSession) => {
   toast.success('Session updated successfully');
   // Refresh the session data
   loadSession();
 };
 
-const openInGenomeBrowser = () => {
+/**
+ * Initialize IGV browser for the session
+ */
+const viewInIGV = async () => {
   if (!session.value) return;
 
-  if (!auth.datahubToken) {
-    toast.error('Genome browser access token not ready. Please wait a moment and try again.');
-    return;
-  }
+  igvLoading.value = true;
 
-  if (!genomeBrowserUrl.value) {
-    toast.error('Unable to generate genome browser URL');
-    return;
-  }
+  try {
+    // Set the authentication cookie for file access
+    await sessionService.setFileCookie(session.value.id);
 
-  // Open in new tab
-  window.open(genomeBrowserUrl.value, '_blank');
+    // Fetch the datahub configuration (includes genome and tracks)
+    const datahubResponse = await sessionService.getDatahub(session.value.id);
+    const datahubConfig = datahubResponse.data;
+
+    const igv_tracks = datahubConfig.tracks;
+
+    // igv_tracks.push({
+    //   name: 'Coverage Data',
+    //   format: 'bigwig',
+    //   url: 'https://people.compgenlab.org/~mbreese/bigWigExample.bw',
+    //   color: 'rgb(150, 20, 20)',
+    // });
+
+    // const igv_tracks = [
+    //   [
+    //     {
+    //       name: 'HG00103',
+    //       url: 'https://s3.amazonaws.com/1000genomes/data/HG00103/alignment/HG00103.alt_bwamem_GRCh38DH.20150718.GBR.low_coverage.cram',
+    //       indexURL:
+    //         'https://s3.amazonaws.com/1000genomes/data/HG00103/alignment/HG00103.alt_bwamem_GRCh38DH.20150718.GBR.low_coverage.cram.crai',
+    //       format: 'cram',
+    //     },
+    //     {
+    //       name: 'Coverage Data',
+    //       format: 'bigwig',
+    //       url: 'https://people.compgenlab.org/~mbreese/bigWigExample.bw',
+    //       color: 'rgb(150, 20, 20)',
+    //     },
+    //   ],
+    // ];
+
+    if (!igv_tracks || igv_tracks.length === 0) {
+      toast.error('No tracks available for this session');
+      igvLoading.value = false;
+      return;
+    }
+
+    // Show IGV container
+    showIGV.value = true;
+
+    // Wait for DOM to update
+    await nextTick();
+
+    // Dynamically import IGV
+    const igvModule = await import('igv');
+    const igv = igvModule.default;
+
+    // Configure IGV options
+    const igvOptions = {
+      genome: 'hg38',
+      locus: 'chr8:127,736,588-127,739,371', // Default locus
+      tracks: igv_tracks,
+    };
+
+    // Create IGV browser instance
+    const container = document.getElementById('igv-container');
+    if (container && igv_tracks && igv_tracks.length > 0) {
+      console.log('igv_tracks');
+      console.log(igv_tracks);
+      igvBrowser = await igv.createBrowser(container, igvOptions);
+      // toast.success('IGV browser loaded successfully');
+      console.log('IGV browser loaded successfully');
+    } else {
+      throw new Error('IGV container not found');
+    }
+  } catch (error) {
+    console.error('Failed to initialize IGV:', error);
+    toast.error('Failed to load IGV browser');
+    showIGV.value = false;
+  } finally {
+    igvLoading.value = false;
+  }
+};
+
+/**
+ * Close IGV browser
+ */
+const closeIGV = () => {
+  if (igvBrowser) {
+    igvBrowser.remove();
+    igvBrowser = null;
+  }
+  showIGV.value = false;
 };
 
 const updateSession = async () => {
@@ -789,13 +873,11 @@ watch(showTracksModal, (isOpen) => {
 // Lifecycle
 onMounted(async () => {
   await loadSession();
-  if (session.value) {
-    auth.setupDatahubTokenRefresh({ sessionId: session.value.id });
-  }
 });
 
 onUnmounted(() => {
-  auth.cleanupDatahubTokenRefresh();
+  // Clean up IGV browser instance
+  closeIGV();
 });
 </script>
 

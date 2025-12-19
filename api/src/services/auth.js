@@ -62,24 +62,9 @@ const oAuth2SecureTransferClient = new OAuth2Client({
   tokenEndpoint: 'oauth/token',
 });
 
-const oAuth2GenomeBrowserClient = new OAuth2Client({
-  // The base URI of your OAuth2 server
-  server: config.get('oauth.base_url'),
-  // OAuth2 client id for genome browser file access
-  clientId: config.get('oauth.genome_browser.client_id'),
-  clientSecret: config.get('oauth.genome_browser.client_secret'),
-  tokenEndpoint: 'oauth/token',
-});
-
 function get_download_token(file_path) {
   return oAuth2SecureTransferClient.clientCredentials({
     scope: [`${config.get('oauth.download.scope_prefix')}${file_path}`],
-  });
-}
-
-function get_file_exposure_token(file_path) {
-  return oAuth2GenomeBrowserClient.clientCredentials({
-    scope: [`${config.get('oauth.genome_browser.scope_prefix')}${file_path}`],
   });
 }
 
@@ -243,7 +228,6 @@ module.exports = {
   checkJWT,
   get_user_profile,
   get_download_token,
-  get_file_exposure_token,
   find_or_create_test_user,
   get_upload_token,
   getJWKS,
