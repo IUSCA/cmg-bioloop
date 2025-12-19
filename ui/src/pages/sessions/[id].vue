@@ -725,32 +725,14 @@ const viewInIGV = async () => {
     const datahubResponse = await sessionService.getDatahub(session.value.id);
     const datahubConfig = datahubResponse.data;
 
-    const igv_tracks = datahubConfig.tracks;
+    console.log('[IGV] Datahub response:', datahubConfig);
 
-    // igv_tracks.push({
-    //   name: 'Coverage Data',
-    //   format: 'bigwig',
-    //   url: 'https://people.compgenlab.org/~mbreese/bigWigExample.bw',
-    //   color: 'rgb(150, 20, 20)',
-    // });
+    // Use tracks from the datahub response (served via /files/expose with cookie auth)
+    const igv_tracks = datahubConfig.tracks || [];
+    const igv_genome = datahubConfig.genome || 'hg38';
 
-    // const igv_tracks = [
-    //   [
-    //     {
-    //       name: 'HG00103',
-    //       url: 'https://s3.amazonaws.com/1000genomes/data/HG00103/alignment/HG00103.alt_bwamem_GRCh38DH.20150718.GBR.low_coverage.cram',
-    //       indexURL:
-    //         'https://s3.amazonaws.com/1000genomes/data/HG00103/alignment/HG00103.alt_bwamem_GRCh38DH.20150718.GBR.low_coverage.cram.crai',
-    //       format: 'cram',
-    //     },
-    //     {
-    //       name: 'Coverage Data',
-    //       format: 'bigwig',
-    //       url: 'https://people.compgenlab.org/~mbreese/bigWigExample.bw',
-    //       color: 'rgb(150, 20, 20)',
-    //     },
-    //   ],
-    // ];
+    console.log('[IGV] Tracks:', igv_tracks);
+    console.log('[IGV] Genome:', igv_genome);
 
     if (!igv_tracks || igv_tracks.length === 0) {
       toast.error('No tracks available for this session');
@@ -770,7 +752,7 @@ const viewInIGV = async () => {
 
     // Configure IGV options
     const igvOptions = {
-      genome: 'hg38',
+      genome: igv_genome,
       locus: 'chr8:127,736,588-127,739,371', // Default locus
       tracks: igv_tracks,
     };

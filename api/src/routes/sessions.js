@@ -50,21 +50,23 @@ function buildFileExposureUrl(sessionId, relativePath) {
 }
 
 /**
- * Determines IGV track type from file path/name
+ * Determines IGV track configuration from file path/name
  * @param {string} filePath - File path or name
- * @returns {string} IGV track type
+ * @returns {Object} IGV track configuration with type and format
  */
 const getIGVFileType = (filePath) => {
   if (!filePath) return null;
   const lowerPath = filePath.toLowerCase();
 
-  // Map extensions to IGV types
-  if (lowerPath.endsWith('.bam')) return 'alignment';
-  if (lowerPath.endsWith('.bw') || lowerPath.endsWith('.bigwig')) return 'wig';
-  if (lowerPath.endsWith('.vcf') || lowerPath.endsWith('.vcf.gz')) return 'variant';
-  if (lowerPath.endsWith('.bed')) return 'annotation';
-  if (lowerPath.endsWith('.gff') || lowerPath.endsWith('.gff3')) return 'annotation';
-  if (lowerPath.endsWith('.gtf')) return 'annotation';
+  // Map extensions to IGV track configurations
+  // type = visualization type, format = file format
+  if (lowerPath.endsWith('.bam')) return { type: 'alignment', format: 'bam' };
+  if (lowerPath.endsWith('.bw') || lowerPath.endsWith('.bigwig')) return { type: 'wig', format: 'bigwig' };
+  if (lowerPath.endsWith('.wig')) return { type: 'wig', format: 'wig' };
+  if (lowerPath.endsWith('.vcf') || lowerPath.endsWith('.vcf.gz')) return { type: 'variant', format: 'vcf' };
+  if (lowerPath.endsWith('.bed')) return { type: 'annotation', format: 'bed' };
+  if (lowerPath.endsWith('.gff') || lowerPath.endsWith('.gff3')) return { type: 'annotation', format: 'gff3' };
+  if (lowerPath.endsWith('.gtf')) return { type: 'annotation', format: 'gtf' };
 
   return null;
 };
@@ -771,8 +773,8 @@ router.get(
         const filePath = datasetFile?.path || datasetFile?.name || '';
 
         // Determine IGV file type from extension
-        const fileType = getIGVFileType(filePath);
-        if (!fileType) {
+        const fileTypeConfig = getIGVFileType(filePath);
+        if (!fileTypeConfig) {
           logger.warn(`Unsupported file type for IGV: ${filePath}`);
           return null;
         }
@@ -785,8 +787,8 @@ router.get(
         const trackName = st.title || track.name || datasetFile.name || 'Unnamed Track';
 
         const trackConfig = {
-          type: fileType,
-          format: fileType,
+          type: fileTypeConfig.type,
+          format: fileTypeConfig.format,
           name: trackName,
           url,
           color: st.color || '#2669a3',
@@ -813,6 +815,15 @@ router.get(
     });
   }),
 );
+
+// OPTIONS /sessions/:id/files/expose/* - Handle CORS preflight for IGV browser
+fileExposureRouter.options('/:id/files/expose/*', (req, res) => {
+  res.set('Access-Control-Allow-Origin', '*');
+  res.set('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
+  res.set('Access-Control-Allow-Headers', 'Range, Content-Type, Authorization, Cookie');
+  res.set('Access-Control-Max-Age', '86400'); // 24 hours
+  res.status(204).send();
+});
 
 // GET /sessions/:id/files/expose/* - Expose genomic files for IGV browser
 // Authenticated via HttpOnly cookie, scoped to this session
