@@ -39,7 +39,10 @@ config = {
             # k4: /zpool/novaseqx/novaseqx1
             # k3: '/data/miseq', '/data/novaseq2', '/data/ns6000'
             # k2: '/data/nextseq', '/data/ns2000/output'
-            'source_dir': '',
+            'source_dir': '/path/to/source/raw_data',
+        },
+        'DATA_PRODUCT': {
+            'source_dir': '/N/project/CMG-SCA/cmg-bioloop/origin/data_products',
         },
     },
     'stage': {
