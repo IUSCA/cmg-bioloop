@@ -39,7 +39,7 @@ function getRelativeFilePath({ dataset, datasetFile }) {
 }
 
 /**
- * Build file exposure URL for IGV (session-scoped, relative)
+ * Build file exposure URL for genome browsers (session-scoped, relative)
  * @param {number} sessionId - Session ID
  * @param {string} relativePath - Relative path to the file
  * @returns {string} Relative API URL
@@ -50,26 +50,173 @@ function buildFileExposureUrl(sessionId, relativePath) {
 }
 
 /**
- * Determines IGV track configuration from file path/name
+ * Determines file type configuration for genome browsers (IGV and WashU)
+ * Returns config that can be serialized for different browser types
  * @param {string} filePath - File path or name
- * @returns {Object} IGV track configuration with type and format
+ * @returns {Object|null} Browser-specific track configuration with igv and washu properties
  */
-const getIGVFileType = (filePath) => {
+const getGenomeBrowserFileConfig = (filePath) => {
   if (!filePath) return null;
   const lowerPath = filePath.toLowerCase();
 
-  // Map extensions to IGV track configurations
-  // type = visualization type, format = file format
-  if (lowerPath.endsWith('.bam')) return { type: 'alignment', format: 'bam' };
-  if (lowerPath.endsWith('.bw') || lowerPath.endsWith('.bigwig')) return { type: 'wig', format: 'bigwig' };
-  if (lowerPath.endsWith('.wig')) return { type: 'wig', format: 'wig' };
-  if (lowerPath.endsWith('.vcf') || lowerPath.endsWith('.vcf.gz')) return { type: 'variant', format: 'vcf' };
-  if (lowerPath.endsWith('.bed')) return { type: 'annotation', format: 'bed' };
-  if (lowerPath.endsWith('.gff') || lowerPath.endsWith('.gff3')) return { type: 'annotation', format: 'gff3' };
-  if (lowerPath.endsWith('.gtf')) return { type: 'annotation', format: 'gtf' };
+  // Map extensions to browser-specific configurations
+  if (lowerPath.endsWith('.bam')) {
+    return {
+      baseType: 'alignment',
+      extension: 'bam',
+      igv: { type: 'alignment', format: 'bam' },
+      washu: { type: 'bam' },
+    };
+  }
+
+  if (lowerPath.endsWith('.bw') || lowerPath.endsWith('.bigwig')) {
+    return {
+      baseType: 'signal',
+      extension: 'bigwig',
+      igv: { type: 'wig', format: 'bigwig' },
+      washu: { type: 'bigwig' },
+    };
+  }
+
+  if (lowerPath.endsWith('.wig')) {
+    return {
+      baseType: 'signal',
+      extension: 'wig',
+      igv: { type: 'wig', format: 'wig' },
+      washu: { type: 'bigwig' },
+    };
+  }
+
+  if (lowerPath.endsWith('.vcf') || lowerPath.endsWith('.vcf.gz')) {
+    return {
+      baseType: 'variant',
+      extension: 'vcf',
+      igv: { type: 'variant', format: 'vcf' },
+      washu: { type: 'vcf' },
+    };
+  }
+
+  if (lowerPath.endsWith('.bed')) {
+    return {
+      baseType: 'annotation',
+      extension: 'bed',
+      igv: { type: 'annotation', format: 'bed' },
+      washu: { type: 'bed' },
+    };
+  }
+
+  if (lowerPath.endsWith('.gff') || lowerPath.endsWith('.gff3')) {
+    return {
+      baseType: 'annotation',
+      extension: 'gff3',
+      igv: { type: 'annotation', format: 'gff3' },
+      washu: { type: 'gff' },
+    };
+  }
+
+  if (lowerPath.endsWith('.gtf')) {
+    return {
+      baseType: 'annotation',
+      extension: 'gtf',
+      igv: { type: 'annotation', format: 'gtf' },
+      washu: { type: 'gtf' },
+    };
+  }
 
   return null;
 };
+
+/**
+ * Serialize track for IGV browser
+ * @param {Object} sessionTrack - Session track object with track, dataset_file, dataset
+ * @param {number} sessionId - Session ID for URL generation
+ * @param {Object} filesByDataset - Map of dataset files for index lookup
+ * @returns {Object|null} IGV-compatible track configuration
+ */
+function serializeTrackForIGV(sessionTrack, sessionId, filesByDataset) {
+  const { track } = sessionTrack;
+  const { dataset_file: datasetFile } = track;
+  const { dataset } = datasetFile;
+  const filePath = datasetFile?.path || datasetFile?.name || '';
+
+  const fileConfig = getGenomeBrowserFileConfig(filePath);
+  if (!fileConfig) {
+    logger.warn(`[IGV] Unsupported file type: ${filePath}`);
+    return null;
+  }
+
+  const relativePath = getRelativeFilePath({ dataset, datasetFile });
+  const url = buildFileExposureUrl(sessionId, relativePath);
+  const trackName = sessionTrack.title || track.name || datasetFile.name || 'Unnamed Track';
+
+  const trackConfig = {
+    type: fileConfig.igv.type,
+    format: fileConfig.igv.format,
+    name: trackName,
+    url,
+    color: sessionTrack.color || '#2669a3',
+    height: 100,
+  };
+
+  // Attach index file if exists (for BAM/VCF)
+  const datasetFilesForThisDataset = filesByDataset[dataset.id] || [];
+  const indexFile = findIndexFileForPrimary(datasetFilesForThisDataset, datasetFile);
+
+  if (indexFile) {
+    const indexRelativePath = getRelativeFilePath({ dataset, datasetFile: indexFile });
+    const indexUrl = buildFileExposureUrl(sessionId, indexRelativePath);
+    trackConfig.indexURL = indexUrl;
+  }
+
+  return trackConfig;
+}
+
+/**
+ * Serialize track for WashU browser
+ * @param {Object} sessionTrack - Session track object with track, dataset_file, dataset
+ * @param {number} sessionId - Session ID for URL generation
+ * @param {Object} filesByDataset - Map of dataset files for index lookup
+ * @returns {Object|null} WashU-compatible track configuration
+ */
+function serializeTrackForWashU(sessionTrack, sessionId, filesByDataset) {
+  const { track } = sessionTrack;
+  const { dataset_file: datasetFile } = track;
+  const { dataset } = datasetFile;
+  const filePath = datasetFile?.path || datasetFile?.name || '';
+
+  const fileConfig = getGenomeBrowserFileConfig(filePath);
+  if (!fileConfig) {
+    logger.warn(`[WashU] Unsupported file type: ${filePath}`);
+    return null;
+  }
+
+  const relativePath = getRelativeFilePath({ dataset, datasetFile });
+  const url = buildFileExposureUrl(sessionId, relativePath);
+  const trackName = sessionTrack.title || track.name || datasetFile.name || 'Unnamed Track';
+
+  // WashU format per https://eg.readthedocs.io/en/latest/datahub.html
+  const trackConfig = {
+    type: fileConfig.washu.type,
+    name: trackName,
+    url,
+    options: {
+      color: sessionTrack.color || '#2669a3',
+      height: 100,
+    },
+  };
+
+  // Attach index file if exists (for BAM/VCF)
+  const datasetFilesForThisDataset = filesByDataset[dataset.id] || [];
+  const indexFile = findIndexFileForPrimary(datasetFilesForThisDataset, datasetFile);
+
+  if (indexFile) {
+    const indexRelativePath = getRelativeFilePath({ dataset, datasetFile: indexFile });
+    const indexUrl = buildFileExposureUrl(sessionId, indexRelativePath);
+    trackConfig.indexURL = indexUrl;
+  }
+
+  return trackConfig;
+}
 
 // GET /sessions - Get all sessions accessible to the current user
 router.get(
@@ -653,7 +800,7 @@ router.delete(
 );
 
 // POST /sessions/:id/set-file-cookie - Set authentication cookie for file access
-// Called by frontend before initializing IGV browser
+// Called by frontend before initializing genome browser (IGV or WashU)
 router.post(
   '/:id/set-file-cookie',
   isPermittedTo('read'),
@@ -692,14 +839,18 @@ router.post(
   }),
 );
 
-// GET /sessions/:id/datahub - Export session tracks in IGV browser format
+// GET /sessions/:id/datahub - Export session tracks in genome browser format
+// Supports both IGV and WashU browsers via ?browser=igv|washu query parameter
 // Returns track configurations with relative URLs for same-origin file access
 router.get(
   '/:id/datahub',
   isPermittedTo('read'),
-  [param('id').isInt().toInt()],
+  [param('id').isInt().toInt(), query('browser').optional().isIn(['igv', 'washu']).default('igv')],
   asyncHandler(async (req, res) => {
     const sessionId = req.params.id;
+    const browserType = req.query.browser || 'igv'; // Default to IGV
+
+    logger.info(`[DATAHUB] Request for session ${sessionId}, browser: ${browserType}`);
 
     const session = await prisma.genome_browser_session.findUnique({
       where: { id: sessionId },
@@ -754,69 +905,38 @@ router.get(
       return acc;
     }, {});
 
-    // Get genome info for IGV
+    // Get genome reference (e.g., "hg38", "hg19", "mm10")
+    // Try to infer from session tracks, fallback to session.genome, finally default to hg38
     const firstTrack = session.session_tracks[0];
     const firstDataset = firstTrack?.track?.dataset_file?.dataset;
     const genomeInfo = firstDataset?.genomic_details;
-    const genomeValue = genomeInfo?.genome_value || session.genome || '';
+    const genome = genomeInfo?.genome_value || session.genome || 'hg38';
 
-    // Convert genome info to IGV genome reference (e.g., "hg38", "hg19", "mm10")
-    const genome = genomeValue;
+    // Serialize tracks based on browser type
+    if (browserType === 'washu') {
+      // WashU format: Array of track objects
+      const tracks = session.session_tracks
+        .map((st) => serializeTrackForWashU(st, sessionId, filesByDataset))
+        .filter(Boolean);
 
-    // Convert to IGV track format with relative URLs (same-origin)
-    // No tokens needed - authentication via HttpOnly cookies
-    const tracks = session.session_tracks
-      .map((st) => {
-        const { track } = st;
-        const { dataset_file: datasetFile } = track;
-        const { dataset } = datasetFile;
-        const filePath = datasetFile?.path || datasetFile?.name || '';
+      logger.info(`[DATAHUB] Returning ${tracks.length} WashU tracks for session ${sessionId}`);
 
-        // Determine IGV file type from extension
-        const fileTypeConfig = getIGVFileType(filePath);
-        if (!fileTypeConfig) {
-          logger.warn(`Unsupported file type for IGV: ${filePath}`);
-          return null;
-        }
+      // WashU expects genome and tracks (similar to IGV but different track format)
+      res.json({ genome, tracks });
+    } else {
+      // IGV format: Object with genome + tracks
+      const tracks = session.session_tracks
+        .map((st) => serializeTrackForIGV(st, sessionId, filesByDataset))
+        .filter(Boolean);
 
-        // Build relative URL for file exposure (session-scoped)
-        const relativePath = getRelativeFilePath({ dataset, datasetFile });
-        const url = buildFileExposureUrl(sessionId, relativePath);
+      logger.info(`[DATAHUB] Returning ${tracks.length} IGV tracks for session ${sessionId}`);
 
-        // Track display name (use session track title if available, else track name)
-        const trackName = st.title || track.name || datasetFile.name || 'Unnamed Track';
-
-        const trackConfig = {
-          type: fileTypeConfig.type,
-          format: fileTypeConfig.format,
-          name: trackName,
-          url,
-          color: st.color || '#2669a3',
-          height: 100,
-        };
-
-        // Find and attach index file if it exists (for BAM/VCF files)
-        const datasetFilesForThisDataset = filesByDataset[dataset.id] || [];
-        const indexFile = findIndexFileForPrimary(datasetFilesForThisDataset, datasetFile);
-
-        if (indexFile) {
-          const indexRelativePath = getRelativeFilePath({ dataset, datasetFile: indexFile });
-          const indexUrl = buildFileExposureUrl(sessionId, indexRelativePath);
-          trackConfig.indexURL = indexUrl;
-        }
-
-        return trackConfig;
-      })
-      .filter(Boolean); // Remove null entries for unsupported file types
-
-    res.json({
-      genome, // IGV genome reference
-      tracks,
-    });
+      res.json({ genome, tracks });
+    }
   }),
 );
 
-// OPTIONS /sessions/:id/files/expose/* - Handle CORS preflight for IGV browser
+// OPTIONS /sessions/:id/files/expose/* - Handle CORS preflight for genome browsers
 fileExposureRouter.options('/:id/files/expose/*', (req, res) => {
   res.set('Access-Control-Allow-Origin', '*');
   res.set('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
@@ -825,7 +945,7 @@ fileExposureRouter.options('/:id/files/expose/*', (req, res) => {
   res.status(204).send();
 });
 
-// GET /sessions/:id/files/expose/* - Expose genomic files for IGV browser
+// GET /sessions/:id/files/expose/* - Expose genomic files for genome browsers (IGV, WashU)
 // Authenticated via HttpOnly cookie, scoped to this session
 // Supports HTTP Range requests for efficient file streaming
 // This route is mounted BEFORE global authentication to use cookie-based auth
@@ -991,6 +1111,22 @@ fileExposureRouter.get(
     res.set('Accept-Ranges', 'bytes');
     res.set('Access-Control-Allow-Origin', '*');
     res.set('Access-Control-Expose-Headers', 'Content-Range, Accept-Ranges, Content-Length');
+
+    // CRITICAL: Disable compression for binary genomic files
+    // BigWig/BAM files must be served as raw bytes for proper parsing by genome browsers
+    // Multiple strategies to prevent compression at different layers:
+
+    // 1. Tell Express compression middleware to skip (if used)
+    res.locals.compress = false;
+
+    // 2. Tell Nginx to not buffer/compress this response
+    // res.set('X-Accel-Buffering', 'no');
+
+    // 3. Explicitly set Content-Encoding (some proxies respect this)
+    res.set('Content-Encoding', 'identity');
+
+    // 4. Remove Vary header that triggers compression
+    res.removeHeader('Vary');
 
     // Handle Range requests (required for IGV)
     const { range } = req.headers;

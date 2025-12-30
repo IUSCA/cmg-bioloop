@@ -1,7 +1,7 @@
 <template>
   <div class="track-detail">
     <div v-if="loading" class="flex justify-center items-center h-64">
-      <va-progress-circular indeterminate />
+      <va-progress-circle indeterminate />
     </div>
 
     <!-- <div v-else-if="error" class="text-center text-red-600">

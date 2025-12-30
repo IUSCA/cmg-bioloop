@@ -41,8 +41,18 @@ app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: false }));
 app.use(cookieParser());
 
-// compress all responses
-app.use(compression());
+// compress all responses EXCEPT binary genomic files
+// Binary files (BigWig, BAM, etc.) must not be compressed for genome browsers to parse them
+app.use(compression({
+  filter: (req, res) => {
+    // Don't compress file exposure endpoints (genome browser files)
+    if (req.path && req.path.includes('/files/expose')) {
+      return false;
+    }
+    // Use default compression filter for everything else
+    return compression.filter(req, res);
+  },
+}));
 
 if (!['production', 'test'].includes(config.get('mode'))) {
   // mount swagger ui
