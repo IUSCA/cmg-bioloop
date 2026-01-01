@@ -398,9 +398,10 @@
       fullscreen
       hide-default-actions
       no-padding
+      no-outside-dismiss
       @close="closeGenomeBrowser"
     >
-      <div class="h-full flex flex-col">
+      <div class="h-full flex flex-col" @click.stop>
         <!-- IGV Container -->
         <div
           v-if="selectedBrowserType === 'igv'"
@@ -409,13 +410,14 @@
           style="min-height: 600px"
         ></div>
 
-        <!-- WashU Container -->
-        <WashUBrowser
-          v-else-if="selectedBrowserType === 'washu'"
-          :genome-name="genomeBrowserGenome"
-          :tracks="genomeBrowserTracks"
-          class="flex-1"
-        />
+        <!-- WashU Container - Stop click propagation to prevent React-Vue conflicts -->
+        <div v-else-if="selectedBrowserType === 'washu'" class="flex-1" @click.stop @mousedown.stop>
+          <WashUBrowser
+            :genome-name="genomeBrowserGenome"
+            :tracks="genomeBrowserTracks"
+            class="h-full"
+          />
+        </div>
       </div>
     </va-modal>
   </div>
@@ -772,18 +774,8 @@ const initializeIGV = async () => {
 
     console.log('[IGV] Datahub response:', datahubConfig);
 
-    // const tracks = datahubConfig?.tracks || [];
-    const tracks = [
-      {
-        type: 'bigwig',
-        name: 'Test Public BigWig',
-        url: 'https://www.encodeproject.org/files/ENCFF356YES/@@download/ENCFF356YES.bigWig',
-        options: {
-          color: '#ff0000',
-          height: 50,
-        },
-      },
-    ];
+    const tracks = datahubConfig?.tracks || [];
+    // const tracks ß
     const genome = datahubConfig?.genome;
 
     console.log('[IGV] Tracks:', tracks);
@@ -864,20 +856,22 @@ const initializeWashU = async () => {
     }
 
     // TEMPORARY TEST: Add a public BigWig file to test if WashU works at all
-    const testTrack = {
-      type: 'bigwig',
-      // name: 'Test Public BigWig',
-      // url: 'https://www.encodeproject.org/files/ENCFF356YES/@@download/ENCFF356YES.bigWig',
-      url: 'https://wizhub.wustl.edu/public/tmp/TW463_20-5-bonemarrow_MeDIP.bigwig',
-      options: {
-        backgroundColor: '#ff0000',
-        height: 50,
-      },
-    };
+    // const testTrack = {
+    //   type: 'bigwig',
+    //   // name: 'Test Public BigWig',
+    //   url: 'https://www.encodeproject.org/files/ENCFF356YES/@@download/ENCFF356YES.bigWig',
+    //   options: {
+    //     backgroundColor: '#ff0000',
+    //     height: 50,
+    //   },
+    // };
 
     // Store for modal display (including test track)
     genomeBrowserGenome.value = genome;
-    genomeBrowserTracks.value = [testTrack, ...tracks];
+    genomeBrowserTracks.value = [
+      // testTrack,
+      ...tracks,
+    ];
 
     // Show genome browser modal (WashU component will mount automatically)
     showGenomeBrowserModal.value = true;
