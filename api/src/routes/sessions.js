@@ -907,10 +907,11 @@ router.get(
 
     // Get genome reference (e.g., "hg38", "hg19", "mm10")
     // Try to infer from session tracks, fallback to session.genome, finally default to hg38
-    const firstTrack = session.session_tracks[0];
-    const firstDataset = firstTrack?.track?.dataset_file?.dataset;
-    const genomeInfo = firstDataset?.genomic_details;
-    const genome = genomeInfo?.genome_value || session.genome || 'hg38';
+    // const firstTrack = session.session_tracks[0];
+    // const firstDataset = firstTrack?.track?.dataset_file?.dataset;
+    // const genomeInfo = firstDataset?.genomic_details;
+    const { genome } = session;
+    //  || 'hg38'
 
     // Serialize tracks based on browser type
     if (browserType === 'washu') {

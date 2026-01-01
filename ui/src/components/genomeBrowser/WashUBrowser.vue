@@ -11,7 +11,6 @@ import { onBeforeUnmount, onMounted, ref } from 'vue';
 const props = defineProps({
   genomeName: {
     type: String,
-    required: true,
   },
   tracks: {
     type: Array,
@@ -31,7 +30,7 @@ onMounted(async () => {
 
   try {
     // Import WashU GenomeViewer component
-    const { GenomeViewer } = await import('wuepgg');
+    const { GenomeHub } = await import('wuepgg');
 
     // Create React root (React 18 API)
     reactRoot = createRoot(washuContainer.value);
@@ -44,9 +43,10 @@ onMounted(async () => {
     };
 
     console.log('[WashU] Initializing with props:', washuProps);
+    console.dir(washuProps, { depth: null });
 
     // Create React element using createElement (no JSX needed)
-    const genomeViewerElement = createElement(GenomeViewer, washuProps);
+    const genomeViewerElement = createElement(GenomeHub, washuProps);
 
     // Render into container
     reactRoot.render(genomeViewerElement);

@@ -768,12 +768,23 @@ const initializeIGV = async () => {
 
     // Fetch the datahub configuration for IGV
     const datahubResponse = await sessionService.getDatahub(session.value.id, 'igv');
-    const datahubConfig = datahubResponse.data;
+    const datahubConfig = datahubResponse?.data;
 
     console.log('[IGV] Datahub response:', datahubConfig);
 
-    const tracks = datahubConfig.tracks || [];
-    const genome = datahubConfig.genome || 'hg38';
+    // const tracks = datahubConfig?.tracks || [];
+    const tracks = [
+      {
+        type: 'bigwig',
+        name: 'Test Public BigWig',
+        url: 'https://www.encodeproject.org/files/ENCFF356YES/@@download/ENCFF356YES.bigWig',
+        options: {
+          color: '#ff0000',
+          height: 50,
+        },
+      },
+    ];
+    const genome = datahubConfig?.genome;
 
     console.log('[IGV] Tracks:', tracks);
     console.log('[IGV] Genome:', genome);
@@ -840,7 +851,8 @@ const initializeWashU = async () => {
     console.log('[WashU] Datahub response:', datahubConfig);
 
     const tracks = datahubConfig.tracks || [];
-    const genome = datahubConfig.genome || 'hg38';
+    const genome = datahubConfig.genome;
+    // const genome = 'hg38';
 
     console.log('[WashU] Tracks:', tracks);
     console.log('[WashU] Genome:', genome);
@@ -854,10 +866,11 @@ const initializeWashU = async () => {
     // TEMPORARY TEST: Add a public BigWig file to test if WashU works at all
     const testTrack = {
       type: 'bigwig',
-      name: 'Test Public BigWig',
-      url: 'https://www.encodeproject.org/files/ENCFF356YES/@@download/ENCFF356YES.bigWig',
+      // name: 'Test Public BigWig',
+      // url: 'https://www.encodeproject.org/files/ENCFF356YES/@@download/ENCFF356YES.bigWig',
+      url: 'https://wizhub.wustl.edu/public/tmp/TW463_20-5-bonemarrow_MeDIP.bigwig',
       options: {
-        color: '#ff0000',
+        backgroundColor: '#ff0000',
         height: 50,
       },
     };
