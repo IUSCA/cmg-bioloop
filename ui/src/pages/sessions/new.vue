@@ -18,16 +18,25 @@
                 ]"
               />
 
-              <va-input
+              <va-select
                 v-model="form.genome_type"
                 label="Genome Type"
-                placeholder="Auto-populated if tracks have consistent genome info"
+                placeholder="Select genome type or auto-populate from tracks"
+                :options="genomeTypeOptions"
+                text-by="text"
+                value-by="value"
+                clearable
               />
 
-              <va-input
+              <va-select
                 v-model="form.genome"
                 label="Genome Assembly"
-                placeholder="Auto-populated if tracks have consistent genome info"
+                placeholder="Select genome assembly or auto-populate from tracks"
+                :options="availableAssemblies"
+                text-by="text"
+                value-by="value"
+                :disabled="!form.genome_type"
+                clearable
               />
 
               <div class="flex items-center">
@@ -161,12 +170,13 @@
 
 <script setup>
 import TracksAsyncAutoComplete from '@/components/tracks/TracksAsyncAutoComplete.vue';
+import constants from '@/constants';
 import sessionService from '@/services/session';
 import toast from '@/services/toast';
 import { formatBytes } from '@/services/utils';
 import { useSessionsStore } from '@/stores/sessions';
 import _ from 'lodash';
-import { computed, onMounted, ref } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 
 const router = useRouter();
@@ -234,6 +244,40 @@ const selectedTracksTableData = computed(() => {
 const canSubmit = computed(() => {
   return form.value.session_name.trim() && selectedTracks.value.length > 0;
 });
+
+// Genome type dropdown options
+const genomeTypeOptions = computed(() => {
+  return Object.keys(constants.GENOME_TYPES).map((key) => ({
+    value: key,
+    text: constants.GENOME_TYPES[key].label || key,
+  }));
+});
+
+// Available assemblies based on selected genome type
+const availableAssemblies = computed(() => {
+  if (!form.value.genome_type || !constants.GENOME_TYPES[form.value.genome_type]) {
+    return [];
+  }
+  return constants.GENOME_TYPES[form.value.genome_type].genomes.map((assembly) => ({
+    value: assembly,
+    text: assembly,
+  }));
+});
+
+// Watch genome type changes to clear assembly if it's not valid for the new type
+watch(
+  () => form.value.genome_type,
+  (newGenomeType, oldGenomeType) => {
+    // Only clear assembly if genome type actually changed
+    if (newGenomeType !== oldGenomeType && form.value.genome) {
+      const availableGenomes = constants.GENOME_TYPES[newGenomeType]?.genomes || [];
+      // Clear assembly if it's not available for the new genome type
+      if (!availableGenomes.includes(form.value.genome)) {
+        form.value.genome = '';
+      }
+    }
+  }
+);
 
 // Async validation for session name uniqueness
 const validateSessionNameUnique = async (value) => {
@@ -372,9 +416,15 @@ const validateAllTracks = () => {
 
 // Update genome fields based on candidate datasets logic
 const updateGenomeFields = () => {
+  // Don't clear fields if no tracks - preserve manual selections
   if (selectedTracks.value.length === 0) {
-    form.value.genome_type = '';
-    form.value.genome = '';
+    return;
+  }
+
+  // Only auto-populate if fields are currently empty
+  // This preserves manual user selections
+  const fieldsAreEmpty = !form.value.genome_type && !form.value.genome;
+  if (!fieldsAreEmpty) {
     return;
   }
 
@@ -389,16 +439,13 @@ const updateGenomeFields = () => {
     }
   });
 
-  // If exactly one unique genome pair, auto-populate
+  // If exactly one unique genome pair, auto-populate (only if fields are empty)
   if (genomes.size === 1) {
     const [genome_type, genome_value] = Array.from(genomes)[0].split('|');
     form.value.genome_type = genome_type;
     form.value.genome = genome_value;
-  } else {
-    // Multiple or no genome pairs - leave blank for user input
-    form.value.genome_type = '';
-    form.value.genome = '';
   }
+  // Multiple or no genome pairs - leave fields as they are (empty or user-selected)
 };
 
 const removeTrack = (trackId) => {
@@ -406,12 +453,7 @@ const removeTrack = (trackId) => {
   if (index > -1) {
     selectedTracks.value.splice(index, 1);
 
-    // If this was the last track, clear genome fields
-    if (selectedTracks.value.length === 0) {
-      form.value.genome_type = '';
-      form.value.genome = '';
-    }
-    // Update genome fields after removing track
+    // Update genome fields after removing track (preserves manual selections)
     updateGenomeFields();
 
     // Clear validation alerts when tracks are removed

@@ -395,6 +395,7 @@
     <va-modal
       v-model="showGenomeBrowserModal"
       :title="genomeBrowserTitle"
+      :disable-attachment="true"
       fullscreen
       hide-default-actions
       no-padding
@@ -404,20 +405,21 @@
       <div class="h-full flex flex-col" @click.stop>
         <!-- IGV Container -->
         <div
-          v-if="selectedBrowserType === 'igv'"
+          v-if="selectedBrowserType === BROWSER_TYPES.IGV"
           id="igv-container"
           class="flex-1"
           style="min-height: 600px"
         ></div>
 
-        <!-- WashU Container - Stop click propagation to prevent React-Vue conflicts -->
-        <div v-else-if="selectedBrowserType === 'washu'" class="flex-1" @click.stop @mousedown.stop>
-          <WashUBrowser
-            :genome-name="genomeBrowserGenome"
-            :tracks="genomeBrowserTracks"
-            class="h-full"
-          />
-        </div>
+        <!-- WashU Container - v-if ensures full destruction on modal close -->
+        <WashUBrowser
+          v-if="showGenomeBrowserModal && selectedBrowserType === BROWSER_TYPES.WASHU"
+          :key="washuMountKey"
+          :genome-name="genomeBrowserGenome"
+          :data-hub="genomeBrowserTracks"
+          :view-region="genomeBrowserRegion"
+          class="h-full flex-1"
+        />
       </div>
     </va-modal>
   </div>
@@ -429,6 +431,7 @@ import WashUBrowser from '@/components/genomeBrowser/WashUBrowser.vue';
 import DeleteSessionModal from '@/components/sessions/DeleteSessionModal.vue';
 import TracksAsyncAutoComplete from '@/components/tracks/TracksAsyncAutoComplete.vue';
 import AddEditButton from '@/components/utils/buttons/AddEditButton.vue';
+import constants from '@/constants';
 import * as datetime from '@/services/datetime';
 import sessionService from '@/services/session';
 import toast from '@/services/toast';
@@ -537,19 +540,24 @@ const _stagedTracksCount = computed(() => {
     .length;
 });
 
+// Genome Browser constants
+const { browserTypes: BROWSER_TYPES, browserTitles: BROWSER_TITLES } = constants.genomeBrowser;
+
 // Genome Browser state (generic for IGV and WashU)
 const showBrowserSelectionModal = ref(false);
 const showGenomeBrowserModal = ref(false);
 const genomeBrowserLoading = ref(false);
-const selectedBrowserType = ref(null); // 'igv' or 'washu'
+const selectedBrowserType = ref(null); // BROWSER_TYPES.IGV or BROWSER_TYPES.WASHU
 const genomeBrowserGenome = ref('');
 const genomeBrowserTracks = ref([]);
+const genomeBrowserRegion = ref(''); // View region for browser
+const washuMountKey = ref(0); // Force WashU remount on open
 let igvBrowser = null; // IGV browser instance
 
 const genomeBrowserTitle = computed(() => {
-  if (selectedBrowserType.value === 'igv') return 'IGV Genome Browser';
-  if (selectedBrowserType.value === 'washu') return 'WashU Epigenome Browser';
-  return 'Genome Browser';
+  if (selectedBrowserType.value === BROWSER_TYPES.IGV) return BROWSER_TITLES.igv;
+  if (selectedBrowserType.value === BROWSER_TYPES.WASHU) return BROWSER_TITLES.washu;
+  return BROWSER_TITLES.default;
 });
 
 const associatedTracks = computed(() => {
@@ -749,9 +757,9 @@ const _handleSessionUpdated = (_updatedSession) => {
 const handleBrowserSelection = async (browserType) => {
   selectedBrowserType.value = browserType;
 
-  if (browserType === 'igv') {
+  if (browserType === BROWSER_TYPES.IGV) {
     await initializeIGV();
-  } else if (browserType === 'washu') {
+  } else if (browserType === BROWSER_TYPES.WASHU) {
     await initializeWashU();
   }
 };
@@ -769,7 +777,7 @@ const initializeIGV = async () => {
     await sessionService.setFileCookie(session.value.id);
 
     // Fetch the datahub configuration for IGV
-    const datahubResponse = await sessionService.getDatahub(session.value.id, 'igv');
+    const datahubResponse = await sessionService.getDatahub(session.value.id, BROWSER_TYPES.IGV);
     const datahubConfig = datahubResponse?.data;
 
     console.log('[IGV] Datahub response:', datahubConfig);
@@ -837,7 +845,7 @@ const initializeWashU = async () => {
     await sessionService.setFileCookie(session.value.id);
 
     // Fetch the datahub configuration for WashU
-    const datahubResponse = await sessionService.getDatahub(session.value.id, 'washu');
+    const datahubResponse = await sessionService.getDatahub(session.value.id, BROWSER_TYPES.WASHU);
     const datahubConfig = datahubResponse.data;
 
     console.log('[WashU] Datahub response:', datahubConfig);
@@ -866,17 +874,21 @@ const initializeWashU = async () => {
     //   },
     // };
 
-    // Store for modal display (including test track)
+    // Store for modal display
     genomeBrowserGenome.value = genome;
-    genomeBrowserTracks.value = [
-      // testTrack,
-      ...tracks,
-    ];
+    genomeBrowserTracks.value = tracks;
+    genomeBrowserRegion.value = datahubConfig.locus || 'chr1:155000000-155050000';
+
+    // Force fresh WashU mount by incrementing key
+    washuMountKey.value++;
 
     // Show genome browser modal (WashU component will mount automatically)
     showGenomeBrowserModal.value = true;
 
-    console.log('[WashU] Browser will initialize via component (with test track)');
+    console.log(
+      '[WashU] Browser will initialize via component with mount key:',
+      washuMountKey.value
+    );
   } catch (error) {
     console.error('[WashU] Failed to initialize:', error);
     toast.error('Failed to load WashU browser');
@@ -890,19 +902,11 @@ const initializeWashU = async () => {
  * Close genome browser (IGV or WashU)
  */
 const closeGenomeBrowser = () => {
-  // Clean up IGV browser instance if it exists and has remove method
-  // if (igvBrowser && typeof igvBrowser.remove === 'function') {
-  // try {
-  //   igvBrowser.remove();
-  //   console.log('[IGV] Browser instance removed');
-  // } catch (error) {
-  //   console.error('[IGV] Error removing browser:', error);
-  // }
+  // Clean up IGV browser instance if it exists
   if (igvBrowser) {
     igvBrowser.dispose();
     igvBrowser = null;
   }
-  // }
 
   // WashU cleanup is handled by its component's onBeforeUnmount
 
@@ -910,6 +914,7 @@ const closeGenomeBrowser = () => {
   selectedBrowserType.value = null;
   genomeBrowserGenome.value = '';
   genomeBrowserTracks.value = [];
+  genomeBrowserRegion.value = '';
 
   console.log('[Genome Browser] Closed and cleaned up');
 };

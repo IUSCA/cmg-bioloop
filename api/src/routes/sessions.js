@@ -16,6 +16,12 @@ const fileExposureRouter = express.Router();
 
 const DATA_ROOT = config.get('data_root');
 
+// Genome Browser Constants
+const BROWSER_TYPES = {
+  IGV: 'igv',
+  WASHU: 'washu',
+};
+
 // Middleware to check permissions
 const isPermittedTo = accessControl('sessions');
 
@@ -498,11 +504,7 @@ router.post(
     }
 
     // Validate tracks for session compatibility
-    const validationResult = validateTracksForSession(
-      tracks,
-      providedGenomeType,
-      providedGenome,
-    );
+    const validationResult = validateTracksForSession(tracks);
     if (!validationResult.isValid) {
       return res.status(400).json({ error: validationResult.error });
     }
@@ -706,7 +708,7 @@ router.patch(
       }
 
       // Validate tracks for session compatibility
-      const validationResult = validateTracksForSession(tracks, genome_type, genome);
+      const validationResult = validateTracksForSession(tracks);
       if (!validationResult.isValid) {
         return res.status(400).json({ error: validationResult.error });
       }
@@ -845,10 +847,16 @@ router.post(
 router.get(
   '/:id/datahub',
   isPermittedTo('read'),
-  [param('id').isInt().toInt(), query('browser').optional().isIn(['igv', 'washu']).default('igv')],
+  [
+    param('id').isInt().toInt(),
+    query('browser')
+      .optional()
+      .isIn(Object.values(BROWSER_TYPES))
+      .default(BROWSER_TYPES.IGV),
+  ],
   asyncHandler(async (req, res) => {
     const sessionId = req.params.id;
-    const browserType = req.query.browser || 'igv'; // Default to IGV
+    const browserType = req.query.browser || BROWSER_TYPES.IGV;
 
     logger.info(`[DATAHUB] Request for session ${sessionId}, browser: ${browserType}`);
 
@@ -914,7 +922,7 @@ router.get(
     //  || 'hg38'
 
     // Serialize tracks based on browser type
-    if (browserType === 'washu') {
+    if (browserType === BROWSER_TYPES.WASHU) {
       // WashU format: Array of track objects
       const tracks = session.session_tracks
         .map((st) => serializeTrackForWashU(st, sessionId, filesByDataset))
@@ -958,13 +966,14 @@ fileExposureRouter.get(
     const sessionId = req.params.id;
     const requestedPath = req.params[0] || ''; // Everything after /files/expose/
 
-    logger.info('[FILE EXPOSE] Request received', {
+    logger.info('[FILE EXPOSE] Request received');
+    console.dir({
       sessionId,
       requestedPath,
       user: req.user?.username,
       userId: req.user?.id,
       rangeHeader: req.headers.range || 'none',
-    });
+    }, { depth: null });
 
     // Verify user has access to this session
     const session = await prisma.genome_browser_session.findUnique({
@@ -982,6 +991,7 @@ fileExposureRouter.get(
                       select: {
                         id: true,
                         metadata: true,
+                        staged_path: true,
                       },
                     },
                   },
@@ -998,11 +1008,12 @@ fileExposureRouter.get(
       return next(createError.NotFound('Session not found'));
     }
 
-    logger.info('[FILE EXPOSE] Session found', {
+    logger.info('[FILE EXPOSE] Session found');
+    console.dir({
       sessionId,
       sessionUserId: session.user_id,
       trackCount: session.session_tracks.length,
-    });
+    }, { depth: null });
 
     // Check if user owns the session or has access
     if (session.user_id !== req.user.id && !req.user.roles?.includes('admin')) {
@@ -1016,6 +1027,8 @@ fileExposureRouter.get(
 
     // Verify the requested file belongs to this session's tracks
     const cleanedRequestedPath = requestedPath.replace(/^\/+/, '');
+    logger.info('[FILE EXPOSE] Cleaned requested path');
+    console.dir({ cleanedRequestedPath }, { depth: null });
 
     const matchedTrack = session.session_tracks.find((st) => {
       const { dataset } = st.track.dataset_file;
@@ -1041,41 +1054,38 @@ fileExposureRouter.get(
     const matchedFile = matchedTrack.track.dataset_file;
     const matchedDataset = matchedTrack.track.dataset_file.dataset;
 
-    logger.info('[FILE EXPOSE] File matched in session', {
+    logger.info('[FILE EXPOSE] File matched in session');
+    console.dir({
       sessionId,
       trackId: matchedTrack.track.id,
       datasetId: matchedDataset.id,
       fileId: matchedFile.id,
       fileName: matchedFile.name,
-    });
+    }, { depth: null });
 
-    // Construct full file path
-    const stageAlias = matchedDataset.metadata?.stage_alias || '';
+    // Construct full file path using dataset's staged_path
+    const stagedPath = matchedDataset.staged_path;
+    logger.info('[FILE EXPOSE] Dataset staged path');
+    console.dir({ stagedPath }, { depth: null });
+
     const filePath = matchedFile.path || '';
-    const cleanedStageAlias = stageAlias.replace(/^\/+/, '').replace(/\/+$/, '');
-    const cleanedFilePath = filePath.replace(/^\/+/, '');
-    const fullRelativePath = cleanedStageAlias ? `${cleanedStageAlias}/${cleanedFilePath}` : cleanedFilePath;
+    logger.info('[FILE EXPOSE] File path from dataset_file');
+    console.dir({ filePath }, { depth: null });
 
-    const fullPath = path.join(DATA_ROOT, fullRelativePath);
+    // Absolute path is: staged_path + '/' + filePath
+    const resolvedFull = path.join(stagedPath, filePath);
+    logger.info('[FILE EXPOSE] Full absolute path constructed');
+    console.dir({ resolvedFull }, { depth: null });
+
+    // Security: Verify path starts with DATA_ROOT to prevent path traversal
     const resolvedRoot = path.resolve(DATA_ROOT);
-    const resolvedFull = path.resolve(fullPath);
-
-    logger.info('[FILE EXPOSE] File path constructed', {
-      dataRoot: DATA_ROOT,
-      stageAlias,
-      filePath,
-      fullRelativePath,
-      fullPath,
-      resolvedFull,
-    });
-
-    // Security: Prevent path traversal
     if (!resolvedFull.startsWith(resolvedRoot)) {
-      logger.error('Path traversal attempt detected', {
-        requested: fullPath,
-        resolved: resolvedFull,
-        root: resolvedRoot,
-      });
+      logger.error('[FILE EXPOSE] Path traversal attempt detected');
+      console.dir({
+        resolvedFull,
+        resolvedRoot,
+        dataRoot: DATA_ROOT,
+      }, { depth: null });
       return next(createError.BadRequest('Invalid file path'));
     }
 
@@ -1084,16 +1094,20 @@ fileExposureRouter.get(
 
     // Get file stats
     const fileStats = await fs.promises.stat(resolvedFull);
-    logger.info('[FILE EXPOSE] File exists and accessible', {
+    logger.info('[FILE EXPOSE] File exists and accessible');
+    console.dir({
       resolvedFull,
       fileSize: fileStats.size,
       fileSizeFormatted: `${(fileStats.size / 1024 / 1024).toFixed(2)} MB`,
       isFile: fileStats.isFile(),
       isDirectory: fileStats.isDirectory(),
-    });
+    }, { depth: null });
 
     // Set headers
     const ext = path.extname(resolvedFull).toLowerCase();
+    logger.info('[FILE EXPOSE] File extension extracted');
+    console.dir({ ext }, { depth: null });
+
     const mimeTypes = {
       '.bam': 'application/octet-stream',
       '.bai': 'application/octet-stream',
@@ -1107,6 +1121,8 @@ fileExposureRouter.get(
       '.gtf': 'text/plain',
     };
     const contentType = mimeTypes[ext] || 'application/octet-stream';
+    logger.info('[FILE EXPOSE] Content type determined');
+    console.dir({ contentType }, { depth: null });
 
     res.set('Content-Type', contentType);
     res.set('Accept-Ranges', 'bytes');
@@ -1132,15 +1148,36 @@ fileExposureRouter.get(
     // Handle Range requests (required for IGV)
     const { range } = req.headers;
     if (range) {
+      logger.info('[FILE EXPOSE] Range header detected');
+      console.dir({ range }, { depth: null });
+
       const stats = await fs.promises.stat(resolvedFull);
       const fileSize = stats.size;
-      const parts = range.replace(/bytes=/, '').split('-');
-      const start = parseInt(parts[0], 10);
-      const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
-      const chunksize = (end - start) + 1;
-      const percentOfFile = ((chunksize / fileSize) * 100).toFixed(2);
+      logger.info('[FILE EXPOSE] File size from stats');
+      console.dir({ fileSize }, { depth: null });
 
-      logger.info('[FILE EXPOSE] Streaming range request', {
+      const parts = range.replace(/bytes=/, '').split('-');
+      logger.info('[FILE EXPOSE] Range parts parsed');
+      console.dir({ parts }, { depth: null });
+
+      const start = parseInt(parts[0], 10);
+      logger.info('[FILE EXPOSE] Range start position');
+      console.dir({ start }, { depth: null });
+
+      const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
+      logger.info('[FILE EXPOSE] Range end position');
+      console.dir({ end }, { depth: null });
+
+      const chunksize = (end - start) + 1;
+      logger.info('[FILE EXPOSE] Chunk size calculated');
+      console.dir({ chunksize }, { depth: null });
+
+      const percentOfFile = ((chunksize / fileSize) * 100).toFixed(2);
+      logger.info('[FILE EXPOSE] Percent of file calculated');
+      console.dir({ percentOfFile }, { depth: null });
+
+      logger.info('[FILE EXPOSE] Streaming range request');
+      console.dir({
         resolvedFull,
         rangeHeader: range,
         start,
@@ -1148,16 +1185,19 @@ fileExposureRouter.get(
         chunksize,
         fileSize,
         percentOfFile: `${percentOfFile}%`,
-      });
+      }, { depth: null });
 
       res.status(206); // Partial Content
       res.set('Content-Range', `bytes ${start}-${end}/${fileSize}`);
       res.set('Content-Length', chunksize);
 
       const fileStream = fs.createReadStream(resolvedFull, { start, end });
+      logger.info('[FILE EXPOSE] File stream created (range)');
+      console.dir({ streamOptions: { start, end } }, { depth: null });
 
       fileStream.on('open', () => {
-        logger.info('[FILE EXPOSE] Stream opened (range)', { start, end });
+        logger.info('[FILE EXPOSE] Stream opened (range)');
+        console.dir({ start, end }, { depth: null });
       });
 
       fileStream.on('error', (err) => {
@@ -1173,23 +1213,27 @@ fileExposureRouter.get(
       });
 
       fileStream.on('end', () => {
-        logger.info('[FILE EXPOSE] Stream completed (range)', {
+        logger.info('[FILE EXPOSE] Stream completed (range)');
+        console.dir({
           resolvedFull,
           start,
           end,
           bytesStreamed: chunksize,
-        });
+        }, { depth: null });
       });
 
       fileStream.pipe(res);
     } else {
       // Stream full file
-      logger.info('[FILE EXPOSE] Streaming full file', {
+      logger.info('[FILE EXPOSE] Streaming full file');
+      console.dir({
         resolvedFull,
         fileSize: fileStats.size,
-      });
+      }, { depth: null });
 
       const fileStream = fs.createReadStream(resolvedFull);
+      logger.info('[FILE EXPOSE] File stream created (full)');
+      console.dir({ resolvedFull }, { depth: null });
 
       fileStream.on('open', () => {
         logger.info('[FILE EXPOSE] Stream opened (full file)');
@@ -1206,10 +1250,11 @@ fileExposureRouter.get(
       });
 
       fileStream.on('end', () => {
-        logger.info('[FILE EXPOSE] Stream completed (full file)', {
+        logger.info('[FILE EXPOSE] Stream completed (full file)');
+        console.dir({
           resolvedFull,
           bytesStreamed: fileStats.size,
-        });
+        }, { depth: null });
       });
 
       fileStream.pipe(res);
@@ -1405,7 +1450,7 @@ router.get(
 );
 
 // Track validation functions
-const validateTracksForSession = (tracks, sessionGenomeType, sessionGenome) => {
+const validateTracksForSession = (tracks) => {
   if (!tracks || tracks.length === 0) {
     return { isValid: false, error: 'No tracks provided for validation' };
   }
@@ -1444,22 +1489,8 @@ const validateTracksForSession = (tracks, sessionGenomeType, sessionGenome) => {
     };
   }
 
-  // Validation 3: Check if session genome matches track genomes
-  if (sessionGenomeType && sessionGenomeType !== firstGenomeDetails?.genome_type) {
-    return {
-      isValid: false,
-      error: `Session genome type "${sessionGenomeType}" `
-        + `does not match track genome type "${firstGenomeDetails?.genome_type || 'unknown'}"`,
-    };
-  }
-
-  if (sessionGenome && sessionGenome !== firstGenomeDetails?.genome_value) {
-    return {
-      isValid: false,
-      error: `Session genome assembly "${sessionGenome}" `
-        + `does not match track genome assembly "${firstGenomeDetails?.genome_value || 'unknown'}"`,
-    };
-  }
+  // Validation 3: REMOVED - Allow users to specify any genome type/assembly
+  // Users can override genome values in the UI regardless of track dataset values
 
   return { isValid: true };
 };
