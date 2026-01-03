@@ -18,75 +18,1117 @@ Key patterns to remember:
 - Use transactions for data consistency
 - Page components should be minimal, delegating to list components
 - Use icons instead of buttons for actions
-- Always check permissions before allowing operations 
 
-# Allowlisted Commands (Read-Only + Safe)
 
-## System Information
-- whoami
-- uname -a
-- lsb_release -a
-- cat /etc/os-release
-- df -h
-- du -sh *
-- free -h
-- top -n 1
-- uptime
-- date
-- env
-- printenv
+# Bioloop Coding Conventions & Preferences
 
-## Directory & File Inspection
-- ls -al
-- ls -lh
-- tree
-- pwd
-- stat
-- file
-- head -n 50
-- tail -n 50
-- cat
-- less
-- more
-- wc -l
-- grep
-- find . -type f
-- find . -type d
+## Table of Contents
+1. [Project Structure & Constants](#project-structure--constants)
+2. [API Development Conventions](#api-development-conventions)
+3. [UI Development Conventions](#ui-development-conventions)
+4. [Worker Development Conventions](#worker-development-conventions)
+5. [Database & Prisma Patterns](#database--prisma-patterns)
+6. [Authentication & Authorization](#authentication--authorization)
+7. [File Operations & Serving](#file-operations--serving)
+8. [Error Handling & Logging](#error-handling--logging)
+9. [Component-Specific Guidelines](#component-specific-guidelines)
+10. [Testing & Development Workflow](#testing--development-workflow)
 
-## Networking (Read-Only)
-- ifconfig
-- ip addr
-- ip route
-- netstat -tulpn
-- ss -tulpn
-- ping -c 4
-- curl -I
-- wget --spider
+---
 
-## Git & Repo Status
-- git status
-- git log --oneline
-- git diff
-- git branch
-- git remote -v
-- git show
+## 1. Project Structure & Constants
 
-## Docker (Read-Only) – with sudo
-- sudo docker ps
-- sudo docker ps -a
-- sudo docker images
-- sudo docker logs --tail 50
-- sudo docker network ls
-- sudo docker volume ls
-- sudo docker inspect
+### Constants vs Config Files
 
-## Node.js & NPM (Read-Only)
-- node -v
-- npm -v
-- npm list --depth=0
+**Constants Files** (`constants.js`, `constants.py`)
+- Use for **business logic constants** that are intrinsic to how the application works
+- Examples:
+  - Browser types: `{ IGV: 'igv', WASHU: 'washu' }`
+  - Genome type mappings: `GENOME_TYPES = { human: { genomes: ['hg38', 'hg19'] } }`
+  - Shared Prisma includes for complex queries
+  - File type enums: `['BAM', 'BIGWIG', 'VCF_GZ']`
+  - Role names: `ROLES = { ADMIN: 'admin', OPERATOR: 'operator' }`
 
-## Python & Pip (Read-Only)
-- python3 --version
-- pip --version
-- pip list
+**Config Files** (`config/default.json`, `config/docker.json`)
+- Use for **runtime behavior configuration** that can change between environments
+- Examples:
+  - Data root paths: `data_root: '/opt/sca/data'`
+  - Feature toggles: `{ igv_in_app: true, washu_enabled: true }`
+  - API base URLs, ports, timeouts
+  - Logger levels
+  - JWT expiration times
 
+**Location Patterns:**
+```
+api/src/constants.js          # API-side business constants
+ui/src/constants.js            # UI-side business constants
+api/config/default.json        # API runtime config
+ui/src/config.js               # UI runtime config
+workers/config/common.py       # Worker config
+```
+
+### Shared Prisma Includes as Constants
+
+**DO THIS:**
+```javascript
+// api/src/constants/prismaIncludes.js
+export const INCLUDES = {
+  SESSION_WITH_TRACKS: {
+    session_tracks: {
+      include: {
+        track: {
+          include: {
+            dataset_file: {
+              include: {
+                dataset: {
+                  include: { genomic_details: true },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  },
+  DATASET_WITH_FILES: {
+    files: true,
+    genomic_details: true,
+  },
+};
+
+// In route file
+const session = await prisma.genome_browser_session.findUnique({
+  where: { id: sessionId },
+  include: INCLUDES.SESSION_WITH_TRACKS,
+});
+```
+
+**NOT THIS:**
+```javascript
+// Repeating the same include in multiple route files
+const session = await prisma.genome_browser_session.findUnique({
+  where: { id: sessionId },
+  include: {
+    session_tracks: {
+      include: {
+        track: {
+          include: { /* ... deeply nested ... */ }
+        }
+      }
+    }
+  }
+});
+```
+
+---
+
+## 2. API Development Conventions
+
+### Prisma Instance Reuse
+
+**ALWAYS reuse the Prisma instance from `@/db`:**
+
+```javascript
+// ✅ CORRECT
+const prisma = require('@/db');
+
+router.get('/:id', asyncHandler(async (req, res) => {
+  const session = await prisma.genome_browser_session.findUnique({
+    where: { id: req.params.id }
+  });
+}));
+```
+
+**NEVER create new Prisma instances:**
+```javascript
+// ❌ WRONG
+const { PrismaClient } = require('@prisma/client');
+const prisma = new PrismaClient();
+```
+
+### Transaction Pattern for Multi-Operation Calls
+
+When a single API call needs to perform multiple database operations across different service methods:
+
+**Pattern: Service methods accept optional Prisma/transaction instance**
+
+```javascript
+// api/src/services/dataset.js
+const prisma = require('@/db');
+
+async function createDataset(data, tx = prisma) {
+  return tx.dataset.create({ data });
+}
+
+async function linkToProject(datasetId, projectId, tx = prisma) {
+  return tx.project_dataset.create({
+    data: { dataset_id: datasetId, project_id: projectId }
+  });
+}
+
+module.exports = { createDataset, linkToProject };
+```
+
+```javascript
+// api/src/routes/datasets.js
+const prisma = require('@/db');
+const datasetService = require('@/services/dataset');
+
+router.post('/', asyncHandler(async (req, res) => {
+  const { name, type, project_id } = req.body;
+  
+  // Use transaction when operations must be atomic
+  const result = await prisma.$transaction(async (tx) => {
+    // Create dataset
+    const dataset = await datasetService.createDataset(
+      { name, type, user_id: req.user.id },
+      tx
+    );
+    
+    // Link to project
+    await datasetService.linkToProject(dataset.id, project_id, tx);
+    
+    // Return full dataset with relation
+    return tx.dataset.findUnique({
+      where: { id: dataset.id },
+      include: { projects: true }
+    });
+  });
+  
+  res.status(201).json({ dataset: result });
+}));
+```
+
+**Key Points:**
+- Service methods default to `prisma` if no transaction provided: `tx = prisma`
+- When transaction needed, pass `tx` to all service calls
+- Always return the final result from transaction callback
+- Use transactions for: create → link, update → audit log, delete → cleanup
+
+### Route Handler Structure
+
+**Standard pattern:**
+```javascript
+const express = require('express');
+const { body, param, query } = require('express-validator');
+const prisma = require('@/db');
+const asyncHandler = require('@/middleware/asyncHandler');
+const { accessControl } = require('@/middleware/auth');
+const createError = require('http-errors');
+const logger = require('@/services/logger');
+
+const router = express.Router();
+const isPermittedTo = accessControl('resource_name');
+
+router.get(
+  '/:id',
+  isPermittedTo('read'),
+  [param('id').isInt().toInt()],
+  asyncHandler(async (req, res) => {
+    const id = req.params.id;
+    
+    const resource = await prisma.resource.findUnique({
+      where: { id }
+    });
+    
+    if (!resource) throw createError(404, 'Resource not found');
+    
+    res.json({ resource });
+  })
+);
+
+module.exports = router;
+```
+
+**Key Elements:**
+1. Use `asyncHandler` for all async route handlers (auto error catching)
+2. Use `express-validator` for input validation before handler
+3. Use `createError` for HTTP errors (not `throw new Error()`)
+4. Use `logger` for logging (not `console.log`)
+5. Use `isPermittedTo` middleware for authorization
+6. Always validate and sanitize user input
+
+### Router Mounting Order
+
+**CRITICAL:** File exposure routers must be mounted **before** global authentication middleware:
+
+```javascript
+// api/src/routes/index.js
+
+// ✅ CORRECT ORDER
+const fileExposureRouter = require('./sessions').fileExposureRouter;
+
+// 1. Mount file exposure (has its own auth)
+app.use('/sessions', fileExposureRouter);
+
+// 2. Global authentication middleware
+app.use(authenticate);
+
+// 3. Other protected routes
+app.use('/sessions', sessionsRouter);
+app.use('/tracks', tracksRouter);
+```
+
+**Reason:** Genome browsers make `GET` requests with cookies; global middleware would trigger CORS preflight for routes that need cookie auth.
+
+### API Response Patterns
+
+**Consistent response structure:**
+```javascript
+// Single resource
+res.json({ session });
+res.json({ track });
+
+// List with metadata
+res.json({
+  sessions,
+  total: count,
+  limit: req.query.limit,
+  offset: req.query.offset
+});
+
+// Error (use createError)
+throw createError(404, 'Resource not found');
+throw createError(403, 'Not authorized');
+```
+
+---
+
+## 3. UI Development Conventions
+
+### Vuestic Component Usage
+
+**Correct Component Names:**
+- ✅ `va-progress-circle` (NOT `va-progress-circular`)
+- ✅ Individual `va-radio` components (NOT `va-radio-group`)
+- ✅ `va-select` with `text-by` and `value-by` props
+
+**va-select Pattern:**
+```vue
+<va-select
+  v-model="form.genome_type"
+  :options="genomeTypeOptions"
+  text-by="text"
+  value-by="value"
+  label="Genome Type"
+/>
+
+<script setup>
+const genomeTypeOptions = computed(() => {
+  return Object.entries(constants.GENOME_TYPES).map(([key, value]) => ({
+    text: value.label,
+    value: key,
+  }));
+});
+</script>
+```
+
+**va-radio Pattern:**
+```vue
+<div class="flex flex-col gap-3">
+  <va-radio 
+    v-model="selectedBrowser" 
+    :option="BROWSER_TYPES.IGV" 
+    :label="BROWSER_LABELS[BROWSER_TYPES.IGV]" 
+  />
+  <va-radio 
+    v-model="selectedBrowser" 
+    :option="BROWSER_TYPES.WASHU" 
+    :label="BROWSER_LABELS[BROWSER_TYPES.WASHU]" 
+  />
+</div>
+```
+
+### Constants Import Pattern
+
+```vue
+<script setup>
+import constants from '@/constants';
+
+// Destructure what you need
+const { browserTypes: BROWSER_TYPES, browserLabels: BROWSER_LABELS } = 
+  constants.genomeBrowser;
+  
+const { GENOME_TYPES } = constants;
+</script>
+```
+
+### Async Autocomplete Pattern
+
+For searchable dropdowns with API data:
+
+```vue
+<template>
+  <va-async-auto-complete
+    v-model="selectedItems"
+    :fetch-data="fetchItems"
+    :multiple="true"
+    placeholder="Search..."
+    :debounce="300"
+  />
+</template>
+
+<script setup>
+import itemService from '@/services/item';
+
+const fetchItems = async (inputValue) => {
+  try {
+    const response = await itemService.search({
+      search: inputValue,
+      limit: 20,
+    });
+    return response.data.items || [];
+  } catch (error) {
+    console.error('Failed to fetch items:', error);
+    return [];
+  }
+};
+</script>
+```
+
+### CSS & Styling Preferences
+
+**DO NOT add styling classes unless explicitly asked:**
+- Avoid: `text-sm`, `bg-gray-100`, `text-red-500`, etc.
+- When styling is needed, refer to existing components for patterns
+- Use Vuestic's built-in styling props when available
+
+**DO use Vuestic component props for styling:**
+```vue
+<va-button color="primary" size="small" />
+<va-card stripe color="success" />
+```
+
+### Auto-Population Logic
+
+When implementing auto-population (e.g., filling form fields based on selections):
+
+**RULE: Preserve manual user selections**
+
+```javascript
+// ✅ CORRECT: Only auto-populate if fields are empty
+const updateGenomeFields = () => {
+  if (!form.genome_type && !form.genome) {
+    // Auto-populate only if both are empty
+    const uniqueGenomes = getUniqueGenomesFromTracks();
+    if (uniqueGenomes.length === 1) {
+      form.genome_type = uniqueGenomes[0].type;
+      form.genome = uniqueGenomes[0].value;
+    }
+  }
+};
+
+// ❌ WRONG: Overwriting existing values
+const updateGenomeFields = () => {
+  const uniqueGenomes = getUniqueGenomesFromTracks();
+  if (uniqueGenomes.length === 1) {
+    form.genome_type = uniqueGenomes[0].type; // Overwrites manual input!
+    form.genome = uniqueGenomes[0].value;
+  }
+};
+```
+
+### Page vs List Component Pattern
+
+**Pages should be minimal, delegating to list components:**
+
+```vue
+<!-- pages/sessions/index.vue -->
+<template>
+  <div>
+    <h1>Sessions</h1>
+    <SessionsList />
+  </div>
+</template>
+
+<script setup>
+import SessionsList from '@/components/sessions/SessionsList.vue';
+</script>
+
+<!-- components/sessions/SessionsList.vue -->
+<template>
+  <div>
+    <!-- All logic, filters, tables here -->
+  </div>
+</template>
+
+<script setup>
+// Actual implementation
+</script>
+```
+
+### Action Buttons vs Icons
+
+**Prefer icons over buttons for actions:**
+
+```vue
+<!-- ✅ PREFERRED -->
+<va-icon 
+  name="mdi-delete" 
+  @click="deleteItem(item.id)"
+  class="cursor-pointer text-red-500"
+/>
+
+<!-- ❌ AVOID (unless explicitly needed) -->
+<va-button @click="deleteItem(item.id)">
+  Delete
+</va-button>
+```
+
+### Toast Notifications
+
+**Show toasts ONLY for API success/failure, not for UI interactions:**
+
+```javascript
+// ✅ CORRECT
+const saveSession = async () => {
+  try {
+    await sessionService.create(form);
+    toast.success('Session created successfully');
+  } catch (error) {
+    toast.error('Failed to create session');
+  }
+};
+
+// ❌ WRONG
+const selectTrack = (track) => {
+  selectedTracks.push(track);
+  toast.success('Track selected'); // No toast for UI interactions
+};
+```
+
+### React-in-Vue Integration Pattern
+
+When embedding React components (e.g., WashU browser) in Vue:
+
+```vue
+<template>
+  <div ref="reactContainer" class="h-full w-full"></div>
+</template>
+
+<script setup>
+import { createRoot } from 'react-dom/client';
+import { createElement } from 'react';
+import { onMounted, onBeforeUnmount, ref } from 'vue';
+
+const props = defineProps({
+  someProp: { type: String, required: true },
+});
+
+const reactContainer = ref(null);
+let reactRoot = null;
+
+onMounted(async () => {
+  const ReactComponent = (await import('some-react-lib')).default;
+  
+  reactRoot = createRoot(reactContainer.value);
+  reactRoot.render(createElement(ReactComponent, props));
+});
+
+onBeforeUnmount(() => {
+  if (reactRoot) {
+    reactRoot.unmount();
+    reactRoot = null;
+  }
+});
+</script>
+```
+
+**Key points:**
+- Use `createRoot()` from `react-dom/client` (React 18+)
+- Always unmount in `onBeforeUnmount()`
+- Stop event propagation with `@click.stop` on container to prevent React-Vue conflicts
+- Use `:disable-attachment="true"` on parent `va-modal` if inside a modal
+- Convert relative URLs to absolute for Web Workers
+- Force remounts with dynamic `:key` when props change
+
+---
+
+## 4. Worker Development Conventions
+
+### Configuration Pattern
+
+Workers use Python config files:
+
+```python
+# workers/config/common.py
+
+CONFIG = {
+    'genomic_conversion': {
+        'default_analysis_type': {
+            'enabled': True,
+            'value': 'fastq'
+        }
+    },
+    'celery': {
+        'broker_url': os.getenv('CELERY_BROKER_URL'),
+        'result_backend': os.getenv('CELERY_RESULT_BACKEND'),
+    }
+}
+```
+
+### Task Definition Pattern
+
+```python
+from celery import shared_task
+import logging
+
+logger = logging.getLogger(__name__)
+
+@shared_task(bind=True, max_retries=3)
+def process_conversion(self, conversion_id):
+    """
+    Process a genomic data conversion.
+    
+    Args:
+        conversion_id: ID of the conversion to process
+    
+    Returns:
+        dict: Conversion result with output dataset IDs
+    """
+    try:
+        # Task logic
+        logger.info(f"Processing conversion {conversion_id}")
+        # ...
+        return {'status': 'success', 'datasets': [1, 2, 3]}
+    except Exception as exc:
+        logger.error(f"Conversion failed: {exc}")
+        raise self.retry(exc=exc, countdown=60)
+```
+
+---
+
+## 5. Database & Prisma Patterns
+
+### Prisma Schema Conventions
+
+**Model naming:**
+- Use `snake_case` for model names (matches PostgreSQL convention)
+- Use `snake_case` for field names
+- Use descriptive relation names
+
+```prisma
+model genome_browser_session {
+  id                   Int             @id @default(autoincrement())
+  title                String?
+  user_id              Int?
+  user                 user?           @relation(fields: [user_id], references: [id])
+  session_tracks       session_track[]
+}
+
+model session_track {
+  id         Int                    @id @default(autoincrement())
+  session_id Int
+  track_id   Int
+  session    genome_browser_session @relation(fields: [session_id], references: [id])
+  track      track                  @relation(fields: [track_id], references: [id])
+  
+  @@unique([session_id, track_id])
+}
+```
+
+### Cascade Delete Patterns
+
+Use `onDelete: Cascade` for dependent data:
+
+```prisma
+model track {
+  id              Int          @id @default(autoincrement())
+  dataset_file_id Int          @unique
+  dataset_file    dataset_file @relation(fields: [dataset_file_id], references: [id], onDelete: Cascade)
+}
+```
+
+### JSON Field Usage
+
+Use `Json` type for flexible metadata:
+
+```prisma
+model dataset {
+  metadata Json? // { stage_alias: "path/to/staged", custom_key: "value" }
+}
+```
+
+Access in code:
+```javascript
+const stageAlias = dataset.metadata?.stage_alias || '';
+```
+
+---
+
+## 6. Authentication & Authorization
+
+### Permission Checking Pattern
+
+**ALWAYS use helper methods, not direct role checks:**
+
+```javascript
+// ✅ CORRECT
+if (auth.canAdmin) {
+  // Admin-only logic
+}
+
+if (auth.canOperate) {
+  // Operator or Admin logic
+}
+
+// ❌ WRONG
+if (auth.hasRole(['admin'])) { }
+if (auth.hasRole(['admin', 'operator'])) { }
+```
+
+**Reason:** Helper methods provide semantic clarity and can be updated centrally if role logic changes.
+
+### User-Specific Endpoints Pattern
+
+```javascript
+// Pattern: /:username/resource
+router.get(
+  '/:username/sessions',
+  isPermittedTo('read', { checkOwnership: true }),
+  asyncHandler(async (req, res) => {
+    const username = req.params.username;
+    
+    // Ownership check happens in middleware
+    const sessions = await prisma.genome_browser_session.findMany({
+      where: { user: { username } }
+    });
+    
+    res.json({ sessions });
+  })
+);
+```
+
+### Cookie-Based File Access
+
+For genome browser file serving:
+
+```javascript
+// 1. Set cookie
+router.post('/:id/set-file-cookie', async (req, res) => {
+  const token = jwt.sign(
+    { user_id: req.user.id, session_id: req.params.id },
+    JWT_SECRET,
+    { expiresIn: '1h' }
+  );
+  
+  res.cookie('bioloop_session_token', token, {
+    httpOnly: true,
+    secure: true,
+    sameSite: 'lax',
+    maxAge: 3600000,
+  });
+  
+  res.json({ success: true });
+});
+
+// 2. Authenticate with cookie
+const authenticateWithCookie = asyncHandler(async (req, res, next) => {
+  const token = req.cookies.bioloop_session_token;
+  if (!token) throw createError(401, 'Token not found');
+  
+  const decoded = jwt.verify(token, JWT_SECRET);
+  
+  if (decoded.session_id !== parseInt(req.params.id)) {
+    throw createError(403, 'Token does not match session');
+  }
+  
+  req.user = await prisma.user.findUnique({
+    where: { id: decoded.user_id }
+  });
+  
+  next();
+});
+```
+
+---
+
+## 7. File Operations & Serving
+
+### File Path Construction
+
+**Pattern for staged file paths:**
+
+```javascript
+function getRelativeFilePath({ dataset, datasetFile }) {
+  const stageAlias = dataset.metadata?.stage_alias || '';
+  const filePath = datasetFile.path || '';
+
+  const cleanedStageAlias = stageAlias.replace(/^\/+/, '').replace(/\/+$/, '');
+  const cleanedFilePath = filePath.replace(/^\/+/, '');
+
+  return cleanedStageAlias ? `${cleanedStageAlias}/${cleanedFilePath}` : cleanedFilePath;
+}
+
+function buildFileExposureUrl(sessionId, relativePath) {
+  const cleanedPath = relativePath.replace(/^\/+/, '');
+  return `/api/sessions/${sessionId}/files/expose/${cleanedPath}`;
+}
+```
+
+### Disable Compression for Binary Files
+
+**CRITICAL for genome browser files:**
+
+```javascript
+// In app.js
+app.use(compression({
+  filter: (req, res) => {
+    if (req.path && req.path.includes('/files/expose')) {
+      return false; // Disable compression
+    }
+    return compression.filter(req, res);
+  },
+}));
+
+// In file exposure route
+router.get('/:id/files/expose/*', asyncHandler(async (req, res) => {
+  // Explicitly disable compression
+  res.locals.compress = false;
+  res.set('Content-Encoding', 'identity');
+  res.removeHeader('Vary');
+  
+  // Serve file with range support
+  const stat = await fs.promises.stat(absolutePath);
+  res.set('Content-Length', stat.size);
+  res.set('Accept-Ranges', 'bytes');
+  
+  const readStream = fs.createReadStream(absolutePath);
+  readStream.pipe(res);
+}));
+```
+
+### Range Request Support
+
+```javascript
+const range = req.headers.range;
+if (range) {
+  const parts = range.replace(/bytes=/, '').split('-');
+  const start = parseInt(parts[0], 10);
+  const end = parts[1] ? parseInt(parts[1], 10) : stat.size - 1;
+  const chunkSize = end - start + 1;
+
+  res.status(206); // Partial Content
+  res.set('Content-Range', `bytes ${start}-${end}/${stat.size}`);
+  res.set('Content-Length', chunkSize);
+
+  const readStream = fs.createReadStream(absolutePath, { start, end });
+  readStream.pipe(res);
+} else {
+  // Full file
+  const readStream = fs.createReadStream(absolutePath);
+  readStream.pipe(res);
+}
+```
+
+---
+
+## 8. Error Handling & Logging
+
+### Error Handling Pattern
+
+```javascript
+const createError = require('http-errors');
+const logger = require('@/services/logger');
+
+// ✅ CORRECT
+router.get('/:id', asyncHandler(async (req, res) => {
+  const resource = await prisma.resource.findUnique({
+    where: { id: req.params.id }
+  });
+  
+  if (!resource) {
+    throw createError(404, 'Resource not found');
+  }
+  
+  res.json({ resource });
+}));
+
+// ❌ WRONG
+router.get('/:id', async (req, res) => {
+  try {
+    const resource = await prisma.resource.findUnique({
+      where: { id: req.params.id }
+    });
+    
+    if (!resource) {
+      throw new Error('Not found'); // No status code
+    }
+    
+    res.json({ resource });
+  } catch (error) {
+    res.status(500).json({ error: error.message }); // Manual error handling
+  }
+});
+```
+
+### Logging Pattern
+
+```javascript
+const logger = require('@/services/logger');
+
+// API logging
+logger.info('[FILE EXPOSE] Request received');
+logger.warn('[IGV] Unsupported file type:', filePath);
+logger.error('[WashU] Failed to initialize:', error);
+
+// UI logging (console is OK for user feedback in CLI scripts)
+console.log('[WashU] Browser initialized successfully');
+console.error('[IGV] Failed to load tracks:', error);
+```
+
+**When to use console.log:**
+- CLI scripts for user feedback
+- Debug statements during development (remove in production)
+
+**When to use logger:**
+- API server logs
+- Worker task logs
+- Production-grade logging
+
+---
+
+## 9. Component-Specific Guidelines
+
+### Genome Browser Implementation
+
+**Generic terminology in shared code:**
+
+```javascript
+// ✅ CORRECT - Generic naming
+const showGenomeBrowserModal = ref(false);
+const selectedBrowserType = ref(null);
+const genomeBrowserTracks = ref([]);
+
+const handleBrowserSelection = (browserType) => {
+  if (browserType === BROWSER_TYPES.IGV) {
+    initializeIGV();
+  } else if (browserType === BROWSER_TYPES.WASHU) {
+    initializeWashU();
+  }
+};
+
+// ❌ WRONG - Browser-specific naming in shared code
+const showIGVModal = ref(false);
+const showWashUModal = ref(false);
+```
+
+**Browser-specific code is OK within initialization functions:**
+
+```javascript
+// ✅ OK - Inside browser-specific function
+const initializeIGV = async () => {
+  const igvModule = await import('igv');
+  const igvOptions = { /* IGV-specific */ };
+  const igvBrowser = await igv.createBrowser(container, igvOptions);
+};
+
+const initializeWashU = async () => {
+  const washuProps = { /* WashU-specific */ };
+  // ...
+};
+```
+
+### Form Validation Pattern
+
+```vue
+<script setup>
+import { ref, computed } from 'vue';
+
+const form = ref({
+  name: '',
+  genome_type: '',
+  genome: '',
+});
+
+const isValid = computed(() => {
+  return form.value.name.trim() !== '' 
+    && form.value.genome_type !== ''
+    && form.value.genome !== '';
+});
+
+const submit = async () => {
+  if (!isValid.value) {
+    toast.error('Please fill in all required fields');
+    return;
+  }
+  
+  try {
+    await api.create(form.value);
+    toast.success('Created successfully');
+  } catch (error) {
+    toast.error('Failed to create');
+  }
+};
+</script>
+```
+
+### Modal Pattern
+
+```vue
+<template>
+  <va-modal
+    v-model="showModal"
+    title="Modal Title"
+    ok-text="Save"
+    @ok="handleSave"
+    @cancel="handleCancel"
+  >
+    <!-- Content -->
+  </va-modal>
+</template>
+
+<script setup>
+import { ref, watch } from 'vue';
+
+const showModal = ref(false);
+
+const handleSave = () => {
+  // Save logic
+  showModal.value = false;
+};
+
+const handleCancel = () => {
+  // Reset form
+  showModal.value = false;
+};
+
+// Reset form when modal closes
+watch(showModal, (isOpen) => {
+  if (!isOpen) {
+    // Reset state
+  }
+});
+</script>
+```
+
+---
+
+## 10. Testing & Development Workflow
+
+### Hot Module Replacement (HMR)
+
+**API and UI changes should NOT require restarts** unless:
+- API configuration changes (`config/*.json`)
+- New npm package installed
+- Prisma schema changes (requires `npx prisma generate`)
+
+### Docker Restart Pattern
+
+**After bringing down containers, restart with:**
+```bash
+docker compose up -d
+```
+
+**Reason:** Bringing down one container can affect others; always use `up -d` to restart the full stack.
+
+### Linter Preferences
+
+**Do NOT fix linter errors unless explicitly asked.**
+- Console statements in CLI scripts are OK
+- Focus on functionality first
+- Clean up linter errors only when requested
+
+### Environment-Specific Code
+
+**Check for production vs development:**
+
+```javascript
+// API
+const isProduction = process.env.NODE_ENV === 'production';
+
+res.cookie('token', jwt, {
+  httpOnly: true,
+  secure: isProduction, // HTTPS only in production
+  sameSite: 'lax',
+});
+
+// Comment out dev-specific headers
+// res.set('X-Accel-Buffering', 'no'); // Only needed with Nginx (production)
+```
+
+### CMG Production Environment
+
+**No sudo access in production:**
+```bash
+# ❌ WRONG in production
+sudo docker ps
+
+# ✅ CORRECT in production
+docker ps
+```
+
+---
+
+## Quick Reference Checklist
+
+### Starting New API Route
+- [ ] Import `prisma` from `@/db`
+- [ ] Use `asyncHandler` for route handler
+- [ ] Add `express-validator` validation
+- [ ] Use `isPermittedTo` for authorization
+- [ ] Use `createError` for HTTP errors
+- [ ] Use `logger` for logging
+- [ ] Check if service methods need transaction support
+
+### Starting New UI Component
+- [ ] Import constants from `@/constants`
+- [ ] Use correct Vuestic component names
+- [ ] Add `text-by` and `value-by` to `va-select`
+- [ ] Preserve manual user input in auto-population logic
+- [ ] Use icons instead of buttons for actions
+- [ ] Show toasts only for API operations
+
+### Adding New Constant
+- [ ] Determine if it's a constant (business logic) or config (runtime behavior)
+- [ ] Add to appropriate constants file (`api/src/constants.js`, `ui/src/constants.js`)
+- [ ] Update documentation if it's a shared pattern
+- [ ] Use constant throughout codebase (replace hardcoded strings)
+
+### Implementing Transaction
+- [ ] Add optional `tx` parameter to service methods: `async fn(data, tx = prisma)`
+- [ ] In route handler, wrap operations in `prisma.$transaction()`
+- [ ] Pass `tx` to all service method calls within transaction
+- [ ] Return final result from transaction callback
+
+### Embedding React Component in Vue
+- [ ] Install React and react-dom if not present
+- [ ] Create Vue wrapper component with `ref` container
+- [ ] Use `createRoot()` in `onMounted()`
+- [ ] Use `createElement()` to create React element
+- [ ] Unmount in `onBeforeUnmount()`
+- [ ] Stop event propagation with `@click.stop`
+- [ ] Convert relative URLs to absolute if component uses Web Workers
+- [ ] Use dynamic `:key` to force remount when props change
+
+---
+
+## Common Pitfalls to Avoid
+
+1. **❌ Creating new Prisma instances instead of reusing from `@/db`**
+2. **❌ Using `auth.hasRole()` directly instead of `auth.canAdmin`/`auth.canOperate`**
+3. **❌ Using `va-progress-circular` (correct: `va-progress-circle`)**
+4. **❌ Using `va-radio-group` (correct: individual `va-radio` components)**
+5. **❌ Forgetting `text-by` and `value-by` on `va-select`**
+6. **❌ Clearing form fields on track selection (preserve manual input)**
+7. **❌ Adding styling classes without being asked**
+8. **❌ Showing toast notifications for UI interactions**
+9. **❌ Enabling compression for binary genome files**
+10. **❌ Not using transactions for multi-operation API calls**
+11. **❌ Mounting file exposure router after global auth middleware**
+12. **❌ Not unmounting React components in Vue wrapper**
+13. **❌ Using relative URLs for React components with Web Workers**
+14. **❌ Hardcoding browser type strings instead of using constants**
+
+---
+
+## Documentation References
+
+For detailed implementation guides, see:
+- `genome-browser-sessions-tracks-conversions-YYYY-MM-DD.md` - Architecture overview
+- `genome-browser-igv-washu-implementation-YYYY-MM-DD.md` - Browser implementation details
+- `AI_MEMORY.md` - Project overview and patterns
+
+---
+
+**Last Updated:** 2026-01-03
