@@ -1,7 +1,7 @@
 <template>
   <div class="session-detail">
     <div v-if="loading" class="flex justify-center items-center h-64">
-      <va-progress-circular indeterminate />
+      <va-progress-circle indeterminate />
     </div>
 
     <!-- <div v-else-if="error" class="text-center text-red-600">
@@ -66,17 +66,17 @@
             </va-card-title>
             <va-card-content class="flex items-center justify-center py-8">
               <div class="flex gap-3">
-                <!-- View in IGV Browser Action Button-->
+                <!-- View in Genome Browser Action Button-->
                 <va-button
                   color="primary"
                   border-color="primary"
                   preset="secondary"
                   class="flex-initial"
-                  @click="viewInIGV"
-                  :loading="igvLoading"
+                  @click="showBrowserSelectionModal = true"
+                  :loading="genomeBrowserLoading"
                 >
                   <i-mdi-dna class="pr-2 text-2xl" />
-                  View in IGV Browser
+                  View in Genome Browser
                 </va-button>
 
                 <!-- Delete Session Action Button-->
@@ -385,26 +385,53 @@
       @update="router.push('/sessions')"
     />
 
-    <!-- IGV Browser Modal -->
+    <!-- Browser Selection Modal -->
+    <BrowserSelectionModal
+      v-model="showBrowserSelectionModal"
+      @browser-selected="handleBrowserSelection"
+    />
+
+    <!-- Genome Browser Modal (IGV or WashU) -->
     <va-modal
-      v-model="showIGV"
-      title="IGV Genome Browser"
+      v-model="showGenomeBrowserModal"
+      :title="genomeBrowserTitle"
+      :disable-attachment="true"
       fullscreen
       hide-default-actions
       no-padding
-      @close="closeIGV"
+      no-outside-dismiss
+      @close="closeGenomeBrowser"
     >
-      <div class="h-full flex flex-col">
-        <div id="igv-container" class="flex-1" style="min-height: 600px"></div>
+      <div class="h-full flex flex-col" @click.stop>
+        <!-- IGV Container -->
+        <div
+          v-if="selectedBrowserType === BROWSER_TYPES.IGV"
+          id="igv-container"
+          class="flex-1"
+          style="min-height: 600px"
+        ></div>
+
+        <!-- WashU Container - v-if ensures full destruction on modal close -->
+        <WashUBrowser
+          v-if="showGenomeBrowserModal && selectedBrowserType === BROWSER_TYPES.WASHU"
+          :key="washuMountKey"
+          :genome-name="genomeBrowserGenome"
+          :data-hub="genomeBrowserTracks"
+          :view-region="genomeBrowserRegion"
+          class="h-full flex-1"
+        />
       </div>
     </va-modal>
   </div>
 </template>
 
 <script setup>
+import BrowserSelectionModal from '@/components/genomeBrowser/BrowserSelectionModal.vue';
+import WashUBrowser from '@/components/genomeBrowser/WashUBrowser.vue';
 import DeleteSessionModal from '@/components/sessions/DeleteSessionModal.vue';
 import TracksAsyncAutoComplete from '@/components/tracks/TracksAsyncAutoComplete.vue';
 import AddEditButton from '@/components/utils/buttons/AddEditButton.vue';
+import constants from '@/constants';
 import * as datetime from '@/services/datetime';
 import sessionService from '@/services/session';
 import toast from '@/services/toast';
@@ -513,10 +540,25 @@ const _stagedTracksCount = computed(() => {
     .length;
 });
 
-// IGV Browser state
-const showIGV = ref(false);
-const igvLoading = ref(false);
-let igvBrowser = null;
+// Genome Browser constants
+const { browserTypes: BROWSER_TYPES, browserTitles: BROWSER_TITLES } = constants.genomeBrowser;
+
+// Genome Browser state (generic for IGV and WashU)
+const showBrowserSelectionModal = ref(false);
+const showGenomeBrowserModal = ref(false);
+const genomeBrowserLoading = ref(false);
+const selectedBrowserType = ref(null); // BROWSER_TYPES.IGV or BROWSER_TYPES.WASHU
+const genomeBrowserGenome = ref('');
+const genomeBrowserTracks = ref([]);
+const genomeBrowserRegion = ref(''); // View region for browser
+const washuMountKey = ref(0); // Force WashU remount on open
+let igvBrowser = null; // IGV browser instance
+
+const genomeBrowserTitle = computed(() => {
+  if (selectedBrowserType.value === BROWSER_TYPES.IGV) return BROWSER_TITLES.igv;
+  if (selectedBrowserType.value === BROWSER_TYPES.WASHU) return BROWSER_TITLES.washu;
+  return BROWSER_TITLES.default;
+});
 
 const associatedTracks = computed(() => {
   if (!session.value?.session_tracks) return [];
@@ -710,38 +752,55 @@ const _handleSessionUpdated = (_updatedSession) => {
 };
 
 /**
- * Initialize IGV browser for the session
+ * Handle browser selection from modal
  */
-const viewInIGV = async () => {
+const handleBrowserSelection = async (browserType) => {
+  selectedBrowserType.value = browserType;
+
+  if (browserType === BROWSER_TYPES.IGV) {
+    await initializeIGV();
+  } else if (browserType === BROWSER_TYPES.WASHU) {
+    await initializeWashU();
+  }
+};
+
+/**
+ * Initialize IGV browser
+ */
+const initializeIGV = async () => {
   if (!session.value) return;
 
-  igvLoading.value = true;
+  genomeBrowserLoading.value = true;
 
   try {
     // Set the authentication cookie for file access
     await sessionService.setFileCookie(session.value.id);
 
-    // Fetch the datahub configuration (includes genome and tracks)
-    const datahubResponse = await sessionService.getDatahub(session.value.id);
-    const datahubConfig = datahubResponse.data;
+    // Fetch the datahub configuration for IGV
+    const datahubResponse = await sessionService.getDatahub(session.value.id, BROWSER_TYPES.IGV);
+    const datahubConfig = datahubResponse?.data;
 
     console.log('[IGV] Datahub response:', datahubConfig);
 
-    // Use tracks from the datahub response (served via /files/expose with cookie auth)
-    const igv_tracks = datahubConfig.tracks || [];
-    const igv_genome = datahubConfig.genome || 'hg38';
+    const tracks = datahubConfig?.tracks || [];
+    // const tracks ß
+    const genome = datahubConfig?.genome;
 
-    console.log('[IGV] Tracks:', igv_tracks);
-    console.log('[IGV] Genome:', igv_genome);
+    console.log('[IGV] Tracks:', tracks);
+    console.log('[IGV] Genome:', genome);
 
-    if (!igv_tracks || igv_tracks.length === 0) {
+    if (!tracks || tracks.length === 0) {
       toast.error('No tracks available for this session');
-      igvLoading.value = false;
+      genomeBrowserLoading.value = false;
       return;
     }
 
-    // Show IGV container
-    showIGV.value = true;
+    // Store for modal display
+    genomeBrowserGenome.value = genome;
+    genomeBrowserTracks.value = tracks;
+
+    // Show genome browser modal
+    showGenomeBrowserModal.value = true;
 
     // Wait for DOM to update
     await nextTick();
@@ -752,40 +811,112 @@ const viewInIGV = async () => {
 
     // Configure IGV options
     const igvOptions = {
-      genome: igv_genome,
-      locus: 'chr8:127,736,588-127,739,371', // Default locus
-      tracks: igv_tracks,
+      genome,
+      tracks,
     };
 
     // Create IGV browser instance
     const container = document.getElementById('igv-container');
-    if (container && igv_tracks && igv_tracks.length > 0) {
-      console.log('igv_tracks');
-      console.log(igv_tracks);
+    if (container) {
       igvBrowser = await igv.createBrowser(container, igvOptions);
-      // toast.success('IGV browser loaded successfully');
-      console.log('IGV browser loaded successfully');
+      console.log('[IGV] Browser loaded successfully');
     } else {
       throw new Error('IGV container not found');
     }
   } catch (error) {
-    console.error('Failed to initialize IGV:', error);
+    console.error('[IGV] Failed to initialize:', error);
     toast.error('Failed to load IGV browser');
-    showIGV.value = false;
+    showGenomeBrowserModal.value = false;
   } finally {
-    igvLoading.value = false;
+    genomeBrowserLoading.value = false;
   }
 };
 
 /**
- * Close IGV browser
+ * Initialize WashU browser
  */
-const closeIGV = () => {
+const initializeWashU = async () => {
+  if (!session.value) return;
+
+  genomeBrowserLoading.value = true;
+
+  try {
+    // Set the authentication cookie for file access
+    await sessionService.setFileCookie(session.value.id);
+
+    // Fetch the datahub configuration for WashU
+    const datahubResponse = await sessionService.getDatahub(session.value.id, BROWSER_TYPES.WASHU);
+    const datahubConfig = datahubResponse.data;
+
+    console.log('[WashU] Datahub response:', datahubConfig);
+
+    const tracks = datahubConfig.tracks || [];
+    const genome = datahubConfig.genome;
+    // const genome = 'hg38';
+
+    console.log('[WashU] Tracks:', tracks);
+    console.log('[WashU] Genome:', genome);
+
+    if (!tracks || tracks.length === 0) {
+      toast.error('No tracks available for this session');
+      genomeBrowserLoading.value = false;
+      return;
+    }
+
+    // TEMPORARY TEST: Add a public BigWig file to test if WashU works at all
+    // const testTrack = {
+    //   type: 'bigwig',
+    //   // name: 'Test Public BigWig',
+    //   url: 'https://www.encodeproject.org/files/ENCFF356YES/@@download/ENCFF356YES.bigWig',
+    //   options: {
+    //     backgroundColor: '#ff0000',
+    //     height: 50,
+    //   },
+    // };
+
+    // Store for modal display
+    genomeBrowserGenome.value = genome;
+    genomeBrowserTracks.value = tracks;
+    genomeBrowserRegion.value = datahubConfig.locus || 'chr1:155000000-155050000';
+
+    // Force fresh WashU mount by incrementing key
+    washuMountKey.value++;
+
+    // Show genome browser modal (WashU component will mount automatically)
+    showGenomeBrowserModal.value = true;
+
+    console.log(
+      '[WashU] Browser will initialize via component with mount key:',
+      washuMountKey.value
+    );
+  } catch (error) {
+    console.error('[WashU] Failed to initialize:', error);
+    toast.error('Failed to load WashU browser');
+    showGenomeBrowserModal.value = false;
+  } finally {
+    genomeBrowserLoading.value = false;
+  }
+};
+
+/**
+ * Close genome browser (IGV or WashU)
+ */
+const closeGenomeBrowser = () => {
+  // Clean up IGV browser instance if it exists
   if (igvBrowser) {
-    igvBrowser.remove();
+    igvBrowser.dispose();
     igvBrowser = null;
   }
-  showIGV.value = false;
+
+  // WashU cleanup is handled by its component's onBeforeUnmount
+
+  showGenomeBrowserModal.value = false;
+  selectedBrowserType.value = null;
+  genomeBrowserGenome.value = '';
+  genomeBrowserTracks.value = [];
+  genomeBrowserRegion.value = '';
+
+  console.log('[Genome Browser] Closed and cleaned up');
 };
 
 const updateSession = async () => {
@@ -858,8 +989,8 @@ onMounted(async () => {
 });
 
 onUnmounted(() => {
-  // Clean up IGV browser instance
-  closeIGV();
+  // Clean up genome browser instances
+  closeGenomeBrowser();
 });
 </script>
 

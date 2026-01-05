@@ -36,7 +36,7 @@ services:
     command: ["npm", "run", "dev"] 
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3030/health"]
-      interval: 2s
+      interval: 60s
       timeout: 10s
       retries: 5
     depends_on:
@@ -208,7 +208,7 @@ services:
     command: ["uvicorn", "rhythm_api.main:app", "--host", "0.0.0.0", "--port", "5001", "--root-path", "/rhythm"]
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:5001/health"]
-      interval: 2s
+      interval: 60s
       timeout: 10s
       retries: 5
     depends_on:
@@ -234,7 +234,7 @@ services:
     command: ["npm", "run", "dev"]
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3060/health"]
-      interval: 2s
+      interval: 60s
       timeout: 10s
       retries: 5
 
@@ -255,7 +255,7 @@ services:
     command: ["exec", "gunicorn", "--bind", ":5050", "--workers", "1", "--threads", "1", "--timeout", "0", "app:app"]
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:5050/health"]
-      interval: 2s
+      interval: 60s
       timeout: 10s
       retries: 5
     depends_on:

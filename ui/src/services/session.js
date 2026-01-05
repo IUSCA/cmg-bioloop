@@ -81,14 +81,15 @@ class SessionService {
   /**
    * Get datahub configuration for a session
    * @param {number} id - Session ID
+   * @param {string} browser - Browser type ('igv' or 'washu'), defaults to 'igv'
    * @returns {Promise<Object>} Datahub configuration
    */
-  getDatahub(id) {
-    return api.get(`/sessions/${id}/datahub`);
+  getDatahub(id, browser = 'igv') {
+    return api.get(`/sessions/${id}/datahub`, { params: { browser } });
   }
 
   /**
-   * Set authentication cookie for file access in IGV
+   * Set authentication cookie for file access in genome browsers (IGV, WashU)
    * @param {number} id - Session ID
    * @returns {Promise<Object>} Response
    */
