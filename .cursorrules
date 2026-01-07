@@ -1,6 +1,6 @@
 # Bioloop Project Rules for AI Agents
 
-Before working on this project, please read the AI_MEMORY.md file in the project root to understand:
+Before working on this project, please understand:
 - Project overview and architecture
 - Authentication & authorization patterns
 - API design conventions
