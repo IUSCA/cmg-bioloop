@@ -13,6 +13,22 @@
     "base_url": "http://127.0.0.1:5001",
     "auth_token": ""
   },
+  "cmg_mongodb": {
+    "host": "localhost",
+    "port": 27017,
+    "database": "cmg",
+    "authSource": "admin",
+    "username": "",
+    "password": ""
+  },
+  "rhythm_mongodb": {
+    "host": "localhost",
+    "port": 27018,
+    "database": "rhythm",
+    "authSource": "admin",
+    "username": "",
+    "password": ""
+  },
   "auth": {
     "mode": "dev",
     "jwt": {

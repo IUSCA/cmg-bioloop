@@ -593,3 +593,30 @@ enum argument_value_type {
   NUMBER
   BOOLEAN
 }
+
+// CMG Sync Tables - For polling-based synchronization
+model cmg_sync_cursor {
+  poller_name       String    @id
+  last_updated_at   DateTime?
+  last_cmg_objectid String?
+  locked_by         String?
+  lock_expires_at   DateTime?
+  last_started_at   DateTime?
+  last_succeeded_at DateTime?
+  last_failed_at    DateTime?
+  last_error        String?
+  last_run_count    Int?
+  updated_at        DateTime  @updatedAt
+}
+
+model cmg_sync_retry {
+  id               Int      @id @default(autoincrement())
+  poller_name      String
+  cmg_id           String
+  failure_count    Int      @default(0)
+  last_error       String?
+  next_retry_at    DateTime?
+  updated_at       DateTime @updatedAt
+
+  @@unique([poller_name, cmg_id])
+}
