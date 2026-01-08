@@ -292,3 +292,5 @@ def main():
 
 if __name__ == "__main__":
   fire.Fire(main)
+
+# mongodump --uri="mongodb://cmg:All%20the%20GATTACA%20all%20the%20time!@commons3.sca.iu.edu:27017/cmg" --out=/tmp/cmg_data_01_07_2026

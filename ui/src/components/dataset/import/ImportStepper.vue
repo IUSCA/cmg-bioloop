@@ -223,6 +223,82 @@
     </template>
 
     <template #step-content-2>
+      <!-- Genomic Details Step -->
+      <div class="flex w-full pb-6">
+        <va-select
+          v-model="selectedFileType"
+          :options="fileTypeOptions"
+          label="File Type"
+          placeholder="Select file type"
+          class="flex-grow"
+          :text-by="'text'"
+          :track-by="'value'"
+        />
+        <div class="flex items-center ml-2">
+          <va-popover>
+            <template #body>
+              <div class="w-96">
+                Type of genomic data file (e.g., FASTQ, BAM, VCF, BigWig, etc.)
+              </div>
+            </template>
+            <Icon icon="mdi:information" class="text-xl text-gray-500" />
+          </va-popover>
+        </div>
+      </div>
+
+      <div class="flex w-full pb-6">
+        <va-select
+          v-model="selectedGenomeType"
+          :options="genomeTypeOptions"
+          label="Genome Type"
+          placeholder="Select genome type"
+          class="flex-grow mr-2"
+          :text-by="'text'"
+          :track-by="'value'"
+        />
+        <div class="flex items-center ml-2">
+          <va-popover>
+            <template #body>
+              <div class="w-96">
+                Organism type (e.g., Human, Mouse, etc.)
+              </div>
+            </template>
+            <Icon icon="mdi:information" class="text-xl text-gray-500" />
+          </va-popover>
+        </div>
+      </div>
+
+      <div class="flex w-full pb-6" v-if="selectedGenomeType">
+        <va-select
+          v-model="selectedGenomeValue"
+          :options="availableGenomeValues"
+          label="Genome Assembly"
+          placeholder="Select genome assembly"
+          class="flex-grow mr-2"
+        />
+        <div class="flex items-center ml-2">
+          <va-popover>
+            <template #body>
+              <div class="w-96">
+                Specific genome assembly version (e.g., hg38, mm10, etc.)
+              </div>
+            </template>
+            <Icon icon="mdi:information" class="text-xl text-gray-500" />
+          </va-popover>
+        </div>
+      </div>
+
+      <div class="flex w-full pb-6">
+        <va-textarea
+          v-model="importNotes"
+          label="Notes (Optional)"
+          placeholder="Add any additional notes about this import"
+          class="flex-grow"
+        />
+      </div>
+    </template>
+
+    <template #step-content-3>
       <ImportInfo
         v-model:populated-dataset-name="populatedDatasetName"
         :dataset="dataset"
@@ -285,6 +361,7 @@ import { VaPopover } from "vuestic-ui";
 const STEP_KEYS = {
   SELECT_DIRECTORY: "selectDirectory",
   GENERAL_INFO: "generalInfo",
+  GENOMIC_DETAILS: "genomicDetails",
   IMPORT: "info",
 };
 
@@ -311,6 +388,11 @@ const steps = [
     key: STEP_KEYS.GENERAL_INFO,
     label: "General Info",
     icon: "material-symbols:info",
+  },
+  {
+    key: STEP_KEYS.GENOMIC_DETAILS,
+    label: "Genomic Details",
+    icon: "mdi-dna",
   },
   {
     key: STEP_KEYS.IMPORT,
@@ -352,6 +434,10 @@ const datasetSearchText = ref("");
 const projectSearchText = ref("");
 const selectedSourceInstrument = ref(null);
 const sourceInstrumentOptions = ref([]);
+const selectedFileType = ref(null);
+const selectedGenomeType = ref(null);
+const selectedGenomeValue = ref(null);
+const importNotes = ref("");
 const searchSpace = ref(
   FILESYSTEM_SEARCH_SPACES instanceof Array &&
     FILESYSTEM_SEARCH_SPACES.length > 0
@@ -369,6 +455,7 @@ const selectedDatasetType = ref(
 const stepPristineStates = ref([
   { [STEP_KEYS.SELECT_DIRECTORY]: true },
   { [STEP_KEYS.GENERAL_INFO]: true },
+  { [STEP_KEYS.GENOMIC_DETAILS]: true },
   { [STEP_KEYS.IMPORT]: true },
 ]);
 const isFileSearchAutocompleteOpen = ref(false);
@@ -376,6 +463,7 @@ const selectedFile = ref(null);
 const formErrors = ref({
   [STEP_KEYS.SELECT_DIRECTORY]: null,
   [STEP_KEYS.GENERAL_INFO]: null,
+  [STEP_KEYS.GENOMIC_DETAILS]: null,
   [STEP_KEYS.IMPORT]: null,
 });
 
@@ -409,12 +497,38 @@ const stepIsPristine = computed(() => {
   return !!Object.values(stepPristineStates.value[step.value])[0];
 });
 
+const fileTypeOptions = computed(() => {
+  return [
+    { text: "FASTQ", value: "fastq" },
+    { text: "BAM", value: "bam" },
+    { text: "BigWig", value: "bigwig" },
+    { text: "VCF", value: "vcf" },
+    { text: "BED", value: "bed" },
+    { text: "BigBed", value: "bigbed" },
+    { text: "Other", value: "other" },
+  ];
+});
+
+const genomeTypeOptions = computed(() => {
+  return Object.entries(Constants.GENOME_TYPES).map(([key, value]) => ({
+    text: value.label,
+    value: key,
+  }));
+});
+
+const availableGenomeValues = computed(() => {
+  if (!selectedGenomeType.value) return [];
+  return Constants.GENOME_TYPES[selectedGenomeType.value]?.genomes || [];
+});
+
 const stepHasErrors = computed(() => {
   if (step.value === 0) {
     return !!formErrors.value[STEP_KEYS.SELECT_DIRECTORY];
   } else if (step.value === 1) {
     return !!formErrors.value[STEP_KEYS.GENERAL_INFO];
   } else if (step.value === 2) {
+    return !!formErrors.value[STEP_KEYS.GENOMIC_DETAILS];
+  } else if (step.value === 3) {
     return !!formErrors.value[STEP_KEYS.IMPORT];
   }
 });
@@ -493,6 +607,7 @@ const resetFormErrors = () => {
   formErrors.value = {
     [STEP_KEYS.SELECT_DIRECTORY]: null,
     [STEP_KEYS.GENERAL_INFO]: null,
+    [STEP_KEYS.GENOMIC_DETAILS]: null,
     [STEP_KEYS.IMPORT]: null,
   };
 };
@@ -534,6 +649,11 @@ const setFormErrors = async () => {
   }
 
   if (step.value === 2) {
+    // Genomic details step - all fields are optional
+    formErrors.value[STEP_KEYS.GENOMIC_DETAILS] = null;
+  }
+
+  if (step.value === 3) {
     const { isNameValid: datasetNameIsValid, error } =
       await validateDatasetName();
     if (datasetNameIsValid) {
@@ -649,6 +769,11 @@ const preImport = () => {
       src_instrument_id: selectedSourceInstrument.value?.id,
       src_dataset_id: selectedRawData.value?.id,
       create_method: Constants.DATASET_CREATE_METHODS.IMPORT,
+      // Genomic details
+      file_type: selectedFileType.value?.value || null,
+      genome_type: selectedGenomeType.value || null,
+      genome_value: selectedGenomeValue.value || null,
+      import_notes: importNotes.value || null,
     });
   } else {
     return Promise.resolve({ data: dataset.value });
@@ -736,6 +861,10 @@ watch(
     fileListSearchText,
     isFileSearchAutocompleteOpen,
     searchSpace,
+    selectedFileType,
+    selectedGenomeType,
+    selectedGenomeValue,
+    importNotes,
   ],
   async (newVals, oldVals) => {
     // mark step's form fields as not pristine, for fields' errors to be shown
@@ -754,8 +883,8 @@ watch(
 // separate watcher for when step changes, since we don't want to mark the form
 // fields as not pristine upon step changes
 watch(step, async () => {
-  if (step.value !== 2) {
-    // step 3 is the `Import` step
+  if (step.value !== 3) {
+    // step 4 (index 3) is the `Import` step
     await setFormErrors();
   }
 });

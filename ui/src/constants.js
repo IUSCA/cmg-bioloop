@@ -24,6 +24,12 @@ const exports = {
             title: 'Upload',
             path: '/datasetUpload',
           },
+          {
+            feature_key: 'import',
+            icon: 'mdi-history',
+            title: 'Import History',
+            path: '/datasets/import-history',
+          },
         ],
       },
     ],

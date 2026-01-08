@@ -386,6 +386,10 @@ router.post(
     body('workflow_id').optional(),
     body('state').optional(),
     body('metadata').optional(),
+    body('file_type').optional(),
+    body('genome_type').optional(),
+    body('genome_value').optional(),
+    body('import_notes').optional(),
   ]),
   asyncHandler(async (req, res, next) => {
     // #swagger.tags = ['datasets']
@@ -401,6 +405,7 @@ router.post(
     const {
       import_space, create_method, project_id, src_instrument_id, src_dataset_id,
       name, type, origin_path, du_size, size, bundle_size, workflow_id, state, metadata,
+      file_type, genome_type, genome_value, import_notes,
     } = req.body;
 
     // remove any HTML entities inserted by browser because of URL encoding
@@ -436,6 +441,10 @@ router.post(
       state,
       create_method,
       metadata,
+      file_type,
+      genome_type,
+      genome_value,
+      import_notes,
     });
 
     // idempotence: creates dataset or returns error 409 on repeated requests
@@ -986,6 +995,62 @@ router.get(
       },
     });
     res.json({ exists: !!matchingDataset });
+  }),
+);
+
+// Get import logs - UI
+router.get(
+  '/imports/history',
+  isPermittedTo('read'),
+  validate([
+    query('limit').isInt({ min: 1 }).toInt().optional().default(50),
+    query('offset').isInt({ min: 0 }).toInt().optional().default(0),
+    query('sort_by').default('created_at'),
+    query('sort_order').default('desc').isIn(['asc', 'desc']),
+  ]),
+  asyncHandler(async (req, res, next) => {
+    // #swagger.tags = ['datasets']
+    // #swagger.summary = 'Get import history logs'
+
+    const orderBy = {
+      [req.query.sort_by]: req.query.sort_order,
+    };
+
+    const [importLogs, count] = await prisma.$transaction([
+      prisma.dataset_import_log.findMany({
+        skip: req.query.offset,
+        take: req.query.limit,
+        orderBy,
+        include: {
+          audit_log: {
+            include: {
+              user: {
+                select: {
+                  id: true,
+                  username: true,
+                  name: true,
+                  email: true,
+                },
+              },
+              dataset: {
+                select: {
+                  id: true,
+                  name: true,
+                  type: true,
+                  created_at: true,
+                },
+              },
+            },
+          },
+        },
+      }),
+      prisma.dataset_import_log.count(),
+    ]);
+
+    res.json({
+      import_logs: importLogs,
+      metadata: { count },
+    });
   }),
 );
 

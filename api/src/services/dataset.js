@@ -1193,6 +1193,7 @@ const buildDatasetCreateQuery = (data) => {
   const {
     name, type, du_size, size, origin_path, bundle_size, metadata, workflow_id,
     project_id, user_id, src_instrument_id, src_dataset_id, state, create_method,
+    file_type, genome_type, genome_value, import_notes,
   } = data;
   /* eslint-disable no-unused-vars */
 
@@ -1240,6 +1241,16 @@ const buildDatasetCreateQuery = (data) => {
     };
   }
 
+  // add genomic details if provided
+  if (genome_type || genome_value) {
+    create_query.genomic_details = {
+      create: _.omitBy(_.isNil)({
+        genome_type,
+        genome_value,
+      }),
+    };
+  }
+
   // add a state
   create_query.states = {
     create: [
@@ -1249,14 +1260,31 @@ const buildDatasetCreateQuery = (data) => {
     ],
   };
 
+  // audit log entry
+  const audit_log = {
+    action: 'create',
+    create_method: create_method || CONSTANTS.DATASET_CREATE_METHODS.SCAN,
+    user_id: user_id ?? Prisma.skip,
+  };
+
+  // if this is an import, create import_log nested within audit_logs
+  if (create_method === CONSTANTS.DATASET_CREATE_METHODS.IMPORT) {
+    audit_log.import = {
+      create: _.omitBy(_.isNil)({
+        file_type,
+        genome_type,
+        genome_value,
+        source_run: src_dataset_id ? String(src_dataset_id) : null,
+        notes: import_notes,
+        metadata: {
+          import_space: data.import_space || null,
+        },
+      }),
+    };
+  }
+
   create_query.audit_logs = {
-    create: [
-      {
-        action: 'create',
-        create_method: create_method || CONSTANTS.DATASET_CREATE_METHODS.SCAN,
-        user_id: user_id ?? Prisma.skip,
-      },
-    ],
+    create: [audit_log],
   };
 
   return create_query;

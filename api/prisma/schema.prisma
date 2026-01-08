@@ -114,6 +114,21 @@ model file_upload_log {
   dataset_upload_log_id Int?
 }
 
+model dataset_import_log {
+  id           Int           @id @default(autoincrement())
+  created_at   DateTime      @default(now()) @db.Timestamp(6)
+  updated_at   DateTime      @default(now()) @updatedAt @db.Timestamp(6)
+  cmg_id       String?       @db.VarChar(100)
+  file_type    String?
+  genome_type  String?
+  genome_value String?
+  source_run   String?
+  notes        String?
+  metadata     Json?
+  audit_log    dataset_audit @relation(fields: [audit_log_id], references: [id], onDelete: Cascade)
+  audit_log_id Int           @unique
+}
+
 model dataset_audit {
   id            Int                    @id @default(autoincrement())
   action        String
@@ -127,6 +142,7 @@ model dataset_audit {
   dataset_id    Int?
   dataset       dataset?               @relation(fields: [dataset_id], references: [id], onDelete: Cascade)
   upload        dataset_upload_log?
+  import        dataset_import_log?
 
   @@unique([dataset_id, create_method])
 }
