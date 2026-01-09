@@ -1,30 +1,32 @@
-const { ObjectId } = require('mongodb');
 const logger = require('@/services/logger');
 const { mapCMGRolesToBioloop } = require('../utils/role_mapper');
 
 /**
- * Convert CMG users to Bioloop users
- * Equivalent to: db_conversion/src/convert/entity/user.py::convert_users()
+ * Assign roles to a user based on CMG roles
+ * Equivalent to: db_conversion/src/convert/entity/user.py::assign_user_roles()
  */
-async function syncUsers(prisma, cmgDb) {
-  logger.info('[BIGBANG] Converting users...');
+async function assignUserRoles(prisma, cmgUser, userId) {
+  const cmgRoles = cmgUser.roles || [];
+  const bioloopRoleNames = mapCMGRolesToBioloop(cmgRoles);
 
-  const cmgUsers = await cmgDb.collection('users').find({}).toArray();
-  logger.info(`[BIGBANG] Found ${cmgUsers.length} CMG users to convert`);
+  // Get all Bioloop roles
+  const bioloopRoles = await prisma.role.findMany({
+    where: {
+      name: { in: bioloopRoleNames },
+    },
+  });
 
-  let convertedCount = 0;
-  let skippedCount = 0;
-
-  for (const cmgUser of cmgUsers) {
-    const result = await convertUser(prisma, cmgUser);
-    if (result) {
-      convertedCount++;
-    } else {
-      skippedCount++;
-    }
+  // Create user_role associations
+  // eslint-disable-next-line no-restricted-syntax
+  for (const role of bioloopRoles) {
+    // eslint-disable-next-line no-await-in-loop
+    await prisma.user_role.create({
+      data: {
+        user_id: userId,
+        role_id: role.id,
+      },
+    });
   }
-
-  logger.info(`[BIGBANG] User conversion complete: ${convertedCount} succeeded, ${skippedCount} skipped (duplicates)`);
 }
 
 /**
@@ -66,29 +68,30 @@ async function convertUser(prisma, cmgUser) {
 }
 
 /**
- * Assign roles to a user based on CMG roles
- * Equivalent to: db_conversion/src/convert/entity/user.py::assign_user_roles()
+ * Convert CMG users to Bioloop users
+ * Equivalent to: db_conversion/src/convert/entity/user.py::convert_users()
  */
-async function assignUserRoles(prisma, cmgUser, userId) {
-  const cmgRoles = cmgUser.roles || [];
-  const bioloopRoleNames = mapCMGRolesToBioloop(cmgRoles);
+async function syncUsers(prisma, cmgDb) {
+  logger.info('[BIGBANG] Converting users...');
 
-  // Get all Bioloop roles
-  const bioloopRoles = await prisma.role.findMany({
-    where: {
-      name: { in: bioloopRoleNames },
-    },
-  });
+  const cmgUsers = await cmgDb.collection('users').find({}).toArray();
+  logger.info(`[BIGBANG] Found ${cmgUsers.length} CMG users to convert`);
 
-  // Create user_role associations
-  for (const role of bioloopRoles) {
-    await prisma.user_role.create({
-      data: {
-        user_id: userId,
-        role_id: role.id,
-      },
-    });
+  let convertedCount = 0;
+  let skippedCount = 0;
+
+  // eslint-disable-next-line no-restricted-syntax
+  for (const cmgUser of cmgUsers) {
+    // eslint-disable-next-line no-await-in-loop
+    const result = await convertUser(prisma, cmgUser);
+    if (result) {
+      convertedCount += 1;
+    } else {
+      skippedCount += 1;
+    }
   }
+
+  logger.info(`[BIGBANG] User conversion complete: ${convertedCount} succeeded, ${skippedCount} skipped (duplicates)`);
 }
 
 /**

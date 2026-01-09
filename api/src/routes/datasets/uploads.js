@@ -151,6 +151,9 @@ router.post(
     body('files_metadata').isArray(),
     body('project_id').optional(),
     body('src_instrument_id').optional(),
+    body('file_type').optional(),
+    body('genome_type').optional(),
+    body('genome_value').optional(),
   ]),
   asyncHandler(async (req, res, next) => {
     // #swagger.tags = ['datasets']
@@ -158,6 +161,7 @@ router.post(
 
     const {
       project_id, src_instrument_id, src_dataset_id, name, type, files_metadata,
+      file_type, genome_type, genome_value,
     } = req.body;
 
     const datasetCreateQuery = datasetService.buildDatasetCreateQuery({
@@ -167,6 +171,10 @@ router.post(
       user_id: req.user.id,
       src_instrument_id,
       src_dataset_id,
+      create_method: CONSTANTS.DATASET_CREATE_METHODS.UPLOAD,
+      file_type,
+      genome_type,
+      genome_value,
     });
 
     const dataset_upload_log = await prisma.$transaction(async (tx) => {

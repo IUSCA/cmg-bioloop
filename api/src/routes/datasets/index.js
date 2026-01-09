@@ -253,6 +253,175 @@ router.post(
   }),
 );
 
+// Get import logs for all users - operator/admin only
+router.get(
+  '/imports',
+  validate([
+    query('dataset_name').optional().trim().isLength({ min: 1 }),
+    query('limit').isInt({ min: 1 }).toInt().optional(),
+    query('offset').isInt({ min: 0 }).toInt().optional(),
+  ]),
+  isPermittedTo('read'),
+  asyncHandler(async (req, res, next) => {
+    // #swagger.tags = ['datasets']
+    // #swagger.summary = 'Get import history logs for all users'
+
+    try {
+      const {
+        dataset_name, offset, limit, sort_by = 'created_at', sort_order = 'desc',
+      } = req.query;
+
+      const orderBy = {
+        [sort_by]: sort_order,
+      };
+
+      const whereClause = {};
+      if (dataset_name) {
+        whereClause.audit_log = {
+          dataset: {
+            name: {
+              contains: dataset_name,
+              mode: 'insensitive',
+            },
+          },
+        };
+      }
+
+      const filter_query = {
+        skip: offset ?? Prisma.skip,
+        take: limit ?? Prisma.skip,
+        where: whereClause,
+        orderBy,
+      };
+
+      const [importLogs, count] = await prisma.$transaction([
+        prisma.dataset_import_log.findMany({
+          ...filter_query,
+          include: {
+            audit_log: {
+              include: {
+                user: {
+                  select: {
+                    id: true,
+                    username: true,
+                    name: true,
+                    email: true,
+                  },
+                },
+                dataset: {
+                  include: {
+                    source_datasets: {
+                      include: {
+                        source_dataset: true,
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        }),
+        prisma.dataset_import_log.count({ where: whereClause }),
+      ]);
+
+      res.json({
+        imports: importLogs,
+        metadata: { count },
+      });
+    } catch (error) {
+      logger.error('Error fetching import logs:', error);
+      throw error;
+    }
+  }),
+);
+
+// Get import logs for specific user
+router.get(
+  '/imports/:username',
+  validate([
+    query('dataset_name').optional().trim().isLength({ min: 1 }),
+    query('limit').isInt({ min: 1 }).toInt().optional(),
+    query('offset').isInt({ min: 0 }).toInt().optional(),
+    param('username').trim().notEmpty(),
+  ]),
+  isPermittedTo('read', { checkOwnership: true }),
+  asyncHandler(async (req, res, next) => {
+    // #swagger.tags = ['datasets']
+    // #swagger.summary = 'Get import history logs for specific user'
+
+    try {
+      const {
+        dataset_name, offset, limit, sort_by = 'created_at', sort_order = 'desc',
+      } = req.query;
+
+      const orderBy = {
+        [sort_by]: sort_order,
+      };
+
+      const whereClause = {
+        audit_log: {
+          user: {
+            username: req.params.username,
+          },
+          ...(dataset_name && {
+            dataset: {
+              name: {
+                contains: dataset_name,
+                mode: 'insensitive',
+              },
+            },
+          }),
+        },
+      };
+
+      const filter_query = {
+        skip: offset ?? Prisma.skip,
+        take: limit ?? Prisma.skip,
+        where: whereClause,
+        orderBy,
+      };
+
+      const [importLogs, count] = await prisma.$transaction([
+        prisma.dataset_import_log.findMany({
+          ...filter_query,
+          include: {
+            audit_log: {
+              include: {
+                user: {
+                  select: {
+                    id: true,
+                    username: true,
+                    name: true,
+                    email: true,
+                  },
+                },
+                dataset: {
+                  include: {
+                    source_datasets: {
+                      include: {
+                        source_dataset: true,
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        }),
+        prisma.dataset_import_log.count({ where: whereClause }),
+      ]);
+
+      res.json({
+        imports: importLogs,
+        metadata: { count },
+      });
+    } catch (error) {
+      logger.error(`Error fetching import logs for user ${req.params.username}:`, error);
+      throw error;
+    }
+  }),
+);
+
 // Get all datasets, and the count of datasets. Results can optionally be
 // filtered and sorted by the criteria specified. Used by workers + UI.
 router.get(
@@ -995,62 +1164,6 @@ router.get(
       },
     });
     res.json({ exists: !!matchingDataset });
-  }),
-);
-
-// Get import logs - UI
-router.get(
-  '/imports/history',
-  isPermittedTo('read'),
-  validate([
-    query('limit').isInt({ min: 1 }).toInt().optional().default(50),
-    query('offset').isInt({ min: 0 }).toInt().optional().default(0),
-    query('sort_by').default('created_at'),
-    query('sort_order').default('desc').isIn(['asc', 'desc']),
-  ]),
-  asyncHandler(async (req, res, next) => {
-    // #swagger.tags = ['datasets']
-    // #swagger.summary = 'Get import history logs'
-
-    const orderBy = {
-      [req.query.sort_by]: req.query.sort_order,
-    };
-
-    const [importLogs, count] = await prisma.$transaction([
-      prisma.dataset_import_log.findMany({
-        skip: req.query.offset,
-        take: req.query.limit,
-        orderBy,
-        include: {
-          audit_log: {
-            include: {
-              user: {
-                select: {
-                  id: true,
-                  username: true,
-                  name: true,
-                  email: true,
-                },
-              },
-              dataset: {
-                select: {
-                  id: true,
-                  name: true,
-                  type: true,
-                  created_at: true,
-                },
-              },
-            },
-          },
-        },
-      }),
-      prisma.dataset_import_log.count(),
-    ]);
-
-    res.json({
-      import_logs: importLogs,
-      metadata: { count },
-    });
   }),
 );
 

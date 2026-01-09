@@ -27,13 +27,14 @@
  */
 
 const config = require('config');
+// eslint-disable-next-line import/no-unresolved
 const { MongoClient } = require('mongodb');
 const prisma = require('@/db');
 const logger = require('@/services/logger');
 
 // Bigbang modules
 const { createRoles, createCMGUser, populatePipelineDefinitions } = require('./cmg_sync/bigbang/seed_constants');
-const { syncUsers, getBioloopCMGUserId } = require('./cmg_sync/bigbang/sync_users');
+const { syncUsers } = require('./cmg_sync/bigbang/sync_users');
 const { syncAllDatasets } = require('./cmg_sync/bigbang/sync_datasets');
 const { syncAuditLogs } = require('./cmg_sync/bigbang/sync_audit_logs');
 const { syncDatasetHierarchies } = require('./cmg_sync/bigbang/sync_dataset_hierarchies');
@@ -49,14 +50,16 @@ function parseArgs() {
   const args = process.argv.slice(2);
   const options = {};
 
+  // eslint-disable-next-line no-restricted-syntax
   for (const arg of args) {
     if (arg.startsWith('--cmg-uri=')) {
-      options.cmgUri = arg.split('=')[1];
+      [, options.cmgUri] = arg.split('=');
     } else if (arg.startsWith('--rhythm-uri=')) {
-      options.rhythmUri = arg.split('=')[1];
+      [, options.rhythmUri] = arg.split('=');
     } else if (arg === '--skip-sessions') {
       options.skipSessions = true;
     } else if (arg === '--help' || arg === '-h') {
+      // eslint-disable-next-line no-console
       console.log(`
 Usage: node src/scripts/cmg_bigbang_sync.js [options]
 
@@ -112,7 +115,9 @@ function buildMongoUri(dbType, cmdLineUri) {
   } = dbConfig;
 
   if (!host || !database) {
-    throw new Error(`${dbType.toUpperCase()} MongoDB configuration missing. Please set environment variables or use --${dbType}-uri flag.`);
+    const errorMsg = `${dbType.toUpperCase()} MongoDB configuration missing. `
+      + `Please set environment variables or use --${dbType}-uri flag.`;
+    throw new Error(errorMsg);
   }
 
   let uri = 'mongodb://';
@@ -157,14 +162,14 @@ async function main() {
     cmgClient = new MongoClient(cmgUri);
     await cmgClient.connect();
     const cmgDb = cmgClient.db();
-    logger.info('✓ Connected to CMG MongoDB');
+    logger.info('[OK] Connected to CMG MongoDB');
 
     rhythmClient = new MongoClient(rhythmUri);
     await rhythmClient.connect();
     const rhythmDb = rhythmClient.db();
-    logger.info('✓ Connected to Rhythm MongoDB');
+    logger.info('[OK] Connected to Rhythm MongoDB');
 
-    logger.info('✓ Prisma client ready');
+    logger.info('[OK] Prisma client ready');
     logger.info('');
 
     // Execute migration in order (matching convert.py)
@@ -222,7 +227,7 @@ async function main() {
     const duration = ((Date.now() - startTime) / 1000).toFixed(2);
     logger.info('');
     logger.info('='.repeat(80));
-    logger.info(`✓ Big-bang migration completed successfully in ${duration}s`);
+    logger.info(`[SUCCESS] Big-bang migration completed successfully in ${duration}s`);
     logger.info('='.repeat(80));
     logger.info('');
     logger.info('Next steps:');
@@ -233,7 +238,7 @@ async function main() {
   } catch (error) {
     logger.error('');
     logger.error('='.repeat(80));
-    logger.error('✗ Big-bang migration FAILED');
+    logger.error('[FAILED] Big-bang migration FAILED');
     logger.error('='.repeat(80));
     logger.error('Error:', error);
     logger.error('Stack:', error.stack);

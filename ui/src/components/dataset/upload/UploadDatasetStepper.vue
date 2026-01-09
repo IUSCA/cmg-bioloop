@@ -205,6 +205,58 @@
       </template>
 
       <template #step-content-2>
+        <div class="flex w-full pb-6">
+          <va-select
+            v-model="selectedFileType"
+            :options="fileTypeOptions"
+            :text-by="'text'"
+            :track-by="'value'"
+            label="File Type (Optional)"
+            placeholder="Select file type"
+            class="flex-grow"
+          />
+        </div>
+
+        <div class="flex w-full pb-6">
+          <va-select
+            v-model="selectedGenomeType"
+            :options="genomeTypeOptions"
+            :text-by="'text'"
+            :track-by="'value'"
+            label="Genome Type (Optional)"
+            placeholder="Select genome type"
+            class="flex-grow mr-2"
+          />
+          <div class="flex items-center ml-2">
+            <va-popover>
+              <template #body>
+                <div class="w-96">Organism type (e.g., Human, Mouse, etc.)</div>
+              </template>
+              <Icon icon="mdi:information" class="text-xl text-gray-500" />
+            </va-popover>
+          </div>
+        </div>
+
+        <div class="flex w-full pb-6" v-if="selectedGenomeType">
+          <va-select
+            v-model="selectedGenomeValue"
+            :options="availableGenomeValues"
+            label="Genome Assembly (Optional)"
+            placeholder="Select genome assembly"
+            class="flex-grow mr-2"
+          />
+          <div class="flex items-center ml-2">
+            <va-popover>
+              <template #body>
+                <div class="w-96">Specific genome assembly version (e.g., hg38, mm10, etc.)</div>
+              </template>
+              <Icon icon="mdi:information" class="text-xl text-gray-500" />
+            </va-popover>
+          </div>
+        </div>
+      </template>
+
+      <template #step-content-3>
         <div class="flex flex-row" v-if="selectingFiles || selectingDirectory">
           <div class="flex-1">
             <va-card class="upload-details">
@@ -294,8 +346,9 @@ import { VaDivider, VaPopover } from "vuestic-ui";
 const auth = useAuthStore();
 
 const STEP_KEYS = {
-  GENERAL_INFO: "generalInfo",
   SELECT_FILES: "selectFiles",
+  GENERAL_INFO: "generalInfo",
+  GENOMIC_DETAILS: "genomicDetails",
   UPLOAD: "upload",
 };
 
@@ -326,6 +379,11 @@ const steps = [
     icon: "material-symbols:info",
   },
   {
+    key: STEP_KEYS.GENOMIC_DETAILS,
+    label: "Genomic Details",
+    icon: "mdi-dna",
+  },
+  {
     key: STEP_KEYS.UPLOAD,
     label: "Upload",
     icon: "material-symbols:play-circle",
@@ -349,8 +407,9 @@ const FILE_TYPE = {
 };
 
 const formErrors = ref({
-  [STEP_KEYS.GENERAL_INFO]: null,
   [STEP_KEYS.SELECT_FILES]: null,
+  [STEP_KEYS.GENERAL_INFO]: null,
+  [STEP_KEYS.GENOMIC_DETAILS]: null,
   [STEP_KEYS.UPLOAD]: null,
 });
 const uploadToken = ref(useLocalStorage("uploadToken", ""));
@@ -372,8 +431,9 @@ const willUploadRawData = ref(false);
 // touched by user) or not. Errors are only shown when a step's form fields are
 // not pristine.
 const stepPristineStates = ref([
-  { [STEP_KEYS.GENERAL_INFO]: true },
   { [STEP_KEYS.SELECT_FILES]: true },
+  { [STEP_KEYS.GENERAL_INFO]: true },
+  { [STEP_KEYS.GENOMIC_DETAILS]: true },
   { [STEP_KEYS.UPLOAD]: true },
 ]);
 const loading = ref(false);
@@ -399,6 +459,9 @@ const selectingDirectory = ref(false);
 const populatedDatasetName = ref("");
 const step = ref(0);
 const uploadCancelled = ref(false);
+const selectedFileType = ref(null);
+const selectedGenomeType = ref(null);
+const selectedGenomeValue = ref(null);
 
 /**
  * Determines if the upload process has been completed.
@@ -420,6 +483,8 @@ const stepHasErrors = computed(() => {
   } else if (step.value === 1) {
     return !!formErrors.value[STEP_KEYS.GENERAL_INFO];
   } else if (step.value === 2) {
+    return !!formErrors.value[STEP_KEYS.GENOMIC_DETAILS];
+  } else if (step.value === 3) {
     return !!formErrors.value[STEP_KEYS.UPLOAD];
   }
 });
@@ -476,6 +541,10 @@ const uploadFormData = computed(() => {
     src_instrument_id: selectedSourceInstrument.value
       ? selectedSourceInstrument.value.id
       : null,
+    // Genomic details
+    file_type: selectedFileType.value?.value || null,
+    genome_type: selectedGenomeType.value?.value || selectedGenomeType.value || null,
+    genome_value: selectedGenomeValue.value || null,
     files_metadata: filesToUpload.value.map((e) => {
       return {
         name: e.name,
@@ -489,6 +558,37 @@ const uploadFormData = computed(() => {
 
 const noFilesSelected = computed(() => {
   return filesToUpload.value?.length === 0;
+});
+
+const fileTypeOptions = computed(() => {
+  return [
+    { text: 'FASTQ', value: 'fastq' },
+    { text: 'BAM', value: 'bam' },
+    { text: 'BigWig', value: 'bigwig' },
+    { text: 'VCF', value: 'vcf' },
+    { text: 'BED', value: 'bed' },
+    { text: 'BigBed', value: 'bigbed' },
+    { text: 'Other', value: 'other' },
+  ];
+});
+
+const genomeTypeOptions = computed(() => {
+  return Object.entries(Constants.GENOME_TYPES).map(([key, value]) => ({
+    text: value.label,
+    value: key,
+  }));
+});
+
+const availableGenomeValues = computed(() => {
+  if (!selectedGenomeType.value) {
+    return [];
+  }
+
+  // Extract the actual genome type key from the object
+  const genomeTypeKey = selectedGenomeType.value.value || selectedGenomeType.value;
+  const genomes = Constants.GENOME_TYPES[genomeTypeKey]?.genomes || [];
+
+  return genomes;
 });
 
 const onFilesAdded = (files) => {
@@ -599,8 +699,9 @@ const validateIfExists = (value) => {
 
 const resetFormErrors = () => {
   formErrors.value = {
-    [STEP_KEYS.GENERAL_INFO]: null,
     [STEP_KEYS.SELECT_FILES]: null,
+    [STEP_KEYS.GENERAL_INFO]: null,
+    [STEP_KEYS.GENOMIC_DETAILS]: null,
     [STEP_KEYS.UPLOAD]: null,
   };
 };
@@ -683,7 +784,12 @@ const setFormErrors = async () => {
   }
 
   if (step.value === 2) {
-    const { isNameValid: datasetNameIsValid, error } =
+    // Genomic details step - all fields are optional
+    formErrors.value[STEP_KEYS.GENOMIC_DETAILS] = null;
+  }
+
+  if (step.value === 3) {
+    const { isNameValid: datasetNameIsValid, error} =
       await validateDatasetName();
     if (datasetNameIsValid) {
       formErrors.value[STEP_KEYS.UPLOAD] = null;
@@ -1217,6 +1323,11 @@ watch(selectedDatasetType, (newVal) => {
   }
 });
 
+// Clear genome value when genome type changes
+watch(selectedGenomeType, () => {
+  selectedGenomeValue.value = null;
+});
+
 watch(selectingFiles, () => {
   if (selectingFiles.value) {
     populatedDatasetName.value = "";
@@ -1244,6 +1355,9 @@ watch(
     selectingFiles,
     selectingDirectory,
     filesToUpload,
+    selectedFileType,
+    selectedGenomeType,
+    selectedGenomeValue,
   ],
   async (newVals, oldVals) => {
     // Mark step's form fields as not pristine, for fields' errors to be shown

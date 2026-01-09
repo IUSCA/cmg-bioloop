@@ -95,6 +95,7 @@ create_dir "/opt/sca/data/qc/multiqc/bin"         # MultiQC executable location
 # User-facing directories
 create_dir "/opt/sca/data/downloads"              # User-accessible download area
 create_dir "/opt/sca/data/uploads"                # Temporary upload directory
+create_dir "/opt/sca/data/imports"                # Temporary import directory
 
 create_dir "/opt/sca/data/scratch"                # Temporary files and working directories
 

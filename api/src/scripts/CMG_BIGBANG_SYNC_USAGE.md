@@ -106,7 +106,7 @@ The script executes operations in this exact order (matching `convert.py`):
 
 ## What Gets Migrated
 
-### ✅ Migrated
+### Migrated
 - All users with role mappings
 - All datasets (RAW_DATA and DATA_PRODUCT)
 - Dataset genomic attributes
@@ -116,10 +116,10 @@ The script executes operations in this exact order (matching `convert.py`):
 - Dataset audit logs (from events)
 - Poller cursor initialization
 
-### ⚠️ Partially Migrated
+### Partially Migrated
 - **Genome browser sessions**: Most will be skipped due to missing `dataset_file` records (we don't populate this table in big-bang)
 
-### ❌ Not Migrated
+### Not Migrated
 - `dataset_file` table - Not populated (large files, done on-demand)
 - `dataset_file_hierarchy` table - Not populated
 - System events (from CMG `events` collection) - Only dataset events are converted
@@ -214,7 +214,7 @@ Depends on CMG data size:
 
 ## Re-running Big-Bang
 
-⚠️ **Caution**: The script is designed for initial population. Re-running may cause issues:
+**Caution**: The script is designed for initial population. Re-running may cause issues:
 
 - **Roles**: Will fail due to unique constraints (expected)
 - **Users**: Duplicates will be skipped

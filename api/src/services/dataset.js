@@ -1262,9 +1262,9 @@ const buildDatasetCreateQuery = (data) => {
 
   // audit log entry
   const audit_log = {
-    action: 'create',
-    create_method: create_method || CONSTANTS.DATASET_CREATE_METHODS.SCAN,
-    user_id: user_id ?? Prisma.skip,
+        action: 'create',
+        create_method: create_method || CONSTANTS.DATASET_CREATE_METHODS.SCAN,
+        user_id: user_id ?? Prisma.skip,
   };
 
   // if this is an import, create import_log nested within audit_logs
