@@ -2,16 +2,16 @@
 
 /**
  * CMG to Bioloop Big-Bang Synchronization Script
- * 
+ *
  * One-time initial population of all CMG data into Bioloop.
  * Follows the exact same order as: db_conversion/src/convert/scripts/convert.py
- * 
+ *
  * Usage:
  *   node src/scripts/cmg_bigbang_sync.js --cmg-uri="mongodb://..."
- *   
+ *
  * Or with environment variables (using config system):
  *   node src/scripts/cmg_bigbang_sync.js
- * 
+ *
  * Order of operations (same as convert.py):
  * 1. Create roles
  * 2. Create CMG system user
@@ -48,7 +48,7 @@ const { initializeCursors } = require('./cmg_sync/bigbang/initialize_cursors');
 function parseArgs() {
   const args = process.argv.slice(2);
   const options = {};
-  
+
   for (const arg of args) {
     if (arg.startsWith('--cmg-uri=')) {
       options.cmgUri = arg.split('=')[1];
@@ -91,7 +91,7 @@ Examples:
       process.exit(0);
     }
   }
-  
+
   return options;
 }
 
@@ -102,29 +102,31 @@ function buildMongoUri(dbType, cmdLineUri) {
   if (cmdLineUri) {
     return cmdLineUri;
   }
-  
+
   // Get from config system
   const configKey = dbType === 'cmg' ? 'cmg_mongodb' : 'rhythm_mongodb';
   const dbConfig = config.get(configKey);
-  
-  const { host, port, database, username, password, authSource } = dbConfig;
-  
+
+  const {
+    host, port, database, username, password, authSource,
+  } = dbConfig;
+
   if (!host || !database) {
     throw new Error(`${dbType.toUpperCase()} MongoDB configuration missing. Please set environment variables or use --${dbType}-uri flag.`);
   }
-  
-  let uri = `mongodb://`;
-  
+
+  let uri = 'mongodb://';
+
   if (username && password) {
     uri += `${encodeURIComponent(username)}:${encodeURIComponent(password)}@`;
   }
-  
+
   uri += `${host}:${port}/${database}`;
-  
+
   if (authSource) {
     uri += `?authSource=${authSource}`;
   }
-  
+
   return uri;
 }
 
@@ -134,76 +136,77 @@ function buildMongoUri(dbType, cmdLineUri) {
 async function main() {
   const startTime = Date.now();
   const options = parseArgs();
-  
+
   logger.info('='.repeat(80));
   logger.info('CMG to Bioloop Big-Bang Synchronization');
   logger.info('='.repeat(80));
-  
-  let cmgClient, rhythmClient;
-  
+
+  let cmgClient; let
+    rhythmClient;
+
   try {
     // Build connection URIs
     const cmgUri = buildMongoUri('cmg', options.cmgUri);
     const rhythmUri = buildMongoUri('rhythm', options.rhythmUri);
-    
+
     logger.info('Connecting to databases...');
     logger.info(`CMG MongoDB: ${cmgUri.replace(/\/\/.*@/, '//<credentials>@')}`);
     logger.info(`Rhythm MongoDB: ${rhythmUri.replace(/\/\/.*@/, '//<credentials>@')}`);
-    
+
     // Connect to MongoDB databases
     cmgClient = new MongoClient(cmgUri);
     await cmgClient.connect();
     const cmgDb = cmgClient.db();
     logger.info('✓ Connected to CMG MongoDB');
-    
+
     rhythmClient = new MongoClient(rhythmUri);
     await rhythmClient.connect();
     const rhythmDb = rhythmClient.db();
     logger.info('✓ Connected to Rhythm MongoDB');
-    
+
     logger.info('✓ Prisma client ready');
     logger.info('');
-    
+
     // Execute migration in order (matching convert.py)
     logger.info('Starting big-bang migration...');
     logger.info('');
-    
+
     // 1. Create roles
     logger.info('[1/11] Creating roles...');
     await createRoles(prisma);
-    
+
     // 2. Create CMG system user
     logger.info('[2/11] Creating CMG system user...');
     const cmgUserId = await createCMGUser(prisma);
-    
+
     // 3. Populate pipeline definitions
     logger.info('[3/11] Populating pipeline definitions...');
     await populatePipelineDefinitions(prisma, cmgUserId);
-    
+
     // 4. Convert users
     logger.info('[4/11] Converting users...');
     await syncUsers(prisma, cmgDb);
-    
+
     // 5. Convert datasets
     logger.info('[5/11] Converting datasets...');
     await syncAllDatasets(prisma, cmgDb);
-    
+
     // 6. Convert dataset audit logs
     logger.info('[6/11] Converting dataset audit logs...');
     await syncAuditLogs(prisma, cmgDb, cmgUserId);
-    
+
     // 7. Convert dataset hierarchies
     logger.info('[7/11] Converting dataset hierarchies...');
     await syncDatasetHierarchies(prisma, cmgDb);
-    
+
     // 8. Convert projects
     logger.info('[8/11] Converting projects...');
     await syncProjects(prisma, cmgDb);
-    
+
     // 9. Convert conversions
     logger.info('[9/11] Converting conversions...');
     await syncConversions(prisma, cmgDb);
-    
+
     // 10. Convert sessions (optional)
     if (options.skipSessions) {
       logger.info('[10/11] Skipping sessions (--skip-sessions flag provided)');
@@ -211,11 +214,11 @@ async function main() {
       logger.info('[10/11] Converting genome browser sessions...');
       await syncSessions(prisma, cmgDb);
     }
-    
+
     // 11. Initialize cursors
     logger.info('[11/11] Initializing poller cursors...');
     await initializeCursors(prisma, cmgDb, rhythmDb);
-    
+
     const duration = ((Date.now() - startTime) / 1000).toFixed(2);
     logger.info('');
     logger.info('='.repeat(80));
@@ -227,7 +230,6 @@ async function main() {
     logger.info('  2. Start the poller sync script: node src/scripts/cmg_poller_sync.js');
     logger.info('  3. Monitor logs for any sync issues');
     logger.info('');
-    
   } catch (error) {
     logger.error('');
     logger.error('='.repeat(80));
@@ -238,7 +240,7 @@ async function main() {
     logger.error('');
     logger.error('The migration has been rolled back. Please fix the error and try again.');
     logger.error('');
-    
+
     process.exit(1);
   } finally {
     // Close connections
@@ -246,12 +248,12 @@ async function main() {
       await cmgClient.close();
       logger.info('Closed CMG MongoDB connection');
     }
-    
+
     if (rhythmClient) {
       await rhythmClient.close();
       logger.info('Closed Rhythm MongoDB connection');
     }
-    
+
     await prisma.$disconnect();
     logger.info('Closed Prisma connection');
   }
@@ -266,4 +268,3 @@ if (require.main === module) {
 }
 
 module.exports = { main };
-
