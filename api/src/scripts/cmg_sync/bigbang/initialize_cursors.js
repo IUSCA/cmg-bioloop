@@ -4,7 +4,7 @@ const logger = require('@/services/logger');
  * Initialize cursor tracking for all pollers
  * Sets initial cursor values based on current max updatedAt in CMG
  */
-async function initializeCursors(prisma, cmgDb, rhythmDb) {
+async function initializeCursors(prisma, cmgDb) {
   logger.info('[BIGBANG] Initializing poller cursors...');
   
   // Get max updatedAt from CMG collections
@@ -14,7 +14,7 @@ async function initializeCursors(prisma, cmgDb, rhythmDb) {
     await getMaxUpdatedAt(cmgDb, 'datasets'),
     await getMaxUpdatedAt(cmgDb, 'dataproducts')
   );
-  const maxWorkflowUpdatedAt = await getMaxUpdatedAt(rhythmDb, 'workflow_meta');
+  const maxSessionUpdatedAt = await getMaxUpdatedAt(cmgDb, 'sessions');
   
   // Initialize cursors for each poller
   const cursors = [
@@ -39,8 +39,13 @@ async function initializeCursors(prisma, cmgDb, rhythmDb) {
       last_cmg_objectid: null,
     },
     {
-      poller_name: 'workflow_status',
-      last_updated_at: maxWorkflowUpdatedAt ? new Date(maxWorkflowUpdatedAt) : new Date(),
+      poller_name: 'project_metadata',
+      last_updated_at: maxProjectUpdatedAt ? new Date(maxProjectUpdatedAt) : new Date(),
+      last_cmg_objectid: null,
+    },
+    {
+      poller_name: 'session_metadata',
+      last_updated_at: maxSessionUpdatedAt ? new Date(maxSessionUpdatedAt) : new Date(),
       last_cmg_objectid: null,
     },
   ];

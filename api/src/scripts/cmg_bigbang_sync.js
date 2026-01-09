@@ -54,8 +54,6 @@ function parseArgs() {
   for (const arg of args) {
     if (arg.startsWith('--cmg-uri=')) {
       [, options.cmgUri] = arg.split('=');
-    } else if (arg.startsWith('--rhythm-uri=')) {
-      [, options.rhythmUri] = arg.split('=');
     } else if (arg === '--skip-sessions') {
       options.skipSessions = true;
     } else if (arg === '--help' || arg === '-h') {
@@ -67,19 +65,13 @@ Options:
   --cmg-uri=<uri>        MongoDB connection string for CMG database
                          Format: mongodb://username:password@host:port/database?authSource=admin
                          
-  --rhythm-uri=<uri>     MongoDB connection string for Rhythm database
-                         (Optional if using environment variables)
-                         
   --skip-sessions        Skip genome browser session conversion (recommended for initial run)
   
   --help, -h             Show this help message
 
-Environment Variables (alternative to --cmg-uri and --rhythm-uri):
+Environment Variables (alternative to --cmg-uri):
   CMG_MONGO_HOST, CMG_MONGO_PORT, CMG_MONGO_DB, CMG_MONGO_USERNAME,
   CMG_MONGO_PASSWORD, CMG_MONGO_AUTH_SOURCE
-  
-  RHYTHM_MONGO_HOST, RHYTHM_MONGO_PORT, RHYTHM_MONGO_DB, RHYTHM_MONGO_USERNAME,
-  RHYTHM_MONGO_PASSWORD, RHYTHM_MONGO_AUTH_SOURCE
 
 Examples:
   # Using command-line URI
@@ -146,28 +138,20 @@ async function main() {
   logger.info('CMG to Bioloop Big-Bang Synchronization');
   logger.info('='.repeat(80));
 
-  let cmgClient; let
-    rhythmClient;
+  let cmgClient;
 
   try {
     // Build connection URIs
     const cmgUri = buildMongoUri('cmg', options.cmgUri);
-    const rhythmUri = buildMongoUri('rhythm', options.rhythmUri);
 
     logger.info('Connecting to databases...');
     logger.info(`CMG MongoDB: ${cmgUri.replace(/\/\/.*@/, '//<credentials>@')}`);
-    logger.info(`Rhythm MongoDB: ${rhythmUri.replace(/\/\/.*@/, '//<credentials>@')}`);
 
     // Connect to MongoDB databases
     cmgClient = new MongoClient(cmgUri);
     await cmgClient.connect();
     const cmgDb = cmgClient.db();
     logger.info('[OK] Connected to CMG MongoDB');
-
-    rhythmClient = new MongoClient(rhythmUri);
-    await rhythmClient.connect();
-    const rhythmDb = rhythmClient.db();
-    logger.info('[OK] Connected to Rhythm MongoDB');
 
     logger.info('[OK] Prisma client ready');
     logger.info('');
@@ -222,7 +206,7 @@ async function main() {
 
     // 11. Initialize cursors
     logger.info('[11/11] Initializing poller cursors...');
-    await initializeCursors(prisma, cmgDb, rhythmDb);
+    await initializeCursors(prisma, cmgDb);
 
     const duration = ((Date.now() - startTime) / 1000).toFixed(2);
     logger.info('');
@@ -252,11 +236,6 @@ async function main() {
     if (cmgClient) {
       await cmgClient.close();
       logger.info('Closed CMG MongoDB connection');
-    }
-
-    if (rhythmClient) {
-      await rhythmClient.close();
-      logger.info('Closed Rhythm MongoDB connection');
     }
 
     await prisma.$disconnect();
