@@ -1,0 +1,115 @@
+const { ObjectId } = require('mongodb');
+const logger = require('@/services/logger');
+const { mapCMGRolesToBioloop } = require('../utils/role_mapper');
+
+/**
+ * Convert CMG users to Bioloop users
+ * Equivalent to: db_conversion/src/convert/entity/user.py::convert_users()
+ */
+async function syncUsers(prisma, cmgDb) {
+  logger.info('[BIGBANG] Converting users...');
+
+  const cmgUsers = await cmgDb.collection('users').find({}).toArray();
+  logger.info(`[BIGBANG] Found ${cmgUsers.length} CMG users to convert`);
+
+  let convertedCount = 0;
+  let skippedCount = 0;
+
+  for (const cmgUser of cmgUsers) {
+    const result = await convertUser(prisma, cmgUser);
+    if (result) {
+      convertedCount++;
+    } else {
+      skippedCount++;
+    }
+  }
+
+  logger.info(`[BIGBANG] User conversion complete: ${convertedCount} succeeded, ${skippedCount} skipped (duplicates)`);
+}
+
+/**
+ * Convert a single CMG user to Bioloop
+ * Equivalent to: db_conversion/src/convert/entity/user.py::convert_user()
+ *
+ * Returns: user object on success, null if user is a duplicate (skipped)
+ * Throws: on any unexpected error
+ */
+async function convertUser(prisma, cmgUser) {
+  // Insert user
+  let user;
+  try {
+    user = await prisma.user.create({
+      data: {
+        username: cmgUser.username,
+        email: cmgUser.email,
+        name: cmgUser.fullname || null,
+        cas_id: cmgUser.username, // CMG uses username as cas_id
+        is_deleted: !cmgUser.active,
+        cmg_id: cmgUser._id.toString(),
+        created_at: cmgUser.createdDate || new Date(),
+      },
+    });
+  } catch (error) {
+    // Only catch unique constraint violations - this is expected for duplicates
+    if (error.code === 'P2002') {
+      logger.warn(`[BIGBANG] Skipping duplicate user: ${cmgUser.email} - ${cmgUser.fullname}`);
+      return null;
+    }
+    // Any other error should propagate up and stop the migration
+    throw error;
+  }
+
+  // Assign roles - let any errors propagate
+  await assignUserRoles(prisma, cmgUser, user.id);
+
+  return user;
+}
+
+/**
+ * Assign roles to a user based on CMG roles
+ * Equivalent to: db_conversion/src/convert/entity/user.py::assign_user_roles()
+ */
+async function assignUserRoles(prisma, cmgUser, userId) {
+  const cmgRoles = cmgUser.roles || [];
+  const bioloopRoleNames = mapCMGRolesToBioloop(cmgRoles);
+
+  // Get all Bioloop roles
+  const bioloopRoles = await prisma.role.findMany({
+    where: {
+      name: { in: bioloopRoleNames },
+    },
+  });
+
+  // Create user_role associations
+  for (const role of bioloopRoles) {
+    await prisma.user_role.create({
+      data: {
+        user_id: userId,
+        role_id: role.id,
+      },
+    });
+  }
+}
+
+/**
+ * Get Bioloop CMG system user ID
+ * Equivalent to: db_conversion/src/convert/entity/user.py::get_bioloop_cmguser_id()
+ */
+async function getBioloopCMGUserId(prisma) {
+  const user = await prisma.user.findUnique({
+    where: { username: 'cmguser' },
+  });
+
+  if (!user) {
+    throw new Error('User "cmguser" not found in the PostgreSQL database');
+  }
+
+  return user.id;
+}
+
+module.exports = {
+  syncUsers,
+  convertUser,
+  assignUserRoles,
+  getBioloopCMGUserId,
+};

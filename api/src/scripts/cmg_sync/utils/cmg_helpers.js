@@ -193,30 +193,71 @@ async function expandGroupsToUserIds(cmgDb, groupIds) {
 
 /**
  * Generate slug from name (for projects)
+ * Equivalent to: db_conversion/src/convert/common.py::generate_slug()
  * 
+ * @param {Object} prisma - Prisma client
  * @param {string} name - Project name
- * @param {string} cmgId - CMG _id for uniqueness
- * @returns {string} Slug
+ * @param {string} cmgId - CMG _id for uniqueness checking
+ * @returns {Promise<string>} Unique slug
  */
-function generateSlug(name, cmgId) {
-  if (!name) {
-    return `project-${cmgId}`.substring(0, 50);
-  }
+async function generateSlug(prisma, name, cmgId) {
+  const NATO_ALPHABET = [
+    'alpha', 'bravo', 'charlie', 'delta', 'echo', 'foxtrot', 'golf', 'hotel',
+    'india', 'juliet', 'kilo', 'lima', 'mike', 'november', 'oscar', 'papa',
+    'quebec', 'romeo', 'sierra', 'tango', 'uniform', 'victor', 'whiskey',
+    'xray', 'yankee', 'zulu',
+  ];
   
-  let slug = name
+  // Normalize name
+  const normalized = name
     .toLowerCase()
     .trim()
-    .replace(/[^a-z0-9\s-]/g, '') // Remove special chars
-    .replace(/\s+/g, '-')         // Spaces to hyphens
-    .replace(/-+/g, '-')          // Multiple hyphens to single
-    .substring(0, 50);            // Limit length
+    .replace(/[\W_]+/g, '-')      // Replace non-alphanumeric with hyphen
+    .replace(/-+/g, '-')           // Multiple hyphens to single
+    .replace(/^-|-$/g, '');        // Remove leading/trailing hyphens
   
-  // If slug is empty or too short, append part of ID
-  if (slug.length < 3) {
-    slug = `${slug}-${cmgId.substring(0, 8)}`;
+  // Check if normalized slug is unique (excluding this project)
+  const isUnique = async (slug) => {
+    const existing = await prisma.project.findFirst({
+      where: {
+        slug: slug,
+        cmg_id: { not: cmgId },
+      },
+    });
+    return !existing;
+  };
+  
+  if (await isUnique(normalized)) {
+    return normalized;
   }
   
-  return slug;
+  // Generate suffixed slugs using NATO alphabet
+  let i = 0;
+  const N = NATO_ALPHABET.length;
+  
+  while (true) {
+    const suffix = i < N ? NATO_ALPHABET[i] : `${NATO_ALPHABET[i % N]}-${Math.floor(i / N)}`;
+    const slug = `${normalized}-${suffix}`;
+    
+    if (await isUnique(slug)) {
+      return slug;
+    }
+    
+    i++;
+    
+    // Safety check to prevent infinite loop
+    if (i > 10000) {
+      throw new Error(`Failed to generate unique slug for project: ${name}`);
+    }
+  }
+}
+
+/**
+ * Expand CMG groups to user IDs (alias for backward compatibility)
+ * @deprecated Use expandGroupsToUserIds instead
+ */
+async function expandGroups(cmgDb, groupIds) {
+  return expandGroupsToUserIds(cmgDb, groupIds);
 }
 
 /**
@@ -243,6 +284,7 @@ module.exports = {
   extractPaths,
   toBigInt,
   expandGroupsToUserIds,
+  expandGroups,
   generateSlug,
   isUpdatedSinceLastSync
 };
