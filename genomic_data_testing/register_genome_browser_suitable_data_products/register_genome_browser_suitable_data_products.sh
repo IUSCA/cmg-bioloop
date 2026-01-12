@@ -1,44 +1,46 @@
 #!/bin/bash
 # =============================================================================
-# Genome Browser Data Downloader
+# Genome Browser Suitable Data Products Registration Script
 # =============================================================================
 #
 # Purpose:
 #   Downloads genome browser compatible test datasets and places them in
-#   individual directories for ingestion by the watch.py script.
+#   individual directories for ingestion by the watch.py script as DATA_PRODUCT.
 #
 # Usage:
-#   ./download_genomic_data.sh [OPTIONS]
+#   ./register_genome_browser_suitable_data_products.sh [OPTIONS]
 #
 # Options:
 #   -d, --destination DIR    Destination directory (default: /opt/sca/data/origin/data_products)
-#   -n, --number NUM         Number of datasets to download (1-4, default: all)
+#   -n, --number NUM         Number of datasets to download (1-3, default: all)
 #   -h, --help              Show this help message
 #
 # Examples:
 #   # Download all datasets to default location
-#   ./download_genomic_data.sh
+#   ./register_genome_browser_suitable_data_products.sh
 #
-#   # Download only the first 2 datasets (smallest files)
-#   ./download_genomic_data.sh -n 2
+#   # Download only the first dataset (smallest file)
+#   ./register_genome_browser_suitable_data_products.sh -n 1
 #
 #   # Download to custom location
-#   ./download_genomic_data.sh -d /opt/sca/data/origin/data_products
+#   ./register_genome_browser_suitable_data_products.sh -d /opt/sca/data/origin/data_products
 #
-#   # Download 3 datasets to custom location
-#   ./download_genomic_data.sh -d /custom/path -n 3
+#   # Download 2 datasets to custom location
+#   ./register_genome_browser_suitable_data_products.sh -d /custom/path -n 2
 #
 # Dataset Information:
 #   Datasets are ordered by size (smallest to largest):
-#   1. bigBed1 (~few KB) - Feature file
-#   2. E017_15_coreMarks_dense.gz (~few MB) - ChromHMM Chromatin States
-#   3. h1.liftedtohg19.gz (~few MB) - Methylation MethylC-seq
-#   4. GSM429321.bigWig (~larger) - H3K4me3 Signal
+#   1. bigBed1 (~few KB) - Peaks/Features file
+#   2. h1.liftedtohg19.gz (~few MB) - Methylation MethylC-seq
+#   3. GSM429321.bigWig (~larger) - H3K4me3 Signal track
 #
 # Note:
 #   - This script executes commands inside the celery_worker service via docker-compose
 #   - Files are downloaded to /tmp first, then moved into directories atomically
-#   - Each file is placed in its own directory for watch.py to detect as a dataset
+#   - Each file is placed in its own directory for watch.py to detect as a DATA_PRODUCT dataset
+#   - Download uses chunked approach (10MB chunks) with retry logic for reliability
+#   - Chunked downloading prevents connection reset issues
+#   - See data_products_info.md for testing ranges and detailed information
 #
 # =============================================================================
 
@@ -46,21 +48,20 @@ set -e
 
 # Default configuration
 DESTINATION="/opt/sca/data/origin/data_products"
-NUM_DATASETS=4  # Default: download all
+NUM_DATASETS=3  # Default: download all
 SERVICE_NAME="celery_worker"
 
 # Dataset definitions (ordered by size: smallest to largest)
 # Format: "filename:url"
 declare -a DATASETS=(
     "bigBed1:https://vizhub.wustl.edu/hubSample/hg19/bigBed1"
-    "E017_15_coreMarks_dense.gz:https://egg.wustl.edu/d/hg19/E017_15_coreMarks_dense.gz"
     "h1.liftedtohg19.gz:https://vizhub.wustl.edu/public/hg19/methylc2/h1.liftedtohg19.gz"
     "GSM429321.bigWig:https://vizhub.wustl.edu/hubSample/hg19/GSM429321.bigWig"
 )
 
 # Parse command line arguments
 show_help() {
-    head -n 45 "$0" | tail -n +2 | sed 's/^# \?//'
+    head -n 43 "$0" | tail -n +2 | sed 's/^# \?//'
     exit 0
 }
 
@@ -72,8 +73,8 @@ while [[ $# -gt 0 ]]; do
             ;;
         -n|--number)
             NUM_DATASETS="$2"
-            if ! [[ "$NUM_DATASETS" =~ ^[1-4]$ ]]; then
-                echo "Error: Number must be between 1 and 4"
+            if ! [[ "$NUM_DATASETS" =~ ^[1-3]$ ]]; then
+                echo "Error: Number must be between 1 and 3"
                 exit 1
             fi
             shift 2
@@ -102,7 +103,7 @@ if ! docker-compose ps "$SERVICE_NAME" 2>/dev/null | grep -q "Up"; then
 fi
 
 echo "================================"
-echo "Genome Browser Data Downloader"
+echo "Genome Browser Data Products Registration"
 echo "================================"
 echo "Service: $SERVICE_NAME"
 echo "Destination: $DESTINATION"
@@ -137,15 +138,49 @@ for i in $(seq 0 $((NUM_DATASETS - 1))); do
         TMP_DIR=\$(mktemp -d)
         cd \$TMP_DIR
         
-        # Download the file
-        echo '  Downloading...'
-        if curl -L -f -o '$filename' '$url' 2>&1; then
-            echo '  ✓ Download complete'
-        else
-            echo '  ✗ Download failed'
+        # Download the file using chunked download to avoid connection resets
+        echo '  Downloading in chunks...'
+        
+        # Get file size from server
+        FILE_SIZE=\$(curl -sIL '$url' | grep -i content-length | tail -1 | awk '{print \$2}' | tr -d '\\r')
+        
+        if [ -z \"\$FILE_SIZE\" ] || [ \"\$FILE_SIZE\" -eq 0 ]; then
+            echo '  ✗ Could not determine file size'
             rm -rf \$TMP_DIR
             exit 1
         fi
+        
+        echo \"  Total size: \$FILE_SIZE bytes\"
+        
+        CHUNK_SIZE=$((10*1024*1024))   # 10 MiB chunks
+        
+        # Initialize empty file
+        touch '$filename'
+        
+        # Get current size (resume capability)
+        CUR_SIZE=\$(stat -f%z '$filename' 2>/dev/null || stat -c%s '$filename' 2>/dev/null || echo 0)
+        echo \"  Have \$CUR_SIZE / \$FILE_SIZE bytes\"
+        
+        start=\$CUR_SIZE
+        
+        while [ \"\$start\" -lt \"\$FILE_SIZE\" ]; do
+            end=\$((start + CHUNK_SIZE - 1))
+            if [ \"\$end\" -ge \"\$FILE_SIZE\" ]; then end=\$((FILE_SIZE - 1)); fi
+            
+            echo \"  Fetching bytes \$start-\$end\"
+            
+            if curl -L --fail --retry 50 --retry-delay 2 --retry-all-errors \
+                -H \"Range: bytes=\$start-\$end\" \
+                \"$url\" >> '$filename'; then
+                start=\$((end + 1))
+            else
+                echo '  ✗ Download chunk failed'
+                rm -rf \$TMP_DIR
+                exit 1
+            fi
+        done
+        
+        echo '  ✓ Download complete'
         
         # Verify file was downloaded
         if [ ! -f '$filename' ]; then
@@ -182,17 +217,18 @@ for i in $(seq 0 $((NUM_DATASETS - 1))); do
 done
 
 echo "================================"
-echo "Download complete!"
+echo "Registration complete!"
 echo "================================"
 echo ""
 echo "Downloaded datasets are in individual directories at:"
 echo "  $DESTINATION"
 echo ""
-echo "The watch.py script should detect these new directories and begin registration."
+echo "The watch.py script should detect these new directories and register them as DATA_PRODUCT."
 echo ""
 echo "To verify datasets were created:"
 echo "  docker-compose exec $SERVICE_NAME ls -la $DESTINATION"
 echo ""
 echo "To check dataset file contents:"
 echo "  docker-compose exec $SERVICE_NAME find $DESTINATION -type f"
+
 
