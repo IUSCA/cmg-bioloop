@@ -4,7 +4,8 @@
 name: cmg-bioloop-2
 services:
   ui:
-    image: node:21
+    restart: unless-stopped
+    image: node:20
     ports:
       - 127.0.0.1:443:443
     env_file:
