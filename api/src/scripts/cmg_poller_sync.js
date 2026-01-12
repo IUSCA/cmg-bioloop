@@ -7,11 +7,21 @@
  * Runs after big-bang migration to keep data in sync.
  *
  * Usage:
- *   node src/scripts/cmg_poller_sync.js
+ *   node src/scripts/cmg_poller_sync.js [options]
+ *
+ * Options:
+ *   --clear-locks    Clear any existing process locks before starting
+ *   --help, -h       Show help message
  *
  * Environment Variables (via config system):
  *   CMG_MONGO_HOST, CMG_MONGO_PORT, CMG_MONGO_DB, etc.
- *   RHYTHM_MONGO_HOST, RHYTHM_MONGO_PORT, RHYTHM_MONGO_DB, etc.
+ *
+ * Examples:
+ *   # Normal run (will fail if another instance is running)
+ *   node src/scripts/cmg_poller_sync.js
+ *
+ *   # Clear stale locks before starting
+ *   node src/scripts/cmg_poller_sync.js --clear-locks
  *
  * Pollers:
  * - user_roles: Syncs user role changes
@@ -22,10 +32,11 @@
  * - session_metadata: Syncs genome browser session metadata (title, access, staging, etc.)
  */
 
+require('module-alias/register');
 const config = require('config');
 // eslint-disable-next-line import/no-unresolved
 const { MongoClient } = require('mongodb');
-const prisma = require('@/db');
+const { PrismaClient } = require('@prisma/client');
 const logger = require('@/services/logger');
 
 // Poller classes
@@ -36,6 +47,54 @@ const DatasetMetadataPoller = require('./cmg_sync/pollers/dataset_metadata_polle
 const ProjectMetadataPoller = require('./cmg_sync/pollers/project_metadata_poller');
 const SessionMetadataPoller = require('./cmg_sync/pollers/session_metadata_poller');
 
+// Process lock manager
+const {
+  acquireProcessLock,
+  releaseProcessLock,
+  forceReleaseAllProcessLocks,
+  POLLER_LOCK_TTL_MS,
+} = require('./cmg_sync/process_lock_manager');
+
+/**
+ * Parse command line arguments
+ */
+function parseArgs() {
+  const args = process.argv.slice(2);
+  const options = {
+    clearLocks: false,
+  };
+
+  args.forEach((arg) => {
+    if (arg === '--clear-locks') {
+      options.clearLocks = true;
+    } else if (arg === '--help' || arg === '-h') {
+      // eslint-disable-next-line no-console
+      console.log('');
+      // eslint-disable-next-line no-console
+      console.log('CMG to Bioloop Incremental Poller Sync');
+      // eslint-disable-next-line no-console
+      console.log('');
+      // eslint-disable-next-line no-console
+      console.log('Usage:');
+      // eslint-disable-next-line no-console
+      console.log('  node src/scripts/cmg_poller_sync.js [options]');
+      // eslint-disable-next-line no-console
+      console.log('');
+      // eslint-disable-next-line no-console
+      console.log('Options:');
+      // eslint-disable-next-line no-console
+      console.log('  --clear-locks    Clear any existing process locks before starting');
+      // eslint-disable-next-line no-console
+      console.log('  --help, -h       Show this help message');
+      // eslint-disable-next-line no-console
+      console.log('');
+      process.exit(0);
+    }
+  });
+
+  return options;
+}
+
 /**
  * Build MongoDB connection URI from config
  */
@@ -44,7 +103,7 @@ function buildMongoUri(dbType) {
   const dbConfig = config.get(configKey);
 
   const {
-    host, port, database, username, password, authSource,
+    host, port, database, username, password,
   } = dbConfig;
 
   if (!host || !database) {
@@ -59,17 +118,13 @@ function buildMongoUri(dbType) {
 
   uri += `${host}:${port}/${database}`;
 
-  if (authSource) {
-    uri += `?authSource=${authSource}`;
-  }
-
   return uri;
 }
 
 /**
  * Setup graceful shutdown handlers
  */
-function setupGracefulShutdown(pollers, cmgClient) {
+function setupGracefulShutdown(pollers, cmgClient, prisma, lockAcquired) {
   const shutdown = async (signal) => {
     logger.info('');
     logger.info('='.repeat(80));
@@ -83,14 +138,21 @@ function setupGracefulShutdown(pollers, cmgClient) {
       logger.info(`  - ${poller.pollerName} stopped`);
     });
 
+    // Release process lock
+    if (lockAcquired && prisma) {
+      await releaseProcessLock(prisma, 'poller');
+    }
+
     // Close connections
     if (cmgClient) {
       await cmgClient.close();
       logger.info('Closed CMG MongoDB connection');
     }
 
-    await prisma.$disconnect();
-    logger.info('Closed Prisma connection');
+    if (prisma) {
+      await prisma.$disconnect();
+      logger.info('Closed Prisma connection');
+    }
 
     logger.info('');
     logger.info('[OK] Shutdown complete');
@@ -144,14 +206,51 @@ function startMetricsReporter(pollers) {
  * Main poller function
  */
 async function main() {
+  const options = parseArgs();
+
   logger.info('='.repeat(80));
   logger.info('CMG to Bioloop Incremental Poller Sync');
   logger.info('='.repeat(80));
 
   let cmgClient;
+  let prisma;
+  let lockAcquired = false;
   const pollers = [];
 
   try {
+    // Create dedicated Prisma instance for pollers (shared across all pollers)
+    prisma = new PrismaClient();
+    logger.info('[OK] Prisma client created (shared by all pollers)');
+
+    // Clear existing locks if requested
+    if (options.clearLocks) {
+      logger.warn('[CLEAR-LOCKS] Clearing all existing process locks...');
+      const count = await forceReleaseAllProcessLocks(prisma);
+      logger.warn(`[CLEAR-LOCKS] Released ${count} process lock(s)`);
+    }
+
+    // Acquire process lock BEFORE starting pollers
+    lockAcquired = await acquireProcessLock(prisma, 'poller', POLLER_LOCK_TTL_MS);
+
+    if (!lockAcquired) {
+      logger.error('');
+      logger.error('='.repeat(80));
+      logger.error('[FAILED] Another poller process is already running');
+      logger.error('='.repeat(80));
+      logger.error(
+        'If you are certain no other instance is running, you can restart with:',
+      );
+      logger.error('  node src/scripts/cmg_poller_sync.js --clear-locks');
+      logger.error('');
+      logger.error('Or manually clear the lock via Prisma:');
+      logger.error(
+        '  prisma.cmg_sync_process_lock.update({ where: { process_name: "poller" },',
+      );
+      logger.error('    data: { locked_by: null, lock_expires_at: null } })');
+      logger.error('');
+      process.exit(1);
+    }
+
     // Build connection URIs
     const cmgUri = buildMongoUri('cmg');
 
@@ -167,8 +266,6 @@ async function main() {
     await cmgClient.connect();
     const cmgDb = cmgClient.db();
     logger.info('[OK] Connected to CMG MongoDB');
-
-    logger.info('[OK] Prisma client ready');
     logger.info('');
 
     // Initialize pollers
@@ -221,7 +318,7 @@ async function main() {
     logger.info('');
 
     // Setup graceful shutdown
-    setupGracefulShutdown(pollers, cmgClient);
+    setupGracefulShutdown(pollers, cmgClient, prisma, lockAcquired);
 
     // Log metrics periodically
     startMetricsReporter(pollers);
@@ -233,8 +330,17 @@ async function main() {
     logger.error('='.repeat(80));
     logger.error('[FAILED] Poller initialization failed');
     logger.error('='.repeat(80));
-    logger.error('Error:', error);
-    logger.error('Stack:', error.stack);
+    logger.error('Error Message:', error.message);
+    logger.error('Error Name:', error.name);
+    if (error.code) {
+      logger.error('Error Code:', error.code);
+    }
+    if (error.stack) {
+      logger.error('Stack Trace:');
+      logger.error(error.stack);
+    }
+    // Log full error object for debugging
+    logger.error('Full Error Object:', JSON.stringify(error, Object.getOwnPropertyNames(error), 2));
     logger.error('');
 
     // Cleanup
@@ -242,11 +348,18 @@ async function main() {
       poller.stop();
     });
 
+    // Release process lock on failure
+    if (lockAcquired && prisma) {
+      await releaseProcessLock(prisma, 'poller');
+    }
+
     if (cmgClient) {
       await cmgClient.close();
     }
 
-    await prisma.$disconnect();
+    if (prisma) {
+      await prisma.$disconnect();
+    }
 
     process.exit(1);
   }

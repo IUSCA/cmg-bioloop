@@ -1,5 +1,5 @@
-const BasePoller = require('./base_poller');
 const logger = require('@/services/logger');
+const BasePoller = require('./base_poller');
 
 /**
  * Project Metadata Poller
@@ -61,4 +61,3 @@ class ProjectMetadataPoller extends BasePoller {
 }
 
 module.exports = ProjectMetadataPoller;
-

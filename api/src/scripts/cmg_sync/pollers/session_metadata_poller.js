@@ -1,5 +1,5 @@
-const BasePoller = require('./base_poller');
 const logger = require('@/services/logger');
+const BasePoller = require('./base_poller');
 
 /**
  * Session Metadata Poller
@@ -72,4 +72,3 @@ class SessionMetadataPoller extends BasePoller {
 }
 
 module.exports = SessionMetadataPoller;
-

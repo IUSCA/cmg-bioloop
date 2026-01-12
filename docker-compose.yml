@@ -26,7 +26,7 @@ services:
       - tests/.env.default # Variables needed for testing user information
       - db/postgres/.env.default # For Postgres connection settings
       - api/.env.default  # For all default settings
-      # - api/.env? # For keys made after the first run
+      - api/.env # For keys and overrides made after the first run
     volumes:
       - ./api:/opt/sca/app
       - ./workers/:/opt/sca/app/workers/ # You don't need this in production.  This allows common volume space into the workers folder so we can create api token in .env config on api startup if needed.  You should create this manually in production and not mount workers into api.

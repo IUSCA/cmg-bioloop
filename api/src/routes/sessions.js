@@ -4,6 +4,7 @@ const config = require('config');
 const fs = require('fs');
 const path = require('path');
 const createError = require('http-errors');
+const { DONE_STATUSES, DATA_REQUEST_STATUS } = require('@/constants');
 const logger = require('@/services/logger');
 const prisma = require('@/db');
 const asyncHandler = require('../middleware/asyncHandler');
@@ -27,6 +28,72 @@ const isPermittedTo = accessControl('sessions');
 
 // Helper function to get analysis type from dataset metadata
 const getAnalysisType = (dataset) => dataset?.metadata?.analysis_type || null;
+
+/**
+ * Evaluate data request status for a session based on workflow states
+ * @param {Object} session - Session object with session_tracks populated
+ * @returns {Object} { requested: boolean, all_staged: boolean, request_status?: 'PENDING' | 'COMPLETE' }
+ */
+function evaluateDataRequestStatus(session) {
+  if (!session?.session_tracks || session.session_tracks.length === 0) {
+    return { requested: false, all_staged: true };
+  }
+
+  // Get unique datasets from session tracks
+  const datasetMap = new Map();
+  session.session_tracks.forEach((st) => {
+    const dataset = st.track?.dataset_file?.dataset;
+    if (dataset) {
+      datasetMap.set(dataset.id, dataset);
+    }
+  });
+
+  const datasets = Array.from(datasetMap.values());
+
+  // Check if any datasets are unstaged
+  const unstagedDatasets = datasets.filter((ds) => !ds.is_staged);
+
+  if (unstagedDatasets.length === 0) {
+    // All datasets are staged - no request needed
+    return { requested: false, all_staged: true };
+  }
+
+  // Check workflow status for unstaged datasets
+  let hasPendingWorkflows = false;
+  let allHaveWorkflows = true;
+
+  unstagedDatasets.forEach((ds) => {
+    const workflows = ds.workflows || [];
+    const stageWorkflows = workflows.filter((wf) => wf.name === 'Stage');
+
+    if (stageWorkflows.length === 0) {
+      // No stage workflow exists for this dataset
+      allHaveWorkflows = false;
+    } else {
+      // Check if any stage workflow is still pending/running
+      const hasActiveWorkflow = stageWorkflows.some(
+        (wf) => !DONE_STATUSES.includes(wf.status),
+      );
+      if (hasActiveWorkflow) {
+        hasPendingWorkflows = true;
+      }
+    }
+  });
+
+  // If no workflows exist for unstaged datasets, data not requested
+  if (!allHaveWorkflows && !hasPendingWorkflows) {
+    return { requested: false, all_staged: false };
+  }
+
+  // Data has been requested
+  return {
+    requested: true,
+    all_staged: false,
+    request_status: hasPendingWorkflows || !allHaveWorkflows
+      ? DATA_REQUEST_STATUS.PENDING
+      : DATA_REQUEST_STATUS.COMPLETE,
+  };
+}
 
 /**
  * Compute file's relative path for file exposure
@@ -587,7 +654,11 @@ router.get(
               include: {
                 dataset_file: {
                   include: {
-                    dataset: true,
+                    dataset: {
+                      include: {
+                        workflows: true,
+                      },
+                    },
                   },
                 },
               },
@@ -623,7 +694,13 @@ router.get(
       data: { access_count: { increment: 1 } },
     });
 
-    res.json(session);
+    // Evaluate data request status dynamically
+    const dataRequestStatus = evaluateDataRequestStatus(session);
+
+    res.json({
+      ...session,
+      data_requested: dataRequestStatus,
+    });
   }),
 );
 
@@ -1262,9 +1339,72 @@ fileExposureRouter.get(
   }),
 );
 
-// POST /sessions/:id/stage
+// GET /sessions/:id/datasets - Get datasets for a session with optional staging filter
+router.get(
+  '/:id/datasets',
+  isPermittedTo('read'),
+  [
+    param('id').isInt().toInt(),
+    query('staged').optional().isBoolean().toBoolean(),
+  ],
+  asyncHandler(async (req, res) => {
+    const sessionId = req.params.id;
+    const stagedFilter = req.query.staged;
+
+    const session = await prisma.genome_browser_session.findUnique({
+      where: { id: sessionId },
+      include: {
+        session_tracks: {
+          include: {
+            track: {
+              include: {
+                dataset_file: {
+                  include: {
+                    dataset: {
+                      include: {
+                        genomic_details: true,
+                        workflows: true,
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!session) {
+      return res.status(404).json({ error: 'Session not found' });
+    }
+
+    // Get unique datasets
+    const datasetMap = new Map();
+
+    session.session_tracks.forEach((st) => {
+      const dataset = st.track.dataset_file?.dataset;
+      if (dataset) {
+        // Apply staged filter if provided
+        if (stagedFilter === undefined || dataset.is_staged === stagedFilter) {
+          datasetMap.set(dataset.id, dataset);
+        }
+      }
+    });
+
+    const datasets = Array.from(datasetMap.values());
+
+    res.json({
+      count: datasets.length,
+      datasets,
+    });
+  }),
+);
+
+// POST /sessions/:id/stage-datasets - Stage all unstaged datasets for a session (idempotent)
 router.post(
-  '/:id/stage',
+  '/:id/stage-datasets',
+  isPermittedTo('read'),
   [param('id').isInt().toInt()],
   asyncHandler(async (req, res) => {
     const sessionId = req.params.id;
@@ -1293,22 +1433,91 @@ router.post(
     }
 
     // Get unique datasets that need staging
-    const datasetsToStage = [...new Set(
-      session.session_tracks
-        .filter((st) => !st.track.dataset_file?.dataset?.is_staged)
-        .map((st) => st.track.dataset_file?.dataset?.id)
-        .filter(Boolean),
-    )];
+    const unstagedDatasetMap = new Map();
 
-    if (datasetsToStage.length === 0) {
-      return res.json({ message: 'All datasets are already staged' });
+    session.session_tracks.forEach((st) => {
+      const dataset = st.track.dataset_file?.dataset;
+      if (dataset && !dataset.is_staged) {
+        unstagedDatasetMap.set(dataset.id, dataset);
+      }
+    });
+
+    const unstagedDatasets = Array.from(unstagedDatasetMap.values());
+
+    if (unstagedDatasets.length === 0) {
+      // Update session to mark data as not requested if all staged
+      await prisma.genome_browser_session.update({
+        where: { id: sessionId },
+        data: { data_requested: false },
+      });
+
+      return res.json({
+        success: true,
+        message: 'All datasets are already staged',
+        results: [],
+        all_successful: true,
+      });
     }
 
-    // Return the datasets that need staging so the frontend can call the staging workflow
-    res.json({
-      message: 'Datasets need staging',
-      datasets: datasetsToStage,
-      note: 'Use the dataset staging workflow to stage these datasets individually',
+    // Set data_requested to true before attempting any workflow submissions
+    await prisma.genome_browser_session.update({
+      where: { id: sessionId },
+      data: { data_requested: true },
+    });
+
+    // Track results for each dataset
+    const stagingResults = [];
+
+    // Process each dataset
+    for (const dataset of unstagedDatasets) {
+      try {
+        // Get dataset with workflows (create_workflow needs this to check for duplicates)
+        const datasetWithWorkflows = await prisma.dataset.findUnique({
+          where: { id: dataset.id },
+          include: {
+            workflows: true,
+          },
+        });
+
+        // Create staging workflow (will throw AssertionError if workflow already running/pending)
+        const workflow = await datasetService.create_workflow(
+          datasetWithWorkflows,
+          'Stage',
+          req.user.id,
+        );
+
+        stagingResults.push({
+          dataset_id: dataset.id,
+          dataset_name: dataset.name,
+          success: true,
+          workflow_id: workflow.workflow_id,
+        });
+
+        logger.info(`[Session ${sessionId}] Started staging workflow for dataset ${dataset.id}`);
+      } catch (error) {
+        logger.error(`[Session ${sessionId}] Failed to start staging for dataset ${dataset.id}:`, error);
+        stagingResults.push({
+          dataset_id: dataset.id,
+          dataset_name: dataset.name,
+          success: false,
+          error: error.message,
+        });
+      }
+    }
+
+    const successCount = stagingResults.filter((r) => r.success).length;
+    const failureCount = stagingResults.length - successCount;
+
+    // Return appropriate status code based on results
+    const statusCode = failureCount === 0 ? 200 : (successCount > 0 ? 207 : 500);
+
+    return res.status(statusCode).json({
+      success: failureCount === 0,
+      message: failureCount === 0
+        ? `Successfully requested staging for ${successCount} dataset(s)`
+        : `Staging requested for ${successCount} dataset(s), ${failureCount} failed`,
+      results: stagingResults,
+      all_successful: failureCount === 0,
     });
   }),
 );

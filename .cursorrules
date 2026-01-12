@@ -18,6 +18,77 @@ Key patterns to remember:
 - Use transactions for data consistency
 - Page components should be minimal, delegating to list components
 - Use icons instead of buttons for actions
+- Always check permissions before allowing operations
+
+# Allowlisted Commands (Read-Only + Safe)
+
+## System Information
+- whoami
+- uname -a
+- lsb_release -a
+- cat /etc/os-release
+- df -h
+- du -sh *
+- free -h
+- top -n 1
+- uptime
+- date
+- env
+- printenv
+
+## Directory & File Inspection
+- ls -al
+- ls -lh
+- tree
+- pwd
+- stat
+- file
+- head -n 50
+- tail -n 50
+- cat
+- less
+- more
+- wc -l
+- grep
+- find . -type f
+- find . -type d
+
+## Networking (Read-Only)
+- ifconfig
+- ip addr
+- ip route
+- netstat -tulpn
+- ss -tulpn
+- ping -c 4
+- curl -I
+- wget --spider
+
+## Git & Repo Status
+- git status
+- git log --oneline
+- git diff
+- git branch
+- git remote -v
+- git show
+
+## Docker (Read-Only) – with sudo
+- docker ps
+- docker ps -a
+- docker images
+- docker logs --tail 50
+- docker network ls
+- docker volume ls
+- docker inspect
+
+## Node.js & NPM (Read-Only)
+- node -v
+- npm -v
+- npm list --depth=0
+
+## Python & Pip (Read-Only)
+- python3 --version
+- pip --version
+- pip list
 
 
 # Bioloop Coding Conventions & Preferences
@@ -123,6 +194,42 @@ const session = await prisma.genome_browser_session.findUnique({
 ---
 
 ## 2. API Development Conventions
+
+### Import Organization
+
+**ALWAYS organize imports at the top of JavaScript files:**
+
+```javascript
+// ✅ CORRECT - Imports at the top
+const express = require('express');
+const { body, param, query } = require('express-validator');
+const prisma = require('@/db');
+const asyncHandler = require('@/middleware/asyncHandler');
+const { accessControl } = require('@/middleware/auth');
+const createError = require('http-errors');
+const logger = require('@/services/logger');
+const datasetService = require('@/services/dataset');
+
+const router = express.Router();
+const isPermittedTo = accessControl('sessions');
+
+// Route definitions below...
+```
+
+**Import Order (recommended):**
+1. External dependencies (express, lodash, etc.)
+2. Validation libraries (express-validator)
+3. Database clients (`@/db`)
+4. Middleware (`@/middleware/*`)
+5. Services (`@/services/*`)
+6. Utilities (`@/utils/*`)
+7. Constants and configuration
+
+**Key Points:**
+- All `require()` statements should be at the top of the file
+- Avoid importing modules inside route handlers or functions
+- Group related imports together
+- Use blank lines to separate import groups
 
 ### Prisma Instance Reuse
 

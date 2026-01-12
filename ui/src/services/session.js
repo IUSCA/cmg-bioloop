@@ -115,6 +115,26 @@ class SessionService {
   getProjects(id) {
     return api.get(`/sessions/${id}/projects`);
   }
+
+  /**
+   * Get datasets for a session
+   * @param {number} id - Session ID
+   * @param {Object} params - Query parameters
+   * @param {boolean} params.staged - Filter by staged status (optional)
+   * @returns {Promise<Object>} Datasets data
+   */
+  getDatasets(id, params = {}) {
+    return api.get(`/sessions/${id}/datasets`, { params });
+  }
+
+  /**
+   * Stage all unstaged datasets for a session
+   * @param {number} id - Session ID
+   * @returns {Promise<Object>} Staging results
+   */
+  stageDatasets(id) {
+    return api.post(`/sessions/${id}/stage-datasets`);
+  }
 }
 
 export default new SessionService();

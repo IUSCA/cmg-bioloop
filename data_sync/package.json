@@ -1,0 +1,38 @@
+{
+  "name": "cmg-bioloop-data-sync",
+  "version": "1.0.0",
+  "description": "CMG to Bioloop database synchronization scripts",
+  "main": "src/bigbang_sync.js",
+  "scripts": {
+    "bigbang": "node src/bigbang_sync.js",
+    "poller": "node src/poller_sync.js",
+    "prisma:generate": "prisma generate --schema=/opt/sca/api/prisma/schema.prisma",
+    "prisma:migrate": "prisma migrate deploy --schema=/opt/sca/api/prisma/schema.prisma",
+    "prisma:studio": "prisma studio --schema=/opt/sca/api/prisma/schema.prisma"
+  },
+  "keywords": [
+    "cmg",
+    "bioloop",
+    "migration",
+    "sync"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@prisma/client": "5.20.0",
+    "config": "^3.3.9",
+    "module-alias": "^2.2.3",
+    "mongodb": "5.9.2",
+    "winston": "^3.10.0"
+  },
+  "devDependencies": {
+    "prisma": "5.20.0"
+  },
+  "prisma": {
+    "schema": "/opt/sca/api/prisma/schema.prisma"
+  },
+  "_moduleAliases": {
+    "@": "src"
+  }
+}
+

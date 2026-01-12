@@ -51,8 +51,20 @@ The poller system consists of 5 independent pollers:
 
 ```bash
 cd /opt/sca/app  # Or your project root
+
+# Normal run (will fail if another instance is running)
 node src/scripts/cmg_poller_sync.js
+
+# Clear stale locks before starting
+node src/scripts/cmg_poller_sync.js --clear-locks
+
+# Show help
+node src/scripts/cmg_poller_sync.js --help
 ```
+
+**Command-line Options:**
+- `--clear-locks`: Clear any existing process locks before starting (useful if previous instance crashed)
+- `--help, -h`: Show usage information
 
 ### Method 2: PM2 (Production - Recommended)
 
@@ -96,7 +108,6 @@ All configuration comes from the config system (environment variables):
 CMG_MONGO_HOST=commons3.sca.iu.edu
 CMG_MONGO_PORT=27017
 CMG_MONGO_DB=cmg
-CMG_MONGO_AUTH_SOURCE=admin
 CMG_MONGO_USERNAME=cmg
 CMG_MONGO_PASSWORD=password
 ```
@@ -106,7 +117,6 @@ CMG_MONGO_PASSWORD=password
 RHYTHM_MONGO_HOST=rhythm-host
 RHYTHM_MONGO_PORT=27018
 RHYTHM_MONGO_DB=celery
-RHYTHM_MONGO_AUTH_SOURCE=admin
 RHYTHM_MONGO_USERNAME=appuser
 RHYTHM_MONGO_PASSWORD=password
 ```
@@ -248,19 +258,42 @@ Each error entry includes:
 
 ```bash
 # Test MongoDB connection
-mongosh "mongodb://user:pass@host:27017/cmg?authSource=admin"
+mongosh "mongodb://user:pass@host:27017/cmg"
 
 # Check cursors exist
 psql -d bioloop -c "SELECT * FROM cmg_sync_cursor;"
 ```
 
-### Poller Stuck
+### Poller Stuck / Another Instance Running
 
+If you see the error: `[FAILED] Another poller process is already running`
+
+**Option 1: Restart with --clear-locks flag (Recommended)**
+```bash
+# Kill the stuck process first
+pm2 stop cmg-poller
+
+# Restart with lock clearing
+node src/scripts/cmg_poller_sync.js --clear-locks
+
+# Or if using PM2, manually clear locks then restart
+pm2 restart cmg-poller
+```
+
+**Option 2: Manually clear process locks in database**
 ```sql
--- Check for stuck locks
+-- Check for stuck process locks
+SELECT * FROM cmg_sync_process_lock WHERE locked_by IS NOT NULL;
+
+-- Force release process lock
+UPDATE cmg_sync_process_lock 
+SET locked_by = NULL, lock_expires_at = NULL 
+WHERE process_name = 'poller';
+
+-- Also check individual poller locks
 SELECT * FROM cmg_sync_cursor WHERE locked_by IS NOT NULL;
 
--- Force release lock
+-- Force release individual poller lock (if needed)
 UPDATE cmg_sync_cursor 
 SET locked_by = NULL, lock_expires_at = NULL 
 WHERE poller_name = 'user_roles';
@@ -270,6 +303,8 @@ Then restart:
 ```bash
 pm2 restart cmg-poller
 ```
+
+**Note:** Process-level locks (`cmg_sync_process_lock`) prevent multiple poller script instances. Individual poller locks (`cmg_sync_cursor`) prevent concurrent runs of the same poller type.
 
 ### High Error Rate
 

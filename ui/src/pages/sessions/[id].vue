@@ -56,6 +56,36 @@
                 <span class="font-medium">Last Updated</span>
                 <span>{{ datetime.fromNow(session.updated_at) }}</span>
               </div>
+              <div class="flex justify-between">
+                <span class="font-medium">Data Status</span>
+                <div class="flex items-center gap-2">
+                  <va-icon
+                    :name="
+                      session.data_requested?.all_staged
+                        ? 'check_circle'
+                        : session.data_requested?.requested
+                          ? 'hourglass_empty'
+                          : 'warning'
+                    "
+                    :color="
+                      session.data_requested?.all_staged
+                        ? 'success'
+                        : session.data_requested?.requested
+                          ? 'warning'
+                          : 'danger'
+                    "
+                  />
+                  <span class="text-sm">
+                    {{
+                      session.data_requested?.all_staged
+                        ? 'All Staged'
+                        : session.data_requested?.requested
+                          ? `Staging ${session.data_requested.request_status || 'PENDING'}`
+                          : 'Not Staged'
+                    }}
+                  </span>
+                </div>
+              </div>
             </va-card-content>
           </va-card>
 
@@ -92,6 +122,24 @@
                   Delete Session
                 </va-button>
 
+                <!-- Retry Staging Button - shown if data requested and staging pending -->
+                <va-button
+                  v-if="
+                    session.data_requested?.requested &&
+                    session.data_requested?.request_status === 'PENDING' &&
+                    canRetryStaging
+                  "
+                  color="warning"
+                  border-color="warning"
+                  class="flex-initial"
+                  preset="secondary"
+                  :loading="retryingStagingLoading"
+                  @click="retryStaging"
+                >
+                  <i-mdi-refresh class="pr-2 text-2xl" />
+                  Retry Staging
+                </va-button>
+
                 <!-- Share Session Action Button-->
                 <va-button
                   class="flex-initial"
@@ -105,6 +153,15 @@
               </div>
             </va-card-content>
           </va-card>
+        </div>
+
+        <!-- Associated Datasets Table -->
+        <div class="grid grid-cols-1 gap-3">
+          <SessionDatasetsTable
+            :session-id="session?.id"
+            :data-requested="session?.data_requested?.requested || false"
+            @datasets-updated="handleDatasetsUpdated"
+          />
         </div>
 
         <!-- Associated Tracks Information -->
@@ -385,6 +442,14 @@
       @update="router.push('/sessions')"
     />
 
+    <!-- Unstaged Datasets Modal -->
+    <UnstagedDatasetsModal
+      v-model="showUnstagedModal"
+      :session-id="session?.id"
+      @close="showUnstagedModal = false"
+      @staging-requested="handleStagingRequested"
+    />
+
     <!-- Browser Selection Modal -->
     <BrowserSelectionModal
       v-model="showBrowserSelectionModal"
@@ -429,6 +494,8 @@
 import BrowserSelectionModal from '@/components/genomeBrowser/BrowserSelectionModal.vue';
 import WashUBrowser from '@/components/genomeBrowser/WashUBrowser.vue';
 import DeleteSessionModal from '@/components/sessions/DeleteSessionModal.vue';
+import SessionDatasetsTable from '@/components/sessions/SessionDatasetsTable.vue';
+import UnstagedDatasetsModal from '@/components/sessions/UnstagedDatasetsModal.vue';
 import TracksAsyncAutoComplete from '@/components/tracks/TracksAsyncAutoComplete.vue';
 import AddEditButton from '@/components/utils/buttons/AddEditButton.vue';
 import constants from '@/constants';
@@ -465,6 +532,9 @@ const showTracksModal = ref(false);
 const updatingTracks = ref(false);
 const selectedTracks = ref([]);
 const trackSearch = ref('');
+const canRetryStaging = ref(false);
+const retryingStagingLoading = ref(false);
+const lastStagingStatus = ref(null);
 
 // Computed
 const session = computed(() => sessionsStore.currentSession);
@@ -542,6 +612,9 @@ const _stagedTracksCount = computed(() => {
 
 // Genome Browser constants
 const { browserTypes: BROWSER_TYPES, browserTitles: BROWSER_TITLES } = constants.genomeBrowser;
+
+// Unstaged datasets modal
+const showUnstagedModal = ref(false);
 
 // Genome Browser state (generic for IGV and WashU)
 const showBrowserSelectionModal = ref(false);
@@ -752,9 +825,101 @@ const _handleSessionUpdated = (_updatedSession) => {
 };
 
 /**
+ * Check for unstaged datasets before opening genome browser
+ */
+const checkUnstagedDatasets = async () => {
+  if (!session.value) return false;
+
+  try {
+    const response = await sessionService.getDatasets(session.value.id, { staged: false });
+    const unstagedDatasets = response.data.datasets || [];
+
+    if (unstagedDatasets.length > 0) {
+      // Show modal with unstaged datasets
+      showUnstagedModal.value = true;
+      return true; // Has unstaged datasets
+    }
+
+    return false; // All datasets are staged
+  } catch (error) {
+    console.error('Failed to check unstaged datasets:', error);
+    toast.error('Failed to check dataset staging status');
+    return false;
+  }
+};
+
+/**
+ * Handle staging requested
+ */
+const handleStagingRequested = () => {
+  toast.info(
+    'Staging workflows have been requested. Datasets will be available once staging completes.'
+  );
+  showUnstagedModal.value = false;
+  // Reload session to update data_requested status
+  loadSession();
+};
+
+/**
+ * Handle datasets updated from table
+ */
+const handleDatasetsUpdated = (updatedDatasets) => {
+  // Check if there are any unstaged datasets
+  const hasUnstagedDatasets = updatedDatasets.some((ds) => !ds.is_staged);
+
+  // If data requested and we have unstaged datasets, allow retry
+  canRetryStaging.value = session.value?.data_requested?.requested && hasUnstagedDatasets;
+};
+
+/**
+ * Retry staging for unstaged datasets
+ */
+const retryStaging = async () => {
+  if (!session.value?.id) return;
+
+  retryingStagingLoading.value = true;
+  try {
+    const response = await sessionService.stageDatasets(session.value.id);
+    lastStagingStatus.value = response.status;
+
+    if (response.status === 200) {
+      // All successful
+      toast.success(response.data.message);
+      canRetryStaging.value = false;
+      // Reload session to update data_requested status
+      await loadSession();
+    } else if (response.status === 207) {
+      // Partial success
+      toast.warning(response.data.message);
+      canRetryStaging.value = true;
+    } else {
+      // All failed
+      toast.error(response.data.message);
+      canRetryStaging.value = true;
+    }
+  } catch (error) {
+    console.error('Failed to retry staging:', error);
+    toast.error('Failed to initiate staging workflows');
+    canRetryStaging.value = true;
+  } finally {
+    retryingStagingLoading.value = false;
+  }
+};
+
+/**
  * Handle browser selection from modal
  */
 const handleBrowserSelection = async (browserType) => {
+  // First check if there are any unstaged datasets
+  const hasUnstagedDatasets = await checkUnstagedDatasets();
+
+  if (hasUnstagedDatasets) {
+    // User will be shown the unstaged datasets modal
+    // They can choose to stage them or cancel
+    return;
+  }
+
+  // All datasets are staged, proceed with browser initialization
   selectedBrowserType.value = browserType;
 
   if (browserType === BROWSER_TYPES.IGV) {

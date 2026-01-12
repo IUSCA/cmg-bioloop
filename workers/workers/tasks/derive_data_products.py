@@ -169,9 +169,10 @@ def derive_data_products(celery_task, dataset_id: int, conversion_id: int):
             print(f"  - Conflicted: {conflicted['name']}")
     
     if result.get('errored'):
-        print(f"Found {len(result['errored'])} errored datasets")
+        print(f"❌ Found {len(result['errored'])} errored datasets - these will NOT have workflows started")
         for errored in result['errored']:
-            print(f"  - Errored: {errored['name']}")
+            error_msg = errored.get('error', 'unknown')
+            print(f"  - Errored: {errored.get('name', 'unknown')} - Reason: {error_msg}")
     
     # result['created'] is a list of datasets that were created:
     # [
@@ -279,11 +280,27 @@ def derive_data_products(celery_task, dataset_id: int, conversion_id: int):
         # create_tracks_for_data_products(derived_data_products)
 
     # Kick off 'Integrated' workflow for all data products
-    for data_product in derived_data_products:
-        wf = Workflow(celery_app=celery_app, **wf_utils.get_wf_body(wf_name='integrated'))
-        wf.start(data_product['id'])
-        print(f"Started workflow {wf} for data product {data_product['id']}")
-        api.add_workflow_to_dataset(dataset_id=data_product['id'], workflow_id=wf.workflow['_id'])
+    if not derived_data_products:
+        print("⚠️ Warning: No data products were derived - no integrated workflows will be started")
+    else:
+        print(f"Will start integrated workflows for {len(derived_data_products)} data products")
+        
+        workflow_success_count = 0
+        workflow_failure_count = 0
+        
+        for data_product in derived_data_products:
+            try:
+                wf = Workflow(celery_app=celery_app, **wf_utils.get_wf_body(wf_name='integrated'))
+                wf.start(data_product['id'])
+                api.add_workflow_to_dataset(dataset_id=data_product['id'], workflow_id=wf.workflow['_id'])
+                print(f"✓ Started integrated workflow for data product: {data_product.get('name', 'unknown')} (ID: {data_product['id']})")
+                workflow_success_count += 1
+            except Exception as e:
+                print(f"❌ Error starting integrated workflow for data product {data_product.get('name', 'unknown')} (ID: {data_product['id']}): {e}")
+                workflow_failure_count += 1
+                # Continue with remaining data products
+        
+        print(f"\nIntegrated workflow summary: {workflow_success_count} succeeded, {workflow_failure_count} failed")
 
 
 def derive(celery_task, dataset_id_conversion_id, **kwargs):

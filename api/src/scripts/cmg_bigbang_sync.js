@@ -7,10 +7,27 @@
  * Follows the exact same order as: db_conversion/src/convert/scripts/convert.py
  *
  * Usage:
- *   node src/scripts/cmg_bigbang_sync.js --cmg-uri="mongodb://..."
+ *   node src/scripts/cmg_bigbang_sync.js [options]
  *
- * Or with environment variables (using config system):
+ * Options:
+ *   --cmg-uri=<uri>     MongoDB connection string for CMG database
+ *   --skip-sessions     Skip genome browser session conversion
+ *   --clear-locks       Clear any existing process locks before starting
+ *   --help, -h          Show help message
+ *
+ * Environment Variables (alternative to --cmg-uri):
+ *   CMG_MONGO_HOST, CMG_MONGO_PORT, CMG_MONGO_DB, CMG_MONGO_USERNAME,
+ *   CMG_MONGO_PASSWORD
+ *
+ * Examples:
+ *   # Using environment variables (via config system)
  *   node src/scripts/cmg_bigbang_sync.js
+ *
+ *   # Using command-line URI
+ *   node src/scripts/cmg_bigbang_sync.js --cmg-uri="mongodb://user:pass@host:27017/cmg"
+ *
+ *   # Skip sessions and clear stale locks
+ *   node src/scripts/cmg_bigbang_sync.js --skip-sessions --clear-locks
  *
  * Order of operations (same as convert.py):
  * 1. Create roles
@@ -26,10 +43,11 @@
  * 11. Initialize cursors for pollers
  */
 
+require('module-alias/register');
 const config = require('config');
 // eslint-disable-next-line import/no-unresolved
 const { MongoClient } = require('mongodb');
-const prisma = require('@/db');
+const { PrismaClient } = require('@prisma/client');
 const logger = require('@/services/logger');
 
 // Bigbang modules
@@ -42,6 +60,13 @@ const { syncProjects } = require('./cmg_sync/bigbang/sync_projects');
 const { syncConversions } = require('./cmg_sync/bigbang/sync_conversions');
 const { syncSessions } = require('./cmg_sync/bigbang/sync_sessions');
 const { initializeCursors } = require('./cmg_sync/bigbang/initialize_cursors');
+const {
+  acquireProcessLock,
+  releaseProcessLock,
+  extendProcessLock,
+  forceReleaseAllProcessLocks,
+  DEFAULT_LOCK_TTL_MS,
+} = require('./cmg_sync/process_lock_manager');
 
 /**
  * Parse command line arguments
@@ -56,6 +81,8 @@ function parseArgs() {
       [, options.cmgUri] = arg.split('=');
     } else if (arg === '--skip-sessions') {
       options.skipSessions = true;
+    } else if (arg === '--clear-locks') {
+      options.clearLocks = true;
     } else if (arg === '--help' || arg === '-h') {
       // eslint-disable-next-line no-console
       console.log(`
@@ -63,25 +90,30 @@ Usage: node src/scripts/cmg_bigbang_sync.js [options]
 
 Options:
   --cmg-uri=<uri>        MongoDB connection string for CMG database
-                         Format: mongodb://username:password@host:port/database?authSource=admin
+                         Format: mongodb://username:password@host:port/database
                          
   --skip-sessions        Skip genome browser session conversion (recommended for initial run)
+  
+  --clear-locks          Clear any existing process locks before starting
   
   --help, -h             Show this help message
 
 Environment Variables (alternative to --cmg-uri):
   CMG_MONGO_HOST, CMG_MONGO_PORT, CMG_MONGO_DB, CMG_MONGO_USERNAME,
-  CMG_MONGO_PASSWORD, CMG_MONGO_AUTH_SOURCE
+  CMG_MONGO_PASSWORD
 
 Examples:
   # Using command-line URI
-  node src/scripts/cmg_bigbang_sync.js --cmg-uri="mongodb://cmg:pass@localhost:27017/cmg?authSource=admin"
+  node src/scripts/cmg_bigbang_sync.js --cmg-uri="mongodb://cmg:pass@localhost:27017/cmg"
   
   # Using environment variables (via config system)
   node src/scripts/cmg_bigbang_sync.js
   
   # Skip sessions (recommended for first run)
   node src/scripts/cmg_bigbang_sync.js --skip-sessions
+  
+  # Clear stale locks before starting
+  node src/scripts/cmg_bigbang_sync.js --clear-locks
 `);
       process.exit(0);
     }
@@ -103,7 +135,7 @@ function buildMongoUri(dbType, cmdLineUri) {
   const dbConfig = config.get(configKey);
 
   const {
-    host, port, database, username, password, authSource,
+    host, port, database, username, password,
   } = dbConfig;
 
   if (!host || !database) {
@@ -120,10 +152,6 @@ function buildMongoUri(dbType, cmdLineUri) {
 
   uri += `${host}:${port}/${database}`;
 
-  if (authSource) {
-    uri += `?authSource=${authSource}`;
-  }
-
   return uri;
 }
 
@@ -139,22 +167,71 @@ async function main() {
   logger.info('='.repeat(80));
 
   let cmgClient;
+  let prisma;
+  let lockAcquired = false;
+  let lockExtender;
 
   try {
+    // Create dedicated Prisma instance for this script
+    prisma = new PrismaClient();
+    logger.info('[OK] Prisma client created');
+
+    // Test Bioloop PostgreSQL connection
+    await prisma.$connect();
+    logger.info('[OK] Successfully connected to Bioloop PostgreSQL');
+
+    // Clear existing locks if requested
+    if (options.clearLocks) {
+      logger.warn('[CLEAR-LOCKS] Clearing all existing process locks...');
+      const count = await forceReleaseAllProcessLocks(prisma);
+      logger.warn(`[CLEAR-LOCKS] Released ${count} process lock(s)`);
+    }
+
+    // Acquire process lock BEFORE starting migration
+    lockAcquired = await acquireProcessLock(prisma, 'bigbang', DEFAULT_LOCK_TTL_MS);
+
+    if (!lockAcquired) {
+      logger.error('');
+      logger.error('='.repeat(80));
+      logger.error('[FAILED] Another big-bang process is already running');
+      logger.error('='.repeat(80));
+      logger.error(
+        'If you are certain no other instance is running, you can restart with:',
+      );
+      logger.error('  node src/scripts/cmg_bigbang_sync.js --clear-locks');
+      logger.error('');
+      logger.error('Or manually clear the lock via Prisma:');
+      logger.error(
+        '  prisma.cmg_sync_process_lock.update({ where: { process_name: "bigbang" },',
+      );
+      logger.error('    data: { locked_by: null, lock_expires_at: null } })');
+      logger.error('');
+      process.exit(1);
+    }
+
     // Build connection URIs
     const cmgUri = buildMongoUri('cmg', options.cmgUri);
 
     logger.info('Connecting to databases...');
-    logger.info(`CMG MongoDB: ${cmgUri.replace(/\/\/.*@/, '//<credentials>@')}`);
+    // logger.info(`CMG MongoDB: ${cmgUri.replace(/\/\/.*@/, '//<credentials>@')}`);
+    logger.info(`CMG MongoDB: ${cmgUri}`);
 
     // Connect to MongoDB databases
     cmgClient = new MongoClient(cmgUri);
     await cmgClient.connect();
     const cmgDb = cmgClient.db();
-    logger.info('[OK] Connected to CMG MongoDB');
-
-    logger.info('[OK] Prisma client ready');
+    logger.info('[OK] Successfully connected to CMG MongoDB');
     logger.info('');
+
+    // Setup periodic lock extension (every 2 minutes)
+    lockExtender = setInterval(async () => {
+      try {
+        await extendProcessLock(prisma, 'bigbang', DEFAULT_LOCK_TTL_MS);
+      } catch (error) {
+        logger.error('Failed to extend process lock:', error);
+        clearInterval(lockExtender);
+      }
+    }, 120000); // Every 2 minutes
 
     // Execute migration in order (matching convert.py)
     logger.info('Starting big-bang migration...');
@@ -208,6 +285,11 @@ async function main() {
     logger.info('[11/11] Initializing poller cursors...');
     await initializeCursors(prisma, cmgDb);
 
+    // Clear lock extender
+    if (lockExtender) {
+      clearInterval(lockExtender);
+    }
+
     const duration = ((Date.now() - startTime) / 1000).toFixed(2);
     logger.info('');
     logger.info('='.repeat(80));
@@ -220,26 +302,47 @@ async function main() {
     logger.info('  3. Monitor logs for any sync issues');
     logger.info('');
   } catch (error) {
+    // Clear lock extender
+    if (lockExtender) {
+      clearInterval(lockExtender);
+    }
+
     logger.error('');
     logger.error('='.repeat(80));
     logger.error('[FAILED] Big-bang migration FAILED');
     logger.error('='.repeat(80));
-    logger.error('Error:', error);
-    logger.error('Stack:', error.stack);
+    logger.error('Error Message:', error.message);
+    logger.error('Error Name:', error.name);
+    if (error.code) {
+      logger.error('Error Code:', error.code);
+    }
+    if (error.stack) {
+      logger.error('Stack Trace:');
+      logger.error(error.stack);
+    }
+    // Log full error object for debugging
+    logger.error('Full Error Object:', JSON.stringify(error, Object.getOwnPropertyNames(error), 2));
     logger.error('');
     logger.error('The migration has been rolled back. Please fix the error and try again.');
     logger.error('');
 
     process.exit(1);
   } finally {
+    // Release process lock
+    if (lockAcquired && prisma) {
+      await releaseProcessLock(prisma, 'bigbang');
+    }
+
     // Close connections
     if (cmgClient) {
       await cmgClient.close();
       logger.info('Closed CMG MongoDB connection');
     }
 
-    await prisma.$disconnect();
-    logger.info('Closed Prisma connection');
+    if (prisma) {
+      await prisma.$disconnect();
+      logger.info('Closed Prisma connection');
+    }
   }
 }
 

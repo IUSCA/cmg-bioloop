@@ -28,9 +28,15 @@ Provide MongoDB connection string directly:
 ```bash
 cd /opt/sca/app  # Or your project root
 
+# Basic usage
 node src/scripts/cmg_bigbang_sync.js \
-  --cmg-uri="mongodb://username:password@host:27017/cmg?authSource=admin" \
-  --rhythm-uri="mongodb://username:password@host:27018/rhythm?authSource=admin"
+  --cmg-uri="mongodb://username:password@host:27017/cmg"
+
+# Skip sessions and clear any stale locks
+node src/scripts/cmg_bigbang_sync.js \
+  --cmg-uri="mongodb://username:password@host:27017/cmg" \
+  --skip-sessions \
+  --clear-locks
 ```
 
 ### Method 2: Using Environment Variables
@@ -41,14 +47,12 @@ Set environment variables and use the config system:
 export CMG_MONGO_HOST=commons3.sca.iu.edu
 export CMG_MONGO_PORT=27017
 export CMG_MONGO_DB=cmg
-export CMG_MONGO_AUTH_SOURCE=admin
 export CMG_MONGO_USERNAME=cmg
 export CMG_MONGO_PASSWORD='your_password'
 
 export RHYTHM_MONGO_HOST=rhythm-host
 export RHYTHM_MONGO_PORT=27018
 export RHYTHM_MONGO_DB=celery
-export RHYTHM_MONGO_AUTH_SOURCE=admin
 export RHYTHM_MONGO_USERNAME=appuser
 export RHYTHM_MONGO_PASSWORD='your_password'
 
@@ -71,17 +75,17 @@ node src/scripts/cmg_bigbang_sync.js --cmg-uri="mongodb://..."
 | Flag | Description |
 |------|-------------|
 | `--cmg-uri=<uri>` | MongoDB connection string for CMG database |
-| `--rhythm-uri=<uri>` | MongoDB connection string for Rhythm database |
 | `--skip-sessions` | Skip genome browser session conversion (recommended for first run) |
+| `--clear-locks` | Clear any existing process locks before starting (useful if previous run crashed) |
 | `--help`, `-h` | Show help message |
 
 ## MongoDB Connection String Format
 
 ```
-mongodb://username:password@host:port/database?authSource=admin
+mongodb://username:password@host:port/database
 ```
 
-**Example** (from convert.py comment):
+**Example**:
 ```
 mongodb://cmg:All%20the%20GATTACA%20all%20the%20time!@commons3.sca.iu.edu:27017/cmg
 ```
@@ -176,15 +180,41 @@ These indicate:
 
 ## Troubleshooting
 
+### Another Instance Already Running
+
+```
+[FAILED] Another big-bang process is already running
+```
+
+**Cause**: The script uses a process-level lock to prevent multiple instances from running simultaneously.
+
+**Fix Option 1 (Recommended)**: Restart with `--clear-locks` flag
+```bash
+node src/scripts/cmg_bigbang_sync.js --clear-locks
+```
+
+**Fix Option 2**: Manually clear the lock in database
+```sql
+-- Check for stuck process lock
+SELECT * FROM cmg_sync_process_lock WHERE process_name = 'bigbang';
+
+-- Force release process lock
+UPDATE cmg_sync_process_lock 
+SET locked_by = NULL, lock_expires_at = NULL 
+WHERE process_name = 'bigbang';
+```
+
+Then re-run the script normally.
+
 ### Connection Issues
 
 ```
 Error: MongoDB connection failed
 ```
 
-**Fix**: Check credentials, host, port, and authSource. Test with `mongosh`:
+**Fix**: Check credentials, host, and port. Test with `mongosh`:
 ```bash
-mongosh "mongodb://user:pass@host:27017/cmg?authSource=admin"
+mongosh "mongodb://user:pass@host:27017/cmg"
 ```
 
 ### Prisma Errors

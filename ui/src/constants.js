@@ -336,6 +336,10 @@ const exports = {
       'FRAGMENTS_TSV_GZ',
     ],
   },
+  dataRequestStatus: {
+    PENDING: 'PENDING',
+    COMPLETE: 'COMPLETE',
+  },
 };
 
 export default exports;

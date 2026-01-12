@@ -636,3 +636,12 @@ model cmg_sync_retry {
 
   @@unique([poller_name, cmg_id])
 }
+
+model cmg_sync_process_lock {
+  process_name      String    @id @db.VarChar(50)
+  locked_by         String?   @db.VarChar(200)
+  lock_expires_at   DateTime?
+  last_started_at   DateTime?
+  last_completed_at DateTime?
+  updated_at        DateTime  @updatedAt
+}
