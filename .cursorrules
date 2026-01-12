@@ -6,12 +6,13 @@ Before working on this project, please understand:
 * /opt/sca/cmg on host cmg-new-service1.sca.iu.edu (use hostname, it's in in the allowlist below)
 * /opt/sca/cmg-bioloop if hostname starts with 'mmge2' or 'colo' 'or k1,k2, k3' etc.
 * /tmp for either hostname.
-- If hostname does not match either of these, ask user at the start of each new chat/tab whether user would like to grant permission to Write docker commands in addition Read.
+- If hostname does not match either of these, ask user at the start of each new chat/tab whether user would like to grant permission to Write docker/git etc. commands (i.e. the more dangerous commands) in addition to Read operations.
 - Do not touch anything outside these locations.
 - MOST IMPORTANTLY NEVER EVER EVER WRITE/DELETE ANYTHING TO/IN PATHS BEGINNING WITH /N/....
 - NEVER EVER RESET THE DATABASE YOURSELF. ONLY DO SO IF USER EXPLICTLY PERMITS IN CHAT.
 - You do not have access to exec into docker containers, or to restart them. Ask the user to so and give them commands to run, if needed.
-- In the allow-list below, some commands are commented out. Please make sure to not try them.
+- In the allow-list below, some commands may be commented out. Please make sure to not try them.
+- Delete anything written to /tmp after work is done.
 
 ---
 
@@ -81,11 +82,22 @@ Key patterns to remember:
 
 ## Git & Repo Status
 - git status
-- git log --oneline
 - git diff
-- git branch
-- git remote -v
+- git log
 - git show
+- git blame
+- git reflog
+- git branch
+- git tag
+- git rev-parse
+- git describe
+- git ls-files
+- git ls-tree
+- git cat-file
+- git grep
+- git shortlog
+- git remote -v
+- git submodule status
 
 ## Docker (Read-Only)
 - docker ps
