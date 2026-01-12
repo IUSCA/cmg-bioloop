@@ -1,7 +1,20 @@
 # Bioloop Project Rules for AI Agents
 
 Before working on this project, please understand:
+THIS IS THE PRODUCTION ENVIRONMENT. You only have access to make changes in:
+- /opt/sca/cmg on host cmg-new-service1.sca.iu.edu (use hostname, it's in in the allowlist below)
+- /opt/sca/cmg-bioloop if hostname starts with 'mmge2'
+- /tmp.
+- Do not touch anything outside these locations.
+- MOST IMPORTANTLY NEVER EVER EVER WRITE/DELETE ANYTHING TO/IN PATHS BEGINNING WITH /N/....
+- NEVER EVER RESET THE DATABASE YOURSELF. ONLY DO SO IF USER EXPLICTLY PERMITS IN CHAT.
+- You do not have access to exec into docker containers, or to restart them. Ask the user to so and give them commands to run, if needed.
+- In the allow-list below, some commands are commented out. Please make sure to not try them.
+
+---
+
 - Project overview and architecture
+
 - Authentication & authorization patterns
 - API design conventions
 - UI/UX patterns
@@ -23,6 +36,7 @@ Key patterns to remember:
 # Allowlisted Commands (Read-Only + Safe)
 
 ## System Information
+- hostname
 - whoami
 - uname -a
 - lsb_release -a
@@ -53,7 +67,7 @@ Key patterns to remember:
 - find . -type f
 - find . -type d
 
-## Networking (Read-Only)
+<!-- ## Networking (Read-Only)
 - ifconfig
 - ip addr
 - ip route
@@ -61,7 +75,7 @@ Key patterns to remember:
 - ss -tulpn
 - ping -c 4
 - curl -I
-- wget --spider
+- wget --spider -->
 
 ## Git & Repo Status
 - git status
@@ -71,14 +85,14 @@ Key patterns to remember:
 - git remote -v
 - git show
 
-## Docker (Read-Only) – with sudo
+<!-- ## Docker (Read-Only) – with sudo
 - docker ps
 - docker ps -a
 - docker images
 - docker logs --tail 50
 - docker network ls
 - docker volume ls
-- docker inspect
+- docker inspect -->
 
 ## Node.js & NPM (Read-Only)
 - node -v

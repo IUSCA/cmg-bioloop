@@ -76,6 +76,7 @@ db/db/backups
 db/db_postgres
 db/db/postgres
 db/db/db_postgres
+db/prod/db_postgres
 
 cmg_data/dump/
 cmg_data/data/
