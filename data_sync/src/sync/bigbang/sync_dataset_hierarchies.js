@@ -1,5 +1,5 @@
 const { ObjectId } = require('mongodb');
-const logger = require('../logger');
+const logger = require('../../logger');
 
 /**
  * Convert dataset hierarchies from CMG to Bioloop
@@ -15,7 +15,7 @@ async function syncDatasetHierarchies(prisma, cmgDb) {
   
   for (const cmgDataProduct of cmgDataProducts) {
     // Find the corresponding Bioloop DATA_PRODUCT
-    const bioloopDataProduct = await prisma.dataset.findUnique({
+    const bioloopDataProduct = await prisma.dataset.findFirst({
       where: { cmg_id: cmgDataProduct._id.toString() },
     });
     
@@ -45,7 +45,7 @@ async function syncDatasetHierarchies(prisma, cmgDb) {
     }
     
     // Find the corresponding Bioloop RAW_DATA
-    const bioloopRawData = await prisma.dataset.findUnique({
+    const bioloopRawData = await prisma.dataset.findFirst({
       where: { cmg_id: cmgSourceDataset._id.toString() },
     });
     

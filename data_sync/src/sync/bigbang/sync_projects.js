@@ -1,6 +1,6 @@
 const { ObjectId } = require('mongodb');
 const { expandGroups, generateSlug } = require('../utils/cmg_helpers');
-const logger = require('../logger');
+const logger = require('../../logger');
 
 /**
  * Convert projects from CMG to Bioloop
@@ -40,7 +40,7 @@ async function syncProjects(prisma, cmgDb) {
   
   for (const cmgProject of cmgProjects) {
     // Find the Bioloop project we just created
-    const bioloopProject = await prisma.project.findUnique({
+    const bioloopProject = await prisma.project.findFirst({
       where: { cmg_id: cmgProject._id.toString() },
     });
     
@@ -56,7 +56,7 @@ async function syncProjects(prisma, cmgDb) {
     
     // Find corresponding Bioloop users
     for (const cmgUserId of allUserIds) {
-      const bioloopUser = await prisma.user.findUnique({
+      const bioloopUser = await prisma.user.findFirst({
         where: { cmg_id: cmgUserId },
       });
       
@@ -73,7 +73,7 @@ async function syncProjects(prisma, cmgDb) {
     // Get all dataproducts
     const dataproductIds = cmgProject.dataproducts || [];
     for (const cmgDataproductId of dataproductIds) {
-      const bioloopDataset = await prisma.dataset.findUnique({
+      const bioloopDataset = await prisma.dataset.findFirst({
         where: { cmg_id: cmgDataproductId.toString() },
       });
       

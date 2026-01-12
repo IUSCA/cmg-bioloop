@@ -395,6 +395,25 @@ const ARGUMENT_DATA = [
 ];
 
 /**
+ * Other Program Names (non-bcl2fastq programs that share certain arguments)
+ * These are cellranger, spaceranger, and other conversion programs
+ */
+const OTHER_PROGRAM_NAMES = [
+  'bcl-convert',
+  'cellranger-v8.0.1',
+  'cellranger-v6.1.2',
+  'cellranger-v4.0.0',
+  'cellranger-arc',
+  'cellranger-arc-v2',
+  'cellranger-atac',
+  'spaceranger-v3.0.1',
+  'spaceranger-v1.3.1',
+  'spaceranger-v1.1.0',
+  'cellranger',
+  'spaceranger'
+];
+
+/**
  * Poller Names
  */
 const POLLER_NAMES = {
@@ -412,6 +431,7 @@ module.exports = {
   CMD_LINE_PROGRAMS,
   CONVERSION_DEFINITIONS,
   ARGUMENT_DATA,
+  OTHER_PROGRAM_NAMES,
   POLLER_NAMES
 };
 

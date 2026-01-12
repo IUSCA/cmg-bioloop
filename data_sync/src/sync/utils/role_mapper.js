@@ -5,7 +5,7 @@
  */
 
 const { ROLE_MAPPING } = require('../constants');
-const logger = require('../logger');
+const logger = require('../../logger');
 
 /**
  * Map CMG roles to Bioloop role names

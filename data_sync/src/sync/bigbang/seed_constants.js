@@ -1,5 +1,5 @@
 const { CMD_LINE_PROGRAMS, CONVERSION_DEFINITIONS, ARGUMENT_DATA, OTHER_PROGRAM_NAMES } = require('../constants');
-const logger = require('../logger');
+const logger = require('../../logger');
 
 /**
  * Seed constants: roles, cmd_line_programs, conversion_definitions, arguments
@@ -19,16 +19,25 @@ async function createRoles(prisma) {
     { name: 'user', description: 'User level access' },
   ];
 
+  let createdCount = 0;
   for (const role of bioloopRoles) {
-    await prisma.role.create({
-      data: {
-        name: role.name,
-        description: role.description,
-      },
-    });
+    const existing = await prisma.role.findFirst({ where: { name: role.name } });
+    if (!existing) {
+      await prisma.role.create({
+        data: {
+          name: role.name,
+          description: role.description,
+        },
+      });
+      createdCount++;
+    }
   }
 
-  logger.info(`[BIGBANG] Inserted ${bioloopRoles.length} roles`);
+  if (createdCount > 0) {
+    logger.info(`[BIGBANG] Inserted ${createdCount} roles`);
+  } else {
+    logger.info('[BIGBANG] All roles already exist');
+  }
 }
 
 /**
@@ -48,28 +57,36 @@ async function createCMGUser(prisma) {
     roles: ['user'],
   };
 
-  const user = await prisma.user.create({
-    data: {
-      username: cmguser.username,
-      email: cmguser.email,
-      name: cmguser.name,
-      cas_id: cmguser.cas_id,
-      is_deleted: false,
-      cmg_id: cmguser._id,
-      created_at: new Date(),
-    },
-  });
+  // Check if user already exists
+  let user = await prisma.user.findUnique({ where: { username: cmguser.username } });
+  
+  if (!user) {
+    user = await prisma.user.create({
+      data: {
+        username: cmguser.username,
+        email: cmguser.email,
+        name: cmguser.name,
+        cas_id: cmguser.cas_id,
+        is_deleted: false,
+        cmg_id: cmguser._id,
+        created_at: new Date(),
+      },
+    });
 
-  // Assign user role
-  const userRole = await prisma.role.findUnique({ where: { name: 'user' } });
-  await prisma.user_role.create({
-    data: {
-      user_id: user.id,
-      role_id: userRole.id,
-    },
-  });
+    // Assign user role
+    const userRole = await prisma.role.findFirst({ where: { name: 'user' } });
+    await prisma.user_role.create({
+      data: {
+        user_id: user.id,
+        role_id: userRole.id,
+      },
+    });
 
-  logger.info(`[BIGBANG] Created CMG system user: ${cmguser.username}`);
+    logger.info(`[BIGBANG] Created CMG system user: ${cmguser.username}`);
+  } else {
+    logger.info(`[BIGBANG] CMG system user already exists: ${cmguser.username}`);
+  }
+  
   return user.id;
 }
 
@@ -82,16 +99,22 @@ async function populatePipelineDefinitions(prisma, cmgUserId) {
 
   // 1. Create cmd_line_programs
   logger.info('[BIGBANG] Inserting cmd_line_programs...');
+  let programsCreated = 0;
   for (const program of CMD_LINE_PROGRAMS) {
-    await prisma.cmd_line_program.create({
-      data: {
-        name: program.name,
-        executable_path: program.executable_path,
-        executable_directory: program.executable_directory,
-        allow_additional_args: program.allow_additional_args,
-      },
-    });
+    const existing = await prisma.cmd_line_program.findFirst({ where: { name: program.name } });
+    if (!existing) {
+      await prisma.cmd_line_program.create({
+        data: {
+          name: program.name,
+          executable_path: program.executable_path,
+          executable_directory: program.executable_directory,
+          allow_additional_args: program.allow_additional_args,
+        },
+      });
+      programsCreated++;
+    }
   }
+  logger.info(`[BIGBANG] Inserted ${programsCreated} cmd_line_programs (${CMD_LINE_PROGRAMS.length - programsCreated} already existed)`);
 
   // 2. Get program name to ID mapping
   const programs = await prisma.cmd_line_program.findMany();
@@ -102,21 +125,27 @@ async function populatePipelineDefinitions(prisma, cmgUserId) {
 
   // 3. Create conversion_definitions
   logger.info('[BIGBANG] Inserting conversion_definitions...');
+  let definitionsCreated = 0;
   for (const definition of CONVERSION_DEFINITIONS) {
-    await prisma.conversion_definition.create({
-      data: {
-        name: definition.name,
-        description: definition.description,
-        enabled: definition.enabled,
-        dataset_types: definition.dataset_types,
-        tags: definition.tags,
-        capture_logs: definition.capture_logs,
-        output_directory: definition.output_directory,
-        program_id: programMap[definition.name],
-        author_id: cmgUserId,
-      },
-    });
+    const existing = await prisma.conversion_definition.findFirst({ where: { name: definition.name } });
+    if (!existing) {
+      await prisma.conversion_definition.create({
+        data: {
+          name: definition.name,
+          description: definition.description,
+          enabled: definition.enabled,
+          dataset_types: definition.dataset_types,
+          tags: definition.tags,
+          capture_logs: definition.capture_logs,
+          output_directory: definition.output_directory,
+          program_id: programMap[definition.name],
+          author_id: cmgUserId,
+        },
+      });
+      definitionsCreated++;
+    }
   }
+  logger.info(`[BIGBANG] Inserted ${definitionsCreated} conversion_definitions (${CONVERSION_DEFINITIONS.length - definitionsCreated} already existed)`);
 
   // 4. Create arguments
   logger.info('[BIGBANG] Inserting arguments...');
@@ -148,12 +177,20 @@ async function populatePipelineDefinitions(prisma, cmgUserId) {
   }
 
   // Insert all arguments
+  let argumentsCreated = 0;
   for (const arg of argumentDataWithPrograms) {
-    await prisma.argument.create({
-      data: {
+    const existing = await prisma.argument.findFirst({
+      where: {
         name: arg.name,
-        value_type: arg.value_type,
-        allowed_values: arg.allowed_values,
+        program_id: arg.program_id,
+      },
+    });
+    if (!existing) {
+      await prisma.argument.create({
+        data: {
+          name: arg.name,
+          value_type: arg.value_type,
+          allowed_values: arg.allowed_values,
         is_required: arg.is_required,
         default_value: arg.default_value,
         is_flag: arg.is_flag,
@@ -167,7 +204,10 @@ async function populatePipelineDefinitions(prisma, cmgUserId) {
         program_id: arg.program_id,
       },
     });
+      argumentsCreated++;
+    }
   }
+  logger.info(`[BIGBANG] Inserted ${argumentsCreated} arguments (${argumentDataWithPrograms.length - argumentsCreated} already existed)`);
 
   logger.info('[BIGBANG] Pipeline definitions populated successfully');
 }

@@ -4,7 +4,7 @@
  * Parses CMG events arrays to extract timestamps and determine states
  */
 
-const logger = require('../logger');
+const logger = require('../../logger');
 
 /**
  * Check if CMG document has a specific event

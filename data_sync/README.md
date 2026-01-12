@@ -48,7 +48,8 @@ docker compose -f docker-compose.sandbox.yml up -d
 ### 2. Check Container Status
 
 ```bash
-docker ps | grep bioloop_db_sandbox
+cd data_sync
+docker compose -f docker-compose.sandbox.yml ps
 ```
 
 ### 3. Run Prisma Migrations
@@ -108,7 +109,7 @@ node src/poller_sync.js
 ```bash
 cd data_sync
 docker compose -f docker-compose.sandbox.yml logs -f
-docker exec -it bioloop_db_sandbox psql -U appuser -d bioloop_sync -c '\dt'
+docker compose -f docker-compose.sandbox.yml exec db_sandbox psql -U appuser -d bioloop_sync -c '\dt'
 ```
 
 ### Connect to Database

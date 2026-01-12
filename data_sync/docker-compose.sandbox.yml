@@ -19,6 +19,12 @@ services:
       - "127.0.0.1:5434:5432"
     networks:
       - sandbox_network
+    deploy:
+      resources:
+        limits:
+          memory: 8G
+        reservations:
+          memory: 4G
     command: ["tail", "-f", "/dev/null"]
 
 networks:

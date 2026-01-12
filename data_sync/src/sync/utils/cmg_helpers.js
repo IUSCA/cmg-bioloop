@@ -5,7 +5,7 @@
  */
 
 const { ObjectId } = require('mongodb');
-const logger = require('../logger');
+const logger = require('../../logger');
 
 /**
  * Convert MongoDB ObjectId to string

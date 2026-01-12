@@ -5,7 +5,7 @@
  * Bioloop has UNIQUE constraint on (name, type, is_deleted)
  */
 
-const logger = require('../logger');
+const logger = require('../../logger');
 
 const DUPLICATE_PREFIX = 'DUPLICATE';
 const UNKNOWN_PREFIX = 'UNKNOWN';

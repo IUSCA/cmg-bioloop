@@ -1,6 +1,6 @@
 const BasePoller = require('./base_poller');
 const { mapCMGRolesToBioloop } = require('../utils/role_mapper');
-const logger = require('../logger');
+const logger = require('../../logger');
 
 /**
  * User Roles Poller
@@ -83,7 +83,7 @@ class UserRolesPoller extends BasePoller {
     // Add missing roles
     const rolesToAdd = targetRoleNames.filter(name => !existingRoleNames.includes(name));
     for (const roleName of rolesToAdd) {
-      const role = await tx.role.findUnique({ where: { name: roleName } });
+      const role = await tx.role.findFirst({ where: { name: roleName } });
       if (role) {
         await tx.user_role.create({
           data: {

@@ -1,4 +1,4 @@
-const logger = require('../logger');
+const logger = require('../../logger');
 const BasePoller = require('./base_poller');
 
 /**
@@ -27,7 +27,7 @@ class ProjectMetadataPoller extends BasePoller {
    */
   async processDocument(cmgProject, tx) {
     // Find project by cmg_id
-    const bioloopProject = await tx.project.findUnique({
+    const bioloopProject = await tx.project.findFirst({
       where: { cmg_id: cmgProject._id.toString() },
     });
 

@@ -27,15 +27,17 @@ Provide MongoDB connection string directly:
 
 ```bash
 # Inside the sandbox container
-docker exec -it bioloop_db_sandbox bash
+cd data_sync
+docker compose -f docker-compose.sandbox.yml exec db_sandbox bash
 cd /opt/sca/app
 
-# Basic usage
-node src/bigbang_sync.js \
+# Basic usage (with increased heap size for large datasets)
+# Note: --max-old-space-size=6144 allocates 6GB to Node.js heap (container has 8GB limit)
+node --max-old-space-size=6144 src/bigbang_sync.js \
   --cmg-uri="mongodb://username:password@host:27017/cmg"
 
 # Skip sessions and clear any stale locks
-node src/bigbang_sync.js \
+node --max-old-space-size=6144 src/bigbang_sync.js \
   --cmg-uri="mongodb://username:password@host:27017/cmg" \
   --skip-sessions \
   --clear-locks
@@ -47,7 +49,8 @@ Set environment variables in `.env` file and use the config system:
 
 ```bash
 # From host, exec into container
-docker exec -it bioloop_db_sandbox bash
+cd data_sync
+docker compose -f docker-compose.sandbox.yml exec db_sandbox bash
 cd /opt/sca/app
 
 # Run the script (reads from .env file)
@@ -57,7 +60,8 @@ node src/bigbang_sync.js
 ### Method 3: One-Liner from Host
 
 ```bash
-docker exec -it bioloop_db_sandbox node /opt/sca/app/src/bigbang_sync.js --cmg-uri="mongodb://..."
+cd data_sync
+docker compose -f docker-compose.sandbox.yml exec db_sandbox node /opt/sca/app/src/bigbang_sync.js --cmg-uri="mongodb://..."
 ```
 
 ## Options

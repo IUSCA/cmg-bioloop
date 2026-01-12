@@ -197,7 +197,8 @@ docker compose -f docker-compose.sandbox.yml logs -f
 
 ```bash
 # Access container
-docker exec -it bioloop_db_sandbox bash
+cd data_sync
+docker compose -f docker-compose.sandbox.yml exec db_sandbox bash
 
 # Check schema is accessible
 cat /opt/sca/api/prisma/schema.prisma | head -20
@@ -219,7 +220,8 @@ psql -U appuser -d bioloop_sync -c '\dt'
 Syncs all historical CMG data to sandbox database:
 
 ```bash
-docker exec -it bioloop_db_sandbox node src/bigbang_sync.js --clear-locks
+cd data_sync
+docker compose -f docker-compose.sandbox.yml exec db_sandbox node src/bigbang_sync.js --clear-locks
 ```
 
 **Options:**
@@ -234,7 +236,8 @@ docker exec -it bioloop_db_sandbox node src/bigbang_sync.js --clear-locks
 Continuously polls CMG for updates:
 
 ```bash
-docker exec -it bioloop_db_sandbox node src/poller_sync.js
+cd data_sync
+docker compose -f docker-compose.sandbox.yml exec db_sandbox node src/poller_sync.js
 ```
 
 **Pollers:**
@@ -297,7 +300,8 @@ docker compose -f docker-compose.sandbox.yml down -v
 ### Access Container Shell
 
 ```bash
-docker exec -it bioloop_db_sandbox bash
+cd data_sync
+docker compose -f docker-compose.sandbox.yml exec db_sandbox bash
 
 # Once inside:
 node src/bigbang_sync.js --help
@@ -309,11 +313,13 @@ npx prisma studio --schema=/opt/sca/api/prisma/schema.prisma
 
 **From inside container:**
 ```bash
+cd data_sync
+
 # Via psql
-docker exec -it bioloop_db_sandbox psql -U appuser -d bioloop_sync
+docker compose -f docker-compose.sandbox.yml exec db_sandbox psql -U appuser -d bioloop_sync
 
 # Via Prisma Studio (opens on localhost:5555)
-docker exec -it bioloop_db_sandbox npx prisma studio --schema=/opt/sca/api/prisma/schema.prisma
+docker compose -f docker-compose.sandbox.yml exec db_sandbox npx prisma studio --schema=/opt/sca/api/prisma/schema.prisma
 ```
 
 **From external DB tools (DBeaver, pgAdmin, DataGrip, etc.):**
@@ -365,7 +371,8 @@ postgresql://appuser:example@localhost:5434/bioloop_sync
 
 ```bash
 # Inside container
-docker exec -it bioloop_db_sandbox env | grep -E '(SYNC_|CMG_|RHYTHM_)'
+cd data_sync
+docker compose -f docker-compose.sandbox.yml exec db_sandbox env | grep -E '(SYNC_|CMG_|RHYTHM_)'
 
 # From host
 cd data_sync
@@ -397,7 +404,8 @@ docker compose -f docker-compose.sandbox.yml up -d db_sandbox
 
 **Verify mount:**
 ```bash
-docker exec -it bioloop_db_sandbox ls -la /opt/sca/api/prisma/
+cd data_sync
+docker compose -f docker-compose.sandbox.yml exec db_sandbox ls -la /opt/sca/api/prisma/
 ```
 
 **Should show:**
@@ -417,7 +425,8 @@ cat data_sync/.env | grep CMG_MONGO
 
 **Test connection:**
 ```bash
-docker exec -it bioloop_db_sandbox mongosh "mongodb://$CMG_MONGO_USERNAME:$CMG_MONGO_PASSWORD@$CMG_MONGO_HOST:$CMG_MONGO_PORT/$CMG_MONGO_DB"
+cd data_sync
+docker compose -f docker-compose.sandbox.yml exec db_sandbox mongosh "mongodb://$CMG_MONGO_USERNAME:$CMG_MONGO_PASSWORD@$CMG_MONGO_HOST:$CMG_MONGO_PORT/$CMG_MONGO_DB"
 ```
 
 **Common causes:**
@@ -429,13 +438,16 @@ docker exec -it bioloop_db_sandbox mongosh "mongodb://$CMG_MONGO_USERNAME:$CMG_M
 
 **Regenerate manually:**
 ```bash
-docker exec -it bioloop_db_sandbox npm run prisma:generate
+cd data_sync
+docker compose -f docker-compose.sandbox.yml exec db_sandbox npm run prisma:generate
 ```
 
 **If that fails:**
 ```bash
+cd data_sync
+
 # Check schema is accessible
-docker exec -it bioloop_db_sandbox cat /opt/sca/api/prisma/schema.prisma
+docker compose -f docker-compose.sandbox.yml exec db_sandbox cat /opt/sca/api/prisma/schema.prisma
 
 # Rebuild container
 docker compose -f docker-compose.sandbox.yml build db_sandbox
@@ -446,19 +458,22 @@ docker compose -f docker-compose.sandbox.yml up -d db_sandbox
 
 **Check database:**
 ```bash
-docker exec -it bioloop_db_sandbox psql -U appuser -d bioloop_sync -c '\dt'
+cd data_sync
+docker compose -f docker-compose.sandbox.yml exec db_sandbox psql -U appuser -d bioloop_sync -c '\dt'
 ```
 
 **Reset database:**
 ```bash
 # WARNING: Deletes all data
+cd data_sync
 docker compose -f docker-compose.sandbox.yml down -v
 docker compose -f docker-compose.sandbox.yml up -d db_sandbox
 ```
 
 **Check migration history:**
 ```bash
-docker exec -it bioloop_db_sandbox npx prisma migrate status --schema=/opt/sca/api/prisma/schema.prisma
+cd data_sync
+docker compose -f docker-compose.sandbox.yml exec db_sandbox npx prisma migrate status --schema=/opt/sca/api/prisma/schema.prisma
 ```
 
 ### Environment Variables Not Loading
@@ -482,9 +497,10 @@ docker compose -f docker-compose.sandbox.yml restart db_sandbox
 
 **Clear locks:**
 ```bash
-docker exec -it bioloop_db_sandbox node src/bigbang_sync.js --clear-locks
+cd data_sync
+docker compose -f docker-compose.sandbox.yml exec db_sandbox node src/bigbang_sync.js --clear-locks
 # OR
-docker exec -it bioloop_db_sandbox node src/poller_sync.js --clear-locks
+docker compose -f docker-compose.sandbox.yml exec db_sandbox node src/poller_sync.js --clear-locks
 ```
 
 ## File Reference
@@ -556,14 +572,16 @@ NODE_ENV=production
 ### Run Initial Migration
 
 ```bash
-docker exec -it bioloop_db_sandbox node src/bigbang_sync.js
+cd data_sync
+docker compose -f docker-compose.sandbox.yml exec db_sandbox node src/bigbang_sync.js
 ```
 
 ### Setup Continuous Poller
 
 **Option A: PM2 (inside container)**
 ```bash
-docker exec -it bioloop_db_sandbox bash
+cd data_sync
+docker compose -f docker-compose.sandbox.yml exec db_sandbox bash
 npm install -g pm2
 pm2 start src/poller_sync.js --name cmg-poller
 pm2 save
@@ -580,14 +598,16 @@ db_sandbox:
 ### Monitoring
 
 ```bash
+cd data_sync
+
 # Check logs
 docker compose -f docker-compose.sandbox.yml logs -f db_sandbox
 
 # Check database
-docker exec -it bioloop_db_sandbox psql -U appuser -d bioloop_sync
+docker compose -f docker-compose.sandbox.yml exec db_sandbox psql -U appuser -d bioloop_sync
 
 # Check sync status
-docker exec -it bioloop_db_sandbox psql -U appuser -d bioloop_sync -c \
+docker compose -f docker-compose.sandbox.yml exec db_sandbox psql -U appuser -d bioloop_sync -c \
   "SELECT * FROM cmg_sync_cursor ORDER BY last_started_at DESC;"
 ```
 

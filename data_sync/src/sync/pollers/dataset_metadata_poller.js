@@ -1,5 +1,5 @@
 const BasePoller = require('./base_poller');
-const logger = require('../logger');
+const logger = require('../../logger');
 
 /**
  * Dataset Metadata Poller
@@ -44,7 +44,7 @@ class DatasetMetadataPoller extends BasePoller {
    */
   async processDocument(cmgDataset, tx) {
     // Find dataset by cmg_id
-    const bioloopDataset = await tx.dataset.findUnique({
+    const bioloopDataset = await tx.dataset.findFirst({
       where: { cmg_id: cmgDataset._id.toString() },
     });
     

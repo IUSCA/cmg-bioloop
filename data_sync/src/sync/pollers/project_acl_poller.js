@@ -1,7 +1,7 @@
 const BasePoller = require('./base_poller');
 const { ObjectId } = require('mongodb');
 const { expandGroups } = require('../utils/cmg_helpers');
-const logger = require('../logger');
+const logger = require('../../logger');
 
 /**
  * Project ACL Poller
@@ -33,7 +33,7 @@ class ProjectACLPoller extends BasePoller {
    */
   async processDocument(cmgProject, tx) {
     // Find project by cmg_id
-    const bioloopProject = await tx.project.findUnique({
+    const bioloopProject = await tx.project.findFirst({
       where: { cmg_id: cmgProject._id.toString() },
     });
     

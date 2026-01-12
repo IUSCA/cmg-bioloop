@@ -1,6 +1,6 @@
 const { ObjectId } = require('mongodb');
 const { handleDuplicateName } = require('../utils/duplicate_handler');
-const logger = require('../logger');
+const logger = require('../../logger');
 
 const DUPLICATE_PREFIX = 'DUPLICATE';
 const UNKNOWN_PREFIX = 'UNKNOWN';
@@ -22,6 +22,48 @@ async function syncAllDatasets(prisma, cmgDb) {
 }
 
 /**
+ * Process a batch of items: group by name, handle duplicates, and insert
+ * This keeps memory usage low by processing small batches at a time
+ */
+async function processBatch(prisma, batchItems, datasetType) {
+  // Group items in this batch by name
+  const nameGroups = {};
+  
+  for (const item of batchItems) {
+    const name = item.name;
+    if (!nameGroups[name]) {
+      nameGroups[name] = [];
+    }
+    nameGroups[name].push(item);
+  }
+  
+  // Insert each group (always check DB for existing names, even if only 1 in batch)
+  for (const [originalName, items] of Object.entries(nameGroups)) {
+    for (const item of items) {
+      // Always check if name exists in DB (handles cross-batch duplicates)
+      const existingDataset = await prisma.dataset.findFirst({
+        where: {
+          name: originalName,
+          type: datasetType,
+          is_deleted: false,
+        },
+      });
+      
+      let finalName;
+      if (existingDataset || items.length > 1) {
+        // Name exists in DB OR multiple items in this batch - get unique name
+        finalName = await handleDuplicateName(prisma, originalName, datasetType, false);
+      } else {
+        // Name doesn't exist, safe to use original
+        finalName = originalName;
+      }
+      
+      await insertDataset(prisma, item, datasetType, finalName, false);
+    }
+  }
+}
+
+/**
  * Convert datasets from a specific CMG collection
  * Equivalent to: db_conversion/src/convert/entity/dataset.py::convert_cmg_datasets()
  */
@@ -31,13 +73,20 @@ async function convertCMGDatasets(prisma, cmgDb, datasetType) {
   
   logger.info(`[BIGBANG] Processing CMG collection: ${collectionName} (type: ${datasetType})`);
   
-  // Group CMG datasets by name
-  const nameGroups = {};
+  // Get total count for progress tracking
+  const totalCount = await collection.countDocuments({});
+  logger.info(`[BIGBANG] Found ${totalCount} items to process`);
+  
+  // Process in small batches and insert immediately to avoid memory issues
   let unknownCount = 0;
+  let processedCount = 0;
+  const BATCH_SIZE = 50;  // Small batch size to avoid memory buildup
+  let currentBatch = [];
   
-  const cmgItems = await collection.find({}).toArray();
+  // Use cursor to stream data
+  const cursor = collection.find({}).batchSize(BATCH_SIZE);
   
-  for (const cmgItem of cmgItems) {
+  for await (const cmgItem of cursor) {
     // Handle missing names
     if (!cmgItem.name) {
       unknownCount++;
@@ -46,28 +95,36 @@ async function convertCMGDatasets(prisma, cmgDb, datasetType) {
       cmgItem.name = assignedName;
     }
     
-    const name = cmgItem.name;
-    if (!nameGroups[name]) {
-      nameGroups[name] = [];
-    }
-    nameGroups[name].push(cmgItem);
-  }
-  
-  logger.info(`[BIGBANG] Found ${Object.keys(nameGroups).length} unique ${datasetType} names`);
-  
-  // Process each name group
-  for (const [originalName, items] of Object.entries(nameGroups)) {
-    if (items.length === 1) {
-      // No duplicates, use original name
-      await insertDataset(prisma, items[0], datasetType, originalName, false);
-    } else {
-      // Handle duplicates - add DUPLICATE prefix
-      for (const item of items) {
-        const newName = await handleDuplicateName(prisma, originalName, datasetType, false);
-        await insertDataset(prisma, item, datasetType, newName, false);
+    currentBatch.push(cmgItem);
+    
+    // Process and insert batch when it reaches size limit
+    if (currentBatch.length >= BATCH_SIZE) {
+      await processBatch(prisma, currentBatch, datasetType);
+      processedCount += currentBatch.length;
+      
+      // Clear batch from memory immediately
+      currentBatch = [];
+      
+      // Progress logging
+      if (processedCount % 500 === 0) {
+        logger.info(`[BIGBANG] Processed ${processedCount}/${totalCount} items (${Math.round(processedCount / totalCount * 100)}%)`);
+      }
+      
+      // Force garbage collection hint
+      if (global.gc && processedCount % 1000 === 0) {
+        global.gc();
       }
     }
   }
+  
+  // Process remaining items
+  if (currentBatch.length > 0) {
+    await processBatch(prisma, currentBatch, datasetType);
+    processedCount += currentBatch.length;
+    currentBatch = [];
+  }
+  
+  logger.info(`[BIGBANG] Completed processing ${processedCount} ${datasetType} items`);
 }
 
 /**

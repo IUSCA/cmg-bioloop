@@ -1,4 +1,4 @@
-const logger = require('../logger');
+const logger = require('../../logger');
 
 /**
  * Initialize cursor tracking for all pollers

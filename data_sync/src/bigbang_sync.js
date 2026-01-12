@@ -323,7 +323,8 @@ async function main() {
     // Log full error object for debugging
     logger.error('Full Error Object:', JSON.stringify(error, Object.getOwnPropertyNames(error), 2));
     logger.error('');
-    logger.error('The migration has been rolled back. Please fix the error and try again.');
+    logger.error('NOTE: Data inserted before the error occurred has been retained in the database.');
+    logger.error('The script is idempotent - you can re-run it after fixing the error.');
     logger.error('');
 
     process.exit(1);

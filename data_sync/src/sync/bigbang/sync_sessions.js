@@ -1,5 +1,5 @@
 const { ObjectId } = require('mongodb');
-const logger = require('../logger');
+const logger = require('../../logger');
 
 /**
  * Convert genome browser sessions from CMG to Bioloop
@@ -41,7 +41,7 @@ async function convertSession(prisma, cmgDb, cmgSession) {
   // Map session owner
   let userId = null;
   if (cmgSession.user) {
-    const user = await prisma.user.findUnique({
+    const user = await prisma.user.findFirst({
       where: { cmg_id: cmgSession.user.toString() },
     });
     
@@ -81,7 +81,7 @@ async function convertSession(prisma, cmgDb, cmgSession) {
     }
     
     // Find corresponding Bioloop DATA_PRODUCT
-    const bioloopDataset = await prisma.dataset.findUnique({
+    const bioloopDataset = await prisma.dataset.findFirst({
       where: { cmg_id: cmgDataproductId.toString() },
     });
     

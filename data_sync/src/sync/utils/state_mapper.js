@@ -5,7 +5,7 @@
  */
 
 const { parseEventsForStates } = require('./event_parser');
-const logger = require('../logger');
+const logger = require('../../logger');
 
 /**
  * Determine which states should be added to a dataset based on CMG data

@@ -1,5 +1,5 @@
 const { ObjectId } = require('mongodb');
-const logger = require('../logger');
+const logger = require('../../logger');
 
 /**
  * Convert conversions from CMG to Bioloop
@@ -50,7 +50,7 @@ async function convertConversion(prisma, cmgDb, cmgConversion) {
   // Find initiator user
   let initiatorId = null;
   if (cmgConversion.user) {
-    const initiator = await prisma.user.findUnique({
+    const initiator = await prisma.user.findFirst({
       where: { cmg_id: cmgConversion.user.toString() },
     });
     
@@ -62,7 +62,7 @@ async function convertConversion(prisma, cmgDb, cmgConversion) {
   // Find source dataset
   let sourceDatasetId = null;
   if (cmgConversion.dataset) {
-    const sourceDataset = await prisma.dataset.findUnique({
+    const sourceDataset = await prisma.dataset.findFirst({
       where: { cmg_id: cmgConversion.dataset.toString() },
     });
     
@@ -104,7 +104,7 @@ async function linkDerivedDatasets(prisma, cmgDb, bioloopConversionId, cmgConver
   }).toArray();
   
   for (const dataproduct of dataproducts) {
-    const bioloopDataset = await prisma.dataset.findUnique({
+    const bioloopDataset = await prisma.dataset.findFirst({
       where: { cmg_id: dataproduct._id.toString() },
     });
     

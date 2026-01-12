@@ -1,4 +1,4 @@
-const logger = require('../logger');
+const logger = require('../../logger');
 const BasePoller = require('./base_poller');
 
 /**
@@ -27,7 +27,7 @@ class SessionMetadataPoller extends BasePoller {
    */
   async processDocument(cmgSession, tx) {
     // Find session by cmg_id
-    const bioloopSession = await tx.genome_browser_session.findUnique({
+    const bioloopSession = await tx.genome_browser_session.findFirst({
       where: { cmg_id: cmgSession._id.toString() },
     });
 

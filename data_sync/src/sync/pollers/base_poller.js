@@ -1,5 +1,5 @@
 const { ObjectId } = require('mongodb');
-const logger = require('../logger');
+const logger = require('../../logger');
 const { acquireLock, releaseLock, updateCursor } = require('../cursor_manager');
 const { logSyncError } = require('../error_logger');
 

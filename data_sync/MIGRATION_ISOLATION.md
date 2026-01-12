@@ -45,16 +45,17 @@ docker compose -f docker-compose.sandbox.yml down -v
 ### Access Container
 ```bash
 # Execute commands
-docker exec -it bioloop_db_sandbox bash
+cd data_sync
+docker compose -f docker-compose.sandbox.yml exec db_sandbox bash
 
 # Run bigbang script
-docker exec -it bioloop_db_sandbox node src/bigbang_sync.js
+docker compose -f docker-compose.sandbox.yml exec db_sandbox node src/bigbang_sync.js
 
 # Run poller script
-docker exec -it bioloop_db_sandbox node src/poller_sync.js
+docker compose -f docker-compose.sandbox.yml exec db_sandbox node src/poller_sync.js
 
 # Access PostgreSQL
-docker exec -it bioloop_db_sandbox psql -U appuser -d bioloop_sync
+docker compose -f docker-compose.sandbox.yml exec db_sandbox psql -U appuser -d bioloop_sync
 ```
 
 ### Restart After Changes
