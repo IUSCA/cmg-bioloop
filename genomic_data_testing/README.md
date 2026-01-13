@@ -9,8 +9,8 @@ genomic_data_testing/
 ├── register_sequencing_runs/
 │   ├── register_sequencing_runs.sh          # Download 10x Genomics sequencing run
 │   └── dataset_info.md                      # Documentation for sequencing run dataset
-└── register_genome_browser_suitable_data_products/
-    ├── register_genome_browser_suitable_data_products.sh  # Download genome browser tracks
+└── register_data_products_suitable_for_genome_browser/
+    ├── register_data_products_suitable_for_genome_browser.sh  # Download genome browser tracks
     └── data_products_info.md                # Documentation for genome browser datasets
 ```
 
@@ -36,7 +36,7 @@ cd register_sequencing_runs
 
 ### 2. Genome Browser Data Products (DATA_PRODUCT)
 
-**Location:** `register_genome_browser_suitable_data_products/`  
+**Location:** `register_data_products_suitable_for_genome_browser/`  
 **Datasets:** 3 genome browser compatible files (bigBed, bigWig, methylation data)  
 **Registration Type:** DATA_PRODUCT
 
@@ -48,8 +48,8 @@ These datasets are used for testing genome browser integration:
 All mapped to hg19 genome assembly.
 
 ```bash
-cd register_genome_browser_suitable_data_products
-./register_genome_browser_suitable_data_products.sh
+cd register_data_products_suitable_for_genome_browser
+./register_data_products_suitable_for_genome_browser.sh
 ```
 
 ## Usage
@@ -101,7 +101,7 @@ Both scripts support command-line options for customization:
 ```bash
 # View help for any script
 ./register_sequencing_runs.sh -h
-./register_genome_browser_suitable_data_products.sh -h
+./register_data_products_suitable_for_genome_browser.sh -h
 
 # Common options
 -d, --destination DIR    # Override destination directory
@@ -121,6 +121,6 @@ Both scripts support command-line options for customization:
 For detailed information about each dataset, including testable genomic ranges and data sources, see:
 
 - `register_sequencing_runs/dataset_info.md` - Sequencing run details
-- `register_genome_browser_suitable_data_products/data_products_info.md` - Genome browser data details
+- `register_data_products_suitable_for_genome_browser/data_products_info.md` - Genome browser data details
 
 

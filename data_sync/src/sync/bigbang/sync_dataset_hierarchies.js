@@ -55,6 +55,20 @@ async function syncDatasetHierarchies(prisma, cmgDb) {
       continue;
     }
     
+    // Check if hierarchy relationship already exists (for idempotency)
+    const existingHierarchy = await prisma.dataset_hierarchy.findFirst({
+      where: {
+        source_id: bioloopRawData.id,
+        derived_id: bioloopDataProduct.id,
+      },
+    });
+    
+    if (existingHierarchy) {
+      logger.debug(`[BIGBANG] Hierarchy already exists: source=${bioloopRawData.id}, derived=${bioloopDataProduct.id}`);
+      skippedCount++;
+      continue;
+    }
+    
     // Insert the hierarchy relationship
     await prisma.dataset_hierarchy.create({
       data: {

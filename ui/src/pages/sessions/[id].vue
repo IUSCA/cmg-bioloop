@@ -102,7 +102,7 @@
                   border-color="primary"
                   preset="secondary"
                   class="flex-initial"
-                  @click="showBrowserSelectionModal = true"
+                  @click="handleViewInBrowser"
                   :loading="genomeBrowserLoading"
                 >
                   <i-mdi-dna class="pr-2 text-2xl" />
@@ -825,39 +825,67 @@ const _handleSessionUpdated = (_updatedSession) => {
 };
 
 /**
- * Check for unstaged datasets before opening genome browser
+ * Handle View in Genome Browser button click
+ * Check for unstaged/staged datasets before showing appropriate modal
  */
-const checkUnstagedDatasets = async () => {
-  if (!session.value) return false;
+const handleViewInBrowser = async () => {
+  if (!session.value) return;
 
   try {
-    const response = await sessionService.getDatasets(session.value.id, { staged: false });
-    const unstagedDatasets = response.data.datasets || [];
+    // Check both staged and unstaged datasets
+    const [stagedResponse, unstagedResponse] = await Promise.all([
+      sessionService.getDatasets(session.value.id, { staged: true }),
+      sessionService.getDatasets(session.value.id, { staged: false }),
+    ]);
 
+    const stagedDatasets = stagedResponse.data.datasets || [];
+    const unstagedDatasets = unstagedResponse.data.datasets || [];
+
+    // If there are unstaged datasets, show the unstaged modal first
     if (unstagedDatasets.length > 0) {
-      // Show modal with unstaged datasets
       showUnstagedModal.value = true;
-      return true; // Has unstaged datasets
+      return;
     }
 
-    return false; // All datasets are staged
+    // If there are no staged datasets at all, nothing to view
+    if (stagedDatasets.length === 0) {
+      toast.warning('No datasets available for viewing');
+      return;
+    }
+
+    // All datasets are staged, proceed to browser selection
+    showBrowserSelectionModal.value = true;
   } catch (error) {
-    console.error('Failed to check unstaged datasets:', error);
+    console.error('Failed to check dataset status:', error);
     toast.error('Failed to check dataset staging status');
-    return false;
   }
 };
 
 /**
  * Handle staging requested
  */
-const handleStagingRequested = () => {
+const handleStagingRequested = async () => {
   toast.info(
     'Staging workflows have been requested. Datasets will be available once staging completes.'
   );
   showUnstagedModal.value = false;
   // Reload session to update data_requested status
-  loadSession();
+  await loadSession();
+
+  // Check if there are any staged datasets to view
+  try {
+    const response = await sessionService.getDatasets(session.value.id, { staged: true });
+    const stagedDatasets = response.data.datasets || [];
+
+    if (stagedDatasets.length > 0) {
+      // There are some staged datasets, show browser selection
+      showBrowserSelectionModal.value = true;
+    }
+    // If no staged datasets yet, user will have to wait for staging to complete
+    // (no toast needed, the "staging requested" toast is already shown)
+  } catch (error) {
+    console.error('Failed to check staged datasets:', error);
+  }
 };
 
 /**
@@ -910,16 +938,7 @@ const retryStaging = async () => {
  * Handle browser selection from modal
  */
 const handleBrowserSelection = async (browserType) => {
-  // First check if there are any unstaged datasets
-  const hasUnstagedDatasets = await checkUnstagedDatasets();
-
-  if (hasUnstagedDatasets) {
-    // User will be shown the unstaged datasets modal
-    // They can choose to stage them or cancel
-    return;
-  }
-
-  // All datasets are staged, proceed with browser initialization
+  // Browser selection modal only shows if we have staged datasets
   selectedBrowserType.value = browserType;
 
   if (browserType === BROWSER_TYPES.IGV) {

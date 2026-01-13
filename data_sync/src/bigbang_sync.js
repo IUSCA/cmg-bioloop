@@ -36,11 +36,12 @@
  * 4. Convert users
  * 5. Convert datasets (RAW_DATA and DATA_PRODUCT)
  * 6. Convert dataset audit logs (from events)
- * 7. Convert dataset hierarchies
- * 8. Convert projects
- * 9. Convert conversions
- * 10. Convert sessions (optional - many will be skipped)
- * 11. Initialize cursors for pollers
+ * 7. Convert dataset import logs (CMG upload history)
+ * 8. Convert dataset hierarchies
+ * 9. Convert projects
+ * 10. Convert conversions
+ * 11. Convert sessions (optional - many will be skipped)
+ * 12. Initialize cursors for pollers
  */
 
 require('module-alias/register');
@@ -55,6 +56,7 @@ const { createRoles, createCMGUser, populatePipelineDefinitions } = require('./s
 const { syncUsers } = require('./sync/bigbang/sync_users');
 const { syncAllDatasets } = require('./sync/bigbang/sync_datasets');
 const { syncAuditLogs } = require('./sync/bigbang/sync_audit_logs');
+const { syncImportLogs } = require('./sync/bigbang/sync_import_logs');
 const { syncDatasetHierarchies } = require('./sync/bigbang/sync_dataset_hierarchies');
 const { syncProjects } = require('./sync/bigbang/sync_projects');
 const { syncConversions } = require('./sync/bigbang/sync_conversions');
@@ -238,51 +240,55 @@ async function main() {
     logger.info('');
 
     // 1. Create roles
-    logger.info('[1/11] Creating roles...');
+    logger.info('[1/12] Creating roles...');
     await createRoles(prisma);
 
     // 2. Create CMG system user
-    logger.info('[2/11] Creating CMG system user...');
+    logger.info('[2/12] Creating CMG system user...');
     const cmgUserId = await createCMGUser(prisma);
 
     // 3. Populate pipeline definitions
-    logger.info('[3/11] Populating pipeline definitions...');
+    logger.info('[3/12] Populating pipeline definitions...');
     await populatePipelineDefinitions(prisma, cmgUserId);
 
     // 4. Convert users
-    logger.info('[4/11] Converting users...');
+    logger.info('[4/12] Converting users...');
     await syncUsers(prisma, cmgDb);
 
     // 5. Convert datasets
-    logger.info('[5/11] Converting datasets...');
+    logger.info('[5/12] Converting datasets...');
     await syncAllDatasets(prisma, cmgDb);
 
     // 6. Convert dataset audit logs
-    logger.info('[6/11] Converting dataset audit logs...');
+    logger.info('[6/12] Converting dataset audit logs...');
     await syncAuditLogs(prisma, cmgDb, cmgUserId);
 
-    // 7. Convert dataset hierarchies
-    logger.info('[7/11] Converting dataset hierarchies...');
+    // 7. Convert dataset import logs (CMG upload history -> Bioloop import logs)
+    logger.info('[7/12] Converting CMG upload history to import logs...');
+    await syncImportLogs(prisma, cmgDb, cmgUserId);
+
+    // 8. Convert dataset hierarchies
+    logger.info('[8/12] Converting dataset hierarchies...');
     await syncDatasetHierarchies(prisma, cmgDb);
 
-    // 8. Convert projects
-    logger.info('[8/11] Converting projects...');
+    // 9. Convert projects
+    logger.info('[9/12] Converting projects...');
     await syncProjects(prisma, cmgDb);
 
-    // 9. Convert conversions
-    logger.info('[9/11] Converting conversions...');
+    // 10. Convert conversions
+    logger.info('[10/12] Converting conversions...');
     await syncConversions(prisma, cmgDb);
 
-    // 10. Convert sessions (optional)
+    // 11. Convert sessions (optional)
     if (options.skipSessions) {
-      logger.info('[10/11] Skipping sessions (--skip-sessions flag provided)');
+      logger.info('[11/12] Skipping sessions (--skip-sessions flag provided)');
     } else {
-      logger.info('[10/11] Converting genome browser sessions...');
+      logger.info('[11/12] Converting genome browser sessions...');
       await syncSessions(prisma, cmgDb);
     }
 
-    // 11. Initialize cursors
-    logger.info('[11/11] Initializing poller cursors...');
+    // 12. Initialize cursors
+    logger.info('[12/12] Initializing poller cursors...');
     await initializeCursors(prisma, cmgDb);
 
     // Clear lock extender

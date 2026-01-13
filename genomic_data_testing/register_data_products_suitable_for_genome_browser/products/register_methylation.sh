@@ -1,0 +1,297 @@
+#!/bin/bash
+# =============================================================================
+# Methylation Track Registration Script
+# =============================================================================
+#
+# Purpose:
+#   Downloads H1 cell line MethylC-seq data from WashU Public Data and
+#   registers it as DATA_PRODUCT for genome browser testing.
+#
+# Usage:
+#   ./register_methylation.sh [OPTIONS]
+#
+# Options:
+#   -d, --destination DIR    Destination directory (default: /opt/sca/data/origin/data_products)
+#   -h, --help              Show this help message
+#
+# Note:
+#   - This script creates detailed documentation in ../product_docs/methylation_h1_hg19.md
+#
+# =============================================================================
+
+set -e
+
+# Get the script directory
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PRODUCT_DOC_DIR="$(dirname "$SCRIPT_DIR")/product_docs"
+
+# Default configuration
+DESTINATION="/opt/sca/data/origin/data_products"
+SERVICE_NAME="celery_worker"
+
+# Dataset definition
+FILENAME="h1.liftedtohg19.gz"
+URL="https://vizhub.wustl.edu/public/hg19/methylc2/h1.liftedtohg19.gz"
+DIR_NAME="methylation_h1_hg19"
+
+# Parse command line arguments
+show_help() {
+    head -n 16 "$0" | tail -n +2 | sed 's/^# \?//'
+    exit 0
+}
+
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        -d|--destination)
+            DESTINATION="$2"
+            shift 2
+            ;;
+        -h|--help)
+            show_help
+            ;;
+        *)
+            echo "Error: Unknown option: $1"
+            echo ""
+            show_help
+            ;;
+    esac
+done
+
+# Function to create product documentation
+create_product_doc() {
+    local doc_file="$PRODUCT_DOC_DIR/${DIR_NAME}.md"
+    
+    cat > "$doc_file" << 'EOF'
+# methylation_h1_hg19 - MethylC-seq Track
+
+## Dataset Overview
+
+**File:** `h1.liftedtohg19.gz`  
+**Source:** https://vizhub.wustl.edu/public/hg19/methylc2/h1.liftedtohg19.gz  
+**Size:** ~few MB  
+**Format:** Methylation bedGraph (gzipped)  
+**Genome:** hg19  
+**Cell Line:** H1 (human embryonic stem cells)
+
+### What This Dataset Is
+
+✅ **Real methylation data from MethylC-seq experiments**
+
+✅ **H1 cell line data lifted over to hg19 coordinates**
+
+✅ **Suitable for testing methylation visualization**
+
+### Purpose
+
+This dataset is used to test:
+- Methylation bedGraph file format support
+- Compressed file handling (.gz)
+- Methylation signal visualization
+- Epigenetic data display in genome browsers
+
+---
+
+## Testing Ranges (hg19)
+
+Use these genomic coordinates to verify methylation data:
+
+### Test Region 1
+```
+chr11:1950000-2120000
+```
+- **Chromosome:** 11
+- **Region Size:** ~170 KB
+- **Expected:** Methylation signal patterns visible
+
+### Test Region 2
+```
+chr19:58430000-58600000
+```
+- **Chromosome:** 19
+- **Region Size:** ~170 KB
+- **Expected:** Variable methylation levels
+
+### Test Region 3
+```
+chr6:32500000-33000000
+```
+- **Chromosome:** 6
+- **Region Size:** ~500 KB
+- **Expected:** Broader methylation landscape
+
+---
+
+## Using This Dataset in Bioloop
+
+### 1. Registration
+
+The dataset is automatically registered as DATA_PRODUCT when placed in:
+```
+/opt/sca/data/origin/data_products/methylation_h1_hg19/
+```
+
+### 2. File Format
+
+The file is a gzipped bedGraph with methylation levels:
+- Compressed with gzip
+- BedGraph format: chrom, start, end, value
+- Values represent methylation levels
+
+### 3. Creating a Genome Browser Session
+
+Once registered:
+1. Navigate to `/sessions/new`
+2. Select the methylation track
+3. Set genome to `hg19`
+4. Create the session
+5. View methylation patterns in the browser
+
+---
+
+## Verification Steps
+
+### 1. Check Dataset Registration
+
+```bash
+curl http://localhost:3030/api/datasets | jq '.datasets[] | select(.name=="methylation_h1_hg19")'
+```
+
+### 2. Test in Genome Browser
+
+1. Create a session with the track
+2. Navigate to `chr11:1950000-2120000`
+3. Verify methylation signal is visible
+4. Compare patterns across different regions
+
+---
+
+## Data Source
+
+**WashU Public Data - MethylC-seq**  
+https://vizhub.wustl.edu/public/
+
+Publicly available methylation data from H1 embryonic stem cells.
+
+EOF
+
+    echo "Created product documentation: $doc_file"
+}
+
+# Create documentation before downloading
+echo "Creating product documentation..."
+create_product_doc
+
+# Function to run commands inside the celery_worker container
+run_in_container() {
+    docker-compose exec -T "$SERVICE_NAME" bash -c "$1"
+}
+
+# Check if service is running
+if ! docker-compose ps "$SERVICE_NAME" 2>/dev/null | grep -q "Up"; then
+    echo "Error: Service '$SERVICE_NAME' is not running"
+    echo "Please start the service with: docker-compose up -d"
+    exit 1
+fi
+
+echo ""
+echo "================================"
+echo "Methylation Track Registration"
+echo "================================"
+echo "Service: $SERVICE_NAME"
+echo "Destination: $DESTINATION"
+echo "Dataset: $FILENAME"
+echo ""
+
+echo "[1/1] Processing: $FILENAME"
+echo "  URL: $URL"
+echo "  Directory: $DIR_NAME"
+
+# Run download and organization inside the container
+run_in_container "
+    set -e
+    
+    TMP_DIR=\$(mktemp -d)
+    cd \$TMP_DIR
+    
+    echo '  Downloading in chunks...'
+    
+    FILE_SIZE=\$(curl -sIL '$URL' | grep -i content-length | tail -1 | awk '{print \$2}' | tr -d '\\r')
+    
+    if [ -z \"\$FILE_SIZE\" ] || [ \"\$FILE_SIZE\" -eq 0 ]; then
+        echo '  ✗ Could not determine file size'
+        rm -rf \$TMP_DIR
+        exit 1
+    fi
+    
+    echo \"  Total size: \$FILE_SIZE bytes\"
+    
+    CHUNK_SIZE=$((10*1024*1024))
+    touch '$FILENAME'
+    
+    CUR_SIZE=\$(stat -f%z '$FILENAME' 2>/dev/null || stat -c%s '$FILENAME' 2>/dev/null || echo 0)
+    echo \"  Have \$CUR_SIZE / \$FILE_SIZE bytes\"
+    
+    start=\$CUR_SIZE
+    
+    while [ \"\$start\" -lt \"\$FILE_SIZE\" ]; do
+        end=\$((start + CHUNK_SIZE - 1))
+        if [ \"\$end\" -ge \"\$FILE_SIZE\" ]; then end=\$((FILE_SIZE - 1)); fi
+        
+        echo \"  Fetching bytes \$start-\$end\"
+        
+        if curl -L --fail --retry 50 --retry-delay 2 --retry-all-errors \
+            -H \"Range: bytes=\$start-\$end\" \
+            \"$URL\" >> '$FILENAME'; then
+            start=\$((end + 1))
+        else
+            echo '  ✗ Download chunk failed'
+            rm -rf \$TMP_DIR
+            exit 1
+        fi
+    done
+    
+    echo '  ✓ Download complete'
+    
+    if [ ! -f '$FILENAME' ]; then
+        echo '  ✗ File not found after download'
+        rm -rf \$TMP_DIR
+        exit 1
+    fi
+    
+    FILE_SIZE=\$(stat -f%z '$FILENAME' 2>/dev/null || stat -c%s '$FILENAME' 2>/dev/null || echo 0)
+    echo \"  File size: \$FILE_SIZE bytes\"
+    
+    DATASET_DIR='$DESTINATION/$DIR_NAME'
+    echo \"  Creating directory: \$DATASET_DIR\"
+    mkdir -p \$DATASET_DIR
+    
+    echo \"  Moving file to: \$DATASET_DIR/$FILENAME\"
+    mv '$FILENAME' \$DATASET_DIR/
+    
+    rm -rf \$TMP_DIR
+    
+    echo '  ✓ Complete'
+"
+
+if [ $? -eq 0 ]; then
+    echo "  ✓ Successfully created dataset: $DIR_NAME"
+else
+    echo "  ✗ Failed to create dataset: $DIR_NAME"
+fi
+
+echo ""
+echo "================================"
+echo "Registration complete!"
+echo "================================"
+echo ""
+echo "Downloaded dataset is in directory at:"
+echo "  $DESTINATION/$DIR_NAME"
+echo ""
+echo "Product documentation created at:"
+echo "  $PRODUCT_DOC_DIR/${DIR_NAME}.md"
+echo ""
+echo "Testing ranges (hg19):"
+echo "  - chr11:1950000-2120000"
+echo "  - chr19:58430000-58600000"
+echo "  - chr6:32500000-33000000"
+

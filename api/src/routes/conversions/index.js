@@ -457,17 +457,20 @@ router.post(
               argument_id: Number(argument_id),
               value: conversionService.convertValueForStorage(value, definition),
             })),
-          },
-          additional_args: req.body.user_argument_values.length > 0 ? req.body.user_argument_values : null,
         },
-      });
+        additional_args: req.body.user_argument_values.length > 0 ? req.body.user_argument_values : null,
+      },
+    });
 
-      const wf_body = datasetService.get_wf_body('conversion');
-      // create the workflow
-      const wf = (await wfService.create({
-        ...wf_body,
-        args: [conversion.id],
-      })).data;
+    const workflow_type = config.genomic_conversion_programs.includes(conversionDefinition.program.name)
+      ? 'genomic_conversion'
+      : 'conversion';
+    const wf_body = datasetService.get_wf_body(workflow_type);
+    // create the workflow
+    const wf = (await wfService.create({
+      ...wf_body,
+      args: [conversion.id],
+    })).data;
 
       // add workflow association to the dataset
       await tx.workflow.create({

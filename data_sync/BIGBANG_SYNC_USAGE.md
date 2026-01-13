@@ -96,11 +96,12 @@ The script executes operations in this exact order (matching `convert.py`):
 4. **Convert users** - CMG users → Bioloop users with role mappings
 5. **Convert datasets** - RAW_DATA (datasets) and DATA_PRODUCT (dataproducts)
 6. **Convert dataset audit logs** - From CMG events arrays
-7. **Convert dataset hierarchies** - Links between raw data and derived products
-8. **Convert projects** - With user and dataset associations
-9. **Convert conversions** - Pipeline runs with derived dataset links
-10. **Convert sessions** - Genome browser sessions (optional, often skipped)
-11. **Initialize cursors** - Set starting points for incremental pollers
+7. **Convert import logs** - CMG upload history → Bioloop import logs (for `/datasets/imports` page)
+8. **Convert dataset hierarchies** - Links between raw data and derived products
+9. **Convert projects** - With user and dataset associations
+10. **Convert conversions** - Pipeline runs with derived dataset links
+11. **Convert sessions** - Genome browser sessions (optional, often skipped)
+12. **Initialize cursors** - Set starting points for incremental pollers
 
 ## What Gets Migrated
 
@@ -108,6 +109,7 @@ The script executes operations in this exact order (matching `convert.py`):
 - All users with role mappings
 - All datasets (RAW_DATA and DATA_PRODUCT)
 - Dataset genomic attributes
+- Dataset import logs (CMG upload history → visible on `/datasets/imports` page)
 - Dataset hierarchies (source → derived relationships)
 - All projects with associations (users, datasets)
 - All conversions with derived datasets

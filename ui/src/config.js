@@ -121,6 +121,9 @@ const exports = {
   upload: {
     scope_prefix: 'upload_file:',
   },
+  conversion: {
+    allow_multiple_dataset_conversions: false, // Set to false by default to allow only single dataset conversions
+  },
   genomic_conversion_programs: [
     'bcl2fastq',
     'bcl-convert',

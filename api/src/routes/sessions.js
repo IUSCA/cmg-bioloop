@@ -64,7 +64,7 @@ function evaluateDataRequestStatus(session) {
 
   unstagedDatasets.forEach((ds) => {
     const workflows = ds.workflows || [];
-    const stageWorkflows = workflows.filter((wf) => wf.name === 'Stage');
+    const stageWorkflows = workflows.filter((wf) => wf.name === 'stage');
 
     if (stageWorkflows.length === 0) {
       // No stage workflow exists for this dataset
@@ -1445,12 +1445,6 @@ router.post(
     const unstagedDatasets = Array.from(unstagedDatasetMap.values());
 
     if (unstagedDatasets.length === 0) {
-      // Update session to mark data as not requested if all staged
-      await prisma.genome_browser_session.update({
-        where: { id: sessionId },
-        data: { data_requested: false },
-      });
-
       return res.json({
         success: true,
         message: 'All datasets are already staged',
@@ -1458,12 +1452,6 @@ router.post(
         all_successful: true,
       });
     }
-
-    // Set data_requested to true before attempting any workflow submissions
-    await prisma.genome_browser_session.update({
-      where: { id: sessionId },
-      data: { data_requested: true },
-    });
 
     // Track results for each dataset
     const stagingResults = [];
@@ -1482,7 +1470,7 @@ router.post(
         // Create staging workflow (will throw AssertionError if workflow already running/pending)
         const workflow = await datasetService.create_workflow(
           datasetWithWorkflows,
-          'Stage',
+          'stage',
           req.user.id,
         );
 
