@@ -111,6 +111,7 @@ node src/poller_sync.js
 - **BIGBANG_SYNC_USAGE.md** - One-time migration documentation
 - **POLLER_SYNC_USAGE.md** - Continuous sync documentation
 - **TARGET_DATABASE_CONFIGURATION.md** - Choose between sandbox and production databases
+- **LOGS.md** - Log locations, accessing logs, pulling from production
 
 ## Quick Reference
 

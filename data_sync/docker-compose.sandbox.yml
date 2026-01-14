@@ -11,6 +11,7 @@ services:
       - .:/opt/sca/app
       - ../api/prisma:/opt/sca/api/prisma:ro
       - ../api/.env:/opt/sca/api/.env:ro
+      - ./logs:/tmp
       - db_sandbox_pgdata:/var/lib/postgresql/15/main
       - db_sandbox_node_modules:/opt/sca/app/node_modules
     working_dir: /opt/sca/app
