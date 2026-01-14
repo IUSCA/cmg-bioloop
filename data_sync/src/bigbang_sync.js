@@ -215,8 +215,8 @@ async function main() {
     const cmgUri = buildMongoUri('cmg', options.cmgUri);
 
     logger.info('Connecting to databases...');
-    // logger.info(`CMG MongoDB: ${cmgUri.replace(/\/\/.*@/, '//<credentials>@')}`);
-    logger.info(`CMG MongoDB: ${cmgUri}`);
+    logger.info(`CMG MongoDB: ${cmgUri.replace(/\/\/.*@/, '//<credentials>@')}`);
+    // logger.info(`CMG MongoDB: ${cmgUri}`);
 
     // Connect to MongoDB databases
     cmgClient = new MongoClient(cmgUri);
