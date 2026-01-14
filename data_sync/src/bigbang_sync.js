@@ -9,10 +9,12 @@
  *   node src/bigbang_sync.js [options]
  *
  * Options:
- *   --cmg-uri=<uri>     MongoDB connection string for CMG database
- *   --skip-sessions     Skip genome browser session conversion
- *   --clear-locks       Clear any existing process locks before starting
- *   --help, -h          Show help message
+ *   --cmg-uri=<uri>        MongoDB connection string for CMG database
+ *   --target-db=<target>   Target database: sandbox (default), app, or custom
+ *   --skip-sessions        Skip genome browser session conversion
+ *   --clear-locks          Clear any existing process locks before starting
+ *   --clear-target-db      Clear all data from target database before migration
+ *   --help, -h             Show help message
  *
  * Environment Variables (alternative to --cmg-uri):
  *   CMG_MONGO_HOST, CMG_MONGO_PORT, CMG_MONGO_DB, CMG_MONGO_USERNAME,
@@ -87,6 +89,8 @@ function parseArgs() {
       options.skipSessions = true;
     } else if (arg === '--clear-locks') {
       options.clearLocks = true;
+    } else if (arg === '--clear-target-db') {
+      options.clearTargetDb = true;
     } else if (arg === '--help' || arg === '-h') {
       // eslint-disable-next-line no-console
       console.log(`
@@ -104,6 +108,9 @@ Options:
   --skip-sessions        Skip genome browser session conversion (recommended for initial run)
   
   --clear-locks          Clear any existing process locks before starting
+  
+  --clear-target-db      Clear all data from target database before migration (keeps schema)
+                         WARNING: This deletes all existing data!
   
   --help, -h             Show this help message
 
@@ -126,6 +133,9 @@ Examples:
   
   # Sync to app DB with all options
   node src/bigbang_sync.js --target-db=app --skip-sessions --clear-locks
+  
+  # Clear target DB and run fresh migration
+  node src/bigbang_sync.js --clear-target-db --skip-sessions
 `);
       process.exit(0);
     }
@@ -181,6 +191,59 @@ function buildMongoUri(cmdLineUri) {
   uri += `${host}:${port}/${database}`;
 
   return uri;
+}
+
+/**
+ * Clear all data from target database (keeps schema intact)
+ * @param {PrismaClient} prisma - Prisma client instance
+ */
+async function clearTargetDatabase(prisma) {
+  logger.warn('='.repeat(80));
+  logger.warn('⚠️  CLEARING TARGET DATABASE');
+  logger.warn('='.repeat(80));
+  logger.warn('This will DELETE ALL DATA from the target database!');
+  logger.warn('Schema (tables) will be preserved.');
+  logger.warn('');
+
+  try {
+    // Get all table names from the database
+    const tables = await prisma.$queryRaw`
+      SELECT tablename 
+      FROM pg_tables 
+      WHERE schemaname = 'public'
+      ORDER BY tablename;
+    `;
+
+    logger.info(`Found ${tables.length} tables to clear`);
+
+    // Disable foreign key checks temporarily
+    await prisma.$executeRawUnsafe('SET session_replication_role = replica;');
+
+    // Truncate each table
+    for (const { tablename } of tables) {
+      // Skip Prisma's migration history table
+      if (tablename === '_prisma_migrations') {
+        logger.debug(`Skipping Prisma migrations table: ${tablename}`);
+        continue;
+      }
+
+      try {
+        await prisma.$executeRawUnsafe(`TRUNCATE TABLE "${tablename}" CASCADE;`);
+        logger.debug(`Cleared table: ${tablename}`);
+      } catch (error) {
+        logger.warn(`Failed to clear table ${tablename}: ${error.message}`);
+      }
+    }
+
+    // Re-enable foreign key checks
+    await prisma.$executeRawUnsafe('SET session_replication_role = DEFAULT;');
+
+    logger.info('✅ Target database cleared successfully');
+    logger.info('');
+  } catch (error) {
+    logger.error('Failed to clear target database:', error.message);
+    throw error;
+  }
 }
 
 /**
@@ -241,6 +304,11 @@ async function main() {
       logger.error('    data: { locked_by: null, lock_expires_at: null } })');
       logger.error('');
       process.exit(1);
+    }
+
+    // Clear target database if requested
+    if (options.clearTargetDb) {
+      await clearTargetDatabase(prisma);
     }
 
     // Build connection URIs
