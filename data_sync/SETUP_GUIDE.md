@@ -8,6 +8,65 @@ The `data_sync` container runs CMG-to-Bioloop database synchronization with:
 - **Isolated PostgreSQL**: Separate database inside container for safe testing
 - **Standalone Compose File**: Uses `docker-compose.sandbox.yml` to avoid affecting main app
 
+## ⚠️ CRITICAL: Network Isolation - Do NOT Modify
+
+### The Problem
+
+On production hosts, there's a tendency to add the main application's network to `docker-compose.sandbox.yml`. **This is wrong.**
+
+### ❌ What NOT to Do
+
+```yaml
+# WRONG - Do not add main app's network
+services:
+  db_sandbox:
+    networks:
+      - default  # Don't add this
+      - cmg-bioloop-2_default  # Don't add this
+```
+
+```yaml
+# WRONG - Do not remove networks section
+services:
+  db_sandbox:
+    # ... no networks defined
+```
+
+### ✅ Correct Configuration
+
+```yaml
+services:
+  db_sandbox:
+    networks:
+      - sandbox_network  # ← Only this network
+
+networks:
+  sandbox_network:
+    name: bioloop_sandbox
+    driver: bridge
+```
+
+### Why Isolation Matters
+
+1. **Safety** - Sandbox failures don't affect production
+2. **Testing** - Test migrations without risk
+3. **Isolation** - Independent PostgreSQL instance
+4. **Clean Teardown** - Destroy sandbox without affecting main app
+
+### How to Sync to Production
+
+**Use the `--target-db=app` flag** instead of modifying networks:
+
+```bash
+node src/bigbang_sync.js --target-db=app
+```
+
+This reads credentials from `../api/.env` and connects to the main database via hostname (works despite network isolation).
+
+See [TARGET_DATABASE_CONFIGURATION.md](TARGET_DATABASE_CONFIGURATION.md) for complete database targeting guide.
+
+---
+
 ## Architecture
 
 ### Schema Sharing (Prisma 5.20)

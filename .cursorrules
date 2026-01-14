@@ -53,8 +53,7 @@ Key patterns to remember:
 - printenv
 
 ## Directory & File Inspection
-- ls -al
-- ls -lh
+- ls
 - tree
 - pwd
 - stat

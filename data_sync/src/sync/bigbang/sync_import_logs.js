@@ -25,14 +25,33 @@ async function syncImportLogs(prisma, cmgDb, cmgUserId) {
   const cursor = uploadsCollection.find({}).batchSize(BATCH_SIZE);
   
   for await (const cmgUpload of cursor) {
+    let bioloopDataset = null; // Declare outside try block for error handler access
+    
     try {
-      // Find the corresponding Bioloop RAW_DATA dataset
-      const bioloopDataset = await prisma.dataset.findFirst({
-        where: { cmg_id: cmgUpload.dataset?.toString() },
+      // CMG uploads can reference either a 'dataset' (RAW_DATA) or 'dataproduct' (DATA_PRODUCT)
+      // Find which one exists and use it
+      let datasetCmgId = null;
+      if (cmgUpload.dataset) {
+        datasetCmgId = cmgUpload.dataset.toString();
+      } else if (cmgUpload.dataproduct) {
+        datasetCmgId = cmgUpload.dataproduct.toString();
+      }
+      
+      // Skip if neither dataset nor dataproduct is specified
+      if (!datasetCmgId) {
+        logger.warn(`[BIGBANG] Skipping CMG upload ${cmgUpload._id}: no dataset or dataproduct reference`);
+        skippedCount++;
+        processedCount++;
+        continue;
+      }
+      
+      // Find the corresponding Bioloop dataset
+      bioloopDataset = await prisma.dataset.findFirst({
+        where: { cmg_id: datasetCmgId },
       });
       
       if (!bioloopDataset) {
-        logger.warn(`[BIGBANG] No Bioloop dataset found for CMG upload ${cmgUpload._id} (dataset: ${cmgUpload.dataset})`);
+        logger.warn(`[BIGBANG] No Bioloop dataset found for CMG upload ${cmgUpload._id} (cmg_id: ${datasetCmgId})`);
         skippedCount++;
         processedCount++;
         continue;
@@ -94,16 +113,9 @@ async function syncImportLogs(prisma, cmgDb, cmgUserId) {
         }
       }
       
-      // Find source dataset if specified (for derived datasets)
-      let sourceRun = null;
-      if (cmgUpload.dataproduct) {
-        const sourceDataset = await prisma.dataset.findFirst({
-          where: { cmg_id: cmgUpload.dataproduct.toString() },
-        });
-        if (sourceDataset) {
-          sourceRun = sourceDataset.id.toString();
-        }
-      }
+      // Note: source_run (source dataset for derived products) is not tracked in CMG uploads
+      // Set to null as this information is not available
+      const sourceRun = null;
       
       // Create the import log entry
       await prisma.dataset_import_log.create({

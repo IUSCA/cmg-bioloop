@@ -38,6 +38,7 @@ const config = require('config');
 const { MongoClient } = require('mongodb');
 const { PrismaClient } = require('@prisma/client');
 const logger = require('./logger');
+const { setDatabaseUrl } = require('./utils/db_config');
 
 // Poller classes
 const UserRolesPoller = require('./sync/pollers/user_roles_poller');
@@ -65,7 +66,9 @@ function parseArgs() {
   };
 
   args.forEach((arg) => {
-    if (arg === '--clear-locks') {
+    if (arg.startsWith('--target-db=')) {
+      [, options.targetDb] = arg.split('=');
+    } else if (arg === '--clear-locks') {
       options.clearLocks = true;
     } else if (arg === '--help' || arg === '-h') {
       // eslint-disable-next-line no-console
@@ -83,9 +86,17 @@ function parseArgs() {
       // eslint-disable-next-line no-console
       console.log('Options:');
       // eslint-disable-next-line no-console
-      console.log('  --clear-locks    Clear any existing process locks before starting');
+      console.log('  --target-db=<target>   Target database: sandbox (default), app, or custom');
       // eslint-disable-next-line no-console
-      console.log('  --help, -h       Show this help message');
+      console.log('                         - sandbox: Use data_sync\'s isolated PostgreSQL');
+      // eslint-disable-next-line no-console
+      console.log('                         - app: Read from ../api/.env and use app\'s database');
+      // eslint-disable-next-line no-console
+      console.log('                         - custom: Use DATABASE_URL from environment');
+      // eslint-disable-next-line no-console
+      console.log('  --clear-locks          Clear any existing process locks before starting');
+      // eslint-disable-next-line no-console
+      console.log('  --help, -h             Show this help message');
       // eslint-disable-next-line no-console
       console.log('');
       process.exit(0);
@@ -229,6 +240,12 @@ async function main() {
   const pollers = [];
 
   try {
+    // Set target database URL based on --target-db flag
+    const targetDb = options.targetDb || 'sandbox';
+    const databaseUrl = setDatabaseUrl(targetDb);
+    logger.info(`[OK] Target database: ${targetDb}`);
+    logger.info(`[OK] Database URL: ${sanitizeUri(databaseUrl)}`);
+
     // Create dedicated Prisma instance for pollers (shared across all pollers)
     prisma = new PrismaClient();
     logger.info('[OK] Prisma client created (shared by all pollers)');
