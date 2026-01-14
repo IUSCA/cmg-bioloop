@@ -63,8 +63,23 @@ node src/poller_sync.js --help
 ```
 
 **Command-line Options:**
+- `--target-db=<target>`: Target database: `sandbox` (default), `app`, or `custom`
+  - `sandbox`: Writes to isolated test database
+  - `app`: Reads from `../api/.env` and writes to production database
+  - `custom`: Uses `DATABASE_URL` from environment
 - `--clear-locks`: Clear any existing process locks before starting (useful if previous instance crashed)
 - `--help, -h`: Show usage information
+
+**Examples:**
+```bash
+# Test poller in sandbox (recommended first)
+node src/poller_sync.js --target-db=sandbox --clear-locks
+
+# Run poller against production database
+node src/poller_sync.js --target-db=app --clear-locks
+```
+
+**See `TARGET_DATABASE_CONFIGURATION.md` for detailed documentation on target database options.**
 
 ### Method 2: PM2 (Production - Recommended)
 
@@ -80,7 +95,11 @@ pm2 start ecosystem.config.js --only cmg-poller
 
 **View logs:**
 ```bash
+# PM2 logs
 pm2 logs cmg-poller
+
+# File logs (accessible from host)
+tail -f /tmp/data_sync_logs/poller_sync_*.log
 ```
 
 **View status:**

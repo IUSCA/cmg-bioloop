@@ -69,6 +69,68 @@ See [TARGET_DATABASE_CONFIGURATION.md](TARGET_DATABASE_CONFIGURATION.md) for com
 
 ## Architecture
 
+### Network Configuration
+
+The sandbox container connects to **two networks**:
+
+1. **sandbox_network** - Isolated network for the sandbox's own PostgreSQL (port 5434)
+2. **bioloop_network** - Production network to access main app's PostgreSQL (172.19.0.3:5432)
+
+```yaml
+# docker-compose.sandbox.yml
+services:
+  db_sandbox:
+    networks:
+      - sandbox_network      # Own isolated DB
+      - bioloop_prod_network # Access to production DB
+    volumes:
+      - /tmp/data_sync_logs:/tmp:rw  # Log files accessible from host
+
+networks:
+  sandbox_network:
+    name: bioloop_sandbox
+    driver: bridge
+  bioloop_prod_network:
+    external: true
+    name: bioloop_network  # Production network
+```
+
+This dual-network setup allows:
+- ✅ Testing migrations safely in sandbox
+- ✅ Writing to production database when ready
+- ✅ No interference between sandbox and production
+- ✅ DataGrip access to sandbox on `localhost:5434`
+
+### Log File Access
+
+Sync logs are automatically written to the host filesystem:
+
+**Container Path:** `/tmp/bigbang_sync_*.log` or `/tmp/poller_sync_*.log`  
+**Host Path:** `/tmp/data_sync_logs/bigbang_sync_*.log`
+
+```bash
+# View logs from host
+ls -lh /tmp/data_sync_logs/
+
+# Tail latest bigbang log
+tail -f /tmp/data_sync_logs/bigbang_sync_*.log
+
+# View latest poller log
+tail -f /tmp/data_sync_logs/poller_sync_*.log
+```
+
+This makes it easy to monitor sync progress and debug issues without needing to exec into the container.
+
+**Cleanup:**
+```bash
+# Clean up old log files when no longer needed
+rm /tmp/data_sync_logs/bigbang_sync_*.log
+rm /tmp/data_sync_logs/poller_sync_*.log
+
+# Or delete all logs
+rm -rf /tmp/data_sync_logs/*
+```
+
 ### Schema Sharing (Prisma 5.20)
 
 ```
@@ -269,27 +331,49 @@ psql -U appuser -d bioloop_sync -c '\dt'
 
 ### One-Time Migration (Big-Bang)
 
-Syncs all historical CMG data to sandbox database:
+The bigbang sync can write to either the **sandbox database** (for testing) or the **app's production database**.
+
+#### Test in Sandbox (Recommended First)
 
 ```bash
 cd data_sync
-docker compose -f docker-compose.sandbox.yml exec db_sandbox node src/bigbang_sync.js --clear-locks
+docker compose -f docker-compose.sandbox.yml exec db_sandbox \
+  node src/bigbang_sync.js --target-db=sandbox --clear-locks
+```
+
+#### Sync to Production Database
+
+```bash
+cd data_sync
+docker compose -f docker-compose.sandbox.yml exec db_sandbox \
+  node src/bigbang_sync.js --target-db=app --skip-sessions --clear-locks
 ```
 
 **Options:**
+- `--target-db=<target>` - Target database: `sandbox` (default), `app`, or `custom`
+  - `sandbox`: Writes to isolated test database
+  - `app`: Reads config from `../api/.env` and writes to production database
+  - `custom`: Uses `DATABASE_URL` from environment
 - `--skip-sessions` - Skip genome browser sessions
 - `--clear-locks` - Clear stale process locks
 - `--cmg-uri=<uri>` - Override CMG MongoDB URI
 
-**See:** `BIGBANG_SYNC_USAGE.md` for detailed documentation
+**See:** `TARGET_DATABASE_CONFIGURATION.md` and `BIGBANG_SYNC_USAGE.md` for detailed documentation
 
 ### Continuous Sync (Poller)
 
-Continuously polls CMG for updates:
+Continuously polls CMG for updates. Like bigbang, can target sandbox or production:
 
 ```bash
 cd data_sync
-docker compose -f docker-compose.sandbox.yml exec db_sandbox node src/poller_sync.js
+
+# Sandbox (testing)
+docker compose -f docker-compose.sandbox.yml exec db_sandbox \
+  node src/poller_sync.js --target-db=sandbox
+
+# Production (actual sync)
+docker compose -f docker-compose.sandbox.yml exec db_sandbox \
+  node src/poller_sync.js --target-db=app
 ```
 
 **Pollers:**
@@ -300,7 +384,7 @@ docker compose -f docker-compose.sandbox.yml exec db_sandbox node src/poller_syn
 - `project_metadata` - Project metadata updates
 - `session_metadata` - Session metadata updates
 
-**See:** `POLLER_SYNC_USAGE.md` for detailed documentation
+**See:** `TARGET_DATABASE_CONFIGURATION.md` and `POLLER_SYNC_USAGE.md` for detailed documentation
 
 ## Common Tasks
 
