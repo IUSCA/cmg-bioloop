@@ -3,7 +3,6 @@ const logger = require('../../logger');
 
 /**
  * Convert genome browser sessions from CMG to Bioloop
- * Equivalent to: db_conversion/src/convert/entity/session.py::convert_sessions()
  * 
  * Note: Sessions sync is optional and may skip many entries due to missing dataset_files
  */

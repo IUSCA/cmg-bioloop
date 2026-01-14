@@ -4,7 +4,6 @@
  * CMG to Bioloop Big-Bang Synchronization Script
  *
  * One-time initial population of all CMG data into Bioloop.
- * Follows the exact same order as: db_conversion/src/convert/scripts/convert.py
  *
  * Usage:
  *   node src/bigbang_sync.js [options]
@@ -29,7 +28,7 @@
  *   # Skip sessions and clear stale locks
  *   node src/bigbang_sync.js --skip-sessions --clear-locks
  *
- * Order of operations (same as convert.py):
+ * Order of operations:
  * 1. Create roles
  * 2. Create CMG system user
  * 3. Populate pipeline definitions (cmd_line_programs, conversion_definitions, arguments)
@@ -125,24 +124,35 @@ Examples:
 }
 
 /**
- * Build MongoDB connection URI from config or command line
+ * Sanitize MongoDB URIs in strings to hide credentials
+ * Replaces mongodb://user:pass@host with mongodb://<credentials>@host
  */
-function buildMongoUri(dbType, cmdLineUri) {
+function sanitizeUri(str) {
+  if (!str) return str;
+  if (typeof str !== 'string') {
+    str = JSON.stringify(str);
+  }
+  return str.replace(/mongodb:\/\/[^:]+:[^@]+@/g, 'mongodb://<credentials>@');
+}
+
+/**
+ * Build CMG MongoDB connection URI from config or command line
+ */
+function buildMongoUri(cmdLineUri) {
   if (cmdLineUri) {
     return cmdLineUri;
   }
 
   // Get from config system
-  const configKey = dbType === 'cmg' ? 'cmg_mongodb' : 'rhythm_mongodb';
-  const dbConfig = config.get(configKey);
+  const dbConfig = config.get('cmg_mongodb');
 
   const {
     host, port, database, username, password,
   } = dbConfig;
 
   if (!host || !database) {
-    const errorMsg = `${dbType.toUpperCase()} MongoDB configuration missing. `
-      + `Please set environment variables or use --${dbType}-uri flag.`;
+    const errorMsg = 'CMG MongoDB configuration missing. '
+      + 'Please set CMG_MONGO_* environment variables or use --cmg-uri flag.';
     throw new Error(errorMsg);
   }
 
@@ -212,11 +222,10 @@ async function main() {
     }
 
     // Build connection URIs
-    const cmgUri = buildMongoUri('cmg', options.cmgUri);
+    const cmgUri = buildMongoUri(options.cmgUri);
 
     logger.info('Connecting to databases...');
-    // logger.info(`CMG MongoDB: ${cmgUri.replace(/\/\/.*@/, '//<credentials>@')}`);
-    logger.info(`CMG MongoDB: ${cmgUri}`);
+    logger.info(`CMG MongoDB: ${cmgUri.replace(/\/\/.*@/, '//<credentials>@')}`);
 
     // Connect to MongoDB databases
     cmgClient = new MongoClient(cmgUri);
@@ -235,7 +244,7 @@ async function main() {
       }
     }, 120000); // Every 2 minutes
 
-    // Execute migration in order (matching convert.py)
+    // Execute migration in order
     logger.info('Starting big-bang migration...');
     logger.info('');
 
@@ -317,17 +326,17 @@ async function main() {
     logger.error('='.repeat(80));
     logger.error('[FAILED] Big-bang migration FAILED');
     logger.error('='.repeat(80));
-    logger.error('Error Message:', error.message);
+    logger.error('Error Message:', sanitizeUri(error.message));
     logger.error('Error Name:', error.name);
     if (error.code) {
       logger.error('Error Code:', error.code);
     }
     if (error.stack) {
       logger.error('Stack Trace:');
-      logger.error(error.stack);
+      logger.error(sanitizeUri(error.stack));
     }
-    // Log full error object for debugging
-    logger.error('Full Error Object:', JSON.stringify(error, Object.getOwnPropertyNames(error), 2));
+    // Log full error object for debugging (sanitized)
+    logger.error('Full Error Object:', sanitizeUri(JSON.stringify(error, Object.getOwnPropertyNames(error), 2)));
     logger.error('');
     logger.error('NOTE: Data inserted before the error occurred has been retained in the database.');
     logger.error('The script is idempotent - you can re-run it after fixing the error.');

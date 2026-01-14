@@ -14,13 +14,6 @@
     "username": "CMG_MONGO_USERNAME",
     "password": "CMG_MONGO_PASSWORD"
   },
-  "rhythm_mongodb": {
-    "host": "RHYTHM_MONGO_HOST",
-    "port": "RHYTHM_MONGO_PORT",
-    "database": "RHYTHM_MONGO_DB",
-    "username": "RHYTHM_MONGO_USERNAME",
-    "password": "RHYTHM_MONGO_PASSWORD"
-  },
   "oauth": {
     "base_url": "OAUTH_BASE_URL",
     "download": {

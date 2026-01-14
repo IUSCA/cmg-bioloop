@@ -808,9 +808,6 @@ Rhythm MongoDB     ←       →   Bioloop Workflows (future operations only)
 - `workers/workers/tasks/*.py` - Task implementations
 - `workers/workers/config/common.py` - Workflow definitions
 
-**Migration:**
-- `db_conversion/src/convert/entity/workflow.py` - Historical workflow recreation (commented out)
-
 ---
 
 ## Conclusion

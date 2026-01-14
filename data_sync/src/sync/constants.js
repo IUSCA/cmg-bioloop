@@ -2,7 +2,6 @@
  * CMG Sync - Constants
  * 
  * Constants for seeding roles, programs, conversion definitions, and arguments
- * Based on db_conversion/src/convert/constants/common.py
  */
 
 /**

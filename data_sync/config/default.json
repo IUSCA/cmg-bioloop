@@ -20,13 +20,6 @@
     "username": "",
     "password": ""
   },
-  "rhythm_mongodb": {
-    "host": "localhost",
-    "port": 27018,
-    "database": "rhythm",
-    "username": "",
-    "password": ""
-  },
   "auth": {
     "mode": "dev",
     "jwt": {

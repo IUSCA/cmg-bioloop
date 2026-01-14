@@ -96,18 +96,29 @@ function parseArgs() {
 }
 
 /**
- * Build MongoDB connection URI from config
+ * Sanitize MongoDB URIs in strings to hide credentials
+ * Replaces mongodb://user:pass@host with mongodb://<credentials>@host
  */
-function buildMongoUri(dbType) {
-  const configKey = dbType === 'cmg' ? 'cmg_mongodb' : 'rhythm_mongodb';
-  const dbConfig = config.get(configKey);
+function sanitizeUri(str) {
+  if (!str) return str;
+  if (typeof str !== 'string') {
+    str = JSON.stringify(str);
+  }
+  return str.replace(/mongodb:\/\/[^:]+:[^@]+@/g, 'mongodb://<credentials>@');
+}
+
+/**
+ * Build CMG MongoDB connection URI from config
+ */
+function buildMongoUri() {
+  const dbConfig = config.get('cmg_mongodb');
 
   const {
     host, port, database, username, password,
   } = dbConfig;
 
   if (!host || !database) {
-    throw new Error(`${dbType.toUpperCase()} MongoDB configuration missing`);
+    throw new Error('CMG MongoDB configuration missing. Please set CMG_MONGO_* environment variables.');
   }
 
   let uri = 'mongodb://';
@@ -164,12 +175,12 @@ function setupGracefulShutdown(pollers, cmgClient, prisma, lockAcquired) {
 
   // Handle uncaught errors
   process.on('uncaughtException', (error) => {
-    logger.error('Uncaught exception:', error);
+    logger.error('Uncaught exception:', sanitizeUri(error.stack || error.message || String(error)));
     shutdown('UNCAUGHT_EXCEPTION');
   });
 
   process.on('unhandledRejection', (reason, promise) => {
-    logger.error('Unhandled rejection at:', promise, 'reason:', reason);
+    logger.error('Unhandled rejection at:', promise, 'reason:', sanitizeUri(String(reason)));
     shutdown('UNHANDLED_REJECTION');
   });
 }
@@ -252,7 +263,7 @@ async function main() {
     }
 
     // Build connection URIs
-    const cmgUri = buildMongoUri('cmg');
+    const cmgUri = buildMongoUri();
 
     logger.info('Connecting to databases...');
     logger.info(`CMG MongoDB: ${cmgUri.replace(/\/\/.*@/, '//<credentials>@')}`);
@@ -330,17 +341,17 @@ async function main() {
     logger.error('='.repeat(80));
     logger.error('[FAILED] Poller initialization failed');
     logger.error('='.repeat(80));
-    logger.error('Error Message:', error.message);
+    logger.error('Error Message:', sanitizeUri(error.message));
     logger.error('Error Name:', error.name);
     if (error.code) {
       logger.error('Error Code:', error.code);
     }
     if (error.stack) {
       logger.error('Stack Trace:');
-      logger.error(error.stack);
+      logger.error(sanitizeUri(error.stack));
     }
-    // Log full error object for debugging
-    logger.error('Full Error Object:', JSON.stringify(error, Object.getOwnPropertyNames(error), 2));
+    // Log full error object for debugging (sanitized)
+    logger.error('Full Error Object:', sanitizeUri(JSON.stringify(error, Object.getOwnPropertyNames(error), 2)));
     logger.error('');
 
     // Cleanup

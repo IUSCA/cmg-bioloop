@@ -8,7 +8,6 @@ const logger = require('../../logger');
 
 /**
  * Create roles in Bioloop database
- * Equivalent to: db_conversion/src/convert/entity/user.py::create_roles()
  */
 async function createRoles(prisma) {
   logger.info('[BIGBANG] Creating roles...');
@@ -42,7 +41,6 @@ async function createRoles(prisma) {
 
 /**
  * Create CMG system user (cmguser)
- * Equivalent to: db_conversion/src/convert/constants/cmg.py::cmguser
  */
 async function createCMGUser(prisma) {
   logger.info('[BIGBANG] Creating CMG system user...');
@@ -92,7 +90,6 @@ async function createCMGUser(prisma) {
 
 /**
  * Populate pipeline definitions: cmd_line_programs, conversion_definitions, arguments
- * Equivalent to: db_conversion/src/convert/entity/conversion.py::_populate_pipeline_definitions()
  */
 async function populatePipelineDefinitions(prisma, cmgUserId) {
   logger.info('[BIGBANG] Populating pipeline definitions...');

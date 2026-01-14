@@ -3,7 +3,6 @@ const { mapCMGRolesToBioloop } = require('../utils/role_mapper');
 
 /**
  * Assign roles to a user based on CMG roles
- * Equivalent to: db_conversion/src/convert/entity/user.py::assign_user_roles()
  */
 async function assignUserRoles(prisma, cmgUser, userId) {
   const cmgRoles = cmgUser.roles || [];
@@ -31,7 +30,6 @@ async function assignUserRoles(prisma, cmgUser, userId) {
 
 /**
  * Convert a single CMG user to Bioloop
- * Equivalent to: db_conversion/src/convert/entity/user.py::convert_user()
  *
  * Returns: user object on success, null if user is a duplicate (skipped)
  * Throws: on any unexpected error
@@ -69,7 +67,6 @@ async function convertUser(prisma, cmgUser) {
 
 /**
  * Convert CMG users to Bioloop users
- * Equivalent to: db_conversion/src/convert/entity/user.py::convert_users()
  */
 async function syncUsers(prisma, cmgDb) {
   logger.info('[BIGBANG] Converting users...');
@@ -96,7 +93,6 @@ async function syncUsers(prisma, cmgDb) {
 
 /**
  * Get Bioloop CMG system user ID
- * Equivalent to: db_conversion/src/convert/entity/user.py::get_bioloop_cmguser_id()
  */
 async function getBioloopCMGUserId(prisma) {
   const user = await prisma.user.findUnique({

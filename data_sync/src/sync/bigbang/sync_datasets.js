@@ -7,7 +7,6 @@ const UNKNOWN_PREFIX = 'UNKNOWN';
 
 /**
  * Convert all datasets from CMG to Bioloop
- * Equivalent to: db_conversion/src/convert/entity/dataset.py::convert_all_datasets()
  */
 async function syncAllDatasets(prisma, cmgDb) {
   logger.info('[BIGBANG] Converting datasets...');
@@ -65,7 +64,6 @@ async function processBatch(prisma, batchItems, datasetType) {
 
 /**
  * Convert datasets from a specific CMG collection
- * Equivalent to: db_conversion/src/convert/entity/dataset.py::convert_cmg_datasets()
  */
 async function convertCMGDatasets(prisma, cmgDb, datasetType) {
   const collectionName = datasetType === 'DATA_PRODUCT' ? 'dataproducts' : 'datasets';
@@ -129,7 +127,6 @@ async function convertCMGDatasets(prisma, cmgDb, datasetType) {
 
 /**
  * Insert a single dataset into Bioloop
- * Equivalent to: db_conversion/src/convert/entity/dataset.py::insert_dataset()
  */
 async function insertDataset(prisma, cmgItem, datasetType, name, isDeleted) {
   if (!name) {
