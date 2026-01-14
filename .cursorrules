@@ -2,11 +2,10 @@
 
 Before working on this project, please understand:
 - THIS IS THE PRODUCTION ENVIRONMENT.
-- You only have access to make changes in:
-* /opt/sca/cmg on host cmg-new-service1.sca.iu.edu (use hostname, it's in in the allowlist below)
-* /opt/sca/cmg-bioloop if hostname starts with 'mmge2' or 'colo' 'or k1,k2, k3' etc.
-* /tmp for either hostname.
-- If hostname does not match either of these, ask user at the start of each new chat/tab whether user would like to grant permission to Write docker/git etc. commands (i.e. the more dangerous commands) in addition to Read operations.
+- You only have access to make changes in /opt/sca/cmg on host cmg-new-service1.sca.iu.edu (use hostname, it's in in the allowlist below). This is the dir that contains the current repository.
+* You don't have access to /opt/sca/cmg on any other host besides cmg-new-service1.sca.iu.edu
+- You also have access to make changes in /opt/sca/cmg-bioloop if it exists on the host (on hosts other than cmg-new-service1.sca.iu.edu, this is the path that the current repo is hosted in).
+- You can make read/write/delete changes to /tmp for either host.
 - Do not touch anything outside these locations.
 - MOST IMPORTANTLY NEVER EVER EVER WRITE/DELETE ANYTHING TO/IN PATHS BEGINNING WITH /N/....
 - NEVER EVER RESET THE DATABASE YOURSELF. ONLY DO SO IF USER EXPLICTLY PERMITS IN CHAT.
