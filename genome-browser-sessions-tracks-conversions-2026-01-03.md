@@ -465,9 +465,9 @@ model conversion_derived_dataset {
    - New dataset(s) created
    - Can be used to create tracks for genome browser sessions
 
-### Conversion Script (Python Worker)
+### Conversion Script (Data Sync)
 
-**Location:** `db_conversion/src/convert/scripts/convert.py`
+**Location:** `data_sync/src/sync/bigbang/sync_conversions.js`
 
 ```python
 class MongoToPostgresConversionManager:
@@ -765,13 +765,13 @@ api/prisma/
 └── migrations/              # Database migrations
 ```
 
-### Workers (Python)
+### Data Sync (Node.js)
 ```
-db_conversion/src/convert/
-├── scripts/
-│   └── convert.py           # MongoDB → PostgreSQL migration
-├── entity/                  # Entity models
-└── operations/              # CRUD operations
+data_sync/src/sync/
+├── bigbang/
+│   └── sync_conversions.js  # MongoDB → PostgreSQL migration
+├── pollers/                 # Incremental sync
+└── utils/                   # Helper functions
 ```
 
 ---

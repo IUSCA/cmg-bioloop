@@ -4,7 +4,6 @@ const logger = require('../../logger');
 
 /**
  * Convert projects from CMG to Bioloop
- * Equivalent to: db_conversion/src/convert/entity/project.py::convert_projects()
  */
 async function syncProjects(prisma, cmgDb) {
   logger.info('[BIGBANG] Converting projects...');

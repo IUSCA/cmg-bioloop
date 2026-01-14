@@ -112,15 +112,6 @@ CMG_MONGO_USERNAME=cmg
 CMG_MONGO_PASSWORD=password
 ```
 
-### Rhythm MongoDB
-```bash
-RHYTHM_MONGO_HOST=rhythm-host
-RHYTHM_MONGO_PORT=27018
-RHYTHM_MONGO_DB=celery
-RHYTHM_MONGO_USERNAME=appuser
-RHYTHM_MONGO_PASSWORD=password
-```
-
 ## Polling Strategy
 
 ### Cursor-Based Incremental Sync

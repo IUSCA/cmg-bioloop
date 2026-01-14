@@ -193,7 +193,6 @@ async function expandGroupsToUserIds(cmgDb, groupIds) {
 
 /**
  * Generate slug from name (for projects)
- * Equivalent to: db_conversion/src/convert/common.py::generate_slug()
  * 
  * @param {Object} prisma - Prisma client
  * @param {string} name - Project name

@@ -931,7 +931,7 @@ CMG used a simpler conversion model:
 
 #### 2. Migrate Existing Conversions
 
-**Script:** `db_conversion/src/convert/scripts/migrate_conversions.py`
+**Script:** `data_sync/src/sync/bigbang/sync_conversions.js`
 
 ```python
 def migrate_cmg_conversions():

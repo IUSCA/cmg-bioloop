@@ -4,7 +4,6 @@
  * CMG to Bioloop Big-Bang Synchronization Script
  *
  * One-time initial population of all CMG data into Bioloop.
- * Follows the exact same order as: db_conversion/src/convert/scripts/convert.py
  *
  * Usage:
  *   node src/bigbang_sync.js [options]
@@ -29,7 +28,7 @@
  *   # Skip sessions and clear stale locks
  *   node src/bigbang_sync.js --skip-sessions --clear-locks
  *
- * Order of operations (same as convert.py):
+ * Order of operations:
  * 1. Create roles
  * 2. Create CMG system user
  * 3. Populate pipeline definitions (cmd_line_programs, conversion_definitions, arguments)
@@ -50,6 +49,7 @@ const config = require('config');
 const { MongoClient } = require('mongodb');
 const { PrismaClient } = require('@prisma/client');
 const logger = require('./logger');
+const { setDatabaseUrl } = require('./utils/db_config');
 
 // Bigbang modules
 const { createRoles, createCMGUser, populatePipelineDefinitions } = require('./sync/bigbang/seed_constants');
@@ -81,6 +81,8 @@ function parseArgs() {
   for (const arg of args) {
     if (arg.startsWith('--cmg-uri=')) {
       [, options.cmgUri] = arg.split('=');
+    } else if (arg.startsWith('--target-db=')) {
+      [, options.targetDb] = arg.split('=');
     } else if (arg === '--skip-sessions') {
       options.skipSessions = true;
     } else if (arg === '--clear-locks') {
@@ -93,6 +95,11 @@ Usage: node src/bigbang_sync.js [options]
 Options:
   --cmg-uri=<uri>        MongoDB connection string for CMG database
                          Format: mongodb://username:password@host:port/database
+  
+  --target-db=<target>   Target database: sandbox (default), app, or custom
+                         - sandbox: Use data_sync's isolated PostgreSQL
+                         - app: Read from ../api/.env and use app's database
+                         - custom: Use DATABASE_URL from environment
                          
   --skip-sessions        Skip genome browser session conversion (recommended for initial run)
   
@@ -105,17 +112,20 @@ Environment Variables (alternative to --cmg-uri):
   CMG_MONGO_PASSWORD
 
 Examples:
-  # Using command-line URI
+  # Using command-line URI (sandbox DB)
   node src/bigbang_sync.js --cmg-uri="mongodb://cmg:pass@localhost:27017/cmg"
   
   # Using environment variables (via config system)
   node src/bigbang_sync.js
   
+  # Target app's production database
+  node src/bigbang_sync.js --target-db=app
+  
   # Skip sessions (recommended for first run)
   node src/bigbang_sync.js --skip-sessions
   
-  # Clear stale locks before starting
-  node src/bigbang_sync.js --clear-locks
+  # Sync to app DB with all options
+  node src/bigbang_sync.js --target-db=app --skip-sessions --clear-locks
 `);
       process.exit(0);
     }
@@ -125,24 +135,35 @@ Examples:
 }
 
 /**
- * Build MongoDB connection URI from config or command line
+ * Sanitize MongoDB URIs in strings to hide credentials
+ * Replaces mongodb://user:pass@host with mongodb://<credentials>@host
  */
-function buildMongoUri(dbType, cmdLineUri) {
+function sanitizeUri(str) {
+  if (!str) return str;
+  if (typeof str !== 'string') {
+    str = JSON.stringify(str);
+  }
+  return str.replace(/mongodb:\/\/[^:]+:[^@]+@/g, 'mongodb://<credentials>@');
+}
+
+/**
+ * Build CMG MongoDB connection URI from config or command line
+ */
+function buildMongoUri(cmdLineUri) {
   if (cmdLineUri) {
     return cmdLineUri;
   }
 
   // Get from config system
-  const configKey = dbType === 'cmg' ? 'cmg_mongodb' : 'rhythm_mongodb';
-  const dbConfig = config.get(configKey);
+  const dbConfig = config.get('cmg_mongodb');
 
   const {
     host, port, database, username, password,
   } = dbConfig;
 
   if (!host || !database) {
-    const errorMsg = `${dbType.toUpperCase()} MongoDB configuration missing. `
-      + `Please set environment variables or use --${dbType}-uri flag.`;
+    const errorMsg = 'CMG MongoDB configuration missing. '
+      + 'Please set CMG_MONGO_* environment variables or use --cmg-uri flag.';
     throw new Error(errorMsg);
   }
 
@@ -174,6 +195,12 @@ async function main() {
   let lockExtender;
 
   try {
+    // Set target database URL based on --target-db flag
+    const targetDb = options.targetDb || 'sandbox';
+    const databaseUrl = setDatabaseUrl(targetDb);
+    logger.info(`[OK] Target database: ${targetDb}`);
+    logger.info(`[OK] Database URL: ${sanitizeUri(databaseUrl)}`);
+
     // Create dedicated Prisma instance for this script
     prisma = new PrismaClient();
     logger.info('[OK] Prisma client created');
@@ -212,11 +239,10 @@ async function main() {
     }
 
     // Build connection URIs
-    const cmgUri = buildMongoUri('cmg', options.cmgUri);
+    const cmgUri = buildMongoUri(options.cmgUri);
 
     logger.info('Connecting to databases...');
     logger.info(`CMG MongoDB: ${cmgUri.replace(/\/\/.*@/, '//<credentials>@')}`);
-    // logger.info(`CMG MongoDB: ${cmgUri}`);
 
     // Connect to MongoDB databases
     cmgClient = new MongoClient(cmgUri);
@@ -235,7 +261,7 @@ async function main() {
       }
     }, 120000); // Every 2 minutes
 
-    // Execute migration in order (matching convert.py)
+    // Execute migration in order
     logger.info('Starting big-bang migration...');
     logger.info('');
 
@@ -317,17 +343,17 @@ async function main() {
     logger.error('='.repeat(80));
     logger.error('[FAILED] Big-bang migration FAILED');
     logger.error('='.repeat(80));
-    logger.error('Error Message:', error.message);
+    logger.error('Error Message:', sanitizeUri(error.message));
     logger.error('Error Name:', error.name);
     if (error.code) {
       logger.error('Error Code:', error.code);
     }
     if (error.stack) {
       logger.error('Stack Trace:');
-      logger.error(error.stack);
+      logger.error(sanitizeUri(error.stack));
     }
-    // Log full error object for debugging
-    logger.error('Full Error Object:', JSON.stringify(error, Object.getOwnPropertyNames(error), 2));
+    // Log full error object for debugging (sanitized)
+    logger.error('Full Error Object:', sanitizeUri(JSON.stringify(error, Object.getOwnPropertyNames(error), 2)));
     logger.error('');
     logger.error('NOTE: Data inserted before the error occurred has been retained in the database.');
     logger.error('The script is idempotent - you can re-run it after fixing the error.');

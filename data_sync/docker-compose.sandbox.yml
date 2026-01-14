@@ -10,11 +10,14 @@ services:
     volumes:
       - .:/opt/sca/app
       - ../api/prisma:/opt/sca/api/prisma:ro
+      - ../api/.env:/opt/sca/api/.env:ro
       - db_sandbox_pgdata:/var/lib/postgresql/15/main
       - db_sandbox_node_modules:/opt/sca/app/node_modules
     working_dir: /opt/sca/app
     ports:
       - "127.0.0.1:5434:5432"
+    networks:
+      - sandbox_network
     deploy:
       resources:
         limits:
@@ -22,6 +25,11 @@ services:
         reservations:
           memory: 4G
     command: ["tail", "-f", "/dev/null"]
+
+networks:
+  sandbox_network:
+    name: bioloop_sandbox
+    driver: bridge
 
 volumes:
   db_sandbox_pgdata:

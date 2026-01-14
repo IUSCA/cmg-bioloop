@@ -3,7 +3,6 @@ const logger = require('../../logger');
 
 /**
  * Convert conversions from CMG to Bioloop
- * Equivalent to: db_conversion/src/convert/entity/conversion.py::convert_conversions()
  */
 async function syncConversions(prisma, cmgDb) {
   logger.info('[BIGBANG] Converting conversions...');
@@ -95,7 +94,6 @@ async function convertConversion(prisma, cmgDb, cmgConversion) {
 
 /**
  * Link derived datasets to a conversion
- * Equivalent to: db_conversion/src/convert/entity/conversion.py::_link_derived_datasets()
  */
 async function linkDerivedDatasets(prisma, cmgDb, bioloopConversionId, cmgConversionId) {
   // Find all dataproducts that have this conversion

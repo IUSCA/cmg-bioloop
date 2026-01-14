@@ -38,6 +38,7 @@ const config = require('config');
 const { MongoClient } = require('mongodb');
 const { PrismaClient } = require('@prisma/client');
 const logger = require('./logger');
+const { setDatabaseUrl } = require('./utils/db_config');
 
 // Poller classes
 const UserRolesPoller = require('./sync/pollers/user_roles_poller');
@@ -65,7 +66,9 @@ function parseArgs() {
   };
 
   args.forEach((arg) => {
-    if (arg === '--clear-locks') {
+    if (arg.startsWith('--target-db=')) {
+      [, options.targetDb] = arg.split('=');
+    } else if (arg === '--clear-locks') {
       options.clearLocks = true;
     } else if (arg === '--help' || arg === '-h') {
       // eslint-disable-next-line no-console
@@ -83,9 +86,17 @@ function parseArgs() {
       // eslint-disable-next-line no-console
       console.log('Options:');
       // eslint-disable-next-line no-console
-      console.log('  --clear-locks    Clear any existing process locks before starting');
+      console.log('  --target-db=<target>   Target database: sandbox (default), app, or custom');
       // eslint-disable-next-line no-console
-      console.log('  --help, -h       Show this help message');
+      console.log('                         - sandbox: Use data_sync\'s isolated PostgreSQL');
+      // eslint-disable-next-line no-console
+      console.log('                         - app: Read from ../api/.env and use app\'s database');
+      // eslint-disable-next-line no-console
+      console.log('                         - custom: Use DATABASE_URL from environment');
+      // eslint-disable-next-line no-console
+      console.log('  --clear-locks          Clear any existing process locks before starting');
+      // eslint-disable-next-line no-console
+      console.log('  --help, -h             Show this help message');
       // eslint-disable-next-line no-console
       console.log('');
       process.exit(0);
@@ -96,18 +107,29 @@ function parseArgs() {
 }
 
 /**
- * Build MongoDB connection URI from config
+ * Sanitize MongoDB URIs in strings to hide credentials
+ * Replaces mongodb://user:pass@host with mongodb://<credentials>@host
  */
-function buildMongoUri(dbType) {
-  const configKey = dbType === 'cmg' ? 'cmg_mongodb' : 'rhythm_mongodb';
-  const dbConfig = config.get(configKey);
+function sanitizeUri(str) {
+  if (!str) return str;
+  if (typeof str !== 'string') {
+    str = JSON.stringify(str);
+  }
+  return str.replace(/mongodb:\/\/[^:]+:[^@]+@/g, 'mongodb://<credentials>@');
+}
+
+/**
+ * Build CMG MongoDB connection URI from config
+ */
+function buildMongoUri() {
+  const dbConfig = config.get('cmg_mongodb');
 
   const {
     host, port, database, username, password,
   } = dbConfig;
 
   if (!host || !database) {
-    throw new Error(`${dbType.toUpperCase()} MongoDB configuration missing`);
+    throw new Error('CMG MongoDB configuration missing. Please set CMG_MONGO_* environment variables.');
   }
 
   let uri = 'mongodb://';
@@ -164,12 +186,12 @@ function setupGracefulShutdown(pollers, cmgClient, prisma, lockAcquired) {
 
   // Handle uncaught errors
   process.on('uncaughtException', (error) => {
-    logger.error('Uncaught exception:', error);
+    logger.error('Uncaught exception:', sanitizeUri(error.stack || error.message || String(error)));
     shutdown('UNCAUGHT_EXCEPTION');
   });
 
   process.on('unhandledRejection', (reason, promise) => {
-    logger.error('Unhandled rejection at:', promise, 'reason:', reason);
+    logger.error('Unhandled rejection at:', promise, 'reason:', sanitizeUri(String(reason)));
     shutdown('UNHANDLED_REJECTION');
   });
 }
@@ -218,6 +240,12 @@ async function main() {
   const pollers = [];
 
   try {
+    // Set target database URL based on --target-db flag
+    const targetDb = options.targetDb || 'sandbox';
+    const databaseUrl = setDatabaseUrl(targetDb);
+    logger.info(`[OK] Target database: ${targetDb}`);
+    logger.info(`[OK] Database URL: ${sanitizeUri(databaseUrl)}`);
+
     // Create dedicated Prisma instance for pollers (shared across all pollers)
     prisma = new PrismaClient();
     logger.info('[OK] Prisma client created (shared by all pollers)');
@@ -252,7 +280,7 @@ async function main() {
     }
 
     // Build connection URIs
-    const cmgUri = buildMongoUri('cmg');
+    const cmgUri = buildMongoUri();
 
     logger.info('Connecting to databases...');
     logger.info(`CMG MongoDB: ${cmgUri.replace(/\/\/.*@/, '//<credentials>@')}`);
@@ -330,17 +358,17 @@ async function main() {
     logger.error('='.repeat(80));
     logger.error('[FAILED] Poller initialization failed');
     logger.error('='.repeat(80));
-    logger.error('Error Message:', error.message);
+    logger.error('Error Message:', sanitizeUri(error.message));
     logger.error('Error Name:', error.name);
     if (error.code) {
       logger.error('Error Code:', error.code);
     }
     if (error.stack) {
       logger.error('Stack Trace:');
-      logger.error(error.stack);
+      logger.error(sanitizeUri(error.stack));
     }
-    // Log full error object for debugging
-    logger.error('Full Error Object:', JSON.stringify(error, Object.getOwnPropertyNames(error), 2));
+    // Log full error object for debugging (sanitized)
+    logger.error('Full Error Object:', sanitizeUri(JSON.stringify(error, Object.getOwnPropertyNames(error), 2)));
     logger.error('');
 
     // Cleanup

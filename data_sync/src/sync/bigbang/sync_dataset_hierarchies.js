@@ -4,7 +4,6 @@ const logger = require('../../logger');
 /**
  * Convert dataset hierarchies from CMG to Bioloop
  * Creates links between RAW_DATA (source) and DATA_PRODUCT (derived)
- * Equivalent to: db_conversion/src/convert/entity/dataset_hierarchy.py::convert_dataset_hierarchies()
  */
 async function syncDatasetHierarchies(prisma, cmgDb) {
   logger.info('[BIGBANG] Converting dataset hierarchies...');

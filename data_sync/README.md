@@ -2,6 +2,14 @@
 
 This directory contains the standalone CMG to Bioloop database synchronization system. It runs in its own container (`db_sandbox`) with an isolated PostgreSQL instance.
 
+## ⚠️ CRITICAL WARNING
+
+**DO NOT modify the `networks` section in `docker-compose.sandbox.yml`**
+
+To sync to production, use `--target-db=app` instead. See [SETUP_GUIDE.md](SETUP_GUIDE.md#-critical-network-isolation---do-not-modify) for details.
+
+---
+
 ## Directory Structure
 
 ```
@@ -99,9 +107,10 @@ node src/poller_sync.js
 
 ## Documentation
 
-- **SETUP_GUIDE.md** - Complete setup and configuration guide
+- **SETUP_GUIDE.md** - Complete setup and configuration (includes network isolation warning)
 - **BIGBANG_SYNC_USAGE.md** - One-time migration documentation
 - **POLLER_SYNC_USAGE.md** - Continuous sync documentation
+- **TARGET_DATABASE_CONFIGURATION.md** - Choose between sandbox and production databases
 
 ## Quick Reference
 

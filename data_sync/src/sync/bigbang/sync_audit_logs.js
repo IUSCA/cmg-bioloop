@@ -46,7 +46,6 @@ function parseCMGEventToAction(eventDescription) {
 
 /**
  * Convert CMG dataset events to Bioloop audit logs
- * Equivalent to: db_conversion/src/convert/entity/audit_log.py::events_to_audit_logs()
  */
 async function syncAuditLogs(prisma, cmgDb, cmgUserId) {
   logger.info('[BIGBANG] Converting dataset audit logs...');
@@ -59,7 +58,6 @@ async function syncAuditLogs(prisma, cmgDb, cmgUserId) {
 
 /**
  * Convert events for a specific dataset type
- * Equivalent to: db_conversion/src/convert/entity/audit_log.py::dataset_events_to_audit_logs()
  */
 async function datasetEventsToAuditLogs(prisma, cmgDb, cmgUserId, datasetType) {
   const collectionName = datasetType === 'DATA_PRODUCT' ? 'dataproducts' : 'datasets';

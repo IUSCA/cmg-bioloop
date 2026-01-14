@@ -2,7 +2,7 @@
 
 ## Overview
 
-The big-bang synchronization script performs a **one-time migration** of all existing CMG data into Bioloop. It follows the exact same operations and order as the Python script `db_conversion/src/convert/scripts/convert.py`.
+The big-bang synchronization script performs a **one-time migration** of all existing CMG data into Bioloop.
 
 ## Prerequisites
 
@@ -88,7 +88,7 @@ mongodb://cmg:All%20the%20GATTACA%20all%20the%20time!@commons3.sca.iu.edu:27017/
 
 ## Migration Order
 
-The script executes operations in this exact order (matching `convert.py`):
+The script executes operations in this order:
 
 1. **Create roles** - `admin`, `operator`, `user`
 2. **Create CMG system user** - `cmguser` for system operations
