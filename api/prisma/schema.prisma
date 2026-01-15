@@ -453,6 +453,7 @@ model genome_browser_session {
   staging_requested    Json? // Staging request details
   staging_completed    Boolean         @default(false)
   staging_requested_by Int? // User who requested staging
+  cmg_id               String?         @db.VarChar(100) // CMG session ID for migration tracking
   session_tracks       session_track[]
 }
 

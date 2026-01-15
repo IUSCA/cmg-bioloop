@@ -66,16 +66,39 @@ function getDatabaseUrl(targetDb = 'sandbox') {
         || 'postgresql://appuser:example@localhost:5432/bioloop_sync?schema=public';
 
     case 'app': {
-      // Read from api/.env file
+      // Read from api/.env file (mounted at /opt/sca/api/.env in container)
       const apiEnvPath = path.resolve(__dirname, '../../../api/.env');
       const apiEnvVars = parseEnvFile(apiEnvPath);
 
-      if (apiEnvVars.DATABASE_URL) {
-        return apiEnvVars.DATABASE_URL;
+      // Check if we got any variables
+      if (Object.keys(apiEnvVars).length === 0) {
+        throw new Error(`Could not read ${apiEnvPath}. File may not exist or be empty.`);
       }
 
-      // Fallback: construct from individual variables
-      const dbUrl = `postgresql://${apiEnvVars.DATABASE_USER || 'appuser'}:${apiEnvVars.DATABASE_PASSWORD || 'example'}@${apiEnvVars.DATABASE_HOST || 'postgres'}:${apiEnvVars.DATABASE_PORT || '5432'}/${apiEnvVars.DATABASE_NAME || 'app'}?schema=public`;
+      if (apiEnvVars.DATABASE_URL) {
+        // Expand environment variables in DATABASE_URL if present
+        let dbUrl = apiEnvVars.DATABASE_URL;
+        
+        // Replace ${VAR} or $VAR patterns with actual values from apiEnvVars
+        dbUrl = dbUrl.replace(/\$\{([^}]+)\}/g, (match, varName) => {
+          return apiEnvVars[varName] || process.env[varName] || match;
+        });
+        dbUrl = dbUrl.replace(/\$([A-Z_]+)/g, (match, varName) => {
+          return apiEnvVars[varName] || process.env[varName] || match;
+        });
+        
+        return dbUrl;
+      }
+
+      // Fallback: construct from individual variables (common in some setups)
+      const host = apiEnvVars.POSTGRES_HOST || apiEnvVars.DATABASE_HOST || 'postgres';
+      const port = apiEnvVars.POSTGRES_PORT || apiEnvVars.DATABASE_PORT || '5432';
+      const user = apiEnvVars.POSTGRES_USER || apiEnvVars.DATABASE_USER || 'appuser';
+      const password = apiEnvVars.POSTGRES_PASSWORD || apiEnvVars.DATABASE_PASSWORD || 'example';
+      const database = apiEnvVars.POSTGRES_DB || apiEnvVars.DATABASE_NAME || 'app';
+      const schema = apiEnvVars.POSTGRES_SCHEMA || 'public';
+
+      const dbUrl = `postgresql://${user}:${password}@${host}:${port}/${database}?schema=${schema}`;
       return dbUrl;
     }
 

@@ -85,25 +85,39 @@ The `.env` file will override values from `.env.default`.
 ### One-Time Migration (Big-Bang)
 
 ```bash
-# Inside the container
-node src/bigbang_sync.js --clear-locks
+# Test in sandbox (recommended first)
+node src/bigbang_sync.js --target-db=sandbox --clear-locks
+
+# Sync to production database (after testing)
+node src/bigbang_sync.js --target-db=app --skip-sessions --clear-locks
 ```
+
+**Target Options:**
+- `--target-db=sandbox` - Writes to isolated test database (default)
+- `--target-db=app` - Reads from `../api/.env` and writes to production database
+- `--target-db=custom` - Uses `DATABASE_URL` from environment
 
 ### Continuous Sync (Poller)
 
 ```bash
-# Inside the container
-node src/poller_sync.js
+# Sandbox (testing)
+node src/poller_sync.js --target-db=sandbox
+
+# Production (actual sync)
+node src/poller_sync.js --target-db=app
 ```
 
 ## Key Features
 
 - **Shared Schema**: Uses main app's Prisma schema (single source of truth)
 - **Isolated PostgreSQL**: Separate database inside container for safe testing
+- **Flexible Targeting**: Write to sandbox or production database via `--target-db` flag
 - **Environment Variables**: Follows project `.env.default` + `.env` pattern
 - **Process Locking**: Prevents multiple instances from running simultaneously
 - **Cursor-Based Sync**: Tracks last synced position for incremental updates
 - **Error Logging**: Comprehensive error tracking and retry mechanisms
+- **Host Log Access**: Logs automatically written to `/tmp/data_sync_logs/` on host
+- **Credential Sanitization**: Database passwords hidden in all logs
 
 ## Documentation
 

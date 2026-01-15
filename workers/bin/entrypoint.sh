@@ -20,6 +20,67 @@ fi
 
 echo ".env file is ready. Starting the worker..."
 
+# Install conversion pipelines if this is the conversion_worker
+if [ "$WORKER_TYPE" = "conversion_worker" ]; then
+  echo "Installing conversion pipelines..."
+  
+  CONVERSION_BASE="/opt/sca/data/conversion"
+  
+  # Install bcl2fastq
+  if [ -f /usr/local/bin/bcl2fastq ]; then
+    cp /usr/local/bin/bcl2fastq "$CONVERSION_BASE/bcl2fastq/bin/"
+    chmod +x "$CONVERSION_BASE/bcl2fastq/bin/bcl2fastq"
+    echo "✓ bcl2fastq"
+  fi
+  
+  # Install bcl-convert
+  if [ -f /usr/local/bin/bcl-convert ]; then
+    cp /usr/local/bin/bcl-convert "$CONVERSION_BASE/bcl-convert/bin/"
+    chmod +x "$CONVERSION_BASE/bcl-convert/bin/bcl-convert"
+    echo "✓ bcl-convert"
+  fi
+  
+  # Install cellranger versions
+  for version in "8.0.1" "6.1.2" "4.0.0"; do
+    if [ -d "/opt/cellranger-$version" ]; then
+      cp -r /opt/cellranger-$version/* "$CONVERSION_BASE/cellranger-v$version/"
+      chmod +x "$CONVERSION_BASE/cellranger-v$version/bin/cellranger" 2>/dev/null || true
+      echo "✓ cellranger-v$version"
+    fi
+  done
+  
+  # Install cellranger-arc
+  if [ -d "/opt/cellranger-arc-1.0.0" ]; then
+    cp -r /opt/cellranger-arc-1.0.0/* "$CONVERSION_BASE/cellranger-arc/"
+    chmod +x "$CONVERSION_BASE/cellranger-arc/bin/cellranger-arc" 2>/dev/null || true
+    echo "✓ cellranger-arc"
+  fi
+  
+  if [ -d "/opt/cellranger-arc-2.0.0" ]; then
+    cp -r /opt/cellranger-arc-2.0.0/* "$CONVERSION_BASE/cellranger-arc-v2/"
+    chmod +x "$CONVERSION_BASE/cellranger-arc-v2/bin/cellranger-arc" 2>/dev/null || true
+    echo "✓ cellranger-arc-v2"
+  fi
+  
+  # Install cellranger-atac
+  if [ -d "/opt/cellranger-atac-1.2.0" ]; then
+    cp -r /opt/cellranger-atac-1.2.0/* "$CONVERSION_BASE/cellranger-atac/"
+    chmod +x "$CONVERSION_BASE/cellranger-atac/bin/cellranger-atac" 2>/dev/null || true
+    echo "✓ cellranger-atac"
+  fi
+  
+  # Install spaceranger versions
+  for version in "3.0.1" "1.3.1" "1.1.0"; do
+    if [ -d "/opt/spaceranger-$version" ]; then
+      cp -r /opt/spaceranger-$version/* "$CONVERSION_BASE/spaceranger-v$version/"
+      chmod +x "$CONVERSION_BASE/spaceranger-v$version/bin/spaceranger" 2>/dev/null || true
+      echo "✓ spaceranger-v$version"
+    fi
+  done
+  
+  echo "Pipeline installation complete"
+fi
+
 # Remove stale PID files, if they exist
 if [ "$WORKER_TYPE" = "celery_worker" ] && [ -f celery_worker.pid ]; then
   echo "Removing stale celery_worker.pid file"

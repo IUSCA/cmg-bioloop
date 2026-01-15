@@ -22,7 +22,7 @@ RUN pip install poetry==$POETRY_VERSION && \
     mv FastQC /opt/fastqc && \
     ln -s /opt/fastqc/fastqc /usr/local/bin/fastqc && \
     # Install MultiQC via pip \
-    pip install multiqc==1.15 && \
+    pip install multiqc==1.28 && \
     # Cleanup \
     rm fastqc_v0.11.9.zip && \
     rm -rf /var/lib/apt/lists/*

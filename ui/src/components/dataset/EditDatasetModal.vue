@@ -1,9 +1,7 @@
 <template>
   <va-modal
     v-model="visible"
-    :title="`Edit ${config.dataset.types[props.data?.type]?.label} / ${
-      props.data?.name
-    }`"
+    :title="`Edit ${config.dataset.types[props.data?.type]?.label} / ${props.data?.name}`"
     no-outside-dismiss
     fixed-layout
     size="small"
@@ -22,7 +20,12 @@
           resize
         >
         </va-textarea>
-        
+
+        <!-- Historical data notice -->
+        <va-alert v-if="isHistoricalData" color="info" border="left">
+          This is historical data from CMG. Some fields are read-only to preserve data integrity.
+        </va-alert>
+
         <!-- Analysis Type field for DATA_PRODUCT datasets when genome browser is enabled -->
         <va-input
           v-if="showAnalysisType"
@@ -31,6 +34,7 @@
           placeholder="Enter analysis type (e.g., Raw Reads)"
           clearable
           class="w-full"
+          :readonly="isHistoricalData"
           @blur="formatAnalysisTypeOnBlur"
         >
           <template #appendInner>
@@ -43,14 +47,14 @@
 </template>
 
 <script setup>
-import config from "@/config";
-import DatasetService from "@/services/dataset";
-import toast from "@/services/toast";
-import { formatAnalysisType, humanizeAnalysisType } from "@/services/sessionUtils";
-import { computed, ref, watch } from "vue";
+import config from '@/config';
+import DatasetService from '@/services/dataset';
+import { formatAnalysisType, humanizeAnalysisType } from '@/services/sessionUtils';
+import toast from '@/services/toast';
+import { computed, ref, watch } from 'vue';
 
-const props = defineProps(["data"]);
-const emit = defineEmits(["update"]);
+const props = defineProps(['data']);
+const emit = defineEmits(['update']);
 
 // parent component can invoke these methods through the template ref
 defineExpose({
@@ -63,6 +67,11 @@ const loading = ref(false);
 const description = ref(props.data.description);
 const analysisType = ref(props.data.metadata?.analysis_type || null);
 const analysisTypeInput = ref(humanizeAnalysisType(props.data.metadata?.analysis_type || ''));
+
+// Check if this is historical CMG data
+const isHistoricalData = computed(() => {
+  return !!props.data?.cmg_id;
+});
 
 // Show Analysis Type field only for DATA_PRODUCT datasets when genome browser is enabled
 const showAnalysisType = computed(() => {
@@ -116,11 +125,11 @@ function handleOk() {
     updated_data: updateData,
   })
     .then(() => {
-      emit("update");
+      emit('update');
     })
     .catch((err) => {
       console.error(err);
-      toast.error("Unable to update the dataset");
+      toast.error('Unable to update the dataset');
     })
     .finally(() => {
       hide();

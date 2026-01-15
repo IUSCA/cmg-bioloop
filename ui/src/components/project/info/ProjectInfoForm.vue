@@ -1,10 +1,16 @@
 <template>
   <va-form class="flex flex-col gap-6 w-full justify-start" ref="formRef">
+    <!-- Historical data notice -->
+    <va-alert v-if="isHistoricalData" color="info" border="left">
+      This is historical data from CMG. Some fields are read-only to preserve data integrity.
+    </va-alert>
+
     <div class="flex-none">
       <va-input
         class="w-full"
         label="Name"
         v-model="name"
+        :readonly="isHistoricalData"
         :rules="[(value) => (value && value.length > 0) || 'Name is required']"
       />
 
@@ -34,12 +40,18 @@
       resize
     />
 
-    <va-input class="flex-none" label="Funding" v-model="funding" />
+    <va-input 
+      class="flex-none" 
+      label="Funding" 
+      v-model="funding" 
+      :readonly="isHistoricalData"
+    />
 
     <va-checkbox
       v-model="browser_enabled"
       class="flex-none"
       label="Enable Genome Browser"
+      :readonly="isHistoricalData"
     />
 
     <!-- <dataset-select class="flex-none" v-model:selected="project.datasets" /> -->
@@ -60,9 +72,13 @@ const props = defineProps({
 });
 
 const projectFormStore = useProjectFormStore();
-const { name, description, browser_enabled, funding } =
+const { name, description, browser_enabled, funding, cmg_id } =
   storeToRefs(projectFormStore);
-// const slug = ref("");
+
+// Check if this is historical CMG data
+const isHistoricalData = computed(() => {
+  return !!cmg_id.value;
+});
 
 // const { isValid } = useForm("formRef");
 projectFormStore.form = useForm("formRef");
