@@ -136,7 +136,7 @@
                   <!-- Delete Action Button-->
                   <va-button
                     v-if="config.enable_delete_archive && dataset.archive_path"
-                    :disabled="is_delete_pending"
+                    :disabled="is_delete_pending || !!dataset.cmg_id"
                     color="danger"
                     border-color="danger"
                     class="flex-initial"

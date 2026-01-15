@@ -54,6 +54,17 @@ async function convertSession(prisma, cmgDb, cmgSession) {
   const title = cmgSession.title || 'Genome Browser Session';
   const genome = cmgSession.genome || null;
   const genomeType = cmgSession.genome_type || null;
+  const cmgSessionId = cmgSession._id.toString();
+  
+  // Check if session already exists (idempotency)
+  const existingSession = await prisma.genome_browser_session.findFirst({
+    where: { cmg_id: cmgSessionId },
+  });
+  
+  if (existingSession) {
+    logger.debug(`[BIGBANG] Session ${cmgSessionId} already exists, skipping`);
+    return existingSession;
+  }
   
   // Insert session
   const session = await prisma.genome_browser_session.create({
@@ -63,6 +74,7 @@ async function convertSession(prisma, cmgDb, cmgSession) {
       genome_type: genomeType,
       user_id: userId,
       access_count: cmgSession.access_count || 0,
+      cmg_id: cmgSessionId, // Track CMG session for provenance
     },
   });
   

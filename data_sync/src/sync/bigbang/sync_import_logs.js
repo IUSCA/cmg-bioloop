@@ -5,57 +5,66 @@ const logger = require('../../logger');
  * Convert CMG uploads to Bioloop dataset_import_log entries
  * CMG's "Upload" feature = Bioloop's "Import" feature (register from remote filesystem)
  * 
- * Equivalent to what would be created when using Bioloop's Import feature
+ * CRITICAL UNDERSTANDING OF CMG MODEL:
+ * -----------------------------------
+ * - Uploads CREATE new dataproducts (they don't just reference existing ones)
+ * - upload.dataset = optional reference to SOURCE sequencing run (RAW_DATA) for context
+ * - upload.dataproduct = optional reference to SOURCE dataproduct (parent lineage)
+ * - dataproduct.upload = links the NEW dataproduct back to the upload that created it
+ * 
+ * Therefore, to find what an upload created:
+ *   Find dataproduct WHERE dataproduct.upload = upload._id
+ * 
+ * One upload can create MULTIPLE dataproducts (e.g., uploading multiple files).
+ * Each dataproduct created gets its own import log entry.
+ * 
+ * Equivalent to what would be created when using Bioloop's Import feature.
  */
 async function syncImportLogs(prisma, cmgDb, cmgUserId) {
   logger.info('[BIGBANG] Converting CMG upload history to Bioloop import logs...');
+  logger.info('[BIGBANG] CORRECTED APPROACH: Finding dataproducts created BY each upload');
+  logger.info('[BIGBANG] (upload.dataset and upload.dataproduct are SOURCE references, not created targets)');
   
   const uploadsCollection = cmgDb.collection('uploads');
+  const dataproductsCollection = cmgDb.collection('dataproducts');
   
   // Get total count for progress tracking
-  const totalCount = await uploadsCollection.countDocuments({});
-  logger.info(`[BIGBANG] Found ${totalCount} CMG upload records to process`);
+  const totalUploads = await uploadsCollection.countDocuments({});
+  logger.info(`[BIGBANG] Found ${totalUploads} CMG upload records to process`);
   
-  let processedCount = 0;
-  let createdCount = 0;
-  let skippedCount = 0;
+  let processedUploads = 0;
+  let totalCreatedImportLogs = 0;
+  let totalSkippedDataproducts = 0;
+  const skipReasons = {};  // Track reasons for skipping
   const BATCH_SIZE = 100;
   
   // Use cursor to stream data instead of loading all at once
   const cursor = uploadsCollection.find({}).batchSize(BATCH_SIZE);
   
   for await (const cmgUpload of cursor) {
-    let bioloopDataset = null; // Declare outside try block for error handler access
-    
     try {
-      // CMG uploads can reference either a 'dataset' (RAW_DATA) or 'dataproduct' (DATA_PRODUCT)
-      // Find which one exists and use it
-      let datasetCmgId = null;
-      if (cmgUpload.dataset) {
-        datasetCmgId = cmgUpload.dataset.toString();
-      } else if (cmgUpload.dataproduct) {
-        datasetCmgId = cmgUpload.dataproduct.toString();
-      }
+      const uploadId = cmgUpload._id.toString();
       
-      // Skip if neither dataset nor dataproduct is specified
-      if (!datasetCmgId) {
-        logger.warn(`[BIGBANG] Skipping CMG upload ${cmgUpload._id}: no dataset or dataproduct reference`);
-        skippedCount++;
-        processedCount++;
+      // CORRECT APPROACH: Find the dataproduct(s) that this upload CREATED
+      // In CMG: dataproduct.upload points back to the upload that created it
+      const createdDataproducts = await dataproductsCollection.find({
+        upload: cmgUpload._id
+      }).toArray();
+      
+      if (createdDataproducts.length === 0) {
+        // This upload didn't create any dataproducts (orphaned or failed upload)
+        if (totalSkippedDataproducts < 5) {
+          logger.warn(`[BIGBANG] Upload ${uploadId} didn't create any dataproducts`);
+          logger.warn(`  This suggests the upload failed or was never completed`);
+        }
+        
+        skipReasons['no_dataproduct_created'] = (skipReasons['no_dataproduct_created'] || 0) + 1;
+        totalSkippedDataproducts++;
+        processedUploads++;
         continue;
       }
       
-      // Find the corresponding Bioloop dataset
-      bioloopDataset = await prisma.dataset.findFirst({
-        where: { cmg_id: datasetCmgId },
-      });
-      
-      if (!bioloopDataset) {
-        logger.warn(`[BIGBANG] No Bioloop dataset found for CMG upload ${cmgUpload._id} (cmg_id: ${datasetCmgId})`);
-        skippedCount++;
-        processedCount++;
-        continue;
-      }
+      logger.debug(`[BIGBANG] Upload ${uploadId} created ${createdDataproducts.length} dataproduct(s)`);
       
       // Find the user who created this upload
       let userId = cmgUserId; // Default to CMG system user
@@ -68,102 +77,176 @@ async function syncImportLogs(prisma, cmgDb, cmgUserId) {
         }
       }
       
-      // Check if an import log already exists for this dataset
-      // (to support idempotent re-runs)
-      const existingImportLog = await prisma.dataset_import_log.findFirst({
-        where: {
-          cmg_id: cmgUpload._id.toString(),
-        },
-      });
-      
-      if (existingImportLog) {
-        logger.debug(`[BIGBANG] Import log already exists for CMG upload ${cmgUpload._id}`);
-        skippedCount++;
-        processedCount++;
-        continue;
-      }
-      
-      // Find or create the 'create' audit log entry for this dataset
-      // The audit log with action='create' should have been created during dataset sync
-      let auditLog = await prisma.dataset_audit.findFirst({
-        where: {
-          dataset_id: bioloopDataset.id,
-          action: 'create',
-        },
-      });
-      
-      // If no 'create' audit log exists, create one
-      if (!auditLog) {
-        auditLog = await prisma.dataset_audit.create({
-          data: {
-            action: 'create',
-            create_method: 'IMPORT',
-            timestamp: cmgUpload.createdAt || new Date(),
-            dataset_id: bioloopDataset.id,
-            user_id: userId,
-          },
+      // Determine source_run (source dataset for derived dataproducts)
+      // In CMG: upload.dataset references the source RAW_DATA sequencing run
+      let sourceRun = null;
+      if (cmgUpload.dataset) {
+        const sourceDataset = await prisma.dataset.findFirst({
+          where: { cmg_id: cmgUpload.dataset.toString() },
         });
-      } else {
-        // Update existing audit log to mark it as an IMPORT
-        if (!auditLog.create_method) {
-          auditLog = await prisma.dataset_audit.update({
-            where: { id: auditLog.id },
-            data: { create_method: 'IMPORT' },
-          });
+        if (sourceDataset) {
+          sourceRun = sourceDataset.name;
         }
       }
       
-      // Note: source_run (source dataset for derived products) is not tracked in CMG uploads
-      // Set to null as this information is not available
-      const sourceRun = null;
+      // Process each dataproduct created by this upload
+      for (const createdDataproduct of createdDataproducts) {
+        try {
+          const dataproductCmgId = createdDataproduct._id.toString();
+          
+          // Find the corresponding Bioloop dataset (DATA_PRODUCT type)
+          const bioloopDataset = await prisma.dataset.findFirst({
+            where: { cmg_id: dataproductCmgId },
+          });
+          
+          if (!bioloopDataset) {
+            if (totalSkippedDataproducts < 10) {
+              logger.warn(`[BIGBANG] Dataproduct ${dataproductCmgId} not found in Bioloop`);
+              logger.warn(`  Created by upload ${uploadId}, name: ${createdDataproduct.name || 'N/A'}`);
+            }
+            
+            skipReasons['dataproduct_not_in_bioloop'] = (skipReasons['dataproduct_not_in_bioloop'] || 0) + 1;
+            totalSkippedDataproducts++;
+            continue;
+          }
+          
+          // Check if an import log already exists for this specific upload+dataproduct combination
+          // (to support idempotent re-runs)
+          const existingImportLog = await prisma.dataset_import_log.findFirst({
+            where: {
+              cmg_id: uploadId,
+              metadata: {
+                path: ['cmg_dataproduct_id'],
+                equals: dataproductCmgId,
+              },
+            },
+          });
+          
+          if (existingImportLog) {
+            logger.debug(`[BIGBANG] Import log already exists for upload ${uploadId} → dataproduct ${dataproductCmgId}`);
+            
+            skipReasons['already_exists_idempotency'] = (skipReasons['already_exists_idempotency'] || 0) + 1;
+            totalSkippedDataproducts++;
+            continue;
+          }
+          
+          // Find or create 'created' audit log for this DATAPRODUCT
+          // In Bioloop, the import log links to the audit log of the dataset (dataproduct) that was created
+          let auditLog = await prisma.dataset_audit.findFirst({
+            where: {
+              action: 'created',
+              dataset_id: bioloopDataset.id,
+            },
+          });
+          
+          if (!auditLog) {
+            // Create a 'created' audit log entry if it doesn't exist
+            auditLog = await prisma.dataset_audit.create({
+              data: {
+                action: 'created',
+                create_method: 'IMPORT',
+                timestamp: cmgUpload.createdAt || new Date(),
+                dataset_id: bioloopDataset.id,
+                user_id: userId,
+              },
+            });
+          } else {
+            // Update existing audit log to mark it as an IMPORT
+            if (!auditLog.create_method) {
+              auditLog = await prisma.dataset_audit.update({
+                where: { id: auditLog.id },
+                data: { create_method: 'IMPORT' },
+              });
+            }
+          }
+          
+          // Create the import log entry
+          // Build upload_data object, filtering out undefined values (Prisma doesn't allow explicit undefined)
+          const uploadData = {};
+          if (cmgUpload.createdAt !== undefined) uploadData.createdAt = cmgUpload.createdAt;
+          if (cmgUpload.updatedAt !== undefined) uploadData.updatedAt = cmgUpload.updatedAt;
+          if (cmgUpload.selected !== undefined) uploadData.selected = cmgUpload.selected;
+          if (cmgUpload.path !== undefined) uploadData.path = cmgUpload.path;
+          if (cmgUpload.status !== undefined) uploadData.status = cmgUpload.status;
+          if (cmgUpload.file_count !== undefined) uploadData.file_count = cmgUpload.file_count;
+          
+          await prisma.dataset_import_log.create({
+            data: {
+              cmg_id: uploadId,
+              file_type: cmgUpload.file_type || null,
+              genome_type: cmgUpload.genomeType || null,
+              genome_value: cmgUpload.genomeValue || null,
+              source_run: sourceRun,
+              notes: cmgUpload.notes || null,
+              metadata: {
+                cmg_upload_id: uploadId,
+                cmg_dataproduct_id: dataproductCmgId, // Track which dataproduct was created
+                cmg_source_dataset: cmgUpload.dataset ? cmgUpload.dataset.toString() : null,
+                cmg_source_dataproduct: cmgUpload.dataproduct ? cmgUpload.dataproduct.toString() : null,
+                cmg_upload_data: uploadData,
+              },
+              audit_log_id: auditLog.id,
+            },
+          });
+          
+          totalCreatedImportLogs++;
+          logger.debug(`[BIGBANG] Created import log: upload ${uploadId} → dataproduct ${dataproductCmgId} (${bioloopDataset.name})`);
+          
+        } catch (dataproductError) {
+          logger.error(`[BIGBANG] Failed to process dataproduct ${createdDataproduct._id} from upload ${uploadId}:`);
+          logger.error(`  Error: ${dataproductError.message}`);
+          logger.error(`  Code: ${dataproductError.code || 'N/A'}`);
+          
+          totalSkippedDataproducts++;
+        }
+      } // End of for loop over created dataproducts
       
-      // Create the import log entry
-      await prisma.dataset_import_log.create({
-        data: {
-          cmg_id: cmgUpload._id.toString(),
-          file_type: cmgUpload.file_type || null,
-          genome_type: cmgUpload.genomeType || null,
-          genome_value: cmgUpload.genomeValue || null,
-          source_run: sourceRun,
-          notes: cmgUpload.notes || null,
-          metadata: {
-            cmg_upload_id: cmgUpload._id.toString(),
-            path: cmgUpload.path || null,
-            status: cmgUpload.status || null,
-            file_count: cmgUpload.file_count || null,
-          },
-          audit_log_id: auditLog.id,
-          created_at: cmgUpload.createdAt || new Date(),
-          updated_at: cmgUpload.updatedAt || new Date(),
-        },
-      });
+    } catch (uploadError) {
+      logger.error(`[BIGBANG] Failed to process CMG upload ${cmgUpload._id}:`);
+      logger.error(`  Error: ${uploadError.message}`);
+      logger.error(`  Code: ${uploadError.code || 'N/A'}`);
       
-      createdCount++;
-      logger.debug(`[BIGBANG] Created import log for dataset ${bioloopDataset.name} from CMG upload ${cmgUpload._id}`);
-      
-    } catch (error) {
-      logger.error(`[BIGBANG] Failed to process CMG upload ${cmgUpload._id.toString()}:`);
-      logger.error(`  Error: ${error.message}`);
-      logger.error(`  Code: ${error.code || 'N/A'}`);
-      logger.error(`  Dataset: ${bioloopDataset ? bioloopDataset.name : 'N/A'}`);
-      if (error.stack) {
-        logger.debug(`  Stack: ${error.stack}`);
-      }
-      skippedCount++;
+      totalSkippedDataproducts++;
     }
     
-    processedCount++;
+    processedUploads++;
     
-    // Progress logging
-    if (processedCount % 100 === 0) {
-      logger.info(`[BIGBANG] Processed ${processedCount}/${totalCount} upload records (${Math.round(processedCount / totalCount * 100)}%)`);
+    // Log progress every 100 records
+    if (processedUploads % 100 === 0) {
+      logger.info(`[BIGBANG] Processed ${processedUploads}/${totalUploads} uploads (${Math.round(processedUploads / totalUploads * 100)}%)`);
+      logger.info(`[BIGBANG]   Created ${totalCreatedImportLogs} import logs so far`);
     }
   }
   
-  logger.info(`[BIGBANG] Import logs conversion complete: ${createdCount} created, ${skippedCount} skipped`);
+  // Log detailed summary
+  logger.info(`[BIGBANG] Import logs conversion complete:`);
+  logger.info(`  - Processed uploads: ${processedUploads}`);
+  logger.info(`  - Created import logs: ${totalCreatedImportLogs}`);
+  logger.info(`  - Skipped dataproducts: ${totalSkippedDataproducts}`);
+  
+  // Show breakdown of skip reasons
+  if (Object.keys(skipReasons).length > 0) {
+    logger.info('[BIGBANG] Skip reasons breakdown:');
+    Object.entries(skipReasons).forEach(([reason, count]) => {
+      logger.info(`  - ${reason}: ${count} records`);
+    });
+  }
+  
+  // Provide context for common issues
+  if (skipReasons['no_dataproduct_created']) {
+    logger.warn('[BIGBANG] Many uploads have no associated dataproducts.');
+    logger.warn('  This suggests uploads were incomplete, failed, or the dataproducts were deleted.');
+  }
+  
+  if (skipReasons['dataproduct_not_in_bioloop']) {
+    logger.warn('[BIGBANG] Some dataproducts referenced by uploads were not found in Bioloop.');
+    logger.warn('  This could mean:');
+    logger.warn('  1. The dataproducts failed to migrate in step 5');
+    logger.warn('  2. The dataproducts were filtered out during migration');
+    logger.warn('  3. The CMG data has integrity issues');
+  }
 }
 
 module.exports = {
   syncImportLogs,
 };
-

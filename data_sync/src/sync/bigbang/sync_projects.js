@@ -11,10 +11,31 @@ async function syncProjects(prisma, cmgDb) {
   const cmgProjects = await cmgDb.collection('projects').find({}).toArray();
   logger.info(`[BIGBANG] Found ${cmgProjects.length} CMG projects to convert`);
   
-  // Step 1: Batch insert all projects
+  // Step 1: Batch insert all projects (with idempotency)
   const projectData = [];
+  const existingProjects = await prisma.project.findMany({
+    select: { cmg_id: true, slug: true },
+  });
+  
+  const existingCmgIds = new Set(existingProjects.map(p => p.cmg_id).filter(Boolean));
+  const existingSlugs = new Set(existingProjects.map(p => p.slug));
+  
   for (const project of cmgProjects) {
-    const slug = await generateSlug(prisma, project.name, project._id.toString());
+    const cmgId = project._id.toString();
+    
+    // Skip if already migrated
+    if (existingCmgIds.has(cmgId)) {
+      continue;
+    }
+    
+    const slug = await generateSlug(prisma, project.name, cmgId);
+    
+    // Skip if slug already exists (shouldn't happen with proper slug generation, but safety check)
+    if (existingSlugs.has(slug)) {
+      logger.warn(`[BIGBANG] Duplicate slug detected, skipping project: ${project.name} (${cmgId})`);
+      continue;
+    }
+    
     projectData.push({
       name: project.name,
       description: project.description || null,
@@ -22,16 +43,27 @@ async function syncProjects(prisma, cmgDb) {
       created_at: project.createdAt || new Date(),
       updated_at: project.updatedAt || new Date(),
       browser_enabled: project.browser || false,
-      cmg_id: project._id.toString(),
+      cmg_id: cmgId,
     });
+    
+    existingSlugs.add(slug); // Track in-batch duplicates
   }
   
-  // Batch create all projects
-  await prisma.project.createMany({
-    data: projectData,
-  });
+  // Batch create all new projects
+  if (projectData.length > 0) {
+    await prisma.project.createMany({
+      data: projectData,
+      skipDuplicates: true, // Safety net
+    });
+    logger.info(`[BIGBANG] Inserted ${projectData.length} new projects`);
+  } else {
+    logger.info('[BIGBANG] No new projects to insert (all already exist)');
+  }
   
-  logger.info(`[BIGBANG] Inserted ${projectData.length} projects`);
+  const totalExisting = cmgProjects.length - projectData.length;
+  if (totalExisting > 0) {
+    logger.info(`[BIGBANG] Skipped ${totalExisting} existing projects`);
+  }
   
   // Step 2: Create project associations (user and dataset)
   const projectUserAssociations = [];
