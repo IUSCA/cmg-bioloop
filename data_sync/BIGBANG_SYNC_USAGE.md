@@ -81,11 +81,11 @@ node src/bigbang_sync.js --target-db=sandbox
 ```bash
 cd data_sync
 
-# Sandbox test
+# Sandbox test (skip conversion logs since filesystem not accessible)
 docker compose -f docker-compose.sandbox.yml exec db_sandbox \
-  node /opt/sca/app/src/bigbang_sync.js --target-db=sandbox --skip-sessions
+  node /opt/sca/app/src/bigbang_sync.js --target-db=sandbox --skip-sessions --skip-conversion-logs
 
-# Production sync
+# Production sync (include conversion logs)
 docker compose -f docker-compose.sandbox.yml exec db_sandbox \
   node /opt/sca/app/src/bigbang_sync.js --target-db=app --skip-sessions
 ```
@@ -97,6 +97,7 @@ docker compose -f docker-compose.sandbox.yml exec db_sandbox \
 | `--target-db=<target>` | Target database: `sandbox` (default), `app`, or `custom` |
 | `--cmg-uri=<uri>` | MongoDB connection string for CMG database |
 | `--skip-sessions` | Skip genome browser session conversion (recommended for first run) |
+| `--skip-conversion-logs` | Skip conversion logs migration from filesystem (useful for local/dev) |
 | `--clear-locks` | Clear any existing process locks before starting (useful if previous run crashed) |
 | `--help`, `-h` | Show help message |
 
@@ -143,8 +144,46 @@ The script executes operations in this order:
 8. **Convert dataset hierarchies** - Links between raw data and derived products
 9. **Convert projects** - With user and dataset associations
 10. **Convert conversions** - Pipeline runs with derived dataset links
-11. **Convert sessions** - Genome browser sessions (optional, often skipped)
-12. **Initialize cursors** - Set starting points for incremental pollers
+11. **Convert conversion logs** - Historical conversion logs from filesystem (production only)
+12. **Convert sessions** - Genome browser sessions (optional, often skipped)
+13. **Initialize cursors** - Set starting points for incremental pollers
+
+### Note on Conversion Logs (Step 11)
+
+Historical conversion logs are read from the CMG filesystem and migrated to Bioloop's database:
+
+**How it works:**
+- CMG stores logs as files: `/N/project/CMG-SCA/production/runlogs/convert_{dataset_name}.log`
+- Multiple conversions for the same dataset share one log file
+- Each conversion's logs are separated by "logfile header" markers
+- Logs are parsed and inserted into `worker_process` and `log` tables
+
+**Configuration:**
+```bash
+# Required environment variable (defaults to production path):
+CMG_RUNLOGS_DIR=/N/project/CMG-SCA/production/runlogs
+```
+
+**Skipping:**
+```bash
+# Use --skip-conversion-logs flag to skip this step
+node src/bigbang_sync.js --skip-conversion-logs
+```
+
+**Behavior:**
+- **Production (with filesystem access):** Reads logs from filesystem and migrates to database
+- **Local/Dev (without filesystem access):** Use `--skip-conversion-logs` to skip this step
+- **Automatic skip:** If directory not accessible, step is automatically skipped with informational message
+
+**What gets created:**
+- `worker_process` record for each conversion (contains workflow_id, start_time, etc.)
+- `log` entries linked to worker_process (parsed from log files)
+
+**Skip reasons** (logged for transparency):
+- `no_cmg_id` - Conversion has no CMG ID
+- `log_file_not_found` - Log file doesn't exist (dataset was never converted)
+- `no_workflow_id` - Conversion has no workflow_id (can't link logs)
+- `already_exists` - Worker process already created (idempotency)
 
 ## What Gets Migrated
 
@@ -156,6 +195,7 @@ The script executes operations in this order:
 - Dataset hierarchies (source → derived relationships)
 - All projects with associations (users, datasets)
 - All conversions with derived datasets
+- **Conversion logs** (from CMG filesystem → `worker_process` and `log` tables, production only)
 - Dataset audit logs (from events)
 - Poller cursor initialization
 

@@ -14,6 +14,7 @@
     "username": "CMG_MONGO_USERNAME",
     "password": "CMG_MONGO_PASSWORD"
   },
+  "cmg_runlogs_dir": "CMG_RUNLOGS_DIR",
   "oauth": {
     "base_url": "OAUTH_BASE_URL",
     "download": {

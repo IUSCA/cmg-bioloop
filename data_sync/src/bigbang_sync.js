@@ -9,12 +9,13 @@
  *   node src/bigbang_sync.js [options]
  *
  * Options:
- *   --cmg-uri=<uri>        MongoDB connection string for CMG database
- *   --target-db=<target>   Target database: sandbox (default), app, or custom
- *   --skip-sessions        Skip genome browser session conversion
- *   --clear-locks          Clear any existing process locks before starting
- *   --clear-target-db      Clear all data from target database before migration
- *   --help, -h             Show help message
+ *   --cmg-uri=<uri>             MongoDB connection string for CMG database
+ *   --target-db=<target>        Target database: sandbox (default), app, or custom
+ *   --skip-sessions             Skip genome browser session conversion
+ *   --skip-conversion-logs      Skip conversion logs migration (from filesystem)
+ *   --clear-locks               Clear any existing process locks before starting
+ *   --clear-target-db           Clear all data from target database before migration
+ *   --help, -h                  Show help message
  *
  * Environment Variables (alternative to --cmg-uri):
  *   CMG_MONGO_HOST, CMG_MONGO_PORT, CMG_MONGO_DB, CMG_MONGO_USERNAME,
@@ -41,8 +42,9 @@
  * 8. Convert dataset hierarchies
  * 9. Convert projects
  * 10. Convert conversions
- * 11. Convert sessions (optional - many will be skipped)
- * 12. Initialize cursors for pollers
+ * 11. Convert conversion logs (from filesystem - production only)
+ * 12. Convert sessions (optional - many will be skipped)
+ * 13. Initialize cursors for pollers
  */
 
 require('module-alias/register');
@@ -73,6 +75,7 @@ const { syncImportLogs } = require('./sync/bigbang/sync_import_logs');
 const { syncDatasetHierarchies } = require('./sync/bigbang/sync_dataset_hierarchies');
 const { syncProjects } = require('./sync/bigbang/sync_projects');
 const { syncConversions } = require('./sync/bigbang/sync_conversions');
+const { syncAllConversionLogs } = require('./sync/bigbang/sync_conversion_logs');
 const { syncSessions } = require('./sync/bigbang/sync_sessions');
 const { initializeCursors } = require('./sync/bigbang/initialize_cursors');
 const {
@@ -98,6 +101,8 @@ function parseArgs() {
       [, options.targetDb] = arg.split('=');
     } else if (arg === '--skip-sessions') {
       options.skipSessions = true;
+    } else if (arg === '--skip-conversion-logs') {
+      options.skipConversionLogs = true;
     } else if (arg === '--clear-locks') {
       options.clearLocks = true;
     } else if (arg === '--clear-target-db') {
@@ -111,17 +116,19 @@ Options:
   --cmg-uri=<uri>        MongoDB connection string for CMG database
                          Format: mongodb://username:password@host:port/database
   
-  --target-db=<target>   Target database: sandbox (default), app, or custom
-                         - sandbox: Use data_sync's isolated PostgreSQL
-                         - app: Read from ../api/.env and use app's database
-                         - custom: Use DATABASE_URL from environment
+  --target-db=<target>        Target database: sandbox (default), app, or custom
+                              - sandbox: Use data_sync's isolated PostgreSQL
+                              - app: Read from ../api/.env and use app's database
+                              - custom: Use DATABASE_URL from environment
                          
-  --skip-sessions        Skip genome browser session conversion (recommended for initial run)
+  --skip-sessions             Skip genome browser session conversion (recommended for initial run)
   
-  --clear-locks          Clear any existing process locks before starting
+  --skip-conversion-logs      Skip conversion logs migration from filesystem (useful for local/dev)
   
-  --clear-target-db      Clear all data from target database before migration (keeps schema)
-                         WARNING: This deletes all existing data!
+  --clear-locks               Clear any existing process locks before starting
+  
+  --clear-target-db           Clear all data from target database before migration (keeps schema)
+                              WARNING: This deletes all existing data!
   
   --help, -h             Show this help message
 
@@ -142,11 +149,14 @@ Examples:
   # Skip sessions (recommended for first run)
   node src/bigbang_sync.js --skip-sessions
   
+  # Skip conversion logs (useful for local/dev without filesystem access)
+  node src/bigbang_sync.js --skip-conversion-logs
+  
   # Sync to app DB with all options
   node src/bigbang_sync.js --target-db=app --skip-sessions --clear-locks
   
   # Clear target DB and run fresh migration
-  node src/bigbang_sync.js --clear-target-db --skip-sessions
+  node src/bigbang_sync.js --clear-target-db --skip-sessions --skip-conversion-logs
 `);
       process.exit(0);
     }
@@ -346,55 +356,64 @@ async function main() {
     logger.info('');
 
     // 1. Create roles
-    logger.info('[1/12] Creating roles...');
+    logger.info('[1/13] Creating roles...');
     await createRoles(prisma);
 
     // 2. Create CMG system user
-    logger.info('[2/12] Creating CMG system user...');
+    logger.info('[2/13] Creating CMG system user...');
     const cmgUserId = await createCMGUser(prisma);
 
     // 3. Populate pipeline definitions
-    logger.info('[3/12] Populating pipeline definitions...');
+    logger.info('[3/13] Populating pipeline definitions...');
     await populatePipelineDefinitions(prisma, cmgUserId);
 
     // 4. Convert users
-    logger.info('[4/12] Converting users...');
+    logger.info('[4/13] Converting users...');
     await syncUsers(prisma, cmgDb);
 
     // 5. Convert datasets
-    logger.info('[5/12] Converting datasets...');
+    logger.info('[5/13] Converting datasets...');
     await syncAllDatasets(prisma, cmgDb);
 
     // 6. Convert dataset audit logs
-    logger.info('[6/12] Converting dataset audit logs...');
+    logger.info('[6/13] Converting dataset audit logs...');
     await syncAuditLogs(prisma, cmgDb, cmgUserId);
 
     // 7. Convert dataset import logs (CMG upload history -> Bioloop import logs)
-    logger.info('[7/12] Converting CMG upload history to import logs...');
+    logger.info('[7/13] Converting CMG upload history to import logs...');
     await syncImportLogs(prisma, cmgDb, cmgUserId);
 
     // 8. Convert dataset hierarchies
-    logger.info('[8/12] Converting dataset hierarchies...');
+    logger.info('[8/13] Converting dataset hierarchies...');
     await syncDatasetHierarchies(prisma, cmgDb);
 
     // 9. Convert projects
-    logger.info('[9/12] Converting projects...');
+    logger.info('[9/13] Converting projects...');
     await syncProjects(prisma, cmgDb);
 
     // 10. Convert conversions
-    logger.info('[10/12] Converting conversions...');
+    logger.info('[10/13] Converting conversions...');
     await syncConversions(prisma, cmgDb);
 
-    // 11. Convert sessions (optional)
-    if (options.skipSessions) {
-      logger.info('[11/12] Skipping sessions (--skip-sessions flag provided)');
+    // 11. Convert conversion logs (filesystem - production only)
+    if (options.skipConversionLogs) {
+      logger.info('[11/13] Skipping conversion logs (--skip-conversion-logs flag provided)');
     } else {
-      logger.info('[11/12] Converting genome browser sessions...');
+      logger.info('[11/13] Converting conversion logs...');
+      const runlogsDir = config.get('cmg_runlogs_dir');
+      await syncAllConversionLogs(prisma, cmgDb, runlogsDir);
+    }
+
+    // 12. Convert sessions (optional)
+    if (options.skipSessions) {
+      logger.info('[12/13] Skipping sessions (--skip-sessions flag provided)');
+    } else {
+      logger.info('[12/13] Converting genome browser sessions...');
       await syncSessions(prisma, cmgDb);
     }
 
-    // 12. Initialize cursors
-    logger.info('[12/12] Initializing poller cursors...');
+    // 13. Initialize cursors
+    logger.info('[13/13] Initializing poller cursors...');
     await initializeCursors(prisma, cmgDb);
 
     // Clear lock extender

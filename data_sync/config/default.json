@@ -20,6 +20,7 @@
     "username": "",
     "password": ""
   },
+  "cmg_runlogs_dir": "/N/project/CMG-SCA/production/runlogs",
   "auth": {
     "mode": "dev",
     "jwt": {
