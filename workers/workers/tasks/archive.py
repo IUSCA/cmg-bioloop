@@ -1,4 +1,5 @@
 import json
+import os
 import shutil
 from pathlib import Path
 
@@ -62,12 +63,30 @@ def archive(celery_task: WorkflowTask, dataset: dict, delete_local_file: bool = 
         'md5': bundle_checksum,
     }
 
-    # Check if SDA upload should be skipped (from config or parameter)
+    # Determine if SDA upload should be used
+    # Use SDA if APP_ENV is 'production', unless explicitly skipped
+    app_env = os.environ.get('APP_ENV', None)
+    
     if skip_sda_upload is None:
         skip_sda_upload = config.get('file_info_population', {}).get('skip_sda_upload', False)
     
-    if skip_sda_upload:
-        # Use local archive directory instead of SDA
+    # Use SDA if APP_ENV is production and not explicitly skipped
+    use_sda = (app_env == 'production') and not skip_sda_upload
+    
+    if use_sda:
+        # Production mode: Upload to SDA
+        sda_dir = wf_utils.get_archive_dir(dataset['type'])
+        sda_bundle_path = f'{sda_dir}/{bundle.name}'
+        
+        logger.info(f'Uploading bundle {bundle} to SDA at {sda_bundle_path}')
+        wf_utils.upload_file_to_sda(local_file_path=bundle,
+                                    sda_file_path=sda_bundle_path,
+                                    celery_task=celery_task)
+        
+        logger.info(f'Successfully uploaded bundle to SDA: {sda_bundle_path}')
+        archive_path = sda_bundle_path
+    else:
+        # Docker/local mode: Use local archive directory
         local_archive_dir = Path(f'/opt/sca/data/archive/{dataset["type"].lower()}')
         local_archive_dir.mkdir(parents=True, exist_ok=True)
         
@@ -87,14 +106,6 @@ def archive(celery_task: WorkflowTask, dataset: dict, delete_local_file: bool = 
             raise Exception(f'Checksum mismatch after archiving. Original: {bundle_checksum}, Archived: {archived_checksum}')
         
         logger.info(f'Successfully archived bundle to local storage: {local_archive_path}')
-        archive_path = str(local_archive_path)
-    else:
-        # Original SDA upload logic would go here
-        # For now, we'll use local archive as fallback
-        local_archive_dir = Path(f'/opt/sca/data/archive/{dataset["type"].lower()}')
-        local_archive_dir.mkdir(parents=True, exist_ok=True)
-        local_archive_path = local_archive_dir / bundle.name
-        shutil.copy2(bundle, local_archive_path)
         archive_path = str(local_archive_path)
 
     if delete_local_file:
