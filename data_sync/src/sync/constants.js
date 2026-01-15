@@ -152,7 +152,7 @@ const CONVERSION_DEFINITIONS = [
     dataset_types: ['RAW_DATA'],
     tags: [],
     capture_logs: true,
-    output_directory: '/opt/sca/data/conversion/output'
+    output_directory: '/N/scratch/cmguser/cmg-bioloop/conversions/output'
   },
   {
     name: 'bcl-convert',
@@ -161,7 +161,7 @@ const CONVERSION_DEFINITIONS = [
     dataset_types: ['RAW_DATA'],
     tags: [],
     capture_logs: true,
-    output_directory: '/opt/sca/data/conversion/output'
+    output_directory: '/N/scratch/cmguser/cmg-bioloop/conversions/output'
   },
   {
     name: 'cellranger-v8.0.1',
@@ -170,7 +170,7 @@ const CONVERSION_DEFINITIONS = [
     dataset_types: ['RAW_DATA'],
     tags: [],
     capture_logs: true,
-    output_directory: '/opt/sca/data/conversion/output'
+    output_directory: '/N/scratch/cmguser/cmg-bioloop/conversions/output'
   },
   {
     name: 'cellranger-v6.1.2',
@@ -179,7 +179,7 @@ const CONVERSION_DEFINITIONS = [
     dataset_types: ['RAW_DATA'],
     tags: [],
     capture_logs: true,
-    output_directory: '/opt/sca/data/conversion/output'
+    output_directory: '/N/scratch/cmguser/cmg-bioloop/conversions/output'
   },
   {
     name: 'cellranger-v4.0.0',
@@ -188,7 +188,7 @@ const CONVERSION_DEFINITIONS = [
     dataset_types: ['RAW_DATA'],
     tags: [],
     capture_logs: true,
-    output_directory: '/opt/sca/data/conversion/output'
+    output_directory: '/N/scratch/cmguser/cmg-bioloop/conversions/output'
   },
   {
     name: 'cellranger-arc',
@@ -197,7 +197,7 @@ const CONVERSION_DEFINITIONS = [
     dataset_types: ['RAW_DATA'],
     tags: [],
     capture_logs: true,
-    output_directory: '/opt/sca/data/conversion/output'
+    output_directory: '/N/scratch/cmguser/cmg-bioloop/conversions/output'
   },
   {
     name: 'cellranger-arc-v2',
@@ -206,7 +206,7 @@ const CONVERSION_DEFINITIONS = [
     dataset_types: ['RAW_DATA'],
     tags: [],
     capture_logs: true,
-    output_directory: '/opt/sca/data/conversion/output'
+    output_directory: '/N/scratch/cmguser/cmg-bioloop/conversions/output'
   },
   {
     name: 'cellranger-atac',
@@ -215,7 +215,7 @@ const CONVERSION_DEFINITIONS = [
     dataset_types: ['RAW_DATA'],
     tags: [],
     capture_logs: true,
-    output_directory: '/opt/sca/data/conversion/output'
+    output_directory: '/N/scratch/cmguser/cmg-bioloop/conversions/output'
   },
   {
     name: 'spaceranger-v3.0.1',
@@ -224,7 +224,7 @@ const CONVERSION_DEFINITIONS = [
     dataset_types: ['RAW_DATA'],
     tags: [],
     capture_logs: true,
-    output_directory: '/opt/sca/data/conversion/output'
+    output_directory: '/N/scratch/cmguser/cmg-bioloop/conversions/output'
   },
   {
     name: 'spaceranger-v1.3.1',
@@ -233,7 +233,7 @@ const CONVERSION_DEFINITIONS = [
     dataset_types: ['RAW_DATA'],
     tags: [],
     capture_logs: true,
-    output_directory: '/opt/sca/data/conversion/output'
+    output_directory: '/N/scratch/cmguser/cmg-bioloop/conversions/output'
   },
   {
     name: 'spaceranger-v1.1.0',
@@ -242,7 +242,7 @@ const CONVERSION_DEFINITIONS = [
     dataset_types: ['RAW_DATA'],
     tags: [],
     capture_logs: true,
-    output_directory: '/opt/sca/data/conversion/output'
+    output_directory: '/N/scratch/cmguser/cmg-bioloop/conversions/output'
   },
   {
     name: 'cellranger',
@@ -251,7 +251,7 @@ const CONVERSION_DEFINITIONS = [
     dataset_types: ['RAW_DATA'],
     tags: [],
     capture_logs: true,
-    output_directory: '/opt/sca/data/conversion/output'
+    output_directory: '/N/scratch/cmguser/cmg-bioloop/conversions/output'
   },
   {
     name: 'spaceranger',
@@ -260,7 +260,7 @@ const CONVERSION_DEFINITIONS = [
     dataset_types: ['RAW_DATA'],
     tags: [],
     capture_logs: true,
-    output_directory: '/opt/sca/data/conversion/output'
+    output_directory: '/N/scratch/cmguser/cmg-bioloop/conversions/output'
   }
 ];
 

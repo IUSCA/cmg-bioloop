@@ -100,6 +100,7 @@ async function populatePipelineDefinitions(prisma, cmgUserId) {
   // In Bioloop, we separate the executable from args - default args can be added as argument defaults
   logger.info('[BIGBANG] Inserting cmd_line_programs...');
   let programsCreated = 0;
+  let programsUpdated = 0;
   for (const program of CMD_LINE_PROGRAMS) {
     const existing = await prisma.cmd_line_program.findFirst({ where: { name: program.name } });
     if (!existing) {
@@ -112,9 +113,28 @@ async function populatePipelineDefinitions(prisma, cmgUserId) {
         },
       });
       programsCreated++;
+    } else {
+      // Update if executable_path or executable_directory differs
+      const needsUpdate = 
+        existing.executable_path !== program.executable_path ||
+        existing.executable_directory !== (program.executable_directory || null) ||
+        existing.allow_additional_args !== program.allow_additional_args;
+      
+      if (needsUpdate) {
+        await prisma.cmd_line_program.update({
+          where: { id: existing.id },
+          data: {
+            executable_path: program.executable_path,
+            executable_directory: program.executable_directory || null,
+            allow_additional_args: program.allow_additional_args,
+          },
+        });
+        programsUpdated++;
+        logger.info(`[BIGBANG] Updated cmd_line_program: ${program.name}`);
+      }
     }
   }
-  logger.info(`[BIGBANG] Inserted ${programsCreated} cmd_line_programs (${CMD_LINE_PROGRAMS.length - programsCreated} already existed)`);
+  logger.info(`[BIGBANG] Inserted ${programsCreated} cmd_line_programs, updated ${programsUpdated} (${CMD_LINE_PROGRAMS.length - programsCreated - programsUpdated} unchanged)`);
 
   // 2. Get program name to ID mapping
   const programs = await prisma.cmd_line_program.findMany();
@@ -126,6 +146,7 @@ async function populatePipelineDefinitions(prisma, cmgUserId) {
   // 3. Create conversion_definitions
   logger.info('[BIGBANG] Inserting conversion_definitions...');
   let definitionsCreated = 0;
+  let definitionsUpdated = 0;
   for (const definition of CONVERSION_DEFINITIONS) {
     const existing = await prisma.conversion_definition.findFirst({ where: { name: definition.name } });
     if (!existing) {
@@ -143,9 +164,31 @@ async function populatePipelineDefinitions(prisma, cmgUserId) {
         },
       });
       definitionsCreated++;
+    } else {
+      // Update if output_directory or other critical fields differ
+      const needsUpdate = 
+        existing.output_directory !== definition.output_directory ||
+        existing.description !== definition.description ||
+        existing.enabled !== definition.enabled ||
+        existing.capture_logs !== definition.capture_logs;
+      
+      if (needsUpdate) {
+        await prisma.conversion_definition.update({
+          where: { id: existing.id },
+          data: {
+            description: definition.description,
+            enabled: definition.enabled,
+            capture_logs: definition.capture_logs,
+            output_directory: definition.output_directory,
+            // Don't update dataset_types, tags, program_id as they shouldn't change
+          },
+        });
+        definitionsUpdated++;
+        logger.info(`[BIGBANG] Updated conversion_definition: ${definition.name}`);
+      }
     }
   }
-  logger.info(`[BIGBANG] Inserted ${definitionsCreated} conversion_definitions (${CONVERSION_DEFINITIONS.length - definitionsCreated} already existed)`);
+  logger.info(`[BIGBANG] Inserted ${definitionsCreated} conversion_definitions, updated ${definitionsUpdated} (${CONVERSION_DEFINITIONS.length - definitionsCreated - definitionsUpdated} unchanged)`);
 
   // 4. Create arguments
   logger.info('[BIGBANG] Inserting arguments...');
