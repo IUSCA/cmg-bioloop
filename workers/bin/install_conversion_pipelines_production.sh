@@ -19,9 +19,9 @@ set -e
 #   - Internet access for downloads
 #
 # Default Installation:
-#   /usr/local/bin/ - for executables
-#   /opt/10x-genomics/ - for 10x Genomics tools (cellranger, spaceranger)
-#   /opt/illumina/ - for Illumina tools (bcl2fastq, bcl-convert)
+#   /opt/sca/cmg-bioloop/conversion_tools/ - base directory (no sudo needed)
+#   Each tool installed to: /opt/sca/cmg-bioloop/conversion_tools/{tool-version}/bin/{tool}
+#   Example: /opt/sca/cmg-bioloop/conversion_tools/cellranger-v8.0.1/bin/cellranger
 #
 # =============================================================================
 
@@ -33,7 +33,11 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 # Default installation directories
-INSTALL_BASE_DIR="/opt/sca/data/conversion"
+# Option A: Standard system location - requires sudo
+# INSTALL_BASE_DIR="/usr/local/lib/bioloop/conversion_tools"
+# Option B (recommended for this env): Local repo directory - no sudo needed
+INSTALL_BASE_DIR="/opt/sca/cmg-bioloop/conversion_tools"
+
 TMP_DIR="/tmp/bioloop_pipeline_install"
 
 # Parse command line arguments
@@ -67,11 +71,12 @@ echo "Installation Base Directory: $INSTALL_BASE_DIR"
 echo "Temporary Directory: $TMP_DIR"
 echo ""
 
-# Check if running as root or with sudo
-if [ "$EUID" -ne 0 ]; then
-    echo -e "${RED}ERROR: This script must be run with sudo${NC}"
-    exit 1
-fi
+# Check if we can write to installation directory
+# Note: sudo only needed if installing to system directories like /usr/local/lib
+# if [ "$EUID" -ne 0 ]; then
+#     echo -e "${RED}ERROR: This script must be run with sudo${NC}"
+#     exit 1
+# fi
 
 # Create temporary directory
 mkdir -p "$TMP_DIR"
@@ -251,17 +256,44 @@ install_10x_tool() {
             echo "Installing from: $extracted_dir"
             cp -r "$extracted_dir"/* "$TOOL_DIR/"
             
-            # Make main executable executable
-            if [ -f "$TOOL_DIR/bin/$tool_name" ]; then
-                chmod +x "$TOOL_DIR/bin/$tool_name"
-                echo -e "${GREEN}✓ $tool_name $version installed successfully${NC}"
-                "$TOOL_DIR/bin/$tool_name" --version || echo "Version check may not be supported"
-            elif [ -f "$TOOL_DIR/$tool_name" ]; then
-                chmod +x "$TOOL_DIR/$tool_name"
-                ln -sf "$TOOL_DIR/$tool_name" "$TOOL_DIR/bin/$tool_name"
-                echo -e "${GREEN}✓ $tool_name $version installed successfully${NC}"
-            else
-                echo -e "${YELLOW}⚠ $tool_name executable not found in expected location${NC}"
+            # Find and make executable(s) executable
+            echo "Searching for executables in $TOOL_DIR..."
+            
+            # Look for the main binary (usually in a bin subdirectory or root)
+            binary_found=false
+            
+            # Check common locations for the binary
+            for binary_path in \
+                "$TOOL_DIR/bin/$tool_name" \
+                "$TOOL_DIR/$tool_name" \
+                "$TOOL_DIR/$tool_name-$version" \
+                "$extracted_dir/$tool_name"; do
+                
+                if [ -f "$binary_path" ]; then
+                    chmod +x "$binary_path"
+                    
+                    # If binary is not in bin/, create bin/ and link to it
+                    if [ ! -f "$TOOL_DIR/bin/$tool_name" ]; then
+                        mkdir -p "$TOOL_DIR/bin"
+                        ln -sf "$(realpath --relative-to="$TOOL_DIR/bin" "$binary_path")" "$TOOL_DIR/bin/$tool_name"
+                    fi
+                    
+                    binary_found=true
+                    echo -e "${GREEN}✓ $tool_name $version installed successfully${NC}"
+                    echo "Binary location: $binary_path"
+                    "$TOOL_DIR/bin/$tool_name" --version 2>&1 | head -3 || echo "Version check may not be supported"
+                    break
+                fi
+            done
+            
+            if [ "$binary_found" = false ]; then
+                echo -e "${YELLOW}⚠ $tool_name executable not found in standard locations${NC}"
+                echo "Contents of $TOOL_DIR:"
+                ls -la "$TOOL_DIR" | head -10
+                if [ -d "$TOOL_DIR/bin" ]; then
+                    echo "Contents of $TOOL_DIR/bin:"
+                    ls -la "$TOOL_DIR/bin" | head -10
+                fi
             fi
             
             # Cleanup extracted directory

@@ -89,3 +89,6 @@ curl_cmds
 backup_*
 
 startup_output.md
+
+# Conversion tools binaries (installed by workers/bin/install_conversion_pipelines_production.sh)
+conversion_tools/

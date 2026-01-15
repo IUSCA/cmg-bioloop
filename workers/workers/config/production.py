@@ -9,17 +9,18 @@ config = {
     },
     'paths': {
         'RAW_DATA': {
-            'archive': f'archive_raw',
+            'archive': f'/archive_raw',
             'stage': '/N/project/CMG-SCA/cmg-bioloop/stage/raw_data',
+            # 'stage': '/test',
             'bundle': {
                 'generate': '/N/project/CMG-SCA/cmg-bioloop/stage/raw_data',
                 'stage': '/N/project/CMG-SCA/cmg-bioloop/bundles/raw_data',
             },
-            # 'qc': '/N/scratch/cpauser/cpa/production/stage/raw_data/qc'
+            'qc': '/N/scratch/cmguser/cmg-bioloop/qc/raw_data'
         },
         'DATA_PRODUCT': {
             # 'upload': '/opt/sca/uploads/cpa/data_products',
-            'archive': f'archive_products',
+            'archive': f'/archive_products',
             'stage': '/N/scratch/cmguser/cmg-bioloop/stage/data_products',
             'bundle': {
                 'generate': '/N/scratch/cmguser/cmg-bioloop/stage/data_products',
@@ -39,10 +40,10 @@ config = {
             # k4: /zpool/novaseqx/novaseqx1
             # k3: '/data/miseq', '/data/novaseq2', '/data/ns6000'
             # k2: '/data/nextseq', '/data/ns2000/output'
-            'source_dir': '/path/to/source/raw_data',
+            'source_dir': '/N/scratch/cmguser/cmg-bioloop/origin/raw_data',
         },
         'DATA_PRODUCT': {
-            'source_dir': '/N/project/CMG-SCA/cmg-bioloop/origin/data_products',
+            'source_dir': '/N/scratch/cmguser/cmg-bioloop/origin/data_products',
         },
     },
     'stage': {
