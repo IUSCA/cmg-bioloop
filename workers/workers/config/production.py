@@ -9,7 +9,7 @@ config = {
     },
     'paths': {
         'RAW_DATA': {
-            'archive': f'/archive_raw',
+            'archive': f'archive_raw',
             'stage': '/N/project/CMG-SCA/cmg-bioloop/stage/raw_data',
             # 'stage': '/test',
             'bundle': {
@@ -20,7 +20,7 @@ config = {
         },
         'DATA_PRODUCT': {
             # 'upload': '/opt/sca/uploads/cpa/data_products',
-            'archive': f'/archive_products',
+            'archive': f'archive_products',
             'stage': '/N/scratch/cmguser/cmg-bioloop/stage/data_products',
             'bundle': {
                 'generate': '/N/scratch/cmguser/cmg-bioloop/stage/data_products',
@@ -45,6 +45,7 @@ config = {
         'DATA_PRODUCT': {
             'source_dir': '/N/scratch/cmguser/cmg-bioloop/origin/data_products',
         },
+        'recency_threshold_seconds': 0, # 0 minutes
     },
     'stage': {
         'purge': {

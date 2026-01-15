@@ -11,15 +11,15 @@
 #   ./register_iseq-DI.sh [OPTIONS]
 #
 # Options:
-#   -d, --destination DIR    Destination directory (default: /opt/sca/data/origin/raw_data)
+#   -d, --destination DIR    Destination directory (auto-detected from APP_ENV)
 #   -h, --help              Show this help message
 #
 # Examples:
-#   # Download to default location
+#   # Download to auto-detected location based on APP_ENV
 #   ./register_iseq-DI.sh
 #
-#   # Download to custom location
-#   ./register_iseq-DI.sh -d /opt/sca/data/origin/raw_data
+#   # Download to custom location (overrides auto-detection)
+#   ./register_iseq-DI.sh -d /custom/path/to/raw_data
 #
 # Dataset Information:
 #   - Dataset: iseq-DI.tar.gz
@@ -29,7 +29,9 @@
 #   - Purpose: bcl2fastq conversion testing
 #
 # Note:
-#   - This script executes commands inside the celery_worker service via docker-compose
+#   - This script adapts to APP_ENV in workers/.env:
+#     * Production (APP_ENV=production): Runs directly on host, downloads to /N/scratch/...
+#     * Development: Runs in celery_worker container, downloads to /opt/sca/data/...
 #   - Files are downloaded to /tmp first, then moved into directories atomically
 #   - Download uses chunked approach (25MB chunks) with retry logic for reliability
 #   - Creates conversion testing documentation automatically
@@ -38,12 +40,26 @@
 
 set -e
 
-# Get the script directory
+# Get the script directory and repo root
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
 CONVERSION_DOC_DIR="$(dirname "$SCRIPT_DIR")/conversion_testing"
 
-# Default configuration
-DESTINATION="/opt/sca/data/origin/raw_data"
+# Determine destination based on APP_ENV in workers/.env
+WORKERS_ENV="$REPO_ROOT/workers/.env"
+if [ -f "$WORKERS_ENV" ]; then
+    APP_ENV=$(grep '^APP_ENV=' "$WORKERS_ENV" | cut -d '=' -f2 | tr -d '"' | tr -d "'")
+fi
+
+# Set destination based on environment
+if [ "$APP_ENV" = "production" ]; then
+    # Production: use path from workers/config/production.py
+    DESTINATION="/N/scratch/cmguser/cmg-bioloop/origin/raw_data"
+else
+    # Non-production: use default path
+    DESTINATION="/opt/sca/data/origin/raw_data"
+fi
+
 SERVICE_NAME="celery_worker"
 
 # Dataset definition
@@ -307,22 +323,35 @@ EOF
     echo "Created conversion testing documentation: $doc_file"
 }
 
-# Function to run commands inside the celery_worker container
-run_in_container() {
-    docker-compose exec -T "$SERVICE_NAME" bash -c "$1"
+# Function to run commands (in container or directly on host)
+run_command() {
+    if [ "$APP_ENV" = "production" ]; then
+        # Production: run directly on host
+        bash -c "$1"
+    else
+        # Non-production: run inside container
+        docker-compose exec -T "$SERVICE_NAME" bash -c "$1"
+    fi
 }
 
-# Check if service is running
-if ! docker-compose ps "$SERVICE_NAME" 2>/dev/null | grep -q "Up"; then
-    echo "Error: Service '$SERVICE_NAME' is not running"
-    echo "Please start the service with: docker-compose up -d"
-    exit 1
+# Check if service is running (only for non-production)
+if [ "$APP_ENV" != "production" ]; then
+    if ! docker-compose ps "$SERVICE_NAME" 2>/dev/null | grep -q "Up"; then
+        echo "Error: Service '$SERVICE_NAME' is not running"
+        echo "Please start the service with: docker-compose up -d"
+        exit 1
+    fi
 fi
 
 echo "================================"
 echo "iSeq-DI Run Registration"
 echo "================================"
-echo "Service: $SERVICE_NAME"
+echo "Environment: ${APP_ENV:-development}"
+if [ "$APP_ENV" = "production" ]; then
+    echo "Execution: Direct (host)"
+else
+    echo "Execution: Container ($SERVICE_NAME)"
+fi
 echo "Destination: $DESTINATION"
 echo "Dataset: $FILENAME"
 echo ""
@@ -335,9 +364,9 @@ echo "[1/1] Processing: $FILENAME"
 echo "  URL: $URL"
 echo "  Directory: $DIR_NAME"
 
-# Run download and organization inside the container
+# Run download and organization (in container or on host)
 # Downloads to /tmp, then creates directory and moves file atomically
-run_in_container "
+run_command "
     set -e
     
     # Create temporary directory for download
@@ -366,7 +395,7 @@ run_in_container "
         
         echo \"  Fetching bytes \$start-\$end\"
         
-        if curl -L --fail --retry 50 --retry-delay 2 --retry-all-errors \
+        if curl -L --fail --retry 50 --retry-delay 2 \
             -H \"User-Agent: Mozilla/5.0\" \
             -H \"Referer: https://www.10xgenomics.com/\" \
             -H \"Range: bytes=\$start-\$end\" \
@@ -425,10 +454,18 @@ echo "  $CONVERSION_DOC_DIR/${RUN_NAME}---${PIPELINE}.md"
 echo ""
 echo "The watch.py script should detect this new directory and register it as RAW_DATA."
 echo ""
-echo "To verify dataset was created:"
-echo "  docker-compose exec $SERVICE_NAME ls -la $DESTINATION/$DIR_NAME"
-echo ""
-echo "To check dataset file:"
-echo "  docker-compose exec $SERVICE_NAME find $DESTINATION/$DIR_NAME -type f"
+if [ "$APP_ENV" = "production" ]; then
+    echo "To verify dataset was created:"
+    echo "  ls -la $DESTINATION/$DIR_NAME"
+    echo ""
+    echo "To check dataset file:"
+    echo "  find $DESTINATION/$DIR_NAME -type f"
+else
+    echo "To verify dataset was created:"
+    echo "  docker-compose exec $SERVICE_NAME ls -la $DESTINATION/$DIR_NAME"
+    echo ""
+    echo "To check dataset file:"
+    echo "  docker-compose exec $SERVICE_NAME find $DESTINATION/$DIR_NAME -type f"
+fi
 
 

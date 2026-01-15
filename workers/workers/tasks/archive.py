@@ -46,7 +46,7 @@ def make_tarfile(celery_task: WorkflowTask, tar_path: Path, source_dir: str, sou
     return tar_path
 
 
-def archive(celery_task: WorkflowTask, dataset: dict, delete_local_file: bool = False, skip_sda_upload: bool = None):
+def archive(celery_task: WorkflowTask, dataset: dict, delete_local_file: bool = False):
     # Tar the dataset directory and compute checksum
     bundle = Path(f'{config["paths"][dataset["type"]]["bundle"]["generate"]}/{dataset["name"]}.tar')
 
@@ -63,15 +63,9 @@ def archive(celery_task: WorkflowTask, dataset: dict, delete_local_file: bool = 
         'md5': bundle_checksum,
     }
 
-    # Determine if SDA upload should be used
-    # Use SDA if APP_ENV is 'production', unless explicitly skipped
+    # Determine if SDA upload should be used based on APP_ENV
     app_env = os.environ.get('APP_ENV', None)
-    
-    if skip_sda_upload is None:
-        skip_sda_upload = config.get('file_info_population', {}).get('skip_sda_upload', False)
-    
-    # Use SDA if APP_ENV is production and not explicitly skipped
-    use_sda = (app_env == 'production') and not skip_sda_upload
+    use_sda = (app_env == 'production')
     
     if use_sda:
         # Production mode: Upload to SDA
@@ -118,8 +112,7 @@ def archive(celery_task: WorkflowTask, dataset: dict, delete_local_file: bool = 
 
 def archive_dataset(celery_task, dataset_id, **kwargs):
     dataset = api.get_dataset(dataset_id=dataset_id, bundle=True)
-    skip_sda_upload = kwargs.get('skip_sda_upload', None)
-    archive_path, bundle_attrs = archive(celery_task, dataset, skip_sda_upload=skip_sda_upload)
+    archive_path, bundle_attrs = archive(celery_task, dataset)
     update_data = {
         'archive_path': archive_path,
         'bundle': bundle_attrs
