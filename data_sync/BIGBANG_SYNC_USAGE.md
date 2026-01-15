@@ -21,9 +21,9 @@ The big-bang synchronization script performs a **one-time migration** of all exi
 
 ## Usage
 
-### Method 1: Using Command-Line URI
+### Method 1: Test in Sandbox First (Recommended)
 
-Provide MongoDB connection string directly:
+Always test migrations in the sandbox before running against production:
 
 ```bash
 # Inside the sandbox container
@@ -31,21 +31,40 @@ cd data_sync
 docker compose -f docker-compose.sandbox.yml exec db_sandbox bash
 cd /opt/sca/app
 
-# Basic usage (with increased heap size for large datasets)
+# Test in isolated sandbox database
 # Note: --max-old-space-size=6144 allocates 6GB to Node.js heap (container has 8GB limit)
 node --max-old-space-size=6144 src/bigbang_sync.js \
-  --cmg-uri="mongodb://username:password@host:27017/cmg"
+  --target-db=sandbox \
+  --cmg-uri="mongodb://username:password@host:27017/cmg" \
+  --skip-sessions \
+  --clear-locks
 
-# Skip sessions and clear any stale locks
+# Verify results in sandbox
+psql -U appuser -d bioloop_sync -c "SELECT COUNT(*) FROM dataset;"
+```
+
+### Method 2: Sync to Production Database
+
+After testing successfully in sandbox:
+
+```bash
+# Sync to production (reads config from ../api/.env automatically)
 node --max-old-space-size=6144 src/bigbang_sync.js \
+  --target-db=app \
   --cmg-uri="mongodb://username:password@host:27017/cmg" \
   --skip-sessions \
   --clear-locks
 ```
 
-### Method 2: Using Environment Variables
+**What happens:**
+- Script reads `../api/.env` for production database credentials
+- Connects to production PostgreSQL (e.g., `172.19.0.3:5432/cmg`)
+- **All credentials are sanitized** in logs: `postgresql://<credentials>@host`
+- Writes CMG data directly to production database
 
-Set environment variables in `.env` file and use the config system:
+### Method 3: Using Environment Variables
+
+Set environment variables in `.env` file:
 
 ```bash
 # From host, exec into container
@@ -53,25 +72,49 @@ cd data_sync
 docker compose -f docker-compose.sandbox.yml exec db_sandbox bash
 cd /opt/sca/app
 
-# Run the script (reads from .env file)
-node src/bigbang_sync.js
+# Run the script (reads CMG MongoDB from .env file)
+node src/bigbang_sync.js --target-db=sandbox
 ```
 
-### Method 3: One-Liner from Host
+### Method 4: One-Liner from Host
 
 ```bash
 cd data_sync
-docker compose -f docker-compose.sandbox.yml exec db_sandbox node /opt/sca/app/src/bigbang_sync.js --cmg-uri="mongodb://..."
+
+# Sandbox test
+docker compose -f docker-compose.sandbox.yml exec db_sandbox \
+  node /opt/sca/app/src/bigbang_sync.js --target-db=sandbox --skip-sessions
+
+# Production sync
+docker compose -f docker-compose.sandbox.yml exec db_sandbox \
+  node /opt/sca/app/src/bigbang_sync.js --target-db=app --skip-sessions
 ```
 
 ## Options
 
 | Flag | Description |
 |------|-------------|
+| `--target-db=<target>` | Target database: `sandbox` (default), `app`, or `custom` |
 | `--cmg-uri=<uri>` | MongoDB connection string for CMG database |
 | `--skip-sessions` | Skip genome browser session conversion (recommended for first run) |
 | `--clear-locks` | Clear any existing process locks before starting (useful if previous run crashed) |
 | `--help`, `-h` | Show help message |
+
+### Target Database Options
+
+- **`sandbox`** (default): Writes to isolated PostgreSQL inside the sandbox container
+  - Uses `data_sync/.env` or defaults to `localhost:5432/bioloop_sync`
+  - Safe for testing migrations without affecting production
+  
+- **`app`**: Writes to the main application's production database
+  - Automatically reads configuration from `../api/.env`
+  - Connects to production postgres (typically at `172.19.0.3:5432`)
+  - **⚠️ Use only after testing in sandbox!**
+  
+- **`custom`**: Uses `DATABASE_URL` from current environment
+  - For advanced scenarios with custom database configurations
+
+**See `TARGET_DATABASE_CONFIGURATION.md` for detailed documentation.**
 
 ## MongoDB Connection String Format
 
@@ -130,6 +173,44 @@ The script follows a **fail-fast** approach:
 - Only catches expected errors (e.g., unique constraint violations for duplicate users)
 - All unexpected errors will stop the migration and propagate up
 - No hidden errors - everything is logged and visible
+
+## Log Files
+
+### Location
+
+Logs are written to both:
+- **Console output** (visible with `docker compose logs`)
+- **File:** `/tmp/bigbang_sync_YYYY-MM-DDTHH-MM-SS.log`
+
+**Accessing from host:**
+```bash
+# Logs are automatically available on host at:
+ls -lh /tmp/data_sync_logs/
+
+# View latest log
+tail -f /tmp/data_sync_logs/bigbang_sync_*.log
+
+# Search for errors
+grep -i error /tmp/data_sync_logs/bigbang_sync_*.log
+```
+
+### Credential Sanitization
+
+**All database credentials are automatically hidden in logs:**
+
+```
+# You will see:
+[OK] Database URL: postgresql://<credentials>@172.19.0.3:5432/cmg
+CMG MongoDB: mongodb://<credentials>@commons3.sca.iu.edu:27017/cmg
+
+# Instead of:
+postgresql://user:password@...  (passwords are sanitized)
+```
+
+This applies to:
+- PostgreSQL connection strings
+- MongoDB connection strings
+- Error messages and stack traces
 
 ## Expected Warnings
 

@@ -107,15 +107,20 @@ function parseArgs() {
 }
 
 /**
- * Sanitize MongoDB URIs in strings to hide credentials
+ * Sanitize URIs in strings to hide credentials
  * Replaces mongodb://user:pass@host with mongodb://<credentials>@host
+ * Replaces postgresql://user:pass@host with postgresql://<credentials>@host
  */
 function sanitizeUri(str) {
   if (!str) return str;
   if (typeof str !== 'string') {
     str = JSON.stringify(str);
   }
-  return str.replace(/mongodb:\/\/[^:]+:[^@]+@/g, 'mongodb://<credentials>@');
+  // Sanitize MongoDB URIs
+  str = str.replace(/mongodb:\/\/[^:]+:[^@]+@/g, 'mongodb://<credentials>@');
+  // Sanitize PostgreSQL URIs
+  str = str.replace(/postgresql:\/\/[^:]+:[^@]+@/g, 'postgresql://<credentials>@');
+  return str;
 }
 
 /**
