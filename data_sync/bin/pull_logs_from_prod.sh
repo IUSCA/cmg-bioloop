@@ -50,7 +50,7 @@ SSH_USER=""  # Leave empty to use SSH config default (cmguser)
 REMOTE_LOGS_DIR="/tmp/data_sync_logs"  # Direct path to logs on host
 LOCAL_OUTPUT="./logs_from_prod"
 LIST_ONLY=false
-LAST_N=1  # Default: download last 1 file
+LAST_N=1  # Default: download last 1 file by timestamp
 ALL_FILES=false
 
 # Color codes

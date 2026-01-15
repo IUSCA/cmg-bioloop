@@ -74,18 +74,15 @@ create_dir "/opt/sca/data/bundle/data_products/staging"    # DATA_PRODUCT bundle
 create_dir "/opt/sca/data/conversion"                      # Base conversion directory
 create_dir "/opt/sca/data/conversion/output"               # Conversion output directory
 create_dir "/opt/sca/data/conversion/reports/"             # Conversion reports directory
-# Logs directories for various conversion programs
-create_dir "/opt/sca/data/conversion/bcl2fastq/logs"
-create_dir "/opt/sca/data/conversion/bcl-convert/logs"
-create_dir "/opt/sca/data/conversion/cellranger-v8.0.1/logs"
-create_dir "/opt/sca/data/conversion/cellranger-v6.1.2/logs"
-create_dir "/opt/sca/data/conversion/cellranger-v4.0.0/logs"
-create_dir "/opt/sca/data/conversion/cellranger-arc/logs"
-create_dir "/opt/sca/data/conversion/cellranger-arc-v2/logs"
-create_dir "/opt/sca/data/conversion/cellranger-atac/logs"
-create_dir "/opt/sca/data/conversion/spaceranger-v3.0.1/logs"
-create_dir "/opt/sca/data/conversion/spaceranger-v1.3.1/logs"
-create_dir "/opt/sca/data/conversion/spaceranger-v1.1.0/logs"
+# Logs and bin directories for various conversion programs
+# Each pipeline gets both bin/ and logs/ directories
+for pipeline in bcl2fastq bcl-convert \
+                cellranger-v8.0.1 cellranger-v6.1.2 cellranger-v4.0.0 \
+                cellranger-arc cellranger-arc-v2 cellranger-atac \
+                spaceranger-v3.0.1 spaceranger-v1.3.1 spaceranger-v1.1.0; do
+    create_dir "/opt/sca/data/conversion/$pipeline/bin"
+    create_dir "/opt/sca/data/conversion/$pipeline/logs"
+done
 
 # Quality control directories
 create_dir "/opt/sca/data/qc/raw_data"            # Quality control files's generation place

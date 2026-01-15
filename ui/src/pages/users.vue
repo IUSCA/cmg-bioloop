@@ -144,6 +144,11 @@
     <div class="max-w-lg">
       <va-inner-loading :loading="modal_loading">
         <va-form class="flex flex-wrap gap-2 gap-y-4" ref="modifyFormRef">
+          <!-- Historical data notice -->
+          <va-alert v-if="isHistoricalUser" color="info" border="left" class="w-full">
+            This is historical user data from CMG. Identity fields (username, email, CAS ID) are read-only to preserve data integrity.
+          </va-alert>
+
           <!-- name -->
           <va-input
             data-testid="user-name-input"
@@ -161,6 +166,7 @@
             v-model="editedUser.email"
             label="Email"
             class="w-full"
+            :readonly="isHistoricalUser"
             :rules="[
               (value) => (value && value.length > 0) || 'Field is required',
             ]"
@@ -173,6 +179,7 @@
             @update:modelValue="editedUser.username = $event"
             label="Username"
             class="w-full"
+            :readonly="isHistoricalUser"
             :rules="[
               (value) => (value && value.length > 0) || 'Field is required',
             ]"
@@ -185,6 +192,7 @@
             @update:modelValue="editedUser.cas_id = $event"
             label="CAS ID"
             class="flex-[1_1_100%]"
+            :readonly="isHistoricalUser"
             :rules="[
               (value) => (value && value.length > 0) || 'Field is required',
             ]"
@@ -208,7 +216,7 @@
             </div>
 
             <!-- Delete User Text and Trash Bin Button -->
-            <div v-if="auth.canAdmin" class="flex items-center gap-2 ml-auto">
+            <div v-if="auth.canAdmin && !editedUser.cmg_id" class="flex items-center gap-2 ml-auto">
               <span class="trash-can-button-text"> DELETE USER </span>
               <va-button
                 color="danger"
@@ -383,6 +391,11 @@ const roleOptions = ["user", "operator", "admin"];
 const autofill = ref({
   username: "",
   cas_id: "",
+});
+
+// Check if this is historical CMG user data
+const isHistoricalUser = computed(() => {
+  return !!editedUser.value?.cmg_id;
 });
 
 // New variables for delete confirmation modals

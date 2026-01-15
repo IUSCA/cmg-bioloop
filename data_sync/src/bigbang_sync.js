@@ -50,8 +50,19 @@ const config = require('config');
 // eslint-disable-next-line import/no-unresolved
 const { MongoClient } = require('mongodb');
 const { PrismaClient } = require('@prisma/client');
-const logger = require('./logger');
+const originalLogger = require('./logger');
 const { setDatabaseUrl } = require('./utils/db_config');
+
+// Wrap logger to count log statements
+let logStatementCount = 0;
+const logger = {};
+
+['info', 'warn', 'error', 'debug'].forEach((level) => {
+  logger[level] = (...args) => {
+    logStatementCount += 1;
+    originalLogger[level](...args);
+  };
+});
 
 // Bigbang modules
 const { createRoles, createCMGUser, populatePipelineDefinitions } = require('./sync/bigbang/seed_constants');
@@ -211,29 +222,25 @@ async function clearTargetDatabase(prisma) {
 
     logger.info(`Found ${tables.length} tables to clear`);
 
-    // Disable foreign key checks temporarily
-    await prisma.$executeRawUnsafe('SET session_replication_role = replica;');
+    // Build single TRUNCATE statement with all tables (CASCADE handles foreign keys)
+    // Skip Prisma migrations table
+    const tablesToClear = tables
+      .map(t => t.tablename)
+      .filter(name => name !== '_prisma_migrations');
 
-    // Truncate each table
-    for (const { tablename } of tables) {
-      // Skip Prisma's migration history table
-      if (tablename === '_prisma_migrations') {
-        logger.debug(`Skipping Prisma migrations table: ${tablename}`);
-        continue;
-      }
-
-      try {
-        await prisma.$executeRawUnsafe(`TRUNCATE TABLE "${tablename}" CASCADE;`);
-        logger.debug(`Cleared table: ${tablename}`);
-      } catch (error) {
-        logger.warn(`Failed to clear table ${tablename}: ${error.message}`);
-      }
+    if (tablesToClear.length > 0) {
+      // Use RESTART IDENTITY to reset auto-increment sequences
+      // CASCADE automatically truncates tables with foreign key references
+      const truncateStatement = `TRUNCATE TABLE ${tablesToClear.map(t => `"${t}"`).join(', ')} RESTART IDENTITY CASCADE;`;
+      
+      logger.debug(`Truncating ${tablesToClear.length} tables...`);
+      await prisma.$executeRawUnsafe(truncateStatement);
+      
+      logger.info(`✅ Target database cleared successfully (${tablesToClear.length} tables)`);
+    } else {
+      logger.info('No tables to clear');
     }
-
-    // Re-enable foreign key checks
-    await prisma.$executeRawUnsafe('SET session_replication_role = DEFAULT;');
-
-    logger.info('✅ Target database cleared successfully');
+    
     logger.info('');
   } catch (error) {
     logger.error('Failed to clear target database:', error.message);
@@ -391,9 +398,14 @@ async function main() {
     }
 
     const duration = ((Date.now() - startTime) / 1000).toFixed(2);
+    const minutes = Math.floor(duration / 60);
+    const seconds = (duration % 60).toFixed(2);
+    const timeStr = minutes > 0 ? `${minutes}m ${seconds}s` : `${seconds}s`;
+
     logger.info('');
     logger.info('='.repeat(80));
-    logger.info(`[SUCCESS] Big-bang migration completed successfully in ${duration}s`);
+    logger.info(`[SUCCESS] Big-bang migration completed in ${timeStr}`);
+    logger.info(`          Executed ${logStatementCount} logging statements`);
     logger.info('='.repeat(80));
     logger.info('');
     logger.info('Next steps:');

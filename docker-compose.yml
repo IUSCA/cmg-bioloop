@@ -150,8 +150,6 @@ services:
     depends_on:
       init_data_dirs:
         condition: service_completed_successfully
-      bcl2fastq_setup:
-        condition: service_completed_successfully
       api:
         condition: service_healthy
       mongo:
@@ -357,17 +355,10 @@ services:
       - metrics
 
   # Conversion pipelines setup services
-  bcl2fastq_setup:
-    image: nfcore/bcl2fastq:2.20.0.422
-    platform: linux/amd64
-    volumes:
-      - landing_volume:/opt/sca/data
-    entrypoint: ["sh", "-c"]
-    command: >
-      "cp /usr/local/bin/bcl2fastq /opt/sca/data/conversion/bcl2fastq/bin/ && chmod +x /opt/sca/data/conversion/bcl2fastq/bin/bcl2fastq && echo 'bcl2fastq installed successfully' && /opt/sca/data/conversion/bcl2fastq/bin/bcl2fastq --version && ls -la /opt/sca/data/conversion/bcl2fastq/bin/"
-    depends_on:
-      init_data_dirs:
-        condition: service_completed_successfully
+  # To use other pipelines, mount from host:
+  # conversion_worker:
+  #   volumes:
+  #     - /path/to/cellranger-8.0.1:/opt/cellranger-8.0.1:ro
 
 
 
