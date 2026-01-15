@@ -95,6 +95,9 @@ async function populatePipelineDefinitions(prisma, cmgUserId) {
   logger.info('[BIGBANG] Populating pipeline definitions...');
 
   // 1. Create cmd_line_programs
+  // These paths are from CMG's production configuration at /N/project/CMG-SCA/...
+  // Note: CMG stored default args in the executable path (e.g., "bcl2fastq -r 4 -w 4 -p 14")
+  // In Bioloop, we separate the executable from args - default args can be added as argument defaults
   logger.info('[BIGBANG] Inserting cmd_line_programs...');
   let programsCreated = 0;
   for (const program of CMD_LINE_PROGRAMS) {
@@ -104,7 +107,7 @@ async function populatePipelineDefinitions(prisma, cmgUserId) {
         data: {
           name: program.name,
           executable_path: program.executable_path,
-          executable_directory: program.executable_directory,
+          executable_directory: program.executable_directory || null,
           allow_additional_args: program.allow_additional_args,
         },
       });
