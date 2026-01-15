@@ -102,37 +102,75 @@ async function convertConversion(prisma, cmgDb, cmgConversion) {
         continue;
       }
       
-      // Check if this is a flag (starts with -- or -)
+      // CMG stores options WITHOUT the -- prefix and has multiple formats:
+      // 1. Boolean: "no-lane-splitting"
+      // 2. Key-value in same string: "barcode-mismatches 0" (space-separated)
+      // 3. Key-value in separate items: "key", "value" (rare)
+      // 4. Key=value: "key=value"
+      let argumentName = option;
+      let argumentValue = 'true';
+      
+      // Check if already has prefix (some might)
       if (option.startsWith('--') || option.startsWith('-')) {
-        // Check if the flag has an inline value (--key=value)
+        // Already has prefix, parse normally
         if (option.includes('=')) {
           const [name, value] = option.split('=', 2);
-          parsedArgs.push({
-            argument_name: name,
-            value: value || 'true',
-          });
+          argumentName = name;
+          argumentValue = value || 'true';
+        } else if (option.includes(' ')) {
+          // Space-separated key-value: "--key value"
+          const [name, ...valueParts] = option.split(' ');
+          argumentName = name;
+          argumentValue = valueParts.join(' ');
         } else {
-          // Check if next item is a value (doesn't start with --)
+          // Check if next item is a value
           const nextItem = cmgConversion.options[i + 1];
           if (nextItem && !nextItem.startsWith('--') && !nextItem.startsWith('-')) {
-            // This flag has a value in the next position
-            parsedArgs.push({
-              argument_name: option,
-              value: nextItem,
-            });
+            argumentName = option;
+            argumentValue = nextItem;
             i++; // Skip the next item since we consumed it
           } else {
-            // This is a boolean flag
-            parsedArgs.push({
-              argument_name: option,
-              value: 'true',
-            });
+            argumentName = option;
+            argumentValue = 'true';
           }
         }
       } else {
-        // This is a standalone value (shouldn't happen in well-formed args, but handle it)
-        logger.warn(`[BIGBANG] Unexpected standalone value in conversion ${cmgConversion._id} options: ${option}`);
+        // No prefix - this is the CMG format
+        // Add -- prefix for Bioloop compatibility
+        
+        if (option.includes('=')) {
+          // Handle key=value format: "barcode-mismatches=0"
+          const [name, value] = option.split('=', 2);
+          argumentName = `--${name}`;
+          argumentValue = value || 'true';
+        } else if (option.includes(' ')) {
+          // CRITICAL: CMG stores key-value in SAME string: "barcode-mismatches 0"
+          const spaceIndex = option.indexOf(' ');
+          const name = option.substring(0, spaceIndex);
+          const value = option.substring(spaceIndex + 1).trim();
+          argumentName = `--${name}`;
+          argumentValue = value || 'true';
+        } else {
+          // Check if next item exists and looks like a value
+          const nextItem = cmgConversion.options[i + 1];
+          
+          // If next item exists and doesn't contain hyphens (likely a value, not another option)
+          if (nextItem && nextItem.trim() && !nextItem.includes('-')) {
+            argumentName = `--${option}`;
+            argumentValue = nextItem;
+            i++; // Consume the value
+          } else {
+            // This is a boolean flag
+            argumentName = `--${option}`;
+            argumentValue = 'true';
+          }
+        }
       }
+      
+      parsedArgs.push({
+        argument_name: argumentName,
+        value: argumentValue,
+      });
     }
     
     // Store as additional_args if we parsed any arguments
