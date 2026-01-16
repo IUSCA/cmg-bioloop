@@ -82,6 +82,7 @@ const {
   acquireProcessLock,
   releaseProcessLock,
   extendProcessLock,
+  checkProcessLockStatus,
   forceReleaseAllProcessLocks,
   DEFAULT_LOCK_TTL_MS,
 } = require('./sync/process_lock_manager');
@@ -223,7 +224,7 @@ async function clearTargetDatabase(prisma) {
   logger.warn('⚠️  CLEARING TARGET DATABASE');
   logger.warn('='.repeat(80));
   logger.warn('This will DELETE ALL DATA from the target database!');
-  logger.warn('Schema (tables) will be preserved.');
+  logger.warn('Schema (tables) and sync infrastructure will be preserved.');
   logger.warn('');
 
   try {
@@ -238,10 +239,15 @@ async function clearTargetDatabase(prisma) {
     logger.info(`Found ${tables.length} tables to clear`);
 
     // Build single TRUNCATE statement with all tables (CASCADE handles foreign keys)
-    // Skip Prisma migrations table
+    // Skip Prisma migrations table and sync infrastructure tables
     const tablesToClear = tables
       .map(t => t.tablename)
-      .filter(name => name !== '_prisma_migrations');
+      .filter(name => 
+        name !== '_prisma_migrations' &&      // Prisma schema management
+        name !== 'cmg_sync_process_lock' &&   // Active process locks
+        name !== 'cmg_sync_cursor' &&         // Sync cursor positions
+        name !== 'cmg_sync_retry'             // Failed documents retry queue
+      );
 
     if (tablesToClear.length > 0) {
       // Use RESTART IDENTITY to reset auto-increment sequences
@@ -299,6 +305,35 @@ async function main() {
       logger.warn('[CLEAR-LOCKS] Clearing all existing process locks...');
       const count = await forceReleaseAllProcessLocks(prisma);
       logger.warn(`[CLEAR-LOCKS] Released ${count} process lock(s)`);
+    }
+
+    // Check if pollers are running
+    const pollerLockStatus = await checkProcessLockStatus(prisma, 'poller');
+    if (pollerLockStatus) {
+      logger.warn('');
+      logger.warn('='.repeat(80));
+      logger.warn('⚠️  WARNING: Continuous sync pollers are currently running!');
+      logger.warn('='.repeat(80));
+      logger.warn(`Locked by: ${pollerLockStatus.locked_by}`);
+      logger.warn(`Started at: ${pollerLockStatus.last_started_at}`);
+      logger.warn(`Lock expires: ${pollerLockStatus.lock_expires_at}`);
+      logger.warn('');
+      logger.warn('Running bigbang while pollers are active can cause:');
+      logger.warn('  • Data inconsistencies');
+      logger.warn('  • Race conditions');
+      logger.warn('  • Duplicate records');
+      logger.warn('');
+      logger.warn('RECOMMENDED: Stop pollers before running bigbang migration.');
+      logger.warn('');
+      logger.warn('To stop pollers, you have two options:');
+      logger.warn('  1. Use --clear-locks flag to force release the lock (if poller crashed)');
+      logger.warn('  2. Gracefully stop the poller process (preferred):');
+      logger.warn('     - Find process: ps aux | grep poller_sync');
+      logger.warn('     - Kill gracefully: kill -SIGTERM <PID>');
+      logger.warn('');
+      logger.error('Exiting to prevent data corruption. Fix the issue and try again.');
+      logger.error('');
+      process.exit(1);
     }
 
     // Acquire process lock BEFORE starting migration
@@ -434,7 +469,8 @@ async function main() {
     logger.info('');
     logger.info('Next steps:');
     logger.info('  1. Verify data integrity in Bioloop database');
-    logger.info('  2. Start the poller sync script: node src/poller_sync.js');
+    logger.info('  2. Start continuous sync: ./bin/start_pollers.sh');
+    logger.info('     Or use: ./bin/migrate.sh (and select option 3)');
     logger.info('  3. Monitor logs for any sync issues');
     logger.info('');
   } catch (error) {
@@ -462,6 +498,17 @@ async function main() {
     logger.error('NOTE: Data inserted before the error occurred has been retained in the database.');
     logger.error('The script is idempotent - you can re-run it after fixing the error.');
     logger.error('');
+    logger.warn('⚠️  IMPORTANT: If pollers were running before this migration:');
+    logger.warn('');
+    logger.warn('  1. Check if pollers are still running:');
+    logger.warn('     ps aux | grep poller_sync');
+    logger.warn('');
+    logger.warn('  2. If pollers stopped, restart them after you fix the error:');
+    logger.warn('     ./bin/start_pollers.sh --target-db=<your-target>');
+    logger.warn('     Or: ./bin/migrate.sh (select option 3)');
+    logger.warn('');
+    logger.warn('  3. Review the data state before restarting pollers to ensure consistency.');
+    logger.warn('');
 
     process.exit(1);
   } finally {

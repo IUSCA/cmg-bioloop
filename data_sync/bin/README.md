@@ -32,7 +32,8 @@ This directory contains shell scripts for managing the CMG to Bioloop database m
 ```
 1) Populate database only (one-time historical migration)
 2) Populate database + start continuous sync pollers
-3) Exit
+3) Start continuous sync pollers only (skip database population)
+4) Exit
 ```
 
 ---
