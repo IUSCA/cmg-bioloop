@@ -96,19 +96,68 @@ function evaluateDataRequestStatus(session) {
 }
 
 /**
+ * Convert dataset type to filesystem folder name
+ * @param {string} datasetType - Dataset type (e.g., "raw_data", "data_product")
+ * @returns {string} Folder name used in filesystem
+ */
+function getDatasetTypeFolder(datasetType) {
+  if (!datasetType) return '';
+  
+  const normalized = datasetType.toLowerCase().trim();
+  
+  // Map dataset types from config to their filesystem folder names
+  const datasetTypes = config.get('dataset_types') || [];
+  const folderMap = {};
+  
+  datasetTypes.forEach((type) => {
+    const lowerType = type.toLowerCase();
+    // Handle special case: DATA_PRODUCT -> data_products (plural in filesystem)
+    if (lowerType === 'data_product') {
+      folderMap[lowerType] = 'data_products';
+    } else {
+      folderMap[lowerType] = lowerType;
+    }
+  });
+  
+  return folderMap[normalized] || normalized;
+}
+
+/**
  * Compute file's relative path for file exposure
- * @param {Object} dataset - Dataset object with metadata.stage_alias
+ * @param {Object} dataset - Dataset object with metadata.stage_alias and type
  * @param {Object} datasetFile - Dataset file object with path
- * @returns {string} Relative path (e.g., "staged/data_products/hash/file.bam")
+ * @returns {string} Relative path from data root (includes dataset_type folder)
  */
 function getRelativeFilePath({ dataset, datasetFile }) {
   const stageAlias = dataset.metadata?.stage_alias || '';
   const filePath = datasetFile.path || '';
+  const datasetType = dataset.type || '';
 
   const cleanedStageAlias = stageAlias.replace(/^\/+/, '').replace(/\/+$/, '');
   const cleanedFilePath = filePath.replace(/^\/+/, '');
-
-  return cleanedStageAlias ? `${cleanedStageAlias}/${cleanedFilePath}` : cleanedFilePath;
+  
+  // Get dataset type folder (e.g., "data_products", "raw_data")
+  const datasetTypeFolder = getDatasetTypeFolder(datasetType);
+  
+  // Construct path: dataset_type_folder/stage_alias/file_path
+  let relativePath = '';
+  
+  if (datasetTypeFolder) {
+    relativePath = datasetTypeFolder;
+    if (cleanedStageAlias) {
+      relativePath = `${relativePath}/${cleanedStageAlias}`;
+    }
+  } else if (cleanedStageAlias) {
+    relativePath = cleanedStageAlias;
+  }
+  
+  if (relativePath && cleanedFilePath) {
+    return `${relativePath}/${cleanedFilePath}`;
+  } else if (cleanedFilePath) {
+    return cleanedFilePath;
+  }
+  
+  return relativePath;
 }
 
 /**
@@ -236,7 +285,11 @@ function serializeTrackForIGV(sessionTrack, sessionId, filesByDataset) {
   const indexFile = findIndexFileForPrimary(datasetFilesForThisDataset, datasetFile);
 
   if (indexFile) {
-    const indexRelativePath = getRelativeFilePath({ dataset, datasetFile: indexFile });
+    // Use the index file's dataset object (same as primary file's dataset)
+    const indexRelativePath = getRelativeFilePath({
+      dataset: indexFile.dataset || dataset,
+      datasetFile: indexFile,
+    });
     const indexUrl = buildFileExposureUrl(sessionId, indexRelativePath);
     trackConfig.indexURL = indexUrl;
   }
@@ -283,7 +336,11 @@ function serializeTrackForWashU(sessionTrack, sessionId, filesByDataset) {
   const indexFile = findIndexFileForPrimary(datasetFilesForThisDataset, datasetFile);
 
   if (indexFile) {
-    const indexRelativePath = getRelativeFilePath({ dataset, datasetFile: indexFile });
+    // Use the index file's dataset object (same as primary file's dataset)
+    const indexRelativePath = getRelativeFilePath({
+      dataset: indexFile.dataset || dataset,
+      datasetFile: indexFile,
+    });
     const indexUrl = buildFileExposureUrl(sessionId, indexRelativePath);
     trackConfig.indexURL = indexUrl;
   }
@@ -947,7 +1004,10 @@ router.get(
                 dataset_file: {
                   include: {
                     dataset: {
-                      include: {
+                      select: {
+                        id: true,
+                        type: true,
+                        metadata: true,
                         genomic_details: true,
                       },
                     },
@@ -978,6 +1038,13 @@ router.get(
         path: true,
         metadata: true,
         dataset_id: true,
+        dataset: {
+          select: {
+            id: true,
+            type: true,
+            metadata: true,
+          },
+        },
       },
     });
 
@@ -1067,6 +1134,7 @@ fileExposureRouter.get(
                     dataset: {
                       select: {
                         id: true,
+                        type: true,
                         metadata: true,
                         staged_path: true,
                       },
@@ -1140,17 +1208,16 @@ fileExposureRouter.get(
       fileName: matchedFile.name,
     }, { depth: null });
 
-    // Construct full file path using dataset's staged_path
-    const stagedPath = matchedDataset.staged_path;
-    logger.info('[FILE EXPOSE] Dataset staged path');
-    console.dir({ stagedPath }, { depth: null });
+    // Construct full file path using getRelativeFilePath which includes dataset_type
+    const relativePath = getRelativeFilePath({
+      dataset: matchedDataset,
+      datasetFile: matchedFile,
+    });
+    logger.info('[FILE EXPOSE] Relative path with dataset_type');
+    console.dir({ relativePath }, { depth: null });
 
-    const filePath = matchedFile.path || '';
-    logger.info('[FILE EXPOSE] File path from dataset_file');
-    console.dir({ filePath }, { depth: null });
-
-    // Absolute path is: staged_path + '/' + filePath
-    const resolvedFull = path.join(stagedPath, filePath);
+    // Construct absolute path: DATA_ROOT + relativePath
+    const resolvedFull = path.join(DATA_ROOT, relativePath);
     logger.info('[FILE EXPOSE] Full absolute path constructed');
     console.dir({ resolvedFull }, { depth: null });
 
