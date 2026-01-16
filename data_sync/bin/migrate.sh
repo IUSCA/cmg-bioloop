@@ -64,6 +64,14 @@
 #   - Pollers will watch CMG for changes and sync them to Bioloop
 #   - Use this for: production deployments, automated setups
 #
+#   Mode 3: Start Continuous Sync Only (Skip Population)
+#   -----------------------------------------------------
+#   - Starts continuous sync pollers WITHOUT running bigbang migration
+#   - REQUIRES that bigbang was already run previously
+#   - Pollers will fail if cursor positions are not initialized
+#   - Use this for: restarting pollers after they were stopped, or
+#     starting pollers separately from initial migration
+#
 # Database Targeting:
 #
 #   --target-db sandbox (default)
@@ -141,6 +149,7 @@ PS3="$(echo -e ${BOLD}Your choice:${NC} )"
 options=(
   "Populate database only (one-time historical migration)"
   "Populate database + start continuous sync pollers"
+  "Start continuous sync pollers only (skip database population)"
   "Exit"
 )
 
@@ -222,13 +231,59 @@ do
     
     3)
       echo ""
+      echo -e "${YELLOW}⚠️  Selected: Start continuous sync pollers only${NC}"
+      echo -e "${YELLOW}  Mode: Pollers without bigbang${NC}"
+      echo ""
+      echo -e "${RED}${BOLD}WARNING:${NC} This assumes the database has already been populated!"
+      echo ""
+      echo "Prerequisites:"
+      echo "  • Bigbang migration must have been run previously"
+      echo "  • Cursor positions must be initialized in the database"
+      echo "  • If cursors don't exist, pollers will fail immediately"
+      echo ""
+      echo "If you haven't run bigbang yet, press Ctrl+C now and choose option 1 or 2."
+      echo ""
+      read -p "$(echo -e ${BOLD}Continue anyway? [y/N]:${NC} )" -n 1 -r
+      echo ""
+      
+      if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+        echo ""
+        echo "Cancelled. Returning to menu..."
+        echo ""
+        exec "$0" "${ARGS[@]}"
+      fi
+      
+      echo ""
+      echo -e "${GREEN}✓ Confirmed. Starting continuous sync pollers...${NC}"
+      echo ""
+      
+      # Remove flags that don't apply to pollers
+      POLLER_ARGS=()
+      for arg in "${ARGS[@]}"; do
+        case $arg in
+          --clear-target-db|--skip-sessions|--clear-locks|--skip-conversion-logs)
+            # Skip these flags (bigbang-only)
+            ;;
+          *)
+            POLLER_ARGS+=("$arg")
+            ;;
+        esac
+      done
+      
+      ./bin/start_pollers.sh "${POLLER_ARGS[@]}"
+      poller_exit=$?
+      exit $poller_exit
+      ;;
+    
+    4)
+      echo ""
       echo "Exiting..."
       echo ""
       exit 0
       ;;
     
     *)
-      echo -e "${RED}Invalid option $REPLY. Please enter 1, 2, or 3.${NC}"
+      echo -e "${RED}Invalid option $REPLY. Please enter 1, 2, 3, or 4.${NC}"
       ;;
   esac
 done

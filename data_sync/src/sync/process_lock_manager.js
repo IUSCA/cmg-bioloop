@@ -128,6 +128,39 @@ async function extendProcessLock(
 }
 
 /**
+ * Check if a process is currently locked/running
+ *
+ * @param {PrismaClient} prisma - Prisma client instance
+ * @param {string} processName - Name of the process to check
+ * @returns {Object|null} Lock info if locked, null if not locked or expired
+ */
+async function checkProcessLockStatus(prisma, processName) {
+  try {
+    const lock = await prisma.cmg_sync_process_lock.findUnique({
+      where: { process_name: processName },
+    });
+
+    if (!lock || !lock.locked_by) {
+      return null; // Not locked
+    }
+
+    const now = new Date();
+    if (lock.lock_expires_at && lock.lock_expires_at < now) {
+      return null; // Lock expired
+    }
+
+    return {
+      locked_by: lock.locked_by,
+      lock_expires_at: lock.lock_expires_at,
+      last_started_at: lock.last_started_at,
+    };
+  } catch (error) {
+    logger.error(`[${processName}] Failed to check process lock status:`, error);
+    return null;
+  }
+}
+
+/**
  * Force release all process locks (emergency use only)
  *
  * @param {PrismaClient} prisma - Prisma client instance
@@ -152,6 +185,7 @@ module.exports = {
   acquireProcessLock,
   releaseProcessLock,
   extendProcessLock,
+  checkProcessLockStatus,
   forceReleaseAllProcessLocks,
   DEFAULT_LOCK_TTL_MS,
   POLLER_LOCK_TTL_MS,

@@ -45,6 +45,138 @@ The poller system consists of 5 independent pollers:
 - **Updates**: Dataset states based on completed workflows
 - **Workflows tracked**: `integrated`, `stage`
 
+## Cursor-Based Synchronization & Edge Cases
+
+### How Cursors Work
+
+Pollers use **cursor-based incremental sync** to track which CMG records have been processed. Each poller maintains:
+- `last_updated_at`: Timestamp of the last processed CMG update
+- `last_cmg_objectid`: MongoDB ObjectId of the last processed document at that timestamp
+
+The query logic is:
+```javascript
+WHERE (updatedAt > last_updated_at) 
+   OR (updatedAt = last_updated_at AND _id > last_cmg_objectid)
+```
+
+This approach handles multiple documents with identical timestamps by using ObjectId as a tiebreaker.
+
+### Critical Edge Case: Updates During Bigbang
+
+**The Problem:**
+
+When bigbang migration runs, it can take 10-15 minutes to copy all historical data. During this time, users may continue to update CMG (updating datasets, projects, etc.). These updates create a potential gap:
+
+**❌ Without Proper Cursor Initialization:**
+
+```
+Timeline:
+
+10:00 AM - Sample123 in CMG (updatedAt = 9:00 AM yesterday)
+10:05 AM - Sample456 in CMG (updatedAt = 9:30 AM yesterday)
+
+10:10 AM - BIGBANG STARTS
+          └─> Begins copying all datasets...
+          
+10:12 AM - USER UPDATES Sample456 in CMG (DURING BIGBANG!)
+          ├─> Sample456 updatedAt changes to 10:12 AM
+          └─> Bigbang continues copying OLD version (9:30 AM data)
+          
+10:15 AM - USER UPDATES Sample789 in CMG
+          └─> Sample789 updatedAt = 10:15 AM ← MAX TIMESTAMP!
+          
+10:18 AM - BIGBANG FINISHES copying data
+          └─> Cursor initialization WITHOUT ObjectId:
+              ├─> last_updated_at = 10:15 AM (MAX timestamp)
+              └─> last_cmg_objectid = null ❌ WRONG!
+          
+10:20 AM - POLLERS START
+          └─> Query: WHERE updatedAt > 10:15 AM OR (...)
+          
+Result:
+- Sample456 update (10:12 AM) is MISSED (< 10:15 AM)
+- Sample789 update (10:15 AM) is MISSED (= cursor, but ObjectId null)
+- Bioloop has stale data! ❌
+```
+
+**✅ With Proper Cursor Initialization (CURRENT FIX):**
+
+```
+Timeline:
+
+10:00 AM - Sample123 in CMG (updatedAt = 9:00 AM, _id = ObjectId("aaa"))
+10:05 AM - Sample456 in CMG (updatedAt = 9:30 AM, _id = ObjectId("bbb"))
+
+10:10 AM - BIGBANG STARTS
+          └─> Begins copying all datasets...
+          
+10:12 AM - USER UPDATES Sample456 in CMG (DURING BIGBANG!)
+          ├─> Sample456: updatedAt = 10:12 AM, _id = ObjectId("bbb")
+          └─> Bigbang copies OLD version to Bioloop
+          
+10:15 AM - USER UPDATES Sample789 in CMG
+          ├─> Sample789: updatedAt = 10:15 AM, _id = ObjectId("ccc")
+          └─> Bigbang copies OLD version to Bioloop
+          
+10:18 AM - BIGBANG FINISHES
+          └─> Cursor initialization WITH ObjectId:
+              ├─> Queries CMG: "MAX(updatedAt) with ObjectId"
+              ├─> Finds Sample789 (10:15 AM, ObjectId("ccc"))
+              ├─> last_updated_at = 10:15 AM ✓
+              └─> last_cmg_objectid = "ccc" ✓ CORRECT!
+          
+10:20 AM - POLLERS START
+          └─> Query: WHERE (updatedAt > 10:15 AM)
+                      OR (updatedAt = 10:15 AM AND _id > "ccc")
+          
+10:25 AM - FIRST POLLER CYCLE
+          
+          Checks Sample456 (updatedAt = 10:12 AM, _id = "bbb"):
+          ├─> 10:12 AM > 10:15 AM? NO
+          ├─> 10:12 AM = 10:15 AM? NO
+          └─> NOT in this batch (will be caught by re-processing)
+          
+          Checks Sample789 (updatedAt = 10:15 AM, _id = "ccc"):
+          ├─> 10:15 AM > 10:15 AM? NO
+          ├─> 10:15 AM = 10:15 AM AND "ccc" > "ccc"? NO
+          └─> Correctly skipped (already has latest data)
+          
+10:30 AM - USER UPDATES Sample456 AGAIN
+          └─> Sample456: updatedAt = 10:30 AM (NEW!)
+          
+10:35 AM - NEXT POLLER CYCLE
+          ├─> Finds Sample456 (10:30 AM > 10:15 AM) ✓
+          └─> Updates Bioloop with latest Sample456 data ✓
+          
+Result: Eventually consistent! ✓
+```
+
+### Why This Solution Works
+
+1. **Cursor includes ObjectId**: Prevents missing the document WITH max timestamp
+2. **Pollers catch lagging updates**: Sample456's 10:12 AM update will eventually be superseded by future updates
+3. **Bounded windows**: Pollers use `roundEnd` timestamps to avoid race conditions with actively changing data
+4. **Idempotent operations**: Re-processing the same document multiple times is safe
+
+### Remaining Gap (Acceptable Trade-off)
+
+There's still a small window where updates during bigbang may have stale data in Bioloop until:
+- The user updates that record again (common for active datasets)
+- Manual intervention (rare, for truly stale critical data)
+
+This is an acceptable trade-off because:
+- Bigbang runs infrequently (typically once at migration)
+- Most updates during bigbang are rare (system is usually quiet during migration)
+- Pollers will catch the next update and bring data current
+- Critical data is typically updated frequently, self-correcting quickly
+
+### Best Practices
+
+1. **Run bigbang during low-activity periods** (nights, weekends)
+2. **Stop pollers before bigbang** if running (prevents concurrent access issues)
+3. **Restart pollers immediately after bigbang** to minimize staleness window
+4. **Monitor first few poller cycles** after bigbang for unusual activity
+
 ## Running the Poller
 
 ### Method 1: Direct Execution (Development)
