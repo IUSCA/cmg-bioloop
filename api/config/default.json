@@ -242,7 +242,7 @@
     "DATA_PRODUCT"
   ],
   "system_user": {
-    "username": "svc_tasks"
+    "username": "cmguser"
   },
   "e2e": {
     "users": {
