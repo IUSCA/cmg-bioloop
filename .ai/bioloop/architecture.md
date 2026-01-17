@@ -1,4 +1,4 @@
-# Bioloop Architecture
+# Bioloop Platform Architecture
 
 ## Overview
 
@@ -17,7 +17,6 @@ Bioloop is a **microservice architecture** with separate UI, API, and Worker com
   - User interface and interactions
   - Client-side validation
   - API consumption
-  - React component embedding (e.g., WashU genome browser)
 
 ### API (Node.js/Express)
 - **Technology:** Express.js with Prisma ORM
@@ -34,9 +33,9 @@ Bioloop is a **microservice architecture** with separate UI, API, and Worker com
 - **Queue:** Redis (broker and result backend)
 - **Responsibilities:**
   - Asynchronous task processing
-  - Genomic data conversions
   - Long-running computations
   - SLURM job submission
+  - Workflow execution
 
 ---
 
@@ -67,7 +66,6 @@ Bioloop is a **microservice architecture** with separate UI, API, and Worker com
 ### UI → API
 - RESTful HTTP requests
 - JWT-based authentication
-- Cookie-based file access for genome browsers
 
 ### Workers → API
 - Task status updates via database
@@ -82,14 +80,11 @@ Bioloop is a **microservice architecture** with separate UI, API, and Worker com
 2. API validates credentials and issues JWT
 3. JWT stored in httpOnly cookie
 4. API middleware validates JWT on each request
-5. Special cookie-based auth for genome browser file access
 
 ### File Serving Pattern
 1. Files stored on filesystem (not in database)
 2. Database stores file metadata and paths
 3. API serves files via `/files/expose/` routes
-4. Compression disabled for binary genome browser files
-5. Range request support for efficient browser loading
 
 ### Data Consistency
 - Use Prisma transactions for multi-operation updates
