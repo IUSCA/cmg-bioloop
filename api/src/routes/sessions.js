@@ -12,10 +12,10 @@ const { accessControl, authenticateWithCookie } = require('../middleware/auth');
 const datasetService = require('../services/dataset');
 const { findIndexFileForPrimary } = require('../utils/genomeBrowserUtils');
 
+const pathResolver = require('@/services/pathResolver');
+
 const router = express.Router();
 const fileExposureRouter = express.Router();
-
-const DATA_ROOT = config.get('data_root');
 
 // Genome Browser Constants
 const BROWSER_TYPES = {
@@ -95,70 +95,8 @@ function evaluateDataRequestStatus(session) {
   };
 }
 
-/**
- * Convert dataset type to filesystem folder name
- * @param {string} datasetType - Dataset type (e.g., "raw_data", "data_product")
- * @returns {string} Folder name used in filesystem
- */
-function getDatasetTypeFolder(datasetType) {
-  if (!datasetType) return '';
-  
-  const normalized = datasetType.toLowerCase().trim();
-  
-  // Map dataset types from config to their filesystem folder names
-  const datasetTypes = config.get('dataset_types') || [];
-  const folderMap = {};
-  
-  datasetTypes.forEach((type) => {
-    const lowerType = type.toLowerCase();
-    // Handle special case: DATA_PRODUCT -> data_products (plural in filesystem)
-    if (lowerType === 'data_product') {
-      folderMap[lowerType] = 'data_products';
-    } else {
-      folderMap[lowerType] = lowerType;
-    }
-  });
-  
-  return folderMap[normalized] || normalized;
-}
-
-/**
- * Compute file's relative path for file exposure
- * @param {Object} dataset - Dataset object with metadata.stage_alias and type
- * @param {Object} datasetFile - Dataset file object with path
- * @returns {string} Relative path from data root (includes dataset_type folder)
- */
-function getRelativeFilePath({ dataset, datasetFile }) {
-  const stageAlias = dataset.metadata?.stage_alias || '';
-  const filePath = datasetFile.path || '';
-  const datasetType = dataset.type || '';
-
-  const cleanedStageAlias = stageAlias.replace(/^\/+/, '').replace(/\/+$/, '');
-  const cleanedFilePath = filePath.replace(/^\/+/, '');
-  
-  // Get dataset type folder (e.g., "data_products", "raw_data")
-  const datasetTypeFolder = getDatasetTypeFolder(datasetType);
-  
-  // Construct path: dataset_type_folder/stage_alias/file_path
-  let relativePath = '';
-  
-  if (datasetTypeFolder) {
-    relativePath = datasetTypeFolder;
-    if (cleanedStageAlias) {
-      relativePath = `${relativePath}/${cleanedStageAlias}`;
-    }
-  } else if (cleanedStageAlias) {
-    relativePath = cleanedStageAlias;
-  }
-  
-  if (relativePath && cleanedFilePath) {
-    return `${relativePath}/${cleanedFilePath}`;
-  } else if (cleanedFilePath) {
-    return cleanedFilePath;
-  }
-  
-  return relativePath;
-}
+// Path resolution is now handled by pathResolver service
+// See: api/src/services/pathResolver.js
 
 /**
  * Build file exposure URL for genome browsers (session-scoped, relative)
@@ -267,7 +205,7 @@ function serializeTrackForIGV(sessionTrack, sessionId, filesByDataset) {
     return null;
   }
 
-  const relativePath = getRelativeFilePath({ dataset, datasetFile });
+  const relativePath = pathResolver.getRelativeFilePath({ dataset, datasetFile });
   const url = buildFileExposureUrl(sessionId, relativePath);
   const trackName = sessionTrack.title || track.name || datasetFile.name || 'Unnamed Track';
 
@@ -316,7 +254,7 @@ function serializeTrackForWashU(sessionTrack, sessionId, filesByDataset) {
     return null;
   }
 
-  const relativePath = getRelativeFilePath({ dataset, datasetFile });
+  const relativePath = pathResolver.getRelativeFilePath({ dataset, datasetFile });
   const url = buildFileExposureUrl(sessionId, relativePath);
   const trackName = sessionTrack.title || track.name || datasetFile.name || 'Unnamed Track';
 
@@ -1008,6 +946,7 @@ router.get(
                         id: true,
                         type: true,
                         metadata: true,
+                        staged_path: true,
                         genomic_details: true,
                       },
                     },
@@ -1043,6 +982,7 @@ router.get(
             id: true,
             type: true,
             metadata: true,
+            staged_path: true,
           },
         },
       },
@@ -1178,7 +1118,7 @@ fileExposureRouter.get(
     const matchedTrack = session.session_tracks.find((st) => {
       const { dataset } = st.track.dataset_file;
       const datasetFile = st.track.dataset_file;
-      const relativePath = getRelativeFilePath({ dataset, datasetFile });
+      const relativePath = pathResolver.getRelativeFilePath({ dataset, datasetFile });
       const cleanedRelativePath = relativePath.replace(/^\/+/, '');
       return cleanedRelativePath === cleanedRequestedPath;
     });
@@ -1190,7 +1130,7 @@ fileExposureRouter.get(
         availableTracks: session.session_tracks.map((st) => {
           const { dataset } = st.track.dataset_file;
           const datasetFile = st.track.dataset_file;
-          return getRelativeFilePath({ dataset, datasetFile });
+          return pathResolver.getRelativeFilePath({ dataset, datasetFile });
         }),
       });
       return next(createError.NotFound('File not found in this session'));
@@ -1208,27 +1148,28 @@ fileExposureRouter.get(
       fileName: matchedFile.name,
     }, { depth: null });
 
-    // Construct full file path using getRelativeFilePath which includes dataset_type
-    const relativePath = getRelativeFilePath({
+    // Construct full file path using pathResolver service
+    const relativePath = pathResolver.getRelativeFilePath({
       dataset: matchedDataset,
       datasetFile: matchedFile,
     });
     logger.info('[FILE EXPOSE] Relative path with dataset_type');
     console.dir({ relativePath }, { depth: null });
 
-    // Construct absolute path: DATA_ROOT + relativePath
-    const resolvedFull = path.join(DATA_ROOT, relativePath);
+    // Resolve to absolute path accessible by the container
+    const resolvedFull = pathResolver.resolveToAbsolutePath(relativePath);
     logger.info('[FILE EXPOSE] Full absolute path constructed');
     console.dir({ resolvedFull }, { depth: null });
 
-    // Security: Verify path starts with DATA_ROOT to prevent path traversal
-    const resolvedRoot = path.resolve(DATA_ROOT);
+    // Security: Verify path starts with access root to prevent path traversal
+    const accessRoot = pathResolver.getFileAccessRoot();
+    const resolvedRoot = path.resolve(accessRoot);
     if (!resolvedFull.startsWith(resolvedRoot)) {
       logger.error('[FILE EXPOSE] Path traversal attempt detected');
       console.dir({
         resolvedFull,
         resolvedRoot,
-        dataRoot: DATA_ROOT,
+        accessRoot,
       }, { depth: null });
       return next(createError.BadRequest('Invalid file path'));
     }
