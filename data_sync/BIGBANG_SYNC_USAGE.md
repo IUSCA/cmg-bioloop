@@ -138,53 +138,76 @@ The script executes operations in this order:
 1. **Create roles** - `admin`, `operator`, `user`
 2. **Create CMG system user** - `cmguser` for system operations
 3. **Populate pipeline definitions** - cmd_line_programs, conversion_definitions, arguments
-4. **Convert users** - CMG users → Bioloop users with role mappings
-5. **Convert datasets** - RAW_DATA (datasets) and DATA_PRODUCT (dataproducts)
-6. **Convert dataset audit logs** - From CMG events arrays
-7. **Convert import logs** - CMG upload history → Bioloop import logs (for `/datasets/imports` page)
-8. **Convert dataset hierarchies** - Links between raw data and derived products
-9. **Convert projects** - With user and dataset associations
-10. **Convert conversions** - Pipeline runs with derived dataset links
-11. **Convert conversion logs** - Historical conversion logs from filesystem (production only)
-12. **Convert sessions** - Genome browser sessions (optional, often skipped)
-13. **Initialize cursors** - Set starting points for incremental pollers
+4. **Populate Bioloop users** - From `api/admins.json`, `api/operators.json`, `api/users.json`
+5. **Convert CMG users** - CMG users → Bioloop users (skip if already exists from step 4)
+6. **Convert datasets** - RAW_DATA (datasets) and DATA_PRODUCT (dataproducts)
+7. **Convert dataset audit logs** - From CMG events arrays
+8. **Convert import logs** - CMG upload history → Bioloop import logs (for `/datasets/imports` page)
+9. **Convert dataset hierarchies** - Links between raw data and derived products
+10. **Convert projects** - With user and dataset associations
+11. **Convert conversions** - Pipeline runs with derived dataset links
+12. **Convert conversion logs** - Historic conversion logs from CMG filesystem (production only)
+13. **Convert sessions** - Genome browser sessions (optional, often skipped)
+14. **Initialize cursors** - Set starting points for incremental pollers
 
-### Note on Conversion Logs (Step 11)
+### Note on Conversion Logs (Step 12)
 
-Historical conversion logs are read from the CMG filesystem and migrated to Bioloop's database:
+Historic CMG conversion logs are read from the filesystem and populated into Bioloop's database:
 
 **How it works:**
-- CMG stores logs as files: `/N/project/CMG-SCA/production/runlogs/convert_{dataset_name}.log`
+- CMG stores logs as files: `/N/project/CMG-SCA/runlogs/convert_{dataset_name}.log`
 - Multiple conversions for the same dataset share one log file
-- Each conversion's logs are separated by "logfile header" markers
-- Logs are parsed and inserted into `worker_process` and `log` tables
+- **Each conversion gets its own `worker_process` record with duplicated log entries**
+- Log lines are parsed for timestamps (YYYY-MM-DD HH:MM:SS) and log levels
+- Log levels inferred from content: ERROR, WARNING, INFO, DEBUG
+- Logs are inserted in batches of 1000 entries for performance
+- A synthetic `workflow_id` is generated: `cmg-historic-conversion-{conversion.id}`
+
+**Data Model:**
+```
+conversion.workflow_id (String) → "cmg-historic-conversion-{id}"
+worker_process.workflow_id (String) → same synthetic ID
+worker_process.id → log.worker_process_id (1:N)
+```
 
 **Configuration:**
 ```bash
-# Required environment variable (defaults to production path):
-CMG_RUNLOGS_DIR=/N/project/CMG-SCA/production/runlogs
+# Environment variable
+CMG_LEGACY_CONVERSIONS_LOGS_DIR=/N/project/CMG-SCA/runlogs
+
+# Or add to data_sync/.env
+echo "CMG_LEGACY_CONVERSIONS_LOGS_DIR=/N/project/CMG-SCA/runlogs" >> data_sync/.env
 ```
 
 **Skipping:**
 ```bash
-# Use --skip-conversion-logs flag to skip this step
+# Use --skip-conversion-logs flag to skip this step (useful for local/dev)
 node src/bigbang_sync.js --skip-conversion-logs
 ```
 
 **Behavior:**
-- **Production (with filesystem access):** Reads logs from filesystem and migrates to database
-- **Local/Dev (without filesystem access):** Use `--skip-conversion-logs` to skip this step
-- **Automatic skip:** If directory not accessible, step is automatically skipped with informational message
+- **Production (with filesystem access):** Reads logs and migrates to database
+- **Local/Dev (without filesystem access):** Use `--skip-conversion-logs` or directory will be skipped automatically
+- **Automatic skip:** If `CMG_LEGACY_CONVERSIONS_LOGS_DIR` not accessible, logs warning and continues
+- **Idempotent:** Conversions with existing `workflow_id` are skipped automatically
 
 **What gets created:**
-- `worker_process` record for each conversion (contains workflow_id, start_time, etc.)
-- `log` entries linked to worker_process (parsed from log files)
+- One `worker_process` per conversion (not shared, each gets duplicate of full log)
+- Multiple `log` entries per worker_process (entire log file duplicated for each conversion)
+- `conversion.workflow_id` updated with synthetic ID for linking
 
-**Skip reasons** (logged for transparency):
-- `no_cmg_id` - Conversion has no CMG ID
-- `log_file_not_found` - Log file doesn't exist (dataset was never converted)
-- `no_workflow_id` - Conversion has no workflow_id (can't link logs)
-- `already_exists` - Worker process already created (idempotency)
+**Statistics Reported:**
+- Datasets processed
+- Conversions updated
+- Worker processes created
+- Log entries created
+- Missing log files (with paths)
+- Errors encountered
+
+**Important Notes:**
+- **Log duplication is intentional:** Each conversion gets its own complete copy of the shared log file
+- **No workflow execution:** The `workflow_id` is just a string for linking, NOT inserted into `workflow` table
+- **Safe to re-run:** Already-processed conversions (with `workflow_id != NULL`) are skipped
 
 ## What Gets Migrated
 

@@ -52,6 +52,28 @@ You have access to:
   - This hostname is explicitly allowed in permissions
 - You don't have access to `/opt/sca/cmg` on any other host
 
+### Docker-Specific Paths
+
+**Paths beginning with `/opt/sca/data/...` are ONLY valid in docker environment:**
+
+- These paths are referenced in codebase and environment variables
+- They **ONLY** apply when `NODE_ENV='docker'` (API) or `APP_ENV='docker'` (Workers)
+- In **production** environment, these paths **DO NOT EXIST** and should not be used
+- Docker mounts these paths from the host into containers
+- Production uses different data path configurations, and Production does not use containers
+
+**Example:**
+```bash
+# In docker environment (NODE_ENV='docker')
+DATA_PATH=/opt/sca/data/datasets  # ✓ Valid
+
+# In production environment (NODE_ENV='production')
+DATA_PATH=/N/slate/... or /N/project/...  # ✓ Valid
+# /opt/sca/data/... paths DO NOT APPLY
+```
+
+**Note:** This restriction is specific to `/opt/sca/data/...` paths. The repository paths `/opt/sca/cmg` and `/opt/sca/cmg-bioloop` are NOT affected and remain valid in production.
+
 ### Temporary Files
 
 - You can write to `/tmp` for temporary operations
@@ -231,6 +253,7 @@ Check environment in code:
 ```javascript
 // API
 const isProduction = process.env.NODE_ENV === 'production';
+const isDocker = process.env.NODE_ENV === 'docker';
 
 if (isProduction) {
   // Production-specific behavior
@@ -240,6 +263,21 @@ if (isProduction) {
   res.set('Access-Control-Allow-Origin', '*');
 }
 ```
+
+```python
+# Workers
+import os
+app_env = os.getenv('APP_ENV', 'development')
+
+if app_env == 'production':
+    # Production-specific paths (e.g., /N/slate/...)
+    pass
+elif app_env == 'docker':
+    # Docker-specific paths (e.g., /opt/sca/data/...)
+    pass
+```
+
+**Important:** Paths beginning with `/opt/sca/data/...` only apply when `NODE_ENV='docker'` or `APP_ENV='docker'`. See "Docker-Specific Paths" section above.
 
 ---
 

@@ -68,6 +68,8 @@ You only have access to:
 - `/opt/sca/cmg-bioloop` if it exists on the host (current repo path on other hosts)
 - `/tmp` for temporary read/write/delete operations
 
+**Note:** Paths beginning with `/opt/sca/data/...` referenced in codebase/env vars only apply when `NODE_ENV='docker'` or `APP_ENV='docker'`. In production, these paths do not exist. See `.ai/PRODUCTION_ENVIRONMENT.md` for details.
+
 ### Critical Restrictions
 
 - **NEVER EVER EVER** write/delete anything in paths beginning with `/N/...`

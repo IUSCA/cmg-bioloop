@@ -5,8 +5,8 @@ const logger = require('../../logger');
  * Dataset Metadata Poller
  * 
  * Polls CMG datasets and dataproducts collections for metadata changes.
- * Updates: description, size, du_size, num_files, num_directories, file_type
- * Does NOT update: name, type (these are immutable)
+ * Updates: description, file_type
+ * Does NOT update: name, type (immutable), size, du_size, num_files, num_directories (set by Bioloop inspect_dataset worker)
  */
 class DatasetMetadataPoller extends BasePoller {
   constructor(prisma, cmgDb, options = {}) {
@@ -40,7 +40,8 @@ class DatasetMetadataPoller extends BasePoller {
   
   /**
    * Process a single dataset/dataproduct document
-   * Updates: description, size, du_size, counts, file_type
+   * Updates: description, file_type (user-editable metadata only)
+   * Note: size, du_size, num_files, num_directories are computed by inspect_dataset worker, NOT synced from CMG
    */
   async processDocument(cmgDataset, tx) {
     // Find dataset by cmg_id
@@ -53,20 +54,14 @@ class DatasetMetadataPoller extends BasePoller {
       return;
     }
     
-    // Determine if this is RAW_DATA or DATA_PRODUCT
-    const isRawData = this.currentCollection === 'datasets';
-    
-    // Update metadata fields
+    // Update only user-editable metadata fields
+    // DO NOT sync: size, du_size, num_files, num_directories (computed by inspect_dataset worker)
     const existingMetadata = bioloopDataset.metadata || {};
     
     await tx.dataset.update({
       where: { id: bioloopDataset.id },
       data: {
         description: cmgDataset.description || null,
-        size: cmgDataset.size ? BigInt(cmgDataset.size) : null,
-        du_size: isRawData ? (cmgDataset.du_size ? BigInt(cmgDataset.du_size) : null) : null,
-        num_files: isRawData ? (cmgDataset.files || 0) : 0,
-        num_directories: cmgDataset.directories || 0,
         file_type: cmgDataset.file_type || null, // dataproducts only
         metadata: {
           ...existingMetadata,
