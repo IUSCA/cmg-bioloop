@@ -289,6 +289,36 @@ watch(showModal, (isOpen) => {
 
 ---
 
+## Data Table Empty Values
+
+**NEVER show '-' or other placeholder text for missing values in data tables:**
+
+```vue
+<!-- ✅ CORRECT: Show nothing when value is missing -->
+<template #cell(optional_field)="{ value }">
+  <va-chip v-if="value" size="small">
+    {{ value }}
+  </va-chip>
+</template>
+
+<!-- ❌ WRONG: Showing dash for empty values -->
+<template #cell(optional_field)="{ value }">
+  <va-chip v-if="value" size="small">
+    {{ value }}
+  </va-chip>
+  <span v-else>-</span>
+</template>
+```
+
+**Rationale:** Empty cells are self-explanatory and cleaner than placeholder text. This reduces visual clutter and makes tables easier to scan.
+
+**Applies to:** All data tables across the platform, including:
+- va-data-table columns
+- Custom table implementations
+- List views with tabular data
+
+---
+
 ## Quick Reference Checklist
 
 ### Starting New UI Component
@@ -298,8 +328,9 @@ watch(showModal, (isOpen) => {
 - [ ] Preserve manual user input in auto-population logic
 - [ ] Use icons instead of buttons for actions
 - [ ] Show toasts only for API operations
+- [ ] Never show '-' for empty table cells
 
 ---
 
-**Last Updated:** 2026-01-16
+**Last Updated:** 2026-01-17
 

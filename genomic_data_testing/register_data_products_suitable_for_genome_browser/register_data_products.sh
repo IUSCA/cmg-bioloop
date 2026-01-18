@@ -44,12 +44,26 @@
 
 set -e
 
-# Get script directory
+# Get script directory and repo root
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 PRODUCTS_DIR="$SCRIPT_DIR/products"
 
-# Default configuration
-DESTINATION="/opt/sca/data/origin/data_products"
+# Determine destination based on APP_ENV in workers/.env
+WORKERS_ENV="$REPO_ROOT/workers/.env"
+if [ -f "$WORKERS_ENV" ]; then
+    APP_ENV=$(grep '^APP_ENV=' "$WORKERS_ENV" | cut -d '=' -f2 | tr -d '"' | tr -d "'")
+fi
+
+# Set destination based on environment
+if [ "$APP_ENV" = "production" ]; then
+    # Production: use path from workers/config/production.py
+    DESTINATION="/N/scratch/cmguser/cmg-bioloop/origin/data_products"
+else
+    # Non-production: use default path
+    DESTINATION="/opt/sca/data/origin/data_products"
+fi
+
 NUM_DATASETS=3  # Default: download all
 
 # Dataset scripts (ordered by size: smallest to largest)

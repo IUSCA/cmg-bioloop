@@ -1275,9 +1275,9 @@ const buildDatasetCreateQuery = (data) => {
         genome_type,
         genome_value,
         source_run: src_dataset_id ? String(src_dataset_id) : null,
-        notes: import_notes,
         metadata: {
           import_space: data.import_space || null,
+          notes: import_notes || null,
         },
       }),
     };

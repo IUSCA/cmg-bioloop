@@ -380,4 +380,30 @@ The Import feature with Genomic Details has been implemented following these key
 
 The implementation demonstrates how to add complex features to an existing system while maintaining consistency with established patterns and avoiding common pitfalls like route conflicts and Prisma validation errors.
 
+---
+
+## Recent Updates (2026-01-18)
+
+### Removed Notes Field
+- **Removed from schema:** `dataset_import_log.notes` field
+- **Removed from UI:** Notes column and textarea in Import History and ImportStepper
+- **Removed from API:** `import_notes` parameter handling in dataset service
+
+### Added Workflow Status Tracking
+- **Status Column:** Shows spinner for pending integration, checkmark for completed
+- **Polling Mechanism:** Uses `useIntervalFn` to poll datasets with pending workflows every 10 seconds
+- **Pattern:** Matches ProjectDatasetsTable implementation exactly
+- **Workflow Detection:** Checks for `integrated` workflow with `VALIDATE` step pending
+
+### UI Improvements
+- **No Empty Placeholders:** Removed `-` for missing values; shows nothing instead
+- **Conditional Rendering:** All template cells use `v-if` to only render when data exists
+- **Workflow Status:** Visual indicators (spinner/checkmark) for integration progress
+
+### File Count Column (Feasibility Analysis)
+- **Status:** Research completed, implementation on hold per user request
+- **Feasibility:** ✅ Fully feasible using existing polling mechanism
+- **Data Source:** `dataset.metadata.num_genome_files`
+- **Documentation:** See [`docs/import-history-file-count-feasibility.md`](./import-history-file-count-feasibility.md)
+
 

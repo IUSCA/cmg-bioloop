@@ -315,6 +315,15 @@ router.get(
                         source_dataset: true,
                       },
                     },
+                    workflows: {
+                      select: {
+                        id: true,
+                        name: true,
+                        status: true,
+                        steps_done: true,
+                        total_steps: true,
+                      },
+                    },
                   },
                 },
               },
@@ -400,6 +409,15 @@ router.get(
                     source_datasets: {
                       include: {
                         source_dataset: true,
+                      },
+                    },
+                    workflows: {
+                      select: {
+                        id: true,
+                        name: true,
+                        status: true,
+                        steps_done: true,
+                        total_steps: true,
                       },
                     },
                   },

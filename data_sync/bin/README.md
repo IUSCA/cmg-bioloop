@@ -126,6 +126,45 @@ This directory contains shell scripts for managing the CMG to Bioloop database m
 
 ### 🔧 Utility Scripts
 
+#### `sync_cmg_schema_to_app.sh` - Sync CMG Schema to App Database
+**Purpose:** Copies the `cmg` schema from data_sync postgres to main app postgres.
+
+**When to use:**
+- After running bigbang sync to sandbox, to test data in the main application
+- Development workflow to refresh app database with latest CMG data
+- Testing migrated data in actual application context
+
+**Usage:**
+```bash
+# Basic usage (from project root, data_sync, or data_sync/bin)
+./data_sync/bin/sync_cmg_schema_to_app.sh
+
+# Force mode (bypasses production check - use with extreme caution)
+./data_sync/bin/sync_cmg_schema_to_app.sh --force
+```
+
+**What it does:**
+1. Checks environment (exits if production unless `--force` used)
+2. Verifies both postgres containers are running
+3. Exports `cmg` schema from sandbox DB (data_sync)
+4. Drops existing `cmg` schema in app DB (if exists)
+5. Imports `cmg` schema backup into app DB
+6. Verifies restoration and lists tables
+7. Cleans up temporary files
+
+**Prerequisites:**
+- Both docker compose stacks running (main app + data_sync)
+- Sandbox DB must have `cmg` schema (run bigbang sync first)
+
+**Safety:**
+- Automatically exits if production environment detected
+- Temporary backup created in `/tmp` (auto-deleted after)
+- Only affects `cmg` schema (other schemas untouched)
+
+**See:** `../SYNC_TO_APP_USAGE.md` for detailed documentation
+
+---
+
 #### `pull_logs_from_prod.sh` - Log Retrieval Tool
 **Purpose:** Securely pulls sync logs from production host to local machine.
 
@@ -296,10 +335,11 @@ export DATABASE_URL="postgresql://user:pass@host:5432/dbname"
 - **Setup Guide:** `../SETUP_GUIDE.md`
 - **Bigbang Usage:** `../BIGBANG_SYNC_USAGE.md`
 - **Poller Usage:** `../POLLER_SYNC_USAGE.md`
+- **Sync to App Usage:** `../SYNC_TO_APP_USAGE.md`
 - **Logs Guide:** `../LOGS.md`
 - **Database Targeting:** `../TARGET_DATABASE_CONFIGURATION.md`
 
 ---
 
-**Last Updated:** 2026-01-14
+**Last Updated:** 2026-01-17
 

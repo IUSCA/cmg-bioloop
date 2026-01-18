@@ -21,12 +21,26 @@
 
 set -e
 
-# Get the script directory
+# Get the script directory and repo root
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
 PRODUCT_DOC_DIR="$(dirname "$SCRIPT_DIR")/product_docs"
 
-# Default configuration
-DESTINATION="/opt/sca/data/origin/data_products"
+# Determine destination based on APP_ENV in workers/.env
+WORKERS_ENV="$REPO_ROOT/workers/.env"
+if [ -f "$WORKERS_ENV" ]; then
+    APP_ENV=$(grep '^APP_ENV=' "$WORKERS_ENV" | cut -d '=' -f2 | tr -d '"' | tr -d "'")
+fi
+
+# Set destination based on environment
+if [ "$APP_ENV" = "production" ]; then
+    # Production: use path from workers/config/production.py
+    DESTINATION="/N/scratch/cmguser/cmg-bioloop/origin/data_products"
+else
+    # Non-production: use default path
+    DESTINATION="/opt/sca/data/origin/data_products"
+fi
+
 SERVICE_NAME="celery_worker"
 
 # Dataset definition

@@ -35,6 +35,17 @@ async function assignUserRoles(prisma, cmgUser, userId) {
  * Throws: on any unexpected error
  */
 async function convertUser(prisma, cmgUser) {
+  // Check if user already exists by cas_id (username)
+  // This prevents CMG migration from overwriting Bioloop users populated from JSON files
+  const existingUser = await prisma.user.findFirst({
+    where: { cas_id: cmgUser.username },
+  });
+  
+  if (existingUser) {
+    logger.warn(`[BIGBANG] Skipping CMG user (already exists as Bioloop user): ${cmgUser.username} - ${cmgUser.fullname}`);
+    return null;
+  }
+  
   // Insert user
   let user;
   try {
