@@ -1,5 +1,62 @@
 # Bioloop Project Rules for AI Agents
 
+## 🤖 Agent Initialization Protocol
+
+**When starting a new chat session (especially after "hi", "new task", or similar):**
+
+### Step 1: Auto-Read Core Files
+Immediately read these files in parallel:
+
+**Critical:**
+1. `.ai/PRODUCTION_ENVIRONMENT.md` - ⚠️ Production warnings and restrictions
+2. `.ai/AI_PROTOCOL.md` - How to work with this repo
+
+**Platform Core:**
+3. `.ai/bioloop/README.md` - Platform core overview
+4. `.ai/bioloop/architecture.md` - System architecture
+
+**CMG Customizations:**
+5. `.ai/customizations/README.md` - CMG-specific overview
+
+### Step 2: Report & Confirm
+Respond with:
+```
+✅ Initialization complete. I've read:
+- .ai/PRODUCTION_ENVIRONMENT.md (⚠️ production restrictions)
+- .ai/AI_PROTOCOL.md
+- .ai/bioloop/ (platform core docs)
+- .ai/customizations/ (CMG customizations)
+
+⚠️ Production restrictions active:
+- NEVER touch /N/...
+- NEVER reset DB without permission
+- NEVER docker exec/restart
+- No sudo access
+
+Platform features: Datasets, Workflows, Users/Projects, Imports/Downloads
+CMG features: Sessions/Tracks, Conversions, CMG Database Migration
+
+Which feature are you working on? (or type "general" if not feature-specific)
+```
+
+### Step 3: Load Feature Context
+Once user specifies feature:
+- Platform feature → Read `.ai/bioloop/features/<feature>.md`
+- CMG feature → Read `.ai/customizations/features/<feature>.md`
+- Confirm: "✅ Loaded <feature> documentation. Ready to work."
+
+### Step 4: Load Conventions as Needed
+When user asks about specific areas, read:
+- API code → `.ai/bioloop/api_conventions.md` + `.ai/customizations/api_conventions.md` + both `pitfalls.md`
+- UI code → `.ai/bioloop/ui_conventions.md` + `.ai/customizations/ui_conventions.md` + both `pitfalls.md`
+- Workers → `.ai/bioloop/worker_conventions.md`
+- Database → `.ai/bioloop/database_patterns.md`
+- Genome browser → `.ai/customizations/genome_browser_notes.md`
+
+**This protocol ensures context continuity across tabs and makes initialization testable.**
+
+---
+
 ## ⚠️ PRODUCTION ENVIRONMENT WARNINGS
 
 **THIS IS THE PRODUCTION ENVIRONMENT.**
@@ -32,22 +89,33 @@ You only have access to:
 
 ### Quick Reference
 
-- **Start here:** `.ai/AI_PROTOCOL.md` - How to work with this repo
-- **Feature work:** `.ai/features/*.md` - Feature-specific changelogs
-- **Architecture:** `.ai/ARCHITECTURE.md`
-- **API patterns:** `.ai/CONVENTIONS_API.md`
-- **UI patterns:** `.ai/CONVENTIONS_UI.md`
-- **Workers:** `.ai/CONVENTIONS_WORKERS.md`
-- **Database:** `.ai/PRISMA_PATTERNS.md`
-- **Genome browsers:** `.ai/GENOME_BROWSER_NOTES.md`
-- **Common mistakes:** `.ai/PITFALLS.md`
+**Start Here:**
+- `.ai/AI_PROTOCOL.md` - How to work with this repo
+
+**Platform Core:**
+- `.ai/bioloop/architecture.md` - System architecture
+- `.ai/bioloop/api_conventions.md` - API patterns
+- `.ai/bioloop/ui_conventions.md` - UI patterns
+- `.ai/bioloop/worker_conventions.md` - Worker patterns
+- `.ai/bioloop/database_patterns.md` - Database patterns
+- `.ai/bioloop/pitfalls.md` - Common mistakes
+- `.ai/bioloop/features/*.md` - Platform features
+
+**CMG Customizations:**
+- `.ai/customizations/api_conventions.md` - CMG API additions
+- `.ai/customizations/ui_conventions.md` - CMG UI patterns
+- `.ai/customizations/genome_browser_notes.md` - Browser implementation
+- `.ai/customizations/pitfalls.md` - CMG-specific mistakes
+- `.ai/customizations/features/*.md` - CMG features
 
 ### Priority Order of Truth
 
-1. `.ai/features/<feature>.md` (highest)
-2. Other `.ai/` documentation
-3. Repository code
-4. Chat history (lowest)
+1. `.ai/customizations/features/<feature>.md` (highest - CMG-specific)
+2. `.ai/customizations/*.md` (CMG conventions)
+3. `.ai/bioloop/features/<feature>.md` (platform features)
+4. `.ai/bioloop/*.md` (platform conventions)
+5. Repository code
+6. Chat history (lowest)
 
 **Chats explore. Changelogs decide. Files persist.**
 

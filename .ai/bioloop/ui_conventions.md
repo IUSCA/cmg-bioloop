@@ -1,4 +1,4 @@
-# UI Development Conventions
+# Bioloop Platform UI Conventions
 
 ## Vuestic Component Usage
 
@@ -10,16 +10,16 @@
 **va-select Pattern:**
 ```vue
 <va-select
-  v-model="form.genome_type"
-  :options="genomeTypeOptions"
+  v-model="form.type"
+  :options="typeOptions"
   text-by="text"
   value-by="value"
-  label="Genome Type"
+  label="Type"
 />
 
 <script setup>
-const genomeTypeOptions = computed(() => {
-  return Object.entries(constants.GENOME_TYPES).map(([key, value]) => ({
+const typeOptions = computed(() => {
+  return Object.entries(constants.TYPES).map(([key, value]) => ({
     text: value.label,
     value: key,
   }));
@@ -31,14 +31,14 @@ const genomeTypeOptions = computed(() => {
 ```vue
 <div class="flex flex-col gap-3">
   <va-radio 
-    v-model="selectedBrowser" 
-    :option="BROWSER_TYPES.IGV" 
-    :label="BROWSER_LABELS[BROWSER_TYPES.IGV]" 
+    v-model="selectedOption" 
+    :option="OPTIONS.A" 
+    :label="LABELS[OPTIONS.A]" 
   />
   <va-radio 
-    v-model="selectedBrowser" 
-    :option="BROWSER_TYPES.WASHU" 
-    :label="BROWSER_LABELS[BROWSER_TYPES.WASHU]" 
+    v-model="selectedOption" 
+    :option="OPTIONS.B" 
+    :label="LABELS[OPTIONS.B]" 
   />
 </div>
 ```
@@ -52,10 +52,7 @@ const genomeTypeOptions = computed(() => {
 import constants from '@/constants';
 
 // Destructure what you need
-const { browserTypes: BROWSER_TYPES, browserLabels: BROWSER_LABELS } = 
-  constants.genomeBrowser;
-  
-const { GENOME_TYPES } = constants;
+const { DATASET_TYPES } = constants;
 </script>
 ```
 
@@ -119,23 +116,23 @@ When implementing auto-population (e.g., filling form fields based on selections
 
 ```javascript
 // ✅ CORRECT: Only auto-populate if fields are empty
-const updateGenomeFields = () => {
-  if (!form.genome_type && !form.genome) {
+const updateFields = () => {
+  if (!form.field1 && !form.field2) {
     // Auto-populate only if both are empty
-    const uniqueGenomes = getUniqueGenomesFromTracks();
-    if (uniqueGenomes.length === 1) {
-      form.genome_type = uniqueGenomes[0].type;
-      form.genome = uniqueGenomes[0].value;
+    const uniqueValues = getUniqueValues();
+    if (uniqueValues.length === 1) {
+      form.field1 = uniqueValues[0].value1;
+      form.field2 = uniqueValues[0].value2;
     }
   }
 };
 
 // ❌ WRONG: Overwriting existing values
-const updateGenomeFields = () => {
-  const uniqueGenomes = getUniqueGenomesFromTracks();
-  if (uniqueGenomes.length === 1) {
-    form.genome_type = uniqueGenomes[0].type; // Overwrites manual input!
-    form.genome = uniqueGenomes[0].value;
+const updateFields = () => {
+  const uniqueValues = getUniqueValues();
+  if (uniqueValues.length === 1) {
+    form.field1 = uniqueValues[0].value1; // Overwrites manual input!
+    form.field2 = uniqueValues[0].value2;
   }
 };
 ```
@@ -147,19 +144,19 @@ const updateGenomeFields = () => {
 **Pages should be minimal, delegating to list components:**
 
 ```vue
-<!-- pages/sessions/index.vue -->
+<!-- pages/items/index.vue -->
 <template>
   <div>
-    <h1>Sessions</h1>
-    <SessionsList />
+    <h1>Items</h1>
+    <ItemsList />
   </div>
 </template>
 
 <script setup>
-import SessionsList from '@/components/sessions/SessionsList.vue';
+import ItemsList from '@/components/items/ItemsList.vue';
 </script>
 
-<!-- components/sessions/SessionsList.vue -->
+<!-- components/items/ItemsList.vue -->
 <template>
   <div>
     <!-- All logic, filters, tables here -->
@@ -199,68 +196,21 @@ import SessionsList from '@/components/sessions/SessionsList.vue';
 
 ```javascript
 // ✅ CORRECT
-const saveSession = async () => {
+const saveItem = async () => {
   try {
-    await sessionService.create(form);
-    toast.success('Session created successfully');
+    await itemService.create(form);
+    toast.success('Item created successfully');
   } catch (error) {
-    toast.error('Failed to create session');
+    toast.error('Failed to create item');
   }
 };
 
 // ❌ WRONG
-const selectTrack = (track) => {
-  selectedTracks.push(track);
-  toast.success('Track selected'); // No toast for UI interactions
+const selectItem = (item) => {
+  selectedItems.push(item);
+  toast.success('Item selected'); // No toast for UI interactions
 };
 ```
-
----
-
-## React-in-Vue Integration Pattern
-
-When embedding React components (e.g., WashU browser) in Vue:
-
-```vue
-<template>
-  <div ref="reactContainer" class="h-full w-full"></div>
-</template>
-
-<script setup>
-import { createRoot } from 'react-dom/client';
-import { createElement } from 'react';
-import { onMounted, onBeforeUnmount, ref } from 'vue';
-
-const props = defineProps({
-  someProp: { type: String, required: true },
-});
-
-const reactContainer = ref(null);
-let reactRoot = null;
-
-onMounted(async () => {
-  const ReactComponent = (await import('some-react-lib')).default;
-  
-  reactRoot = createRoot(reactContainer.value);
-  reactRoot.render(createElement(ReactComponent, props));
-});
-
-onBeforeUnmount(() => {
-  if (reactRoot) {
-    reactRoot.unmount();
-    reactRoot = null;
-  }
-});
-</script>
-```
-
-**Key points:**
-- Use `createRoot()` from `react-dom/client` (React 18+)
-- Always unmount in `onBeforeUnmount()`
-- Stop event propagation with `@click.stop` on container to prevent React-Vue conflicts
-- Use `:disable-attachment="true"` on parent `va-modal` if inside a modal
-- Convert relative URLs to absolute for Web Workers
-- Force remounts with dynamic `:key` when props change
 
 ---
 
@@ -272,14 +222,12 @@ import { ref, computed } from 'vue';
 
 const form = ref({
   name: '',
-  genome_type: '',
-  genome: '',
+  type: '',
 });
 
 const isValid = computed(() => {
   return form.value.name.trim() !== '' 
-    && form.value.genome_type !== ''
-    && form.value.genome !== '';
+    && form.value.type !== '';
 });
 
 const submit = async () => {
