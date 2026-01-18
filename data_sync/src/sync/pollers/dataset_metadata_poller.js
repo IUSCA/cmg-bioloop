@@ -40,7 +40,7 @@ class DatasetMetadataPoller extends BasePoller {
   
   /**
    * Process a single dataset/dataproduct document
-   * Updates: description, file_type (user-editable metadata only)
+   * Updates: description, file_type (user-editable metadata only, if changed)
    * Note: size, du_size, num_files, num_directories are computed by inspect_dataset worker, NOT synced from CMG
    */
   async processDocument(cmgDataset, tx) {
@@ -54,6 +54,33 @@ class DatasetMetadataPoller extends BasePoller {
       return;
     }
     
+    // Extract new values
+    const newDescription = cmgDataset.description || null;
+    const newFileType = cmgDataset.file_type || null;
+    
+    // Check if any fields actually changed
+    const descriptionChanged = bioloopDataset.description !== newDescription;
+    const fileTypeChanged = bioloopDataset.file_type !== newFileType;
+    
+    if (!descriptionChanged && !fileTypeChanged) {
+      logger.debug(`[${this.pollerName}] No changes detected for dataset ${bioloopDataset.id}, skipping update`);
+      return;
+    }
+    
+    // Build update data with only changed fields
+    const updateData = {};
+    const changes = [];
+    
+    if (descriptionChanged) {
+      updateData.description = newDescription;
+      changes.push(`description: "${bioloopDataset.description}" -> "${newDescription}"`);
+    }
+    
+    if (fileTypeChanged) {
+      updateData.file_type = newFileType;
+      changes.push(`file_type: "${bioloopDataset.file_type}" -> "${newFileType}"`);
+    }
+    
     // Update only user-editable metadata fields
     // DO NOT sync: size, du_size, num_files, num_directories (computed by inspect_dataset worker)
     const existingMetadata = bioloopDataset.metadata || {};
@@ -61,8 +88,7 @@ class DatasetMetadataPoller extends BasePoller {
     await tx.dataset.update({
       where: { id: bioloopDataset.id },
       data: {
-        description: cmgDataset.description || null,
-        file_type: cmgDataset.file_type || null, // dataproducts only
+        ...updateData,
         metadata: {
           ...existingMetadata,
           cmg_sync_state: {
@@ -73,7 +99,7 @@ class DatasetMetadataPoller extends BasePoller {
       },
     });
     
-    logger.debug(`[${this.pollerName}] Updated metadata for dataset ${bioloopDataset.id}`);
+    logger.debug(`[${this.pollerName}] Updated dataset ${bioloopDataset.id}: ${changes.join(', ')}`);
   }
 }
 

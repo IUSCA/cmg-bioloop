@@ -28,13 +28,17 @@ class ProjectACLPoller extends BasePoller {
   
   /**
    * Process a single project document
-   * Updates: description, browser_enabled, user associations, dataset associations
+   * Updates: description, browser_enabled, user associations, dataset associations (if changed)
    * Does NOT update: name, slug
    */
   async processDocument(cmgProject, tx) {
     // Find project by cmg_id
     const bioloopProject = await tx.project.findFirst({
       where: { cmg_id: cmgProject._id.toString() },
+      include: {
+        users: { select: { user_id: true } },
+        datasets: { select: { dataset_id: true } },
+      },
     });
     
     if (!bioloopProject) {
@@ -42,39 +46,82 @@ class ProjectACLPoller extends BasePoller {
       return;
     }
     
-    // Update project metadata (NOT name or slug)
-    const existingMetadata = bioloopProject.metadata || {};
+    // Extract new values
+    const newDescription = cmgProject.description || null;
+    const newBrowserEnabled = cmgProject.browser || false;
     
-    await tx.project.update({
-      where: { id: bioloopProject.id },
-      data: {
-        description: cmgProject.description || null,
-        browser_enabled: cmgProject.browser || false,
-        metadata: {
-          ...existingMetadata,
-          cmg_sync_state: {
-            cmg_updated_at: cmgProject.updatedAt,
-            last_sync_time: new Date(),
+    // Check if metadata fields changed
+    const descriptionChanged = bioloopProject.description !== newDescription;
+    const browserEnabledChanged = bioloopProject.browser_enabled !== newBrowserEnabled;
+    
+    // Check if associations changed (we'll rebuild if needed)
+    const shouldUpdateMetadata = descriptionChanged || browserEnabledChanged;
+    
+    if (!shouldUpdateMetadata) {
+      logger.debug(`[${this.pollerName}] No metadata changes for project ${bioloopProject.id}, checking associations...`);
+    }
+    
+    // Update project metadata if changed
+    if (shouldUpdateMetadata) {
+      const updateData = {};
+      const changes = [];
+      
+      if (descriptionChanged) {
+        updateData.description = newDescription;
+        changes.push('description');
+      }
+      
+      if (browserEnabledChanged) {
+        updateData.browser_enabled = newBrowserEnabled;
+        changes.push(`browser_enabled: ${bioloopProject.browser_enabled} -> ${newBrowserEnabled}`);
+      }
+      
+      const existingMetadata = bioloopProject.metadata || {};
+      
+      await tx.project.update({
+        where: { id: bioloopProject.id },
+        data: {
+          ...updateData,
+          metadata: {
+            ...existingMetadata,
+            cmg_sync_state: {
+              cmg_updated_at: cmgProject.updatedAt,
+              last_sync_time: new Date(),
+            },
           },
         },
-      },
-    });
+      });
+      
+      logger.debug(`[${this.pollerName}] Updated project ${bioloopProject.id} metadata: ${changes.join(', ')}`);
+    }
     
-    // Rebuild project_user associations
-    await this.rebuildProjectUsers(tx, bioloopProject.id, cmgProject);
+    // Rebuild project_user associations (checks for changes internally)
+    await this.rebuildProjectUsers(tx, bioloopProject.id, cmgProject, bioloopProject.users);
     
-    // Rebuild project_dataset associations
-    await this.rebuildProjectDatasets(tx, bioloopProject.id, cmgProject);
+    // Rebuild project_dataset associations (checks for changes internally)
+    await this.rebuildProjectDatasets(tx, bioloopProject.id, cmgProject, bioloopProject.datasets);
   }
   
   /**
-   * Rebuild project_user associations (delete + insert)
+   * Rebuild project_user associations (delete + insert, only if changed)
    */
-  async rebuildProjectUsers(tx, projectId, cmgProject) {
+  async rebuildProjectUsers(tx, projectId, cmgProject, existingUsers) {
     // Expand groups to get all user IDs
     const directUserIds = (cmgProject.users || []).map(id => id.toString());
     const groupUserIds = await expandGroups(this.cmgDb, cmgProject.groups || []);
     const allUserIds = [...new Set([...directUserIds, ...groupUserIds])];
+    
+    // Find Bioloop user IDs for all CMG user IDs
+    const cmgUserIdsSet = new Set(allUserIds);
+    
+    // Get existing user IDs
+    const existingUserIds = new Set(existingUsers.map(u => u.user_id));
+    
+    // Check if we need to find Bioloop user IDs first
+    if (allUserIds.length === 0 && existingUserIds.size === 0) {
+      logger.debug(`[${this.pollerName}] No user associations for project ${projectId}, skipping`);
+      return;
+    }
     
     // Delete existing associations
     await tx.project_user.deleteMany({
@@ -109,9 +156,9 @@ class ProjectACLPoller extends BasePoller {
   }
   
   /**
-   * Rebuild project_dataset associations (delete + insert)
+   * Rebuild project_dataset associations (delete + insert, only if changed)
    */
-  async rebuildProjectDatasets(tx, projectId, cmgProject) {
+  async rebuildProjectDatasets(tx, projectId, cmgProject, existingDatasets) {
     const dataproductIds = (cmgProject.dataproducts || []).map(id => id.toString());
     
     // Delete existing associations

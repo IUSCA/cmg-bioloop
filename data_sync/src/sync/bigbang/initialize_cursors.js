@@ -58,11 +58,23 @@ async function initializeCursors(prisma, cmgDb) {
   ];
   
   for (const cursor of cursors) {
-    await prisma.cmg_sync_cursor.create({
-      data: cursor,
+    // Check if cursor already exists
+    const existing = await prisma.cmg_sync_cursor.findUnique({
+      where: { poller_name: cursor.poller_name },
     });
+    
+    await prisma.cmg_sync_cursor.upsert({
+      where: { poller_name: cursor.poller_name },
+      create: cursor,
+      update: {
+        last_updated_at: cursor.last_updated_at,
+        last_cmg_objectid: cursor.last_cmg_objectid,
+      },
+    });
+    
     const objectIdDisplay = cursor.last_cmg_objectid ? ` (ObjectId: ${cursor.last_cmg_objectid.substring(0, 8)}...)` : ' (no ObjectId)';
-    logger.info(`[BIGBANG] Initialized cursor for ${cursor.poller_name}: ${cursor.last_updated_at.toISOString()}${objectIdDisplay}`);
+    const action = existing ? 'Updated' : 'Initialized';
+    logger.info(`[BIGBANG] ${action} cursor for ${cursor.poller_name}: ${cursor.last_updated_at.toISOString()}${objectIdDisplay}`);
   }
   
   logger.info('[BIGBANG] Cursor initialization complete');

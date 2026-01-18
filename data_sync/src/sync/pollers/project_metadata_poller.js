@@ -23,7 +23,7 @@ class ProjectMetadataPoller extends BasePoller {
 
   /**
    * Process a single project document
-   * Updates: name, description, browser_enabled, funding, metadata
+   * Updates: name, description, browser_enabled, funding (if changed)
    */
   async processDocument(cmgProject, tx) {
     // Find project by cmg_id
@@ -36,16 +36,54 @@ class ProjectMetadataPoller extends BasePoller {
       return;
     }
 
+    // Extract new values
+    const newName = cmgProject.name;
+    const newDescription = cmgProject.description || null;
+    const newBrowserEnabled = cmgProject.igv_enabled || false;
+    const newFunding = cmgProject.funding || null;
+
+    // Check if any fields actually changed
+    const nameChanged = bioloopProject.name !== newName;
+    const descriptionChanged = bioloopProject.description !== newDescription;
+    const browserEnabledChanged = bioloopProject.browser_enabled !== newBrowserEnabled;
+    const fundingChanged = bioloopProject.funding !== newFunding;
+
+    if (!nameChanged && !descriptionChanged && !browserEnabledChanged && !fundingChanged) {
+      logger.debug(`[${this.pollerName}] No changes detected for project ${bioloopProject.id}, skipping update`);
+      return;
+    }
+
+    // Build update data with only changed fields
+    const updateData = {};
+    const changes = [];
+
+    if (nameChanged) {
+      updateData.name = newName;
+      changes.push(`name: "${bioloopProject.name}" -> "${newName}"`);
+    }
+
+    if (descriptionChanged) {
+      updateData.description = newDescription;
+      changes.push(`description`);
+    }
+
+    if (browserEnabledChanged) {
+      updateData.browser_enabled = newBrowserEnabled;
+      changes.push(`browser_enabled: ${bioloopProject.browser_enabled} -> ${newBrowserEnabled}`);
+    }
+
+    if (fundingChanged) {
+      updateData.funding = newFunding;
+      changes.push(`funding`);
+    }
+
     // Prepare metadata update
     const existingMetadata = bioloopProject.metadata || {};
 
     await tx.project.update({
       where: { id: bioloopProject.id },
       data: {
-        name: cmgProject.name,
-        description: cmgProject.description || null,
-        browser_enabled: cmgProject.igv_enabled || false,
-        funding: cmgProject.funding || null,
+        ...updateData,
         metadata: {
           ...existingMetadata,
           cmg_sync_state: {
@@ -56,7 +94,7 @@ class ProjectMetadataPoller extends BasePoller {
       },
     });
 
-    logger.debug(`[${this.pollerName}] Updated metadata for project ${bioloopProject.id}`);
+    logger.debug(`[${this.pollerName}] Updated project ${bioloopProject.id}: ${changes.join(', ')}`);
   }
 }
 

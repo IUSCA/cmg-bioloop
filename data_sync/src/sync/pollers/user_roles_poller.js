@@ -29,13 +29,18 @@ class UserRolesPoller extends BasePoller {
   
   /**
    * Process a single user document
-   * Updates: is_deleted status, roles
+   * Updates: is_deleted status, roles (if changed)
    * Does NOT update: username, name, email, cas_id
    */
   async processDocument(cmgUser, tx) {
-    // Find user by cmg_id
+    // Find user by cmg_id with roles
     const bioloopUser = await tx.user.findFirst({
       where: { cmg_id: cmgUser._id.toString() },
+      include: {
+        user_role: {
+          include: { role: true },
+        },
+      },
     });
     
     if (!bioloopUser) {
@@ -43,40 +48,46 @@ class UserRolesPoller extends BasePoller {
       return;
     }
     
-    // Update metadata only (NOT identity fields)
-    const existingMetadata = bioloopUser.metadata || {};
+    // Extract new values
+    const newIsDeleted = !cmgUser.active;
     
-    await tx.user.update({
-      where: { id: bioloopUser.id },
-      data: {
-        is_deleted: !cmgUser.active,
-        metadata: {
-          ...existingMetadata,
-          cmg_sync_state: {
-            cmg_updated_at: cmgUser.updatedAt,
-            last_sync_time: new Date(),
+    // Check if is_deleted changed
+    const isDeletedChanged = bioloopUser.is_deleted !== newIsDeleted;
+    
+    // Update is_deleted if changed
+    if (isDeletedChanged) {
+      const existingMetadata = bioloopUser.metadata || {};
+      
+      await tx.user.update({
+        where: { id: bioloopUser.id },
+        data: {
+          is_deleted: newIsDeleted,
+          metadata: {
+            ...existingMetadata,
+            cmg_sync_state: {
+              cmg_updated_at: cmgUser.updatedAt,
+              last_sync_time: new Date(),
+            },
           },
         },
-      },
-    });
+      });
+      
+      logger.debug(`[${this.pollerName}] Updated user ${bioloopUser.id}: is_deleted: ${bioloopUser.is_deleted} -> ${newIsDeleted}`);
+    } else {
+      logger.debug(`[${this.pollerName}] No is_deleted change for user ${bioloopUser.id}`);
+    }
     
     // Sync roles (diff-based: add missing, remove extra)
-    await this.syncUserRoles(tx, bioloopUser.id, cmgUser.roles || []);
+    await this.syncUserRoles(tx, bioloopUser.id, cmgUser.roles || [], bioloopUser.user_role);
   }
   
   /**
-   * Sync user roles (diff-based)
+   * Sync user roles (diff-based, only if changed)
    * Add roles that are missing, remove roles that shouldn't be there
    */
-  async syncUserRoles(tx, userId, cmgRoles) {
+  async syncUserRoles(tx, userId, cmgRoles, existingUserRoles) {
     // Map CMG roles to Bioloop roles
     const targetRoleNames = mapCMGRolesToBioloop(cmgRoles);
-    
-    // Get current roles
-    const existingUserRoles = await tx.user_role.findMany({
-      where: { user_id: userId },
-      include: { role: true },
-    });
     
     const existingRoleNames = existingUserRoles.map(ur => ur.role.name);
     

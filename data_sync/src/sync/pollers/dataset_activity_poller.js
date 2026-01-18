@@ -41,7 +41,7 @@ class DatasetActivityPoller extends BasePoller {
 
   /**
    * Process a single dataset/dataproduct document
-   * Updates: origin_path only
+   * Updates: origin_path only (if changed)
    * Note: archive_path, staged_path, is_staged are managed by Bioloop workers, NOT synced from CMG
    */
   async processDocument(cmgDataset, tx) {
@@ -57,6 +57,13 @@ class DatasetActivityPoller extends BasePoller {
 
     // Extract paths
     const paths = cmgDataset.paths || {};
+    const newOriginPath = paths.origin || null;
+
+    // Only update if value actually changed (avoid unnecessary writes)
+    if (bioloopDataset.origin_path === newOriginPath) {
+      logger.debug(`[${this.pollerName}] No changes detected for dataset ${bioloopDataset.id}, skipping update`);
+      return;
+    }
 
     // Update only origin_path (immutable after bigbang)
     // DO NOT sync: archive_path, staged_path, is_staged (managed by Bioloop workers)
@@ -65,7 +72,7 @@ class DatasetActivityPoller extends BasePoller {
     await tx.dataset.update({
       where: { id: bioloopDataset.id },
       data: {
-        origin_path: paths.origin || null,
+        origin_path: newOriginPath,
         metadata: {
           ...existingMetadata,
           cmg_sync_state: {
@@ -76,7 +83,7 @@ class DatasetActivityPoller extends BasePoller {
       },
     });
 
-    logger.debug(`[${this.pollerName}] Updated origin_path for dataset ${bioloopDataset.id}`);
+    logger.debug(`[${this.pollerName}] Updated origin_path for dataset ${bioloopDataset.id}: ${bioloopDataset.origin_path} -> ${newOriginPath}`);
   }
 }
 
