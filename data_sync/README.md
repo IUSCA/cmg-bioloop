@@ -30,6 +30,7 @@ data_sync/
 ├── prisma/                       # Prisma schema and migrations
 ├── bin/
 │   └── entrypoint.sh            # Container entrypoint script
+├── populate_bundles.js           # Standalone bundle population script (run on host with HSI)
 ├── Dockerfile                    # Container definition
 ├── package.json                  # Node.js dependencies (schema points to ../api/prisma)
 ├── .env.default                  # Default environment variables
@@ -37,7 +38,8 @@ data_sync/
 ├── README.md                     # This file
 ├── SETUP_GUIDE.md                # Complete setup and configuration guide
 ├── BIGBANG_SYNC_USAGE.md         # Big-bang script documentation
-└── POLLER_SYNC_USAGE.md          # Poller script documentation
+├── POLLER_SYNC_USAGE.md          # Poller script documentation
+└── POPULATE_BUNDLES_USAGE.md     # Bundle population script documentation
 
 Note: NO local prisma/ directory - uses main app's schema at /opt/sca/api/prisma/
 
@@ -107,6 +109,23 @@ node src/poller_sync.js --target-db=sandbox
 node src/poller_sync.js --target-db=app
 ```
 
+### Bundle Population (Separate Utility)
+
+**Note:** This is a **standalone script**, NOT part of bigbang/poller. Run directly on the remote host where HSI is available.
+
+```bash
+# On production host with HSI access (e.g., cmg-new-service1.sca.iu.edu)
+cd /opt/sca/cmg/data_sync
+
+# Dry run to see what would happen
+node populate_bundles.js --target-db=app --dry-run
+
+# Populate bundles for legacy archived datasets
+node populate_bundles.js --target-db=app
+```
+
+See **POPULATE_BUNDLES_USAGE.md** for full documentation.
+
 ## Key Features
 
 - **Shared Schema**: Uses main app's Prisma schema (single source of truth)
@@ -124,6 +143,7 @@ node src/poller_sync.js --target-db=app
 - **SETUP_GUIDE.md** - Complete setup and configuration (includes network isolation warning)
 - **BIGBANG_SYNC_USAGE.md** - One-time migration documentation
 - **POLLER_SYNC_USAGE.md** - Continuous sync documentation
+- **POPULATE_BUNDLES_USAGE.md** - Bundle population script for legacy archived datasets
 - **TARGET_DATABASE_CONFIGURATION.md** - Choose between sandbox and production databases
 - **LOGS.md** - Log locations, accessing logs, pulling from production
 

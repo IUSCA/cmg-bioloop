@@ -110,6 +110,88 @@ Bioloop is a **microservice architecture** with separate UI, API, and Worker com
 
 ---
 
+## Environment Variables & Configuration
+
+### Bioloop Convention: `.env` Files Over Exported Variables
+
+**ALWAYS use `.env` files for configuration instead of requiring developers to export environment variables.**
+
+**✅ CORRECT Pattern:**
+```bash
+# Add to .env file
+echo "LOG_LEVEL=debug" >> .env
+echo "API_KEY=your_key_here" >> .env
+
+# Script reads from .env automatically
+node script.js
+```
+
+**❌ WRONG Pattern:**
+```bash
+# Don't require manual exports
+export LOG_LEVEL=debug
+export API_KEY=your_key_here
+node script.js
+```
+
+### Implementation
+
+**In JavaScript/Node.js:**
+```javascript
+// At the top of your script
+require('dotenv').config({ path: path.join(__dirname, '.env') });
+
+// Access variables
+const logLevel = process.env.LOG_LEVEL || 'info';
+const apiKey = process.env.API_KEY;
+```
+
+**In Python:**
+```python
+from dotenv import load_dotenv
+import os
+
+# Load .env file
+load_dotenv()
+
+# Access variables
+log_level = os.getenv('LOG_LEVEL', 'info')
+api_key = os.getenv('API_KEY')
+```
+
+### Rationale
+
+1. **Persistence:** `.env` files persist across sessions and terminal windows
+2. **Documentation:** Configuration is self-documenting in the repository
+3. **Version Control:** `.env.default` provides examples, `.env` is gitignored for secrets
+4. **Consistency:** Same pattern across API, Workers, and utility scripts
+5. **CI/CD Friendly:** Easier to automate in deployment pipelines
+
+### File Structure
+
+Each service/directory should have:
+- **`.env.default`** - Committed to git, contains example values and documentation
+- **`.env`** - Gitignored, contains actual credentials and local overrides
+- **`.env.production`** - (Optional) Production-specific overrides
+
+### Priority Order
+
+Configuration is read in this order (later overrides earlier):
+1. `.env.default` - Default values
+2. `.env` - Local overrides
+3. `process.env` / environment - Runtime overrides (for Docker/CI)
+
+### Examples in Bioloop
+
+- **API:** `api/.env` for database credentials, JWT secrets, external service URLs
+- **Workers:** `workers/.env` for Celery configuration, SLURM settings, data paths
+- **Data Sync:** `data_sync/.env` for CMG MongoDB credentials, sync options
+- **UI:** `ui/.env` for API URL, build-time configuration
+
+**Note:** Feature enablement (Conversions, Sessions, Tracks, Downloads, Uploads) is controlled via `config/*.json` files, NOT `.env` files.
+
+---
+
 ## Critical Cross-Service Dependencies
 
 1. **Prisma Schema Changes**
