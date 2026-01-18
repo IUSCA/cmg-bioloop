@@ -180,6 +180,19 @@ router.post(
     const dataset_upload_log = await prisma.$transaction(async (tx) => {
       const createdDataset = await datasetService.create(tx, datasetCreateQuery);
 
+      // Find the audit_log that was created by datasetService.create()
+      const audit_log = await tx.dataset_audit.findUniqueOrThrow({
+        where: {
+          dataset_id_create_method: {
+            dataset_id: createdDataset.id,
+            create_method: CONSTANTS.DATASET_CREATE_METHODS.UPLOAD,
+          },
+        },
+        select: {
+          id: true,
+        },
+      });
+
       const created_dataset_upload_log = await tx.dataset_upload_log.create({
         data: {
           status: CONSTANTS.UPLOAD_STATUSES.UPLOADING,
@@ -193,11 +206,8 @@ router.post(
             })),
           },
           audit_log: {
-            create: {
-              action: 'create',
-              create_method: CONSTANTS.DATASET_CREATE_METHODS.UPLOAD,
-              dataset_id: createdDataset.id,
-              user_id: req.user.id,
+            connect: {
+              id: audit_log.id,
             },
           },
         },
