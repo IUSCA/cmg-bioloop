@@ -61,27 +61,70 @@ When user asks about specific areas, read:
 
 **THIS IS THE PRODUCTION ENVIRONMENT.**
 
+### Repository Paths
+
+- **Service Host** (`cmg-new-service1.sca.iu.edu`): `/opt/sca/cmg`
+  - Runs docker-compose-prod.yml (UI, API, postgres, monitoring)
+- **Worker Hosts** (`colo`, `mmge2`, etc.): `/opt/sca/cmg-bioloop`
+  - Runs workers via PM2 (celery, conversions, watch, metrics)
+- **Secure Download Host** (same as worker hosts or similar): Uses `/opt/sca/cmg-bioloop/secure_download`
+  - Actual compose file at `/opt/sca/docker/scripts/cmg-new-download/docker-compose-prod.yml` (READ-ONLY access)
+
 ### Access Restrictions
 
 You only have access to:
-- `/opt/sca/cmg` on host `cmg-new-service1.sca.iu.edu` (contains current repository)
-- `/opt/sca/cmg-bioloop` if it exists on the host (current repo path on other hosts)
+- `/opt/sca/cmg` on service host `cmg-new-service1.sca.iu.edu` (code changes only)
+- `/opt/sca/cmg-bioloop` on worker hosts (code changes only)
 - `/tmp` for temporary read/write/delete operations
 
 **Note:** Paths beginning with `/opt/sca/data/...` referenced in codebase/env vars only apply when `NODE_ENV='docker'` or `APP_ENV='docker'`. In production, these paths do not exist. See `.ai/PRODUCTION_ENVIRONMENT.md` for details.
 
 ### Critical Restrictions
 
-- **NEVER EVER EVER** write/delete anything in paths beginning with `/N/...`
-- **NEVER** reset the database yourself. Only do so if user explicitly permits in chat.
-- **NEVER** exec into docker containers or restart them. Ask user and provide commands if needed.
-- **ALWAYS** delete anything written to `/tmp` after work is done.
-- You do **NOT** have sudo access in production.
+#### ❌ NEVER Allowed (Unless User Explicitly Permits):
+
+**File System:**
+- **NEVER** write/edit/delete anything in `/N/...` paths (read-only/debugging operations OK)
+- **ALWAYS** delete anything written to `/tmp` after work is done
+
+**Database:**
+- **NEVER** reset the database on service host
+
+**Docker:**
+- **NEVER** run ANY docker commands (not even read-only: `docker ps`, `docker logs`, etc.)
+- **NEVER** exec into docker containers or restart them
+
+**Workers:**
+- **NEVER** restart/kill/stop workers (PM2 commands: `pm2 restart`, `pm2 stop`, `pm2 delete`)
+- Can view logs: `pm2 logs`, `pm2 monit`
+- Can enter poetry shell: `poetry shell`
+
+**System Services:**
+- **NEVER** restart system services (docker, nginx, apache, etc.)
+- **NEVER** use sudo (you do NOT have sudo access)
+
+**Git:**
+- **NEVER** do git write operations (`git pull`, `git push`, `git rebase`, `git merge`, `git commit`)
+- Can do read-only operations (`git status`, `git diff`, `git log`, `git reflog`, etc.)
+
+**nodemon:**
+- **NEVER** use nodemon in production (except UI service)
+- Not allowed in Dockerfiles, package.json scripts, or any config files
+
+#### ✅ Always Allowed:
+
+- Safe read-only operations for debugging on any host
+- Reading logs, viewing process status
+- File inspection with `cat`, `grep`, `ls`, etc. (except `.env` files)
+- Git read-only operations
+- `poetry shell` in workers directory
 
 ### Host Restrictions
 
-- You can only make changes on `cmg-new-service1.sca.iu.edu` (use hostname - it's in the allowlist)
-- You don't have access to `/opt/sca/cmg` on any other host
+- You can only make **code changes** on appropriate hosts
+- Service host: `/opt/sca/cmg` (service-related code)
+- Worker hosts: `/opt/sca/cmg-bioloop` (worker-related code)
+- **Exception:** All restrictions can be overridden if user explicitly permits in chat
 
 ---
 
@@ -123,6 +166,95 @@ You only have access to:
 
 ---
 
+## 🔒 Sensitive File Restrictions
+
+### .env Files (Secret Files vs Templates)
+
+**NEVER read, write, display, or print the contents of `.env` files that contain secrets.**
+
+**File Structure:**
+- `.env.default` files ALWAYS exist (templates with example/default values)
+- `.env` files MAY exist alongside `.env.default` (contain actual secrets)
+- `.env` files NEVER exist without a corresponding `.env.default`
+
+#### ❌ FORBIDDEN Files (Contain Secrets)
+- Any `.env` file (without `.default`, `.example`, or `.template` suffix)
+  - `api/.env`
+  - `workers/.env`
+  - `secure_download/.env`
+  - `ui/.env`
+  - Any other `.env` files containing secrets
+
+#### ✅ ALLOWED Files (Templates Only)
+- `.env.default` - Default configuration templates (ALWAYS exist)
+- `.env.example` - Example configurations
+- `.env.template` - Configuration templates
+- Any file with these suffixes is safe to read/display
+
+#### Forbidden Operations on .env Files
+
+**File Operations:**
+- Reading with `read_file` tool
+- Writing with `write` or `search_replace` tools
+- Copying or moving `.env` files
+- Deleting `.env` files
+
+**Terminal Commands:**
+- `cat`, `head`, `tail`, `less`, `more` - on any `.env` file
+- `grep` - when searching in `.env` files
+- `echo`, `printf` - when displaying `.env` contents
+- Any command that would reveal `.env` file contents
+
+**Output:**
+- Printing contents to console or chat
+- Including contents in code blocks or explanations
+- Logging or displaying `.env` file contents
+
+#### Before Running Any File Operation
+
+1. Check if the file path ends with `.env` (and NOT `.env.default`, `.env.example`, etc.)
+2. If yes, **STOP** and decline the operation
+3. Explain to the user that `.env` files contain secrets and cannot be accessed
+
+#### Example Commands
+
+**❌ FORBIDDEN:**
+```bash
+cat api/.env
+grep SECRET workers/.env
+head -n 5 secure_download/.env
+read_file("api/.env")
+```
+
+**✅ ALLOWED:**
+```bash
+cat api/.env.default
+grep EXAMPLE workers/.env.example
+head -n 10 ui/.env.template
+read_file("api/.env.default")
+```
+
+#### If User Requests .env File Access
+
+**Response:**
+```
+I cannot access `.env` files as they contain secrets and sensitive credentials.
+
+Instead, I can:
+- Read `.env.default` or `.env.example` files for configuration structure
+- Help you understand what configuration values are needed
+- Guide you to manually provide specific (non-secret) configuration values
+
+If you need to share specific values, please provide them directly (without secrets).
+```
+
+**Exception:**
+- User may explicitly override this restriction by stating in the same message:
+  - "I authorize you to read [specific .env file]" OR
+  - "Override security: read [specific .env file]"
+
+---
+
 ## 🔒 Allowlisted Commands (Read-Only + Safe)
 
 ### System Information
@@ -140,7 +272,7 @@ You only have access to:
 - netstat -tulpn, ss -tulpn
 - ping -c 4, curl -I, wget --spider
 
-### Git & Repo Status
+### Git & Repo Status (Read-Only)
 - git status, git diff, git log, git show, git blame
 - git reflog, git branch, git tag
 - git rev-parse, git describe
@@ -148,11 +280,11 @@ You only have access to:
 - git grep, git shortlog
 - git remote -v, git submodule status
 
-### Docker (Read-Only)
-- docker ps, docker ps -a, docker images
-- docker logs --tail 50
-- docker network ls, docker volume ls
-- docker inspect
+**❌ FORBIDDEN Git Commands:**
+- git pull, git push, git fetch
+- git commit, git rebase, git merge
+- git reset, git checkout (file modifications)
+- Any command that modifies repository state
 
 ### Node.js & NPM (Read-Only)
 - node -v, npm -v, npm list --depth=0

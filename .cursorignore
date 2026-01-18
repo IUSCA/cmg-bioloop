@@ -2,3 +2,14 @@ ui/node_modules/
 api/node_modules/
 *.log
 
+# Sensitive environment files containing secrets
+**/.env
+.env
+
+# Allow environment templates (these don't contain secrets)
+!**/.env.default
+!**/.env.example
+!**/.env.template
+!.env.default
+!.env.example
+!.env.template
