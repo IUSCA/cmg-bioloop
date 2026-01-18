@@ -57,6 +57,23 @@ This file provides a quick reference to all feature changelogs in the `.ai/featu
 
 ---
 
+### 4. Staging in Production Testing
+**File:** `features/staging-prod-testing.md`  
+**Scope:** Issues encountered and resolved while testing staging functionality in production  
+**Status:** In Progress  
+**Key Components:**
+- Permission errors on network filesystem mounts
+- Dataset path reference corrections
+- Download setup task debugging
+- Production environment constraints
+
+**Related Docs:**
+- `.cursorrules` (Production restrictions)
+- `workers/workers/tasks/stage.py`
+- `workers/workers/tasks/download.py`
+
+---
+
 ## Feature Status Legend
 
 - **In Progress**: Active development, frequent changes

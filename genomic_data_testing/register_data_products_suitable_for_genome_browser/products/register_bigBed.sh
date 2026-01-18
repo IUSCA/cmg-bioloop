@@ -37,12 +37,26 @@
 
 set -e
 
-# Get the script directory
+# Get the script directory and repo root
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
 PRODUCT_DOC_DIR="$(dirname "$SCRIPT_DIR")/product_docs"
 
-# Default configuration
-DESTINATION="/opt/sca/data/origin/data_products"
+# Determine destination based on APP_ENV in workers/.env
+WORKERS_ENV="$REPO_ROOT/workers/.env"
+if [ -f "$WORKERS_ENV" ]; then
+    APP_ENV=$(grep '^APP_ENV=' "$WORKERS_ENV" | cut -d '=' -f2 | tr -d '"' | tr -d "'")
+fi
+
+# Set destination based on environment
+if [ "$APP_ENV" = "production" ]; then
+    # Production: use path from workers/config/production.py
+    DESTINATION="/N/scratch/cmguser/cmg-bioloop/origin/data_products"
+else
+    # Non-production: use default path
+    DESTINATION="/opt/sca/data/origin/data_products"
+fi
+
 SERVICE_NAME="celery_worker"
 
 # Dataset definition
@@ -340,25 +354,39 @@ EOF
 
 # Create documentation before downloading
 echo "Creating product documentation..."
+mkdir -p "$PRODUCT_DOC_DIR"
 create_product_doc
 
-# Function to run commands inside the celery_worker container
-run_in_container() {
-    docker-compose exec -T "$SERVICE_NAME" bash -c "$1"
+# Function to run commands (in container or directly on host)
+run_command() {
+    if [ "$APP_ENV" = "production" ]; then
+        # Production: run directly on host
+        bash -c "$1"
+    else
+        # Non-production: run inside container
+        docker-compose exec -T "$SERVICE_NAME" bash -c "$1"
+    fi
 }
 
-# Check if service is running
-if ! docker-compose ps "$SERVICE_NAME" 2>/dev/null | grep -q "Up"; then
-    echo "Error: Service '$SERVICE_NAME' is not running"
-    echo "Please start the service with: docker-compose up -d"
-    exit 1
+# Check if service is running (only for non-production)
+if [ "$APP_ENV" != "production" ]; then
+    if ! docker-compose ps "$SERVICE_NAME" 2>/dev/null | grep -q "Up"; then
+        echo "Error: Service '$SERVICE_NAME' is not running"
+        echo "Please start the service with: docker-compose up -d"
+        exit 1
+    fi
 fi
 
 echo ""
 echo "================================"
 echo "BigBed Test Track Registration"
 echo "================================"
-echo "Service: $SERVICE_NAME"
+echo "Environment: ${APP_ENV:-development}"
+if [ "$APP_ENV" = "production" ]; then
+    echo "Execution: Direct (host)"
+else
+    echo "Execution: Container ($SERVICE_NAME)"
+fi
 echo "Destination: $DESTINATION"
 echo "Dataset: $FILENAME"
 echo ""
@@ -367,8 +395,8 @@ echo "[1/1] Processing: $FILENAME"
 echo "  URL: $URL"
 echo "  Directory: $DIR_NAME"
 
-# Run download and organization inside the container
-run_in_container "
+# Run download and organization (in container or on host)
+run_command "
     set -e
     
     # Create temporary directory for download
@@ -406,7 +434,7 @@ run_in_container "
         
         echo \"  Fetching bytes \$start-\$end\"
         
-        if curl -L --fail --retry 50 --retry-delay 2 --retry-all-errors \
+        if curl -L --fail --retry 50 --retry-delay 2 \
             -H \"Range: bytes=\$start-\$end\" \
             \"$URL\" >> '$FILENAME'; then
             start=\$((end + 1))

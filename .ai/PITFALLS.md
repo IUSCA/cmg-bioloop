@@ -92,7 +92,22 @@ This document catalogs frequent mistakes and anti-patterns in the Bioloop codeba
     - Let `asyncHandler` catch errors automatically
     - Use `createError` for HTTP errors
 
+19. **❌ Hiding errors with try-catch blocks**
+    - **Never** use try-catch to silence errors and return success responses
+    - Try-catch is acceptable at interface boundaries (e.g., API route handlers catching service errors to set proper status codes)
+    - **Never** abuse try-catch within services or business logic to hide failures
+    - Example of what NOT to do:
+      ```javascript
+      try {
+        const stats = fs.statSync(filePath);
+      } catch (error) {
+        logger.error(error);
+        // BAD: continuing execution and returning 200
+      }
+      ```
+    - Instead, let errors bubble up or explicitly handle them with proper error responses
+
 ---
 
-**Last Updated:** 2026-01-16
+**Last Updated:** 2026-01-17
 
