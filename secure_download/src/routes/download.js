@@ -29,17 +29,23 @@ router.get(
     const scopes = (req.token?.scope || '').split(' ');
     const download_scopes = scopes.filter((scope) => scope.startsWith(SCOPE_PREFIX));
 
+    // Redact sensitive fields from token before logging
+    const sanitizedToken = req.token ? {
+      ...req.token,
+      client_id: req.token.client_id ? '[REDACTED]' : undefined,
+    } : null;
+
     logger.info('req.token');
-    logger.info(req.token);
+    logger.info(JSON.stringify(sanitizedToken, null, 2));
 
     logger.info('SCOPE_PREFIX');
     logger.info(SCOPE_PREFIX);
     logger.info('req.token?.scope');
     logger.info(req.token?.scope);
     logger.info('scopes');
-    logger.info(scopes);
+    logger.info(JSON.stringify(scopes, null, 2));
     logger.info('download_scopes');
-    logger.info(download_scopes);
+    logger.info(JSON.stringify(download_scopes, null, 2));
 
     // if (download_scopes.length === 0) {
     //   return next(createError.Forbidden('Invalid scope'));
@@ -53,34 +59,32 @@ router.get(
     logger.info(`req_path: ${req_path}`);
     logger.info(`token_file_path: ${token_file_path}`);
 
-    // Get and print the size of the token file path
-    const fullFilePath = path.join('/opt/sca/data/downloads/', token_file_path);
-    try {
+    // Check if we're in Docker mode (NODE_ENV === 'docker')
+    if (process.env.NODE_ENV === 'docker') {
+      logger.info('Docker mode detected, serving file directly with Express');
+
+      // Set headers for file download
+      res.set('content-type', 'application/octet-stream; charset=utf-8');
+
+      // Get and print the size of the token file path
+      const fullFilePath = path.join('/opt/sca/data/downloads/', token_file_path);
+    
+      // Check if file exists - throw error if not
       const stats = fs.statSync(fullFilePath);
       logger.info(`File size: ${stats.size} bytes`);
 
-      // Check if we're in Docker mode (NODE_ENV === 'docker')
-      if (process.env.NODE_ENV === 'docker') {
-        logger.info('Docker mode detected, serving file directly with Express');
+      // Create read stream and pipe to response
+      const fileStream = fs.createReadStream(fullFilePath);
+      fileStream.pipe(res);
 
-        // Set headers for file download
-        res.set('content-type', 'application/octet-stream; charset=utf-8');
+      fileStream.on('error', (error) => {
+        logger.error(`Error streaming file: ${error.message}`);
+        if (!res.headersSent) {
+          res.status(500).send('Error streaming file');
+        }
+      });
 
-        // Create read stream and pipe to response
-        const fileStream = fs.createReadStream(fullFilePath);
-        fileStream.pipe(res);
-
-        fileStream.on('error', (error) => {
-          logger.error(`Error streaming file: ${error.message}`);
-          if (!res.headersSent) {
-            res.status(500).send('Error streaming file');
-          }
-        });
-
-        return; // Exit early, don't send X-Accel-Redirect
-      }
-    } catch (error) {
-      logger.error(`Error getting file size: ${error.message}`);
+      return; // Exit early, don't send X-Accel-Redirect
     }
 
     // Production mode: use nginx X-Accel-Redirect

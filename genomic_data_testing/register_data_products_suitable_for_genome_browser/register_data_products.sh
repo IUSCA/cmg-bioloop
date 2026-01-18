@@ -113,6 +113,7 @@ done
 echo "========================================"
 echo "Genome Browser Data Products Registration"
 echo "========================================"
+echo "Environment: ${APP_ENV:-development}"
 echo "Destination: $DESTINATION"
 echo "Datasets to download: $NUM_DATASETS of ${#DATASET_SCRIPTS[@]}"
 echo ""

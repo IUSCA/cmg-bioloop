@@ -5,8 +5,9 @@
 **Status:** In Progress
 
 **Related Documentation:**
-- `.ai/PRODUCTION_ENVIRONMENT.md` (Production restrictions)
-- `.ai/bioloop/worker_conventions.md` (Worker patterns)
+- `.ai/ARCHITECTURE.md` (Service components)
+- `.ai/CONVENTIONS_WORKERS.md` (Worker patterns)
+- `.cursorrules` (Production restrictions)
 - `workers/workers/tasks/stage.py` (Staging task implementation)
 - `workers/workers/tasks/download.py` (Download setup task)
 
@@ -219,3 +220,5 @@ Format:
 ---
 
 **Last Updated:** 2026-01-18
+
+

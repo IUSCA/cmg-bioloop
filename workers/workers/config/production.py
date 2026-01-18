@@ -8,13 +8,14 @@ config = {
         'base_url': 'https://cmg-test.sca.iu.edu/api/',  # trailing slash is required
     },
     'paths': {
+        'root': '/N/scratch/cmguser',
         'RAW_DATA': {
             'archive': f'archive_raw',
-            'stage': '/N/project/CMG-SCA/cmg-bioloop/stage/raw_data',
+            'stage': '/N/scratch/cmguser/CMG-SCA/cmg-bioloop/stage/raw_data',
             # 'stage': '/test',
             'bundle': {
-                'generate': '/N/project/CMG-SCA/cmg-bioloop/stage/raw_data',
-                'stage': '/N/project/CMG-SCA/cmg-bioloop/bundles/raw_data',
+                'generate': '/N/scratch/cmguser/CMG-SCA/cmg-bioloop/stage/raw_data',
+                'stage': '/N/scratch/cmguser/CMG-SCA/cmg-bioloop/bundles/raw_data',
             },
             'qc': '/N/scratch/cmguser/cmg-bioloop/qc/raw_data'
         },
@@ -27,7 +28,7 @@ config = {
                 'stage': '/N/scratch/cmguser/cmg-bioloop/bundles/data_products',
             },
         },
-        'download_dir': '/N/scratch/cmguser/cmg-bioloop/download',
+        'download_dir': '/N/scratch/cmguser/cmg-bioloop/production/downloads',
         'conversion': {
           # /N/project/CMG-SCA/production/conversion is the path used in CMG-Production.
           # 'reports': '/N/project/CMG-SCA/production/conversion', 
