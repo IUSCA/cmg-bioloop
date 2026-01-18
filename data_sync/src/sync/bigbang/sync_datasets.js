@@ -167,8 +167,8 @@ async function insertDataset(prisma, cmgItem, datasetType, name, isDeleted) {
       updated_at: updatedAt,
       origin_path: cmgItem.paths?.origin || null,
       archive_path: cmgItem.paths?.archive || null,
-      staged_path: cmgItem.paths?.staged || null,
-      is_staged: cmgItem.staged || false,
+      staged_path: null, // Always null - staging state not migrated from CMG
+      is_staged: false, // Always false - staging state not migrated from CMG
       metadata: null,
     },
   });

@@ -4,8 +4,9 @@ const BasePoller = require('./base_poller');
 /**
  * Dataset Activity Poller
  *
- * Polls CMG datasets and dataproducts collections for path and lifecycle flag changes.
- * Updates: paths (origin, archive, staged), is_staged flag
+ * Polls CMG datasets and dataproducts collections for path changes.
+ * Updates: origin_path (immutable after bigbang)
+ * Does NOT update: archive_path, staged_path, is_staged (set by Bioloop workers)
  * Does NOT: parse events (delegated to Workflow Status Poller), populate dataset_file
  */
 class DatasetActivityPoller extends BasePoller {
@@ -40,7 +41,8 @@ class DatasetActivityPoller extends BasePoller {
 
   /**
    * Process a single dataset/dataproduct document
-   * Updates: paths, is_staged flag
+   * Updates: origin_path only
+   * Note: archive_path, staged_path, is_staged are managed by Bioloop workers, NOT synced from CMG
    */
   async processDocument(cmgDataset, tx) {
     // Find dataset by cmg_id
@@ -56,16 +58,14 @@ class DatasetActivityPoller extends BasePoller {
     // Extract paths
     const paths = cmgDataset.paths || {};
 
-    // Update dataset paths and flags
+    // Update only origin_path (immutable after bigbang)
+    // DO NOT sync: archive_path, staged_path, is_staged (managed by Bioloop workers)
     const existingMetadata = bioloopDataset.metadata || {};
 
     await tx.dataset.update({
       where: { id: bioloopDataset.id },
       data: {
         origin_path: paths.origin || null,
-        archive_path: paths.archive || null,
-        staged_path: paths.staged || null,
-        is_staged: cmgDataset.staged || false,
         metadata: {
           ...existingMetadata,
           cmg_sync_state: {
@@ -76,7 +76,7 @@ class DatasetActivityPoller extends BasePoller {
       },
     });
 
-    logger.debug(`[${this.pollerName}] Updated paths for dataset ${bioloopDataset.id}`);
+    logger.debug(`[${this.pollerName}] Updated origin_path for dataset ${bioloopDataset.id}`);
   }
 }
 

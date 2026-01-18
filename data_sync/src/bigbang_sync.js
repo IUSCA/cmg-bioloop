@@ -436,13 +436,12 @@ async function main() {
     logger.info('[11/14] Converting conversions...');
     await syncConversions(prisma, cmgDb);
 
-    // 11. Convert conversion logs (filesystem - production only)
+    // 12. Convert conversion logs (filesystem - production only)
     if (options.skipConversionLogs) {
       logger.info('[12/14] Skipping conversion logs (--skip-conversion-logs flag provided)');
     } else {
-      logger.info('[12/14] Converting conversion logs...');
-      const runlogsDir = config.get('cmg_runlogs_dir');
-      await syncAllConversionLogs(prisma, cmgDb, runlogsDir);
+      logger.info('[12/14] Converting historic conversion logs...');
+      await syncAllConversionLogs(prisma, cmgDb);
     }
 
     // 12. Convert sessions (optional)
