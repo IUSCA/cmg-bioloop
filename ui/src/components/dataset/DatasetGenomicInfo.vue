@@ -4,11 +4,11 @@
       <tbody>
         <tr>
           <td>Genome Type</td>
-          <td>{{ props.dataset?.genome_type }}</td>
+          <td>{{ props.dataset?.genomic_details?.genome_type }}</td>
         </tr>
         <tr>
           <td>Genome Value</td>
-          <td>{{ props.dataset?.genome_value }}</td>
+          <td>{{ props.dataset?.genomic_details?.genome_value }}</td>
         </tr>
         <tr>
           <td>Genome Files</td>

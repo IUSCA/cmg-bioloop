@@ -263,15 +263,15 @@ async function get_dataset({
           },
         },
       } : undefined),
-    },
-    ...(include_genomic_attributes ? {
-      genomic_details: {
-        select: {
-          genome_type: true,
-          genome_value: true,
+      ...(include_genomic_attributes ? {
+        genomic_details: {
+          select: {
+            genome_type: true,
+            genome_value: true,
+          },
         },
-      },
-    } : undefined),
+      } : undefined),
+    },
   });
   const dataset_workflows = dataset.workflows;
   console.log('dataset_workflows', dataset_workflows);

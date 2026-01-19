@@ -55,6 +55,7 @@ class DatasetService {
     include_projects = false,
     initiator = false,
     include_source_instrument = false,
+    include_genomic_attributes = false,
   }) {
     return api.get(`/datasets/${id}`, {
       params: {
@@ -67,6 +68,7 @@ class DatasetService {
         include_projects,
         initiator,
         include_source_instrument,
+        include_genomic_attributes,
       },
     });
   }

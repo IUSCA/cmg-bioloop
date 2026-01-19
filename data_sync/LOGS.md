@@ -93,7 +93,7 @@ Use the `pull_logs_from_prod.sh` script to download logs from the production hos
 ### Basic Usage
 
 ```bash
-# Pull all logs from production (uses 'cmg-bioloop' SSH alias)
+# Pull latest log from production (default, uses 'cmg-bioloop' SSH alias)
 cd data_sync
 ./bin/pull_logs_from_prod.sh
 ```
@@ -105,11 +105,29 @@ cd data_sync
 
 Logs will be downloaded to `./logs_from_prod/` directory.
 
+**Important:** Remote logs are always read from `/tmp/data_sync_logs/` on the production host (not the container mount path). Files are sorted by timestamp (newest first).
+
 ### List Available Logs
 
 ```bash
 # See what logs are available without downloading
 ./bin/pull_logs_from_prod.sh --list
+
+# List last 5 logs
+./bin/pull_logs_from_prod.sh --list --last 5
+
+# List all available logs
+./bin/pull_logs_from_prod.sh --list --all
+```
+
+### Pull Multiple Logs
+
+```bash
+# Pull last 3 log files (by timestamp, newest first)
+./bin/pull_logs_from_prod.sh --last 3
+
+# Pull all available log files
+./bin/pull_logs_from_prod.sh --all
 ```
 
 ### Custom Options
@@ -131,11 +149,24 @@ Logs will be downloaded to `./logs_from_prod/` directory.
 ### Full Example
 
 ```bash
-# Pull logs with all custom options
+# Pull last 5 logs with all custom options
 ./bin/pull_logs_from_prod.sh \
   --host cmg-bioloop \
+  --last 5 \
   --output ~/migration_analysis/logs_$(date +%Y%m%d)
 ```
+
+### All Options
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| `-h, --host` | Production host (SSH alias or hostname) | `cmg-bioloop` |
+| `-u, --user` | SSH user | From SSH config (`cmguser`) |
+| `-o, --output` | Local output directory | `./logs_from_prod` |
+| `-n, --last N` | Download last N log files by timestamp | `1` |
+| `--all` | Download all log files | (disabled) |
+| `-l, --list` | List available log files without downloading | (disabled) |
+| `--help` | Show help message | (disabled) |
 
 ## Log Analysis
 

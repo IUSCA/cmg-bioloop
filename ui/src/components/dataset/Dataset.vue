@@ -389,6 +389,7 @@ function fetch_dataset(show_loading = false) {
     bundle: true,
     initiator: true,
     include_source_instrument: true,
+    include_genomic_attributes: true,
   })
     .then((res) => {
       const _dataset = res.data;

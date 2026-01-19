@@ -227,10 +227,13 @@
   - Combined (all levels) + error-specific logs
 
 - **Tool:** `bin/pull_logs_from_prod.sh` script created
-  - SSH to production host
-  - Download logs via rsync
-  - Options: `--last N` (default 1), `--all`
+  - SSH to production host and download logs via SCP
+  - Remote path: `/tmp/data_sync_logs/` on production host
+  - Local output: `./logs_from_prod/` by default
+  - Options: `--last N` (default 1), `--all`, `--list`, `--host`, `--user`, `--output`
+  - Sorts by timestamp (newest first)
   - Disables SSH port forwarding conflicts
+  - Full documentation: `data_sync/LOGS.md`
 
 - **Change:** Bigbang tracks and reports logging statistics
   - Wrapper counts all `logger.info/warn/error/debug()` calls
