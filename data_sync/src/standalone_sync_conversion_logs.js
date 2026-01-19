@@ -96,7 +96,8 @@ Examples:
 
 Environment Variables:
   CMG_LEGACY_CONVERSIONS_LOGS_DIR   Path to CMG conversion logs directory
-                                     (default: /N/project/CMG-SCA/runlogs)
+                                     Container: /opt/sca/project/ingestion_source_dir/CMG-SCA/production/runlogs
+                                     Host: /N/project/CMG-SCA/production/runlogs
 
   DATABASE_URL                       PostgreSQL connection string
                                      (required for --target-db=custom)

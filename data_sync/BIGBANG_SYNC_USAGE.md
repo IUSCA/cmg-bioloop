@@ -172,11 +172,13 @@ worker_process.id → log.worker_process_id (1:N)
 
 **Configuration:**
 ```bash
-# Environment variable
-CMG_LEGACY_CONVERSIONS_LOGS_DIR=/N/project/CMG-SCA/runlogs
+# Environment variable (container path)
+CMG_LEGACY_CONVERSIONS_LOGS_DIR=/opt/sca/project/ingestion_source_dir/CMG-SCA/production/runlogs
 
 # Or add to data_sync/.env
-echo "CMG_LEGACY_CONVERSIONS_LOGS_DIR=/N/project/CMG-SCA/runlogs" >> data_sync/.env
+echo "CMG_LEGACY_CONVERSIONS_LOGS_DIR=/opt/sca/project/ingestion_source_dir/CMG-SCA/production/runlogs" >> data_sync/.env
+
+# Note: /N/project on host is mounted at /opt/sca/project/ingestion_source_dir in container
 ```
 
 **Skipping:**

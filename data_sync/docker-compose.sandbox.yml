@@ -15,6 +15,8 @@ services:
       - db_sandbox_pgdata:/var/lib/postgresql/15/main
       - db_sandbox_node_modules:/opt/sca/app/node_modules
       - /tmp/data_sync_logs:/tmp:rw
+      # Mount /N/project for conversion logs access (production only, ignored in local dev)
+      - /N/project:/opt/sca/project/ingestion_source_dir:ro
     working_dir: /opt/sca/app
     ports:
       - "127.0.0.1:5434:5432"

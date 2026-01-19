@@ -7,7 +7,7 @@
     "password": ""
   },
   "cmg": {
-    "legacyConversionsLogsDir": "/N/project/CMG-SCA/production/runlogs"
+    "legacyConversionsLogsDir": "/opt/sca/project/ingestion_source_dir/CMG-SCA/production/runlogs"
   },
   "data_root": "/tmp"
 }
