@@ -63,7 +63,12 @@ backup
 !db/backups
 db/backups/*.sql
 db/backups/*.psql
+db/backups/*.dump
 todo.md
+
+# Backup files
+*.sql.gz
+backup_*.sql.gz
 
 .pm2
 
@@ -76,6 +81,7 @@ db/db/backups
 db/db_postgres
 db/db/postgres
 db/db/db_postgres
+db/prod/db_postgres
 
 cmg_data/dump/
 cmg_data/data/
