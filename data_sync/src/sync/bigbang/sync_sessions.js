@@ -1,14 +1,18 @@
 const { ObjectId } = require('mongodb');
+const { extractGenomicAttributes } = require('../utils/cmg_helpers');
 const logger = require('../../logger');
 
 /**
  * Convert genome browser sessions from CMG to Bioloop
  * 
- * Note: Sessions sync is optional and may skip many entries due to missing dataset_files
+ * Note: 
+ * - Sessions sync is optional (use --skip-sessions to skip)
+ * - Tracks are NOT migrated from CMG (users create tracks in Bioloop UI)
+ * - Only session metadata is migrated: title, genome, genome_type, owner
  */
 async function syncSessions(prisma, cmgDb) {
   logger.info('[BIGBANG] Converting genome browser sessions...');
-  logger.warn('[BIGBANG] Note: Session conversion may skip many entries due to missing dataset_file records');
+  logger.info('[BIGBANG] Note: Tracks are NOT migrated (users create tracks in Bioloop UI)');
   
   const cmgSessions = await cmgDb.collection('sessions').find({}).toArray();
   logger.info(`[BIGBANG] Found ${cmgSessions.length} CMG sessions to convert`);
@@ -52,9 +56,13 @@ async function convertSession(prisma, cmgDb, cmgSession) {
   }
   
   const title = cmgSession.title || 'Genome Browser Session';
-  const genome = cmgSession.genome || null;
-  const genomeType = cmgSession.genome_type || null;
   const cmgSessionId = cmgSession._id.toString();
+  
+  // Extract genomic attributes using utility function to handle CMG field name variations
+  // Note: Sessions use 'genome' field, but utility returns 'genome_value'
+  const { genome_type, genome_value } = extractGenomicAttributes(cmgSession);
+  const genome = genome_value; // Map genome_value to genome for session table
+  const genomeType = genome_type;
   
   // Check if session already exists (idempotency)
   const existingSession = await prisma.genome_browser_session.findFirst({
@@ -78,62 +86,9 @@ async function convertSession(prisma, cmgDb, cmgSession) {
     },
   });
   
-  // Process tracks
-  const tracks = cmgSession.tracks || [];
-  const sessionTrackAssociations = [];
-  
-  for (const cmgTrack of tracks) {
-    const cmgDataproductId = cmgTrack.dataproduct;
-    const cmgFileName = cmgTrack.filename;
-    
-    if (!cmgDataproductId || !cmgFileName) {
-      logger.warn(`[BIGBANG] Track missing dataproduct or filename in session ${cmgSession._id}`);
-      continue;
-    }
-    
-    // Find corresponding Bioloop DATA_PRODUCT
-    const bioloopDataset = await prisma.dataset.findFirst({
-      where: { cmg_id: cmgDataproductId.toString() },
-    });
-    
-    if (!bioloopDataset) {
-      logger.warn(`[BIGBANG] Dataset not found for track in session ${cmgSession._id}, dataproduct: ${cmgDataproductId}`);
-      continue;
-    }
-    
-    // Find dataset_file by name
-    const datasetFile = await prisma.dataset_file.findFirst({
-      where: {
-        dataset_id: bioloopDataset.id,
-        name: cmgFileName,
-      },
-    });
-    
-    if (!datasetFile) {
-      // This is expected - we're not populating dataset_file table in bigbang
-      continue;
-    }
-    
-    // Create track
-    const track = await prisma.track.create({
-      data: {
-        name: cmgTrack.title || cmgFileName,
-        dataset_file_id: datasetFile.id,
-      },
-    });
-    
-    sessionTrackAssociations.push({
-      session_id: session.id,
-      track_id: track.id,
-    });
-  }
-  
-  // Create session_track associations
-  if (sessionTrackAssociations.length > 0) {
-    await prisma.session_track.createMany({
-      data: sessionTrackAssociations,
-    });
-  }
+  // Note: Tracks are NOT migrated from CMG
+  // Tracks are created by users in Bioloop UI directly
+  // CMG track data is not compatible with Bioloop's track model
   
   return session;
 }

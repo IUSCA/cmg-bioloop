@@ -136,12 +136,14 @@ router.get(
         mergeDatasetFilter(filter_query, { file_type: normalizedFileTypeFilter });
       }
 
-      if (genome_type) {
-        filter_query.genomeType = genome_type;
-      }
+      if (genome_type || genome_value) {
+        const genomicDetailsFilter = {};
+        if (genome_type) genomicDetailsFilter.genome_type = genome_type;
+        if (genome_value) genomicDetailsFilter.genome_value = genome_value;
 
-      if (genome_value) {
-        filter_query.genomeValue = genome_value;
+        mergeDatasetFilter(filter_query, {
+          genomic_details: genomicDetailsFilter,
+        });
       }
 
       // Filter by PRIMARY role if genome browser feature is enabled
@@ -174,6 +176,7 @@ router.get(
                     name: true,
                     type: true,
                     metadata: true,
+                    genomic_details: true,
                     projects: {
                       select: {
                         project: {
@@ -219,14 +222,11 @@ router.post(
   isPermittedTo('create'),
   [
     body('name').isString().notEmpty().trim(),
-    body('file_type').isString().notEmpty().trim(),
-    body('genome_type').isString().notEmpty().trim(),
-    body('genome_value').isString().notEmpty().trim(),
     body('dataset_file_id').isInt().toInt(),
   ],
   asyncHandler(async (req, res) => {
     const {
-      name, file_type, genome_type, genome_value, dataset_file_id,
+      name, dataset_file_id,
     } = req.body;
 
     try {
@@ -263,8 +263,6 @@ router.post(
       const track = await prisma.track.create({
         data: {
           name,
-          genomeType: genome_type,
-          genomeValue: genome_value,
           dataset_file_id,
         },
         include: {
@@ -430,14 +428,11 @@ router.patch(
   [
     param('id').isInt().toInt(),
     body('name').isString().optional().trim(),
-    body('file_type').isString().optional().trim(),
-    body('genome_type').isString().optional().trim(),
-    body('genome_value').isString().optional().trim(),
   ],
   asyncHandler(async (req, res) => {
     const { id } = req.params;
     const {
-      name, file_type, genome_type, genome_value,
+      name,
     } = req.body;
 
     try {
@@ -481,8 +476,6 @@ router.patch(
       // Update the track
       const updateData = {};
       if (name !== undefined) updateData.name = name;
-      if (genome_type !== undefined) updateData.genomeType = genome_type;
-      if (genome_value !== undefined) updateData.genomeValue = genome_value;
 
       const track = await prisma.track.update({
         where: { id },
@@ -707,12 +700,14 @@ router.get(
         mergeDatasetFilter(filter_query, { file_type: userFileTypeFilter });
       }
 
-      if (genome_type) {
-        filter_query.genomeType = genome_type;
-      }
+      if (genome_type || genome_value) {
+        const genomicDetailsFilter = {};
+        if (genome_type) genomicDetailsFilter.genome_type = genome_type;
+        if (genome_value) genomicDetailsFilter.genome_value = genome_value;
 
-      if (genome_value) {
-        filter_query.genomeValue = genome_value;
+        mergeDatasetFilter(filter_query, {
+          genomic_details: genomicDetailsFilter,
+        });
       }
 
       // Filter by PRIMARY role if genome browser feature is enabled
@@ -745,6 +740,7 @@ router.get(
                     name: true,
                     type: true,
                     metadata: true,
+                    genomic_details: true,
                     projects: {
                       select: {
                         project: {

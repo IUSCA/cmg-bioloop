@@ -1,5 +1,6 @@
 const { ObjectId } = require('mongodb');
 const { handleDuplicateName } = require('../utils/duplicate_handler');
+const { extractGenomicAttributes } = require('../utils/cmg_helpers');
 const logger = require('../../logger');
 
 const DUPLICATE_PREFIX = 'DUPLICATE';
@@ -174,15 +175,16 @@ async function insertDataset(prisma, cmgItem, datasetType, name, isDeleted) {
   });
   
   // Insert genomic details if present
-  const genomeType = cmgItem.genome_type || null;
-  const genomeValue = cmgItem.genome || null;
+  // CMG has inconsistent field names (genomeType vs genome_type, genomeValue vs genome_value vs genome)
+  // Use utility function to handle all variations
+  const { genome_type, genome_value } = extractGenomicAttributes(cmgItem);
   
-  if (genomeType || genomeValue) {
+  if (genome_type || genome_value) {
     await prisma.dataset_genomic_attributes.create({
       data: {
         dataset_id: dataset.id,
-        genome_type: genomeType,
-        genome_value: genomeValue,
+        genome_type,
+        genome_value,
       },
     });
   }
