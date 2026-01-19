@@ -74,6 +74,30 @@ Then you MUST:
 2. Use **decision-style language**, not discussion.
 3. Do **not** summarize the chat — summarize the *outcome*.
 
+### What to Document
+
+**REQUIRED:**
+- Update feature changelogs in `.ai/features/<feature>.md` for design decisions (see above)
+
+**ALLOWED:**
+- Update existing user-facing documentation (e.g., usage guides, READMEs) when helpful
+- Update existing technical documentation when code changes
+
+**FORBIDDEN (unless explicitly requested by user):**
+- ❌ Refactor summary files (e.g., `*_REFACTOR.md`, `*_CHANGES.md`)
+- ❌ "What changed" summary files
+- ❌ Migration guide files (separate from feature changelogs)
+- ❌ Change documentation files
+- ❌ Implementation summary files
+
+**Why:** This information belongs in:
+1. Feature changelogs (`.ai/features/<feature>.md`) - for design decisions
+2. Existing usage documentation - for user guidance
+3. The code itself - implementation details are self-documenting
+4. Git history - for change tracking
+
+**Exception:** Only create additional documentation files if the user explicitly requests them.
+
 ### Correct entry style
 
 ```markdown
@@ -150,5 +174,5 @@ This protocol exists to prevent:
 
 ---
 
-**Last Updated:** 2026-01-16
+**Last Updated:** 2026-01-19
 

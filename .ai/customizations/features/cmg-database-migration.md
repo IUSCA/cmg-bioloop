@@ -391,6 +391,43 @@
 
 ---
 
+## 2026-01-19
+
+### Conversion Logs Sync - Container Execution
+
+- **Change:** `sync_conversion_logs.sh` refactored to run inside Docker container
+  - Script now automatically execs into `db_sandbox` container when run from host
+  - Detects if already inside container and executes directly
+  - No longer requires Node.js/dependencies on host machine
+  
+- **Decision:** Conversion logs sync works both standalone and as part of bigbang
+  - Integrated into bigbang as step 12 (already implemented)
+  - Can be run independently via `./bin/sync_conversion_logs.sh`
+  - Can be skipped with `--skip-conversion-logs` flag in bigbang
+  
+- **Change:** Created comprehensive documentation
+  - New file: `CONVERSION_LOGS_SYNC_USAGE.md`
+  - Updated: `bin/README.md` with conversion logs sync details
+  - Updated: `README.md` to reference new documentation
+  
+- **Clarification:** Script execution patterns
+  - **From host:** `./bin/sync_conversion_logs.sh [options]` (auto-execs into container)
+  - **Inside container:** `node /opt/sca/app/src/standalone_sync_conversion_logs.js [options]`
+  - **Part of bigbang:** Automatically included unless `--skip-conversion-logs`
+  
+- **Change:** Container detection logic added
+  - Checks for `/opt/sca/app` directory and script file
+  - If inside container, runs directly without docker exec
+  - If on host, validates container is running before exec
+  
+- **Decision:** Script remains idempotent and production-safe
+  - Skips conversions with existing `workflow_id`
+  - Gracefully handles missing log directory (local/dev)
+  - Safe to re-run multiple times
+  - `--overwrite-existing` flag for forced re-processing
+
+---
+
 ## Future Entries
 
 Add entries here as decisions are made, changes are implemented, or issues are resolved.
@@ -407,5 +444,5 @@ Format:
 
 ---
 
-**Last Updated:** 2026-01-16
+**Last Updated:** 2026-01-19
 
