@@ -159,3 +159,41 @@ def populate_file_metadata(celery_task, dataset_id, **kwargs):
     #     raise
     # except Exception as e:
     #     raise exc.RetryableException(e)
+
+
+# Legacy Migration Tasks
+
+@app.task(base=WorkflowTask, bind=True, name='begin_migration',
+          autoretry_for=(Exception,),
+          max_retries=3,
+          default_retry_delay=5)
+def begin_migration(celery_task, dataset_id, **kwargs):
+    from workers.tasks.begin_migration import begin_migration as task_body
+    return task_body(celery_task, dataset_id, **kwargs)
+
+
+@app.task(base=WorkflowTask, bind=True, name='retrieve_archive_dataset',
+          autoretry_for=(Exception,),
+          max_retries=3,
+          default_retry_delay=5)
+def retrieve_archive_dataset(celery_task, dataset_id, **kwargs):
+    from workers.tasks.retrieve_archive import retrieve_archive_dataset as task_body
+    return task_body(celery_task, dataset_id, **kwargs)
+
+
+@app.task(base=WorkflowTask, bind=True, name='populate_metadata_dataset',
+          autoretry_for=(Exception,),
+          max_retries=3,
+          default_retry_delay=5)
+def populate_metadata_dataset(celery_task, dataset_id, **kwargs):
+    from workers.tasks.populate_metadata import populate_metadata_dataset as task_body
+    return task_body(celery_task, dataset_id, **kwargs)
+
+
+@app.task(base=WorkflowTask, bind=True, name='end_migration',
+          autoretry_for=(Exception,),
+          max_retries=3,
+          default_retry_delay=5)
+def end_migration(celery_task, dataset_id, **kwargs):
+    from workers.tasks.end_migration import end_migration as task_body
+    return task_body(celery_task, dataset_id, **kwargs)

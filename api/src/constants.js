@@ -119,6 +119,7 @@ const DATA_REQUEST_STATUS = {
 const WORKFLOWS = {
   INTEGRATED: 'integrated',
   STAGE: 'stage',
+  STAGE_MIGRATED: 'stage_migrated',
   PROCESS_DATASET_UPLOAD: 'process_dataset_upload',
   CANCEL_DATASET_UPLOAD: 'cancel_dataset_upload',
 };
@@ -130,6 +131,12 @@ const DATASET_STATES = {
   FETCHED: 'FETCHED',
   STAGED: 'STAGED',
   DELETED: 'DELETED',
+  // Legacy migration states
+  MIGRATION_INITIATED: 'MIGRATION_INITIATED',
+  RETRIEVED: 'RETRIEVED',
+  INSPECTED: 'INSPECTED',
+  METADATA_POPULATED: 'METADATA_POPULATED',
+  MIGRATED: 'MIGRATED',
 };
 
 const auth = {

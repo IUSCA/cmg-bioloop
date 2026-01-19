@@ -164,6 +164,26 @@
   - Handles both `key=value` and `key value` formats
   - Result: historical conversion arguments preserved in `additional_args`
 
+- **Decision:** Conversion arguments migrated to match current Bioloop workflow behavior (2026-01-19)
+  - **Predefined arguments** → `argument_values` table (linked to `argument` definitions)
+  - **Ad-hoc arguments** → `additional_args` JSON field
+  - **Sample sheets** → `argument_values` table (linked to `--sample-sheet` argument)
+  - Implementation: `sync_conversions.js` parses CMG's `options` array at "wildcards" separator
+  - Before "wildcards": predefined args matched against `argument` definitions, create `argument_values` records
+  - After "wildcards": ad-hoc args stored in `additional_args` JSON
+  - CMG's `samplesheet` field → `argument_values` record for `--sample-sheet` argument
+  - Ensures legacy conversions have same data structure as new Bioloop conversions
+
+- **Change:** Argument value validation during migration (2026-01-19)
+  - Bigbang checks CMG argument values against `allowed_values` constraint in `argument` table
+  - Example: `--barcode-mismatches` must be in `['0', '1', '2']`
+  - If value is outside allowed range, logs detailed warning to bigbang log:
+    - Conversion CMG ID, Dataset CMG ID, Pipeline name
+    - Argument name, invalid value, allowed values list
+    - Note that value will be migrated as-is but may fail Bioloop validation
+  - Invalid values are still migrated (not skipped) to preserve historical data
+  - Allows manual review and correction after migration
+
 - **Fix:** Conversions now fully migrated (2,732 records)
   - Idempotency check by `cmg_id` before creation
   - Derived dataset links checked before creation
@@ -391,6 +411,7 @@
 
 ---
 
+<<<<<<< Updated upstream
 ## 2026-01-19
 
 ### Conversion Logs Sync - Container Execution
@@ -425,6 +446,100 @@
   - Gracefully handles missing log directory (local/dev)
   - Safe to re-run multiple times
   - `--overwrite-existing` flag for forced re-processing
+=======
+## 2026-01-19 (Legacy Dataset Hydration Workflow)
+
+### New Workflow: stage_migrated
+
+- **Change:** Implemented `stage_migrated` workflow for legacy CMG datasets
+  - Purpose: Stage and hydrate legacy datasets that were migrated from MongoDB but lack complete file/track metadata
+  - Steps: begin_migration → retrieve_archive → inspect → populate_metadata → stage → validate → setup_download → end_migration
+  - Automatically triggered for legacy datasets (with `cmg_id`) that haven't been hydrated yet
+
+### New Workflow Tasks
+
+- **Change:** Created new workflow task files in `workers/workers/tasks/`:
+  - `begin_migration.py`: Sets MIGRATION_INITIATED state
+  - `retrieve_archive.py`: Downloads/copies archive bundle to staging location, verifies checksum, sets RETRIEVED state
+  - `populate_metadata.py`: Populates bundle metadata from existing archive, sets METADATA_POPULATED state
+  - `end_migration.py`: Sets final MIGRATED state
+  - All tasks registered in `workers/workers/tasks/declarations.py`
+
+### State Management
+
+- **Change:** Added new dataset states for migration tracking:
+  - `MIGRATION_INITIATED`: Migration workflow has started
+  - `RETRIEVED`: Archive bundle has been retrieved to staging
+  - `INSPECTED`: Dataset files have been inspected (added to existing inspect task)
+  - `METADATA_POPULATED`: Bundle and file metadata populated (hydration complete)
+  - `MIGRATED`: All migration steps completed successfully
+
+- **Change:** Updated `inspect_dataset` task to add INSPECTED state
+  - Enables tracking of inspection completion in stage_migrated workflow
+
+### API Routes and Services
+
+- **Change:** Created legacy migration API routes under `/legacy/`:
+  - `GET /legacy/migrations/datasets/:id`: Returns migration status for a dataset
+    - Fields: is_legacy, is_migration_initiated, is_retrieved, is_inspected, is_metadata_populated, is_hydrated, is_validated, is_migrated
+  - `GET /legacy/sessions/:id`: Returns migration status for sessions (placeholder implementation)
+  - Routes mounted in `api/src/routes/index.js`
+
+- **Change:** Created `api/src/services/legacyMigration.js`
+  - Provides `getDatasetMigrationStatus()`, `getSessionMigrationStatus()`, `isMigrationInProgress()`, `hasReachedState()`
+  - Checks dataset states to determine hydration/migration progress
+
+### Workflow Triggering Logic
+
+- **Decision:** POST `/datasets/:id/workflow/stage` automatically selects correct workflow
+  - If dataset has `cmg_id` AND not yet hydrated: triggers `stage_migrated` workflow
+  - If dataset has `cmg_id` AND already hydrated: triggers standard `stage` workflow
+  - If dataset has no `cmg_id`: triggers standard `stage` workflow
+  - Returns 409 error if migration already in progress
+
+### UI Implementation
+
+- **Change:** Created `ui/src/services/legacyMigration.js`
+  - Client-side service for checking dataset migration status
+  - Functions: `getDatasetMigrationStatus()`, `isLegacyDataset()`, `needsHydration()`, `isMigrationInProgress()`
+
+- **Change:** Updated "Browse Files" button behavior in `ui/src/components/dataset/Dataset.vue`
+  - If dataset not staged: shows modal prompting user to stage dataset
+  - Modal message: "This dataset will need to be staged before its files can be viewed. Would you like to stage this dataset?"
+  - Checks if migration already in progress, shows toast if so
+  - Triggers appropriate workflow when user confirms
+
+### Worker Utilities
+
+- **Change:** Created `workers/workers/legacy_migration.py`
+  - Helper functions for legacy migration operations in worker context
+  - Functions: `has_reached_state()`, `is_legacy_dataset()`, `is_hydrated()`, `is_migrated()`, `get_migration_status()`
+  - Enables workers to check migration status when needed
+
+### Configuration
+
+- **Change:** Added `stage_migrated` workflow to configuration:
+  - `api/config/default.json`: Workflow definition with description and steps
+  - `workers/workers/config/common.py`: Worker-side workflow configuration
+  - `api/src/constants.js`: Added STAGE_MIGRATED constant and migration states
+  - `workers/workers/constants/workflow.py`: Added STAGE_MIGRATED constant
+
+### Architecture Notes
+
+- **Decision:** Workflow reuses existing tasks (stage, validate, setup_download) where possible
+  - Only new tasks are migration-specific: begin_migration, retrieve_archive, populate_metadata, end_migration
+  - Maintains consistency with existing workflow patterns
+
+- **Decision:** `retrieve_archive` step separate from `stage` step
+  - retrieve_archive: downloads bundle to staging location, verifies checksum
+  - stage: extracts bundle (reuses existing stage_dataset task)
+  - Separation allows for cleaner state tracking and error handling
+
+- **Decision:** Bundle metadata population isolated in dedicated step
+  - `populate_metadata` step specifically for legacy dataset hydration
+  - Designed to be extensible for other metadata population needs
+  - Core bundle logic in separate `populate_bundle_metadata()` function
+>>>>>>> Stashed changes
 
 ---
 

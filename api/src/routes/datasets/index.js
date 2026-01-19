@@ -954,6 +954,28 @@ router.post(
     //       || wf_name === CONSTANTS.WORKFLOWS.STAGE) {
     // If staging a dataset Log the staging attempt first.
     if (wf_name === CONSTANTS.WORKFLOWS.STAGE) {
+      // Check if this is a legacy dataset that needs hydration
+      const legacyMigrationService = require('@/services/legacyMigration');
+      let actualWorkflow = wf_name;
+      
+      if (dataset.cmg_id) {
+        // This is a legacy CMG dataset
+        const migrationStatus = await legacyMigrationService.getDatasetMigrationStatus(dataset.id);
+        
+        // If migration is already in progress, return error
+        if (migrationStatus.is_migration_initiated && !migrationStatus.is_migrated) {
+          return next(createError(409, 'Dataset is already being staged'));
+        }
+        
+        // If not yet hydrated, use stage_migrated workflow
+        if (!migrationStatus.is_hydrated) {
+          actualWorkflow = CONSTANTS.WORKFLOWS.STAGE_MIGRATED;
+          logger.info(`Legacy dataset ${dataset.id} needs hydration, using stage_migrated workflow`);
+        } else {
+          logger.info(`Legacy dataset ${dataset.id} already hydrated, using standard stage workflow`);
+        }
+      }
+      
       try {
         await prisma.stage_request_log.create({
           data: {
@@ -966,7 +988,12 @@ router.post(
         return next(createError(500, 'Error creating stage request log'));
         // console.log()
       }
+      
+      logger.info(`Starting workflow ${actualWorkflow} on dataset ${dataset.id}`);
+      const wf = await datasetService.create_workflow(dataset, actualWorkflow, req.user.id);
+      return res.json(wf);
     }
+    
     logger.info(`Starting workflow ${wf_name} on dataset ${dataset.id}`);
     const wf = await datasetService.create_workflow(dataset, wf_name, req.user.id);
     return res.json(wf);

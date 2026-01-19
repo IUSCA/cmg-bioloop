@@ -271,6 +271,13 @@ async function get_dataset({
           },
         },
       } : undefined),
+      ...(config.enabled_features.conversion ? {
+        derived_from_conversions: {
+          include: {
+            dataset: true,
+          },
+        },
+      } : undefined),
     },
   });
   const dataset_workflows = dataset.workflows;
@@ -311,6 +318,39 @@ async function get_dataset({
       const args_list = conversionService.getArgsList(c);
       return { ...c, args_list };
     });
+  }
+
+  // Combine manually-assigned and conversion-derived datasets with method indicators
+  if (config.enabled_features.conversion && dataset.derived_from_conversions) {
+    // Add derivation_method to manually-assigned datasets (from dataset_hierarchy table)
+    const manualDerived = (dataset.derived_datasets || []).map((dd) => ({
+      ...dd,
+      derivation_method: 'manual',
+    }));
+
+    // Add derivation_method to conversion-derived datasets (from conversion_derived_dataset table)
+    const conversionDerived = (dataset.derived_from_conversions || []).map((cdd) => ({
+      source_id: id,
+      derived_id: cdd.dataset.id,
+      assigned_at: cdd.created_at,
+      derivation_method: 'conversion',
+    }));
+
+    // Combine both arrays, removing duplicates (prefer conversion method if exists)
+    const derivedMap = new Map();
+    
+    // First add manual assignments
+    manualDerived.forEach((item) => {
+      derivedMap.set(item.derived_id, item);
+    });
+    
+    // Then add/override with conversion-derived (conversion takes precedence)
+    conversionDerived.forEach((item) => {
+      derivedMap.set(item.derived_id, item);
+    });
+
+    // Replace derived_datasets with combined array
+    dataset.derived_datasets = Array.from(derivedMap.values());
   }
 
   return dataset;
