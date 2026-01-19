@@ -1,5 +1,5 @@
-import api from "../api";
 import qs from "qs";
+import api from "../api";
 
 function cleanParams(params) {
   return Object.fromEntries(
@@ -49,6 +49,11 @@ class ConversionService {
 
   getLogs(id) {
     return api.get(`/conversions/${id}/logs`);
+  }
+
+  getReports(id) {
+    console.log("getReports", id);
+    return api.get(`/conversions/${id}/reports`);
   }
 }
 

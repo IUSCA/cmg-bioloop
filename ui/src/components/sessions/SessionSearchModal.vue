@@ -5,41 +5,61 @@
     fixed-layout
     hide-default-actions
     size="medium"
-    okText="Apply"
-    cancelText="Reset"
-    @ok="handleApply"
-    @cancel="handleReset"
   >
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-      <!-- Title filter -->
-      <va-input
-        v-model="form.title"
-        label="Title"
-        placeholder="Search by session title"
-      />
+    <div class="w-full">
+      <va-form class="flex flex-col gap-3 md:gap-5">
+        <!-- Title filter -->
+        <va-input
+          v-model="form.title"
+          label="Title"
+          placeholder="Search by session title"
+        />
 
-      <!-- Genome filter -->
-      <va-input
-        v-model="form.genome"
-        label="Genome"
-        placeholder="e.g., hg38, mm10"
-      />
+        <!-- Genome filter -->
+        <va-input
+          v-model="form.genome"
+          label="Genome"
+          placeholder="e.g., hg38, mm10"
+        />
 
-      <!-- Genome Type filter -->
-      <va-select
-        v-model="form.genome_type"
-        label="Genome Type"
-        placeholder="Select genome type"
-        :options="genomeTypeOptions"
-        clearable
-      />
+        <!-- Genome Type filter -->
+        <va-select
+          v-model="form.genome_type"
+          label="Genome Type"
+          placeholder="Select genome type"
+          :options="genomeTypeOptions"
+          clearable
+        />
+      </va-form>
     </div>
+
+    <!-- footer -->
+    <template #footer>
+      <div class="flex w-full gap-5">
+        <!-- cancel button -->
+        <va-button preset="secondary" class="flex-none" @click="visible = false">
+          Cancel
+        </va-button>
+
+        <!-- reset button -->
+        <va-button
+          preset="secondary"
+          class="flex-none ml-auto"
+          @click="handleReset"
+        >
+          Reset
+        </va-button>
+
+        <!-- search button -->
+        <va-button class="flex-none" @click="handleApply"> Search </va-button>
+      </div>
+    </template>
   </va-modal>
 </template>
 
 <script setup>
 import constants from '@/constants';
-import { ref, watch } from 'vue';
+import { computed, ref, watch } from 'vue';
 
 const props = defineProps({
   modelValue: { type: Boolean, required: true },

@@ -37,7 +37,10 @@ def execute(cmd: list[str], **kwargs) -> tuple[str, str]:
     """
     kwargs.pop('capture_output', None)
     kwargs.pop('text', None)
-    p = subprocess.run(cmd, capture_output=True, text=True, **kwargs)
+
+    encoding_errors = kwargs.pop('encoding_errors', 'strict')
+    p = subprocess.run(cmd, capture_output=True, text=True, encoding='utf-8', errors=encoding_errors, **kwargs)
+    
     if p.returncode != 0:
         msg = {
             'return_code': p.returncode,
@@ -113,6 +116,10 @@ def execute_with_log_tracking(cmd: list[str], celery_task: WorkflowTask, cwd: st
     # if not cwd:
     #     cwd = os.getcwd()
     
+    # Capture all output for error reporting
+    captured_stdout = []
+    captured_stderr = []
+    
     with subprocess.Popen(cmd,
                           cwd=cwd,
                           stdout=subprocess.PIPE,
@@ -123,32 +130,31 @@ def execute_with_log_tracking(cmd: list[str], celery_task: WorkflowTask, cwd: st
         worker_process_id = register_process(celery_task, p, process_start_time)
         all_lines = read_popen_pipes(p, blocking_delay)
         
-        # DEBUG: Counter for first 10 lines
-        line_count = 0
-        
         for lines in all_lines:
-            # DEBUG: Print first 10 lines from read_popen_pipes output
+            # Capture output for error reporting
             for line in lines:
-                if line_count < 10:
-                    print(f"DEBUG Line {line_count + 1}: timestamp={line.timestamp}, level={line.level}, message={repr(line.message)}")
-                    line_count += 1
+                if line.level == 'stdout':
+                    captured_stdout.append(line.message)
+                elif line.level == 'stderr':
+                    captured_stderr.append(line.message)
             
             data = [log_object(line) for line in lines]
             try:
                 if not worker_process_id:
                     worker_process_id = register_process(celery_task, p, process_start_time)
-                print(f"DEBUG: Posting {len(data)} log entries to API with worker_process_id={worker_process_id}")
                 api.post_worker_logs(worker_process_id, data)
-                print(f"DEBUG: Successfully posted logs")
             except Exception as e:
-                print(f"DEBUG: Failed to post logs - {e}")
                 logger.warning(f'Unable to send worker logs', exc_info=e)
 
     if p.returncode != 0:
+        # Provide captured output in error message
+        stdout_text = ''.join(captured_stdout) if captured_stdout else None
+        stderr_text = ''.join(captured_stderr) if captured_stderr else None
+        
         msg = {
             'return_code': p.returncode,
-            'stdout': None,
-            'stderr': None,
+            'stdout': stdout_text,
+            'stderr': stderr_text,
             'args': p.args
         }
         raise SubprocessError(msg)

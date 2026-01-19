@@ -76,6 +76,7 @@ import constants from "@/constants";
 import toast from "@/services/toast";
 import { useTracksStore } from "@/stores/tracks";
 import { computed, ref, watch } from "vue";
+import config from "@/config";
 
 const props = defineProps({
   modelValue: { type: Boolean, required: true },
@@ -99,15 +100,7 @@ const errors = ref({});
 
 // Computed
 const fileTypeOptions = computed(() => {
-  return [
-    { text: "BAM", value: "bam" },
-    { text: "BigWig", value: "bigwig" },
-    { text: "VCF", value: "vcf" },
-    { text: "BED", value: "bed" },
-    { text: "GTF", value: "gtf" },
-    { text: "FASTQ", value: "fastq" },
-    { text: "FASTA", value: "fasta" },
-  ];
+  return config.fileTypeOptions;
 });
 
 const genomeTypeOptions = computed(() => {

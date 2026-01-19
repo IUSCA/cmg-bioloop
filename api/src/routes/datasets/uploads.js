@@ -111,9 +111,9 @@ router.get(
       };
     }
     where.audit_log = {
-      user : {
+      user: {
         username: req.params.username,
-      }
+      },
     };
 
     const filter_query = {
@@ -151,6 +151,9 @@ router.post(
     body('files_metadata').isArray(),
     body('project_id').optional(),
     body('src_instrument_id').optional(),
+    body('file_type').optional(),
+    body('genome_type').optional(),
+    body('genome_value').optional(),
   ]),
   asyncHandler(async (req, res, next) => {
     // #swagger.tags = ['datasets']
@@ -158,6 +161,7 @@ router.post(
 
     const {
       project_id, src_instrument_id, src_dataset_id, name, type, files_metadata,
+      file_type, genome_type, genome_value,
     } = req.body;
 
     const datasetCreateQuery = datasetService.buildDatasetCreateQuery({
@@ -167,10 +171,27 @@ router.post(
       user_id: req.user.id,
       src_instrument_id,
       src_dataset_id,
+      create_method: CONSTANTS.DATASET_CREATE_METHODS.UPLOAD,
+      file_type,
+      genome_type,
+      genome_value,
     });
 
     const dataset_upload_log = await prisma.$transaction(async (tx) => {
       const createdDataset = await datasetService.create(tx, datasetCreateQuery);
+
+      // Find the audit_log that was created by datasetService.create()
+      const audit_log = await tx.dataset_audit.findUniqueOrThrow({
+        where: {
+          dataset_id_create_method: {
+            dataset_id: createdDataset.id,
+            create_method: CONSTANTS.DATASET_CREATE_METHODS.UPLOAD,
+          },
+        },
+        select: {
+          id: true,
+        },
+      });
 
       const created_dataset_upload_log = await tx.dataset_upload_log.create({
         data: {
@@ -185,11 +206,8 @@ router.post(
             })),
           },
           audit_log: {
-            create: {
-              action: 'create',
-              create_method: CONSTANTS.DATASET_CREATE_METHODS.UPLOAD,
-              dataset_id: createdDataset.id,
-              user_id: req.user.id,
+            connect: {
+              id: audit_log.id,
             },
           },
         },

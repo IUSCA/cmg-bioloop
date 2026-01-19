@@ -40,11 +40,24 @@ def write_sample_sheet(arguments: list, dataset: dict) -> None:
 def get_program_args(arguments: list,
                      dataset: dict,
                      conversion_output_dir: Path) -> list:
+    # Flags that are not supported by bcl2fastq v2.20.0.422
+    UNSUPPORTED_FLAGS = {'--delete-undetermined'}
+    
     processed_args = []
     
     i = 0
     while i < len(arguments):
         arg = arguments[i]
+        
+        # Skip None values
+        if arg is None:
+            i += 1
+            continue
+        
+        # Skip unsupported flags
+        if arg in UNSUPPORTED_FLAGS:
+            i += 1
+            continue
         
         # Only process sample sheets for genomic conversions
         if (arg == '--sample-sheet' and i + 1 < len(arguments)):
@@ -55,6 +68,9 @@ def get_program_args(arguments: list,
             sample_sheet_path = dataset_staged_path / f'{dataset["id"]}_samplesheet.csv'
             processed_args.append(str(sample_sheet_path))            
             i += 2  # +2 to skip next element, which is the sample sheet content
+        # Check if this is a flag with a None value - skip both flag and value
+        elif i + 1 < len(arguments) and arguments[i + 1] is None and arg.startswith('--'):
+            i += 2  # Skip both the flag and the None value
         else:
             processed_args.append(arg)
             i += 1

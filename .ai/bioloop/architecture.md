@@ -1,0 +1,231 @@
+# Bioloop Platform Architecture
+
+## Overview
+
+Bioloop is a **microservice architecture** with separate UI, API, and Worker components.
+
+**Always consider the impact of changes across all services.**
+
+---
+
+## Service Components
+
+### UI (Vue.js)
+- **Technology:** Vue 3 with Vuestic UI component library
+- **Port:** 3000 (development), proxied via Nginx in production
+- **Responsibilities:**
+  - User interface and interactions
+  - Client-side validation
+  - API consumption
+
+### API (Node.js/Express)
+- **Technology:** Express.js with Prisma ORM
+- **Port:** 3001 (development), 3000 (production via Nginx)
+- **Responsibilities:**
+  - RESTful API endpoints
+  - Authentication & authorization
+  - Database operations
+  - File serving and exposure
+  - Job submission to workers
+
+### Workers (Python/Celery)
+- **Technology:** Python with Celery task queue
+- **Queue:** Redis (broker and result backend)
+- **Responsibilities:**
+  - Asynchronous task processing
+  - Long-running computations
+  - SLURM job submission
+  - Workflow execution
+
+---
+
+## Database Architecture
+
+### PostgreSQL
+- **Purpose:** Primary data store
+- **ORM:** Prisma (schema in `api/prisma/schema.prisma`)
+- **Naming Convention:** `snake_case` for all models and fields
+
+### Redis
+- **Purpose:** Celery broker and result backend
+- **Port:** 6379
+
+### MongoDB
+- **Purpose:** Task metadata and worker state (legacy)
+- **Status:** Being phased out in favor of PostgreSQL
+
+---
+
+## Cross-Service Communication
+
+### API → Workers
+- Celery tasks submitted via Redis queue
+- Task results stored in Redis backend
+- API polls for task completion
+
+### UI → API
+- RESTful HTTP requests
+- JWT-based authentication
+
+### Workers → API
+- Task status updates via database
+- No direct HTTP calls from workers to API
+
+---
+
+## Key Architectural Patterns
+
+### Authentication Flow
+1. User logs in via UI
+2. API validates credentials and issues JWT
+3. JWT stored in httpOnly cookie
+4. API middleware validates JWT on each request
+
+### File Serving Pattern
+1. Files stored on filesystem (not in database)
+2. Database stores file metadata and paths
+3. API serves files via `/files/expose/` routes
+
+### Data Consistency
+- Use Prisma transactions for multi-operation updates
+- Cascade deletes configured at database level
+- Optimistic locking for concurrent updates where needed
+
+---
+
+## Environment-Specific Behavior
+
+### Development
+- Hot module replacement (HMR) enabled
+- Detailed logging
+- CORS permissive
+- Direct service access (no Nginx)
+
+### Production
+- Nginx reverse proxy
+- Compressed responses (except binary files)
+- Secure cookies (HTTPS only)
+- Rate limiting
+- Access logs
+
+---
+
+## Environment Variables & Configuration
+
+### Bioloop Convention: `.env` Files Over Exported Variables
+
+**ALWAYS use `.env` files for configuration instead of requiring developers to export environment variables.**
+
+**✅ CORRECT Pattern:**
+```bash
+# Add to .env file
+echo "LOG_LEVEL=debug" >> .env
+echo "API_KEY=your_key_here" >> .env
+
+# Script reads from .env automatically
+node script.js
+```
+
+**❌ WRONG Pattern:**
+```bash
+# Don't require manual exports
+export LOG_LEVEL=debug
+export API_KEY=your_key_here
+node script.js
+```
+
+### Implementation
+
+**In JavaScript/Node.js:**
+```javascript
+// At the top of your script
+require('dotenv').config({ path: path.join(__dirname, '.env') });
+
+// Access variables
+const logLevel = process.env.LOG_LEVEL || 'info';
+const apiKey = process.env.API_KEY;
+```
+
+**In Python:**
+```python
+from dotenv import load_dotenv
+import os
+
+# Load .env file
+load_dotenv()
+
+# Access variables
+log_level = os.getenv('LOG_LEVEL', 'info')
+api_key = os.getenv('API_KEY')
+```
+
+### Rationale
+
+1. **Persistence:** `.env` files persist across sessions and terminal windows
+2. **Documentation:** Configuration is self-documenting in the repository
+3. **Version Control:** `.env.default` provides examples, `.env` is gitignored for secrets
+4. **Consistency:** Same pattern across API, Workers, and utility scripts
+5. **CI/CD Friendly:** Easier to automate in deployment pipelines
+
+### File Structure
+
+Each service/directory should have:
+- **`.env.default`** - Committed to git, contains example values and documentation
+- **`.env`** - Gitignored, contains actual credentials and local overrides
+- **`.env.production`** - (Optional) Production-specific overrides
+
+### Priority Order
+
+Configuration is read in this order (later overrides earlier):
+1. `.env.default` - Default values
+2. `.env` - Local overrides
+3. `process.env` / environment - Runtime overrides (for Docker/CI)
+
+### Examples in Bioloop
+
+- **API:** `api/.env` for database credentials, JWT secrets, external service URLs
+- **Workers:** `workers/.env` for Celery configuration, SLURM settings, data paths
+- **Data Sync:** `data_sync/.env` for CMG MongoDB credentials, sync options
+- **UI:** `ui/.env` for API URL, build-time configuration
+
+**Note:** Feature enablement (Conversions, Sessions, Tracks, Downloads, Uploads) is controlled via `config/*.json` files, NOT `.env` files.
+
+---
+
+## Critical Cross-Service Dependencies
+
+1. **Prisma Schema Changes**
+   - Requires: `npx prisma generate` in API
+   - Requires: API restart
+   - May require: Worker restart if workers use Prisma models
+
+2. **Constants Changes**
+   - Update in: `api/src/constants.js`, `ui/src/constants.js`, `workers/config/common.py`
+   - Requires: Service restart only if config files changed
+
+3. **Database Migrations**
+   - Run in: API service
+   - Affects: All services that access database
+   - Coordination: Must be run before deploying code changes
+
+---
+
+## Service Restart Requirements
+
+### Requires Restart
+- Config file changes (`config/*.json`)
+- New npm/pip package installed
+- Prisma schema changes (after `npx prisma generate`)
+- Environment variable changes
+- Docker container rebuild
+
+### Does NOT Require Restart
+- API route changes (HMR)
+- UI component changes (HMR)
+- Service function changes (HMR)
+- Database data changes (only structure requires restart)
+
+---
+
+**Last Updated:** 2026-01-16
+

@@ -60,7 +60,7 @@ qc
 backup
 
 !db/postgres
-!db/backups
+db/backups
 db/backups/*.sql
 db/backups/*.psql
 db/backups/*.dump
@@ -90,3 +90,10 @@ cmg_convert.log
 *.log
 curl_cmds
 .cursorrules
+
+backup_*
+
+startup_output.md
+
+# Conversion tools binaries (installed by workers/bin/install_conversion_pipelines_production.sh)
+conversion_tools/

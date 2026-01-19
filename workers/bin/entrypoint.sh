@@ -1,6 +1,7 @@
 #!/bin/bash
 set -e
 
+echo "Running entrypoint script for workers container"
 
 echo "Waiting for .env file to be ready..."
 while [ ! -f ".env" ] || ! grep -Eq "^APP_API_TOKEN=[^ ]+" ".env"; do
@@ -8,13 +9,77 @@ while [ ! -f ".env" ] || ! grep -Eq "^APP_API_TOKEN=[^ ]+" ".env"; do
   sleep 1
 done
 
+echo ".env file is ready and should contain APP_API_TOKEN"
 
+echo "loading environment variables from .env file"
 if [ -f .env ]; then
+  echo ".env file exists"
   export $(grep -v '^#' .env | xargs)
+  echo "exported environment variables from .env file"
 fi
 
-
 echo ".env file is ready. Starting the worker..."
+
+# Install conversion pipelines if this is the conversion_worker
+if [ "$WORKER_TYPE" = "conversion_worker" ]; then
+  echo "Installing conversion pipelines..."
+  
+  CONVERSION_BASE="/opt/sca/data/conversion"
+  
+  # Install bcl2fastq
+  if [ -f /usr/local/bin/bcl2fastq ]; then
+    cp /usr/local/bin/bcl2fastq "$CONVERSION_BASE/bcl2fastq/bin/"
+    chmod +x "$CONVERSION_BASE/bcl2fastq/bin/bcl2fastq"
+    echo "✓ bcl2fastq"
+  fi
+  
+  # Install bcl-convert
+  if [ -f /usr/local/bin/bcl-convert ]; then
+    cp /usr/local/bin/bcl-convert "$CONVERSION_BASE/bcl-convert/bin/"
+    chmod +x "$CONVERSION_BASE/bcl-convert/bin/bcl-convert"
+    echo "✓ bcl-convert"
+  fi
+  
+  # Install cellranger versions
+  for version in "8.0.1" "6.1.2" "4.0.0"; do
+    if [ -d "/opt/cellranger-$version" ]; then
+      cp -r /opt/cellranger-$version/* "$CONVERSION_BASE/cellranger-v$version/"
+      chmod +x "$CONVERSION_BASE/cellranger-v$version/bin/cellranger" 2>/dev/null || true
+      echo "✓ cellranger-v$version"
+    fi
+  done
+  
+  # Install cellranger-arc
+  if [ -d "/opt/cellranger-arc-1.0.0" ]; then
+    cp -r /opt/cellranger-arc-1.0.0/* "$CONVERSION_BASE/cellranger-arc/"
+    chmod +x "$CONVERSION_BASE/cellranger-arc/bin/cellranger-arc" 2>/dev/null || true
+    echo "✓ cellranger-arc"
+  fi
+  
+  if [ -d "/opt/cellranger-arc-2.0.0" ]; then
+    cp -r /opt/cellranger-arc-2.0.0/* "$CONVERSION_BASE/cellranger-arc-v2/"
+    chmod +x "$CONVERSION_BASE/cellranger-arc-v2/bin/cellranger-arc" 2>/dev/null || true
+    echo "✓ cellranger-arc-v2"
+  fi
+  
+  # Install cellranger-atac
+  if [ -d "/opt/cellranger-atac-1.2.0" ]; then
+    cp -r /opt/cellranger-atac-1.2.0/* "$CONVERSION_BASE/cellranger-atac/"
+    chmod +x "$CONVERSION_BASE/cellranger-atac/bin/cellranger-atac" 2>/dev/null || true
+    echo "✓ cellranger-atac"
+  fi
+  
+  # Install spaceranger versions
+  for version in "3.0.1" "1.3.1" "1.1.0"; do
+    if [ -d "/opt/spaceranger-$version" ]; then
+      cp -r /opt/spaceranger-$version/* "$CONVERSION_BASE/spaceranger-v$version/"
+      chmod +x "$CONVERSION_BASE/spaceranger-v$version/bin/spaceranger" 2>/dev/null || true
+      echo "✓ spaceranger-v$version"
+    fi
+  done
+  
+  echo "Pipeline installation complete"
+fi
 
 # Remove stale PID files, if they exist
 if [ "$WORKER_TYPE" = "celery_worker" ] && [ -f celery_worker.pid ]; then
@@ -36,9 +101,9 @@ if [ "$WORKER_TYPE" = "celery_worker" ]; then
     -O fair \
     --statedb celery_worker.state \
     --pidfile celery_worker.pid \
-    --hostname 'bioloop-celery-w1@%h' \
+    --hostname 'cmg-test-celery-w1@%h' \
     --autoscale 8,3 \
-    --queues 'cmg-new.sca.iu.edu.q'
+    --queues 'cmg-test.sca.iu.edu.q'
       # --detach
 elif [ "$WORKER_TYPE" = "conversion_worker" ]; then
   echo "Starting Conversion Worker"
@@ -48,9 +113,9 @@ elif [ "$WORKER_TYPE" = "conversion_worker" ]; then
     -O fair \
     --statedb conversion_worker.state \
     --pidfile conversion_worker.pid \
-    --hostname 'bioloop-celery-w1@%h' \
+    --hostname 'cmg-test-celery-w1@%h' \
     --autoscale 8,3 \
-    --queues 'conversion.cmg-new.sca.iu.edu.q'
+    --queues 'conversion.cmg-test.sca.iu.edu.q'
       # --detach
 elif [ "$WORKER_TYPE" = "watch" ]; then
   echo "Starting Watch Worker"
@@ -73,3 +138,5 @@ elif [ "$WORKER_TYPE" = "process_upload_dataset" ]; then
 else
   echo "Invalid Worker Type"
 fi
+
+echo "Completed entrypoint script for workers container"

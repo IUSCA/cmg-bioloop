@@ -64,10 +64,11 @@ def get_product_track_files(product_id: int) -> list[int]:
         files: list[dict] = product_details.get('files', [])
         
         # Filter files that match the name pattern and create payload format
+        trackable_extensions = config['trackable_extensions']
         matching_files_ids: list[dict] = [
             {'id': file['id']} 
             for file in files 
-            if file['name'].endswith('bam') or file['name'].endswith('bw') or file['name'].endswith('vcf') or file['name'].endswith('bigwig')
+            if any(file['name'].endswith(ext.lstrip('.')) for ext in trackable_extensions)
         ]
         
         print(f"Found {len(matching_files_ids)} matching files for product {product_id}")
@@ -141,6 +142,13 @@ def derive_data_products(celery_task, dataset_id: int, conversion_id: int):
             "type": "DATA_PRODUCT",
             "origin_path": str(output_dir),
         }
+        
+        # Add analysis_type if configured to override default behavior
+        analysis_type_config = config.get('genomic_conversion', {}).get('default_analysis_type', {})
+        if analysis_type_config.get('enabled', False) and analysis_type_config.get('value'):
+            product_payload["metadata"] = {
+                "analysis_type": analysis_type_config['value']
+            }
         data_products_to_create.append(product_payload)
     
     # Create all data products using bulk API
@@ -161,9 +169,10 @@ def derive_data_products(celery_task, dataset_id: int, conversion_id: int):
             print(f"  - Conflicted: {conflicted['name']}")
     
     if result.get('errored'):
-        print(f"Found {len(result['errored'])} errored datasets")
+        print(f"❌ Found {len(result['errored'])} errored datasets - these will NOT have workflows started")
         for errored in result['errored']:
-            print(f"  - Errored: {errored['name']}")
+            error_msg = errored.get('error', 'unknown')
+            print(f"  - Errored: {errored.get('name', 'unknown')} - Reason: {error_msg}")
     
     # result['created'] is a list of datasets that were created:
     # [
@@ -271,11 +280,27 @@ def derive_data_products(celery_task, dataset_id: int, conversion_id: int):
         # create_tracks_for_data_products(derived_data_products)
 
     # Kick off 'Integrated' workflow for all data products
-    for data_product in derived_data_products:
-        wf = Workflow(celery_app=celery_app, **wf_utils.get_wf_body(wf_name='integrated'))
-        wf.start(data_product['id'])
-        print(f"Started workflow {wf} for data product {data_product['id']}")
-        api.add_workflow_to_dataset(dataset_id=data_product['id'], workflow_id=wf.workflow['_id'])
+    if not derived_data_products:
+        print("⚠️ Warning: No data products were derived - no integrated workflows will be started")
+    else:
+        print(f"Will start integrated workflows for {len(derived_data_products)} data products")
+        
+        workflow_success_count = 0
+        workflow_failure_count = 0
+        
+        for data_product in derived_data_products:
+            try:
+                wf = Workflow(celery_app=celery_app, **wf_utils.get_wf_body(wf_name='integrated'))
+                wf.start(data_product['id'])
+                api.add_workflow_to_dataset(dataset_id=data_product['id'], workflow_id=wf.workflow['_id'])
+                print(f"✓ Started integrated workflow for data product: {data_product.get('name', 'unknown')} (ID: {data_product['id']})")
+                workflow_success_count += 1
+            except Exception as e:
+                print(f"❌ Error starting integrated workflow for data product {data_product.get('name', 'unknown')} (ID: {data_product['id']}): {e}")
+                workflow_failure_count += 1
+                # Continue with remaining data products
+        
+        print(f"\nIntegrated workflow summary: {workflow_success_count} succeeded, {workflow_failure_count} failed")
 
 
 def derive(celery_task, dataset_id_conversion_id, **kwargs):

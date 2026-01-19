@@ -1,6 +1,6 @@
 {
   "mode": "default",
-  "app_id": "cmg-new.sca.iu.edu",
+  "app_id": "cmg-test.sca.iu.edu",
   "express": {
     "port": 3030,
     "host": "localhost"
@@ -8,9 +8,24 @@
   "logger": {
     "level": "debug"
   },
+  "data_root": "/opt/sca/data",
   "workflow_server": {
     "base_url": "http://127.0.0.1:5001",
     "auth_token": ""
+  },
+  "cmg_mongodb": {
+    "host": "localhost",
+    "port": 27017,
+    "database": "cmg",
+    "username": "",
+    "password": ""
+  },
+  "rhythm_mongodb": {
+    "host": "localhost",
+    "port": 27018,
+    "database": "rhythm",
+    "username": "",
+    "password": ""
   },
   "auth": {
     "mode": "dev",
@@ -67,9 +82,18 @@
       "client_secret": "",
       "scope_prefix": "download_file:"
     },
+    "genome_browser": {
+      "client_id": "",
+      "client_secret": "",
+      "scope_prefix": "genome_browser_file:"
+    },
     "upload": {
       "scope_prefix": "upload_file:"
     }
+  },
+  "secure_download": {
+    "base_url": "http://localhost:3060",
+    "genome_browser_path_prefix": "/files/expose"
   },
   "upload": {
     "path": ""
@@ -80,6 +104,21 @@
     { "name": "VCF", "id": "vcf" },
     { "name": "FASTQ", "id": "fastq" }
   ],
+  "fileExtensionMapping": {
+    ".bam": "BAM",
+    ".bam.bai": "BAI", 
+    ".bai": "BAI",
+    ".vcf.gz": "VCF_GZ",
+    ".vcf.gz.tbi": "TBI",
+    ".tbi": "TBI", 
+    ".bw": "BIGWIG",
+    ".bigwig": "BIGWIG",
+    ".bed": "BED",
+    ".fastq.gz": "FASTQ_GZ",
+    ".fq.gz": "FASTQ_GZ",
+    ".html": "HTML_REPORT",
+    ".txt": "TEXT"
+  },
   "download_server": {
     "base_url": ""
   },
@@ -159,7 +198,7 @@
         {
           "name": "convert",
           "task": "convert_dataset",
-          "queue": "conversion.cmg-new.sca.iu.edu.q"
+          "queue": "conversion.cmg-test.sca.iu.edu.q"
         }
       ]
     },
@@ -169,22 +208,31 @@
         {
           "name": "convert",
           "task": "convert_genomic",
-          "queue": "conversion.cmg-new.sca.iu.edu.q"
+          "queue": "conversion.cmg-test.sca.iu.edu.q"
         },
         {
           "name": "generate qc",
           "task": "generate_qc",
-          "queue": "conversion.cmg-new.sca.iu.edu.q"
+          "queue": "conversion.cmg-test.sca.iu.edu.q"
         },
         {
           "name": "copy reports",
           "task": "copy_conversion_reports",
-          "queue": "conversion.cmg-new.sca.iu.edu.q"
+          "queue": "conversion.cmg-test.sca.iu.edu.q"
         },
         {
           "name": "derive data products",
           "task": "derive_data_products",
-          "queue": "conversion.cmg-new.sca.iu.edu.q"
+          "queue": "conversion.cmg-test.sca.iu.edu.q"
+        }
+      ]
+    },
+    "file_info_population": {
+      "name": "File Info Population",
+      "steps": [
+        {
+          "name": "populate file metadata",
+          "task": "populate_file_metadata"
         }
       ]
     }
@@ -194,7 +242,7 @@
     "DATA_PRODUCT"
   ],
   "system_user": {
-    "username": "svc_tasks"
+    "username": "cmguser"
   },
   "e2e": {
     "users": {
@@ -226,7 +274,8 @@
     "upload": true,
     "fs": true,
     "downloads": true,
-    "signup": true
+    "signup": true,
+    "genome_browser": true
   },
   "institution_types": [
     "Commercial",
@@ -247,5 +296,8 @@
     "spaceranger-v3.0.1",
     "spaceranger-v1.3.1",
     "spaceranger-v1.1.0"
-  ]
+  ],
+  "conversion": {
+    "reports_directory": "/opt/sca/data/conversion/reports"
+  }
 }

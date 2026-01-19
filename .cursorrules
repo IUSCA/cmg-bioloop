@@ -1,92 +1,356 @@
 # Bioloop Project Rules for AI Agents
 
-Before working on this project, please read the AI_MEMORY.md file in the project root to understand:
-- Project overview and architecture
-- Authentication & authorization patterns
-- API design conventions
-- UI/UX patterns
-- Component structure
-- Database & API patterns
-- Security considerations
-- Worker development conventions
+## 🤖 Agent Initialization Protocol
 
-This is a microservice architecture with separate UI, API, and Worker components. Always consider the impact of changes across all services.
+**When starting a new chat session (especially after "hi", "new task", or similar):**
 
-Key patterns to remember:
-- Use `auth.canAdmin` and `auth.canOperate` instead of `auth.hasRole(['admin', 'operator'])`
+### Step 1: Auto-Read Core Files
+Immediately read these files in parallel:
+
+**Critical:**
+1. `.ai/PRODUCTION_ENVIRONMENT.md` - ⚠️ Production warnings and restrictions
+2. `.ai/AI_PROTOCOL.md` - How to work with this repo
+
+**Platform Core:**
+3. `.ai/bioloop/README.md` - Platform core overview
+4. `.ai/bioloop/architecture.md` - System architecture
+
+**CMG Customizations:**
+5. `.ai/customizations/README.md` - CMG-specific overview
+
+### Step 2: Report & Confirm
+Respond with:
+```
+✅ Initialization complete. I've read:
+- .ai/PRODUCTION_ENVIRONMENT.md (⚠️ production restrictions)
+- .ai/AI_PROTOCOL.md
+- .ai/bioloop/ (platform core docs)
+- .ai/customizations/ (CMG customizations)
+
+⚠️ Production restrictions active:
+- NEVER touch /N/...
+- NEVER reset DB without permission
+- NEVER docker exec/restart
+- No sudo access
+
+Platform features: Datasets, Workflows, Users/Projects, Imports/Downloads
+CMG features: Sessions/Tracks, Conversions, CMG Database Migration
+
+Which feature are you working on? (or type "general" if not feature-specific)
+```
+
+### Step 3: Load Feature Context
+Once user specifies feature:
+- Platform feature → Read `.ai/bioloop/features/<feature>.md`
+- CMG feature → Read `.ai/customizations/features/<feature>.md`
+- Confirm: "✅ Loaded <feature> documentation. Ready to work."
+
+### Step 4: Load Conventions as Needed
+When user asks about specific areas, read:
+- API code → `.ai/bioloop/api_conventions.md` + `.ai/customizations/api_conventions.md` + both `pitfalls.md`
+- UI code → `.ai/bioloop/ui_conventions.md` + `.ai/customizations/ui_conventions.md` + both `pitfalls.md`
+- Workers → `.ai/bioloop/worker_conventions.md`
+- Database → `.ai/bioloop/database_patterns.md`
+- Genome browser → `.ai/customizations/genome_browser_notes.md`
+
+**This protocol ensures context continuity across tabs and makes initialization testable.**
+
+---
+
+## ⚠️ PRODUCTION ENVIRONMENT WARNINGS
+
+**THIS IS THE PRODUCTION ENVIRONMENT.**
+
+### Repository Paths
+
+- **Service Host** (`cmg-new-service1.sca.iu.edu`): `/opt/sca/cmg`
+  - Runs docker-compose-prod.yml (UI, API, postgres, monitoring)
+- **Worker Hosts** (`colo`, `mmge2`, etc.): `/opt/sca/cmg-bioloop`
+  - Runs workers via PM2 (celery, conversions, watch, metrics)
+- **Secure Download Host** (same as worker hosts or similar): Uses `/opt/sca/cmg-bioloop/secure_download`
+  - Actual compose file at `/opt/sca/docker/scripts/cmg-new-download/docker-compose-prod.yml` (READ-ONLY access)
+
+### Access Restrictions
+
+You only have access to:
+- `/opt/sca/cmg` on service host `cmg-new-service1.sca.iu.edu` (code changes only)
+- `/opt/sca/cmg-bioloop` on worker hosts (code changes only)
+- `/tmp` for temporary read/write/delete operations
+
+**Note:** Paths beginning with `/opt/sca/data/...` referenced in codebase/env vars only apply when `NODE_ENV='docker'` or `APP_ENV='docker'`. In production, these paths do not exist. See `.ai/PRODUCTION_ENVIRONMENT.md` for details.
+
+### Critical Restrictions
+
+#### ❌ NEVER Allowed (Unless User Explicitly Permits):
+
+**File System:**
+- **NEVER** write/edit/delete anything in `/N/...` paths (read-only/debugging operations OK)
+- **ALWAYS** delete anything written to `/tmp` after work is done
+
+**Database:**
+- **NEVER** reset the database on service host
+
+**Docker:**
+- **NEVER** run ANY docker commands (not even read-only: `docker ps`, `docker logs`, etc.)
+- **NEVER** exec into docker containers or restart them
+
+**Workers:**
+- **NEVER** restart/kill/stop workers (PM2 commands: `pm2 restart`, `pm2 stop`, `pm2 delete`)
+- Can view logs: `pm2 logs`, `pm2 monit`
+- Can enter poetry shell: `poetry shell`
+
+**System Services:**
+- **NEVER** restart system services (docker, nginx, apache, etc.)
+- **NEVER** use sudo (you do NOT have sudo access)
+
+**Git:**
+- **NEVER** do git write operations (`git pull`, `git push`, `git rebase`, `git merge`, `git commit`)
+- Can do read-only operations (`git status`, `git diff`, `git log`, `git reflog`, etc.)
+
+**nodemon:**
+- **NEVER** use nodemon in production (except UI service)
+- Not allowed in Dockerfiles, package.json scripts, or any config files
+
+#### ✅ Always Allowed:
+
+- Safe read-only operations for debugging on any host
+- Reading logs, viewing process status
+- File inspection with `cat`, `grep`, `ls`, etc. (except `.env` files)
+- Git read-only operations
+- `poetry shell` in workers directory
+
+### Host Restrictions
+
+- You can only make **code changes** on appropriate hosts
+- Service host: `/opt/sca/cmg` (service-related code)
+- Worker hosts: `/opt/sca/cmg-bioloop` (worker-related code)
+- **Exception:** All restrictions can be overridden if user explicitly permits in chat
+
+---
+
+## 📚 Documentation & Conventions
+
+**All architectural and coding patterns are documented in the `.ai/` directory.**
+
+### Quick Reference
+
+**Start Here:**
+- `.ai/AI_PROTOCOL.md` - How to work with this repo
+
+**Platform Core:**
+- `.ai/bioloop/architecture.md` - System architecture
+- `.ai/bioloop/api_conventions.md` - API patterns
+- `.ai/bioloop/ui_conventions.md` - UI patterns
+- `.ai/bioloop/worker_conventions.md` - Worker patterns
+- `.ai/bioloop/database_patterns.md` - Database patterns
+- `.ai/bioloop/pitfalls.md` - Common mistakes
+- `.ai/bioloop/features/*.md` - Platform features
+
+**CMG Customizations:**
+- `.ai/customizations/api_conventions.md` - CMG API additions
+- `.ai/customizations/ui_conventions.md` - CMG UI patterns
+- `.ai/customizations/genome_browser_notes.md` - Browser implementation
+- `.ai/customizations/pitfalls.md` - CMG-specific mistakes
+- `.ai/customizations/features/*.md` - CMG features
+
+### Priority Order of Truth
+
+1. `.ai/customizations/features/<feature>.md` (highest - CMG-specific)
+2. `.ai/customizations/*.md` (CMG conventions)
+3. `.ai/bioloop/features/<feature>.md` (platform features)
+4. `.ai/bioloop/*.md` (platform conventions)
+5. Repository code
+6. Chat history (lowest)
+
+**Chats explore. Changelogs decide. Files persist.**
+
+---
+
+## 🔒 Sensitive File Restrictions
+
+### .env Files (Secret Files vs Templates)
+
+**NEVER read, write, display, or print the contents of `.env` files that contain secrets.**
+
+**File Structure:**
+- `.env.default` files ALWAYS exist (templates with example/default values)
+- `.env` files MAY exist alongside `.env.default` (contain actual secrets)
+- `.env` files NEVER exist without a corresponding `.env.default`
+
+#### ❌ FORBIDDEN Files (Contain Secrets)
+- Any `.env` file (without `.default`, `.example`, or `.template` suffix)
+  - `api/.env`
+  - `workers/.env`
+  - `secure_download/.env`
+  - `ui/.env`
+  - Any other `.env` files containing secrets
+
+#### ✅ ALLOWED Files (Templates Only)
+- `.env.default` - Default configuration templates (ALWAYS exist)
+- `.env.example` - Example configurations
+- `.env.template` - Configuration templates
+- Any file with these suffixes is safe to read/display
+
+#### Forbidden Operations on .env Files
+
+**File Operations:**
+- Reading with `read_file` tool
+- Writing with `write` or `search_replace` tools
+- Copying or moving `.env` files
+- Deleting `.env` files
+
+**Terminal Commands:**
+- `cat`, `head`, `tail`, `less`, `more` - on any `.env` file
+- `grep` - when searching in `.env` files
+- `echo`, `printf` - when displaying `.env` contents
+- Any command that would reveal `.env` file contents
+
+**Output:**
+- Printing contents to console or chat
+- Including contents in code blocks or explanations
+- Logging or displaying `.env` file contents
+
+#### Before Running Any File Operation
+
+1. Check if the file path ends with `.env` (and NOT `.env.default`, `.env.example`, etc.)
+2. If yes, **STOP** and decline the operation
+3. Explain to the user that `.env` files contain secrets and cannot be accessed
+
+#### Example Commands
+
+**❌ FORBIDDEN:**
+```bash
+cat api/.env
+grep SECRET workers/.env
+head -n 5 secure_download/.env
+read_file("api/.env")
+```
+
+**✅ ALLOWED:**
+```bash
+cat api/.env.default
+grep EXAMPLE workers/.env.example
+head -n 10 ui/.env.template
+read_file("api/.env.default")
+```
+
+#### If User Requests .env File Access
+
+**Response:**
+```
+I cannot access `.env` files as they contain secrets and sensitive credentials.
+
+Instead, I can:
+- Read `.env.default` or `.env.example` files for configuration structure
+- Help you understand what configuration values are needed
+- Guide you to manually provide specific (non-secret) configuration values
+
+If you need to share specific values, please provide them directly (without secrets).
+```
+
+**Exception:**
+- User may explicitly override this restriction by stating in the same message:
+  - "I authorize you to read [specific .env file]" OR
+  - "Override security: read [specific .env file]"
+
+---
+
+## 🔒 Allowlisted Commands (Read-Only + Safe)
+
+### System Information
+- hostname, whoami, uname -a, lsb_release -a, cat /etc/os-release
+- df -h, du -sh *, free -h, top -n 1, uptime, date
+- env, printenv
+
+### Directory & File Inspection
+- ls, tree, pwd, stat, file
+- head -n 50, tail -n 50, cat, less, more, wc -l
+- grep, find . -type f, find . -type d
+
+### Networking (Read-Only)
+- ifconfig, ip addr, ip route
+- netstat -tulpn, ss -tulpn
+- ping -c 4, curl -I, wget --spider
+
+### Git & Repo Status (Read-Only)
+- git status, git diff, git log, git show, git blame
+- git reflog, git branch, git tag
+- git rev-parse, git describe
+- git ls-files, git ls-tree, git cat-file
+- git grep, git shortlog
+- git remote -v, git submodule status
+
+**❌ FORBIDDEN Git Commands:**
+- git pull, git push, git fetch
+- git commit, git rebase, git merge
+- git reset, git checkout (file modifications)
+- Any command that modifies repository state
+
+### Node.js & NPM (Read-Only)
+- node -v, npm -v, npm list --depth=0
+
+### Python & Pip (Read-Only)
+- python3 --version, pip --version, pip list
+
+---
+
+## 🚀 Development Workflow
+
+### Docker Restart Pattern
+
+After bringing down containers, restart with:
+```bash
+docker compose up -d
+```
+
+**Reason:** Bringing down one container can affect others; always use `up -d` to restart the full stack.
+
+### Hot Module Replacement (HMR)
+
+API and UI changes should **NOT** require restarts unless:
+- API configuration changes (`config/*.json`)
+- New npm package installed
+- Prisma schema changes (requires `npx prisma generate`)
+
+### Linter Policy
+
+**Do NOT fix linter errors unless explicitly asked.**
+- Console statements in CLI scripts are OK
+- Focus on functionality first
+- Clean up linter errors only when requested
+
+---
+
+## 🎯 Key Architectural Reminders
+
+### Microservice Architecture
+This is a microservice architecture with separate UI, API, and Worker components.  
+**Always consider the impact of changes across all services.**
+
+### Key Patterns
+- Use `auth.canAdmin` and `auth.canOperate` (not `auth.hasRole(['admin', 'operator'])`)
 - User-specific endpoints use `/:username` pattern with `checkOwnership: true`
 - Use transactions for data consistency
 - Page components should be minimal, delegating to list components
 - Use icons instead of buttons for actions
-- Always check permissions before allowing operations 
+- Always check permissions before allowing operations
 
-# Allowlisted Commands (Read-Only + Safe)
+See `.ai/` directory for detailed conventions.
 
-## System Information
-- whoami
-- uname -a
-- lsb_release -a
-- cat /etc/os-release
-- df -h
-- du -sh *
-- free -h
-- top -n 1
-- uptime
-- date
-- env
-- printenv
+---
 
-## Directory & File Inspection
-- ls -al
-- ls -lh
-- tree
-- pwd
-- stat
-- file
-- head -n 50
-- tail -n 50
-- cat
-- less
-- more
-- wc -l
-- grep
-- find . -type f
-- find . -type d
+## 📝 Constants vs Config
 
-## Networking (Read-Only)
-- ifconfig
-- ip addr
-- ip route
-- netstat -tulpn
-- ss -tulpn
-- ping -c 4
-- curl -I
-- wget --spider
+**Constants** (business logic):
+- `api/src/constants.js`, `ui/src/constants.js`, `workers/config/common.py`
+- Browser types, genome mappings, file type enums, role names
 
-## Git & Repo Status
-- git status
-- git log --oneline
-- git diff
-- git branch
-- git remote -v
-- git show
+**Config** (runtime behavior):
+- `api/config/*.json`, `ui/src/config.js`, `workers/config/common.py`
+- Data paths, feature toggles, API URLs, ports, timeouts
 
-## Docker (Read-Only) – with sudo
-- sudo docker ps
-- sudo docker ps -a
-- sudo docker images
-- sudo docker logs --tail 50
-- sudo docker network ls
-- sudo docker volume ls
-- sudo docker inspect
+See `.ai/ARCHITECTURE.md` for details.
 
-## Node.js & NPM (Read-Only)
-- node -v
-- npm -v
-- npm list --depth=0
+---
 
-## Python & Pip (Read-Only)
-- python3 --version
-- pip --version
-- pip list
-
+**Last Updated:** 2026-01-16

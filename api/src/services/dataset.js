@@ -16,6 +16,7 @@ const workflowService = require('./workflow');
 const logger = require('./logger');
 
 const { log_axios_error } = require('../utils');
+const { normalizeFormatFromPath, getRoleFromFormat } = require('../utils/genomeBrowserUtils');
 const {
   DONE_STATUSES, INCLUDE_STATES, INCLUDE_WORKFLOWS, INCLUDE_AUDIT_LOGS,
 } = require('../constants');
@@ -201,7 +202,22 @@ async function get_dataset({
   initiator = false,
   include_conversions = false,
   include_source_instrument = false,
+  include_genomic_attributes = false,
 }) {
+  console.log('get_dataset', {
+    id,
+    files,
+    workflows,
+    last_task_run,
+    prev_task_runs,
+    only_active,
+    bundle,
+    includeProjects,
+    initiator,
+    include_conversions,
+    include_source_instrument,
+    include_genomic_attributes,
+  });
   const fileSelect = files ? {
     select: {
       path: true,
@@ -222,6 +238,7 @@ async function get_dataset({
       },
     },
   } : INCLUDE_WORKFLOWS;
+  console.log('workflow_include', workflow_include);
 
   const conversion_includes = {
     include: conversionService.INCLUDE,
@@ -247,10 +264,20 @@ async function get_dataset({
         },
       } : undefined),
     },
+    ...(include_genomic_attributes ? {
+      genomic_details: {
+        select: {
+          genome_type: true,
+          genome_value: true,
+        },
+      },
+    } : undefined),
   });
   const dataset_workflows = dataset.workflows;
+  console.log('dataset_workflows', dataset_workflows);
 
   if (workflows && dataset.workflows.length > 0) {
+    console.log('if workflows and dataset.workflows.length > 0');
     // include workflow objects with dataset
     try {
       const wf_res = await wfService.getAll({
@@ -259,6 +286,7 @@ async function get_dataset({
         prev_task_runs,
         workflow_ids: dataset.workflows.map((x) => x.id),
       });
+      console.log(wf_res.data.results);
       dataset.workflows = wf_res.data.results.map((wf) => {
         const dataset_wf = dataset_workflows.find((dw) => dw.id === wf.id);
         return {
@@ -705,11 +733,30 @@ async function search_files({
  * @param {Array} params.data - An array of file objects to add.
  */
 async function add_files({ dataset_id, data }) {
-  const files = data.map((f) => ({
-    dataset_id,
-    name: path.parse(f.path).base,
-    ...f,
-  }));
+  const isGenomeBrowserEnabled = config.get('enabled_features.genome_browser');
+
+  const files = data.map((f) => {
+    const fileData = {
+      dataset_id,
+      name: path.parse(f.path).base,
+      ...f,
+    };
+
+    // Populate format and role metadata if genome browser feature is enabled
+    if (isGenomeBrowserEnabled) {
+      const format = normalizeFormatFromPath(f.path);
+      if (format) {
+        const role = getRoleFromFormat(format);
+        fileData.metadata = {
+          ...fileData.metadata,
+          format,
+          ...(role && { role }),
+        };
+      }
+    }
+
+    return fileData;
+  });
 
   // create a file tree using graph data structure
   const graph = new FileGraph(files.map((f) => f.path));
@@ -755,6 +802,54 @@ async function add_files({ dataset_id, data }) {
     data: edges,
     skipDuplicates: true,
   });
+
+  // Auto-create tracks for PRIMARY files if genome browser feature is enabled
+  if (isGenomeBrowserEnabled) {
+    // Find files that should have tracks created (PRIMARY role only)
+    const trackableFiles = await prisma.dataset_file.findMany({
+      where: {
+        dataset_id,
+        filetype: 'file', // Only actual files, not directories
+        metadata: {
+          path: ['role'],
+          equals: 'PRIMARY',
+        },
+      },
+      select: {
+        id: true,
+        name: true,
+        path: true,
+        metadata: true,
+      },
+    });
+
+    // Get existing tracks to avoid duplicates
+    const existingTracks = await prisma.track.findMany({
+      where: {
+        dataset_file_id: { in: trackableFiles.map((f) => f.id) },
+      },
+      select: {
+        dataset_file_id: true,
+      },
+    });
+
+    const existingTrackFileIds = new Set(existingTracks.map((t) => t.dataset_file_id));
+
+    // Create tracks for trackable files that don't already have tracks
+    const tracksToCreate = trackableFiles
+      .filter((file) => !existingTrackFileIds.has(file.id))
+      .map((file) => ({
+        name: file.name || path.parse(file.path).base || 'Unnamed Track',
+        dataset_file_id: file.id,
+      }));
+
+    if (tracksToCreate.length > 0) {
+      await prisma.track.createMany({
+        data: tracksToCreate,
+        skipDuplicates: true,
+      });
+    }
+  }
 }
 
 /**
@@ -792,7 +887,7 @@ async function create(tx, data) {
     return;
   }
   // if it doesn't exist, create it
-  // console.log(`creating dataset`, JSON.stringify(data, null, 2));
+  console.log('creating dataset', JSON.stringify(data, null, 2));
   try {
     return await tx.dataset.create({
       data,
@@ -1098,6 +1193,7 @@ const buildDatasetCreateQuery = (data) => {
   const {
     name, type, du_size, size, origin_path, bundle_size, metadata, workflow_id,
     project_id, user_id, src_instrument_id, src_dataset_id, state, create_method,
+    file_type, genome_type, genome_value, import_notes,
   } = data;
   /* eslint-disable no-unused-vars */
 
@@ -1145,6 +1241,16 @@ const buildDatasetCreateQuery = (data) => {
     };
   }
 
+  // add genomic details if provided
+  if (genome_type || genome_value) {
+    create_query.genomic_details = {
+      create: _.omitBy(_.isNil)({
+        genome_type,
+        genome_value,
+      }),
+    };
+  }
+
   // add a state
   create_query.states = {
     create: [
@@ -1154,14 +1260,31 @@ const buildDatasetCreateQuery = (data) => {
     ],
   };
 
+  // audit log entry
+  const audit_log = {
+    action: 'create',
+    create_method: create_method || CONSTANTS.DATASET_CREATE_METHODS.SCAN,
+    user_id: user_id ?? Prisma.skip,
+  };
+
+  // if this is an import, create import_log nested within audit_logs
+  if (create_method === CONSTANTS.DATASET_CREATE_METHODS.IMPORT) {
+    audit_log.import = {
+      create: _.omitBy(_.isNil)({
+        file_type,
+        genome_type,
+        genome_value,
+        source_run: src_dataset_id ? String(src_dataset_id) : null,
+        metadata: {
+          import_space: data.import_space || null,
+          notes: import_notes || null,
+        },
+      }),
+    };
+  }
+
   create_query.audit_logs = {
-    create: [
-      {
-        action: 'create',
-        create_method: create_method || CONSTANTS.DATASET_CREATE_METHODS.SCAN,
-        user_id: user_id ?? Prisma.skip,
-      },
-    ],
+    create: [audit_log],
   };
 
   return create_query;

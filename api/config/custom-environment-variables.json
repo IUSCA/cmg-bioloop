@@ -3,9 +3,24 @@
     "password": "DATABASE_PASSWORD"
   },
   "mode": "NODE_ENV",
+  "data_root": "DATA_ROOT",
   "workflow_server": {
     "base_url": "WORKFLOW_SERVER_BASE_URL",
     "auth_token": "WORKFLOW_AUTH_TOKEN"
+  },
+  "cmg_mongodb": {
+    "host": "CMG_MONGO_HOST",
+    "port": "CMG_MONGO_PORT",
+    "database": "CMG_MONGO_DB",
+    "username": "CMG_MONGO_USERNAME",
+    "password": "CMG_MONGO_PASSWORD"
+  },
+  "rhythm_mongodb": {
+    "host": "RHYTHM_MONGO_HOST",
+    "port": "RHYTHM_MONGO_PORT",
+    "database": "RHYTHM_MONGO_DB",
+    "username": "RHYTHM_MONGO_USERNAME",
+    "password": "RHYTHM_MONGO_PASSWORD"
   },
   "oauth": {
     "base_url": "OAUTH_BASE_URL",
@@ -16,6 +31,10 @@
     "upload": {
       "client_id": "OAUTH_UPLOAD_CLIENT_ID",
       "client_secret": "OAUTH_UPLOAD_CLIENT_SECRET"
+    },
+    "genome_browser": {
+      "client_id": "OAUTH_GENOME_BROWSER_CLIENT_ID",
+      "client_secret": "OAUTH_GENOME_BROWSER_CLIENT_SECRET"
     }
   },
   "auth": {

@@ -1,4 +1,5 @@
 import urllib.parse
+from pymongo import MongoClient
 
 from workers.config import config
 
@@ -18,6 +19,9 @@ broker_connection_retry_on_startup = True
 
 # https://docs.celeryq.dev/en/stable/userguide/configuration.html#conf-mongodb-result-backend
 result_backend = mongo_uri
+# print(f"result_backend: {result_backend}")
+# mongo_client = MongoClient(result_backend)
+# print(f"Server info: {mongo_client.server_info()}")
 
 # https://docs.celeryq.dev/en/stable/userguide/configuration.html#database-backend-settings
 # https://stackoverflow.com/questions/69952488/celery-task-result-in-postgres-database-is-in-byte-format

@@ -142,3 +142,20 @@ def cancel_dataset_upload(celery_task, dataset_id, **kwargs):
     from workers.tasks.cancel_dataset_upload import \
       purge_uploaded_resources as task_body
     return task_body(celery_task, dataset_id, **kwargs)
+
+
+@app.task(base=WorkflowTask, bind=True, name='populate_file_metadata',
+          # autoretry_for=(exc.RetryableException,),
+          # max_retries=3,
+          # default_retry_delay=5
+          )
+def populate_file_metadata(celery_task, dataset_id, **kwargs):
+    from workers.tasks.populate_file_metadata import \
+      populate_file_metadata as task_body
+
+    # try:
+    return task_body(celery_task, dataset_id, **kwargs)
+    # except exc.InspectionFailed:
+    #     raise
+    # except Exception as e:
+    #     raise exc.RetryableException(e)

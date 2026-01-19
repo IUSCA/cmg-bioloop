@@ -1,7 +1,7 @@
 <template>
   <div class="session-detail">
     <div v-if="loading" class="flex justify-center items-center h-64">
-      <va-progress-circular indeterminate />
+      <va-progress-circle indeterminate />
     </div>
 
     <!-- <div v-else-if="error" class="text-center text-red-600">
@@ -15,7 +15,15 @@
           <!-- Session Info -->
           <va-card>
             <va-card-title>
-              <span class="text-lg"> Session Details </span>
+              <div class="flex flex-nowrap items-center w-full">
+                <span class="flex-auto text-lg"> Session Details </span>
+                <AddEditButton
+                  class="flex-none"
+                  edit
+                  @click.stop="showEditModal = true"
+                  v-if="canEditSession"
+                />
+              </div>
             </va-card-title>
             <va-card-content class="space-y-4">
               <div class="flex justify-between">
@@ -24,11 +32,11 @@
               </div>
               <div class="flex justify-between">
                 <span class="font-medium">Genome Type</span>
-                <va-chip size="small">{{ session.genome_type }}</va-chip>
+                <va-chip v-if="session.genome_type" size="small">{{ session.genome_type }}</va-chip>
               </div>
               <div class="flex justify-between">
                 <span class="font-medium">Genome Value</span>
-                <va-chip outline size="small">{{ session.genome }}</va-chip>
+                <va-chip v-if="session.genome" outline size="small">{{ session.genome }}</va-chip>
               </div>
               <div class="flex justify-between">
                 <span class="font-medium">Visibility</span>
@@ -37,7 +45,7 @@
                     :name="session.is_public ? 'public' : 'lock'"
                     :color="session.is_public ? 'success' : 'warning'"
                   />
-                  <span>{{ session.is_public ? "Public" : "Private" }}</span>
+                  <span>{{ session.is_public ? 'Public' : 'Private' }}</span>
                 </div>
               </div>
               <div class="flex justify-between">
@@ -47,6 +55,36 @@
               <div class="flex justify-between">
                 <span class="font-medium">Last Updated</span>
                 <span>{{ datetime.fromNow(session.updated_at) }}</span>
+              </div>
+              <div class="flex justify-between">
+                <span class="font-medium">Data Status</span>
+                <div class="flex items-center gap-2">
+                  <va-icon
+                    :name="
+                      session.data_requested?.all_staged
+                        ? 'check_circle'
+                        : session.data_requested?.requested
+                          ? 'hourglass_empty'
+                          : 'warning'
+                    "
+                    :color="
+                      session.data_requested?.all_staged
+                        ? 'success'
+                        : session.data_requested?.requested
+                          ? 'warning'
+                          : 'danger'
+                    "
+                  />
+                  <span class="text-sm">
+                    {{
+                      session.data_requested?.all_staged
+                        ? 'All Staged'
+                        : session.data_requested?.requested
+                          ? `Staging ${session.data_requested.request_status || 'PENDING'}`
+                          : 'Not Staged'
+                    }}
+                  </span>
+                </div>
               </div>
             </va-card-content>
           </va-card>
@@ -58,27 +96,48 @@
             </va-card-title>
             <va-card-content class="flex items-center justify-center py-8">
               <div class="flex gap-3">
-                <!-- Open in Genome Browser Action Button-->
+                <!-- View in Genome Browser Action Button-->
                 <va-button
                   color="primary"
                   border-color="primary"
                   preset="secondary"
                   class="flex-initial"
-                  @click="openInGenomeBrowser"
+                  @click="handleViewInBrowser"
+                  :loading="genomeBrowserLoading"
                 >
-                  <i-mdi-open-in-new class="pr-2 text-2xl" />
-                  Open in Genome Browser
+                  <i-mdi-dna class="pr-2 text-2xl" />
+                  View in Genome Browser
                 </va-button>
 
                 <!-- Delete Session Action Button-->
                 <va-button
+                  v-if="canDeleteSession"
                   color="danger"
                   border-color="danger"
                   class="flex-initial"
                   preset="secondary"
+                  @click="deleteSession"
                 >
                   <i-mdi-delete class="pr-2 text-2xl" />
                   Delete Session
+                </va-button>
+
+                <!-- Retry Staging Button - shown if data requested and staging pending -->
+                <va-button
+                  v-if="
+                    session.data_requested?.requested &&
+                    session.data_requested?.request_status === 'PENDING' &&
+                    canRetryStaging
+                  "
+                  color="warning"
+                  border-color="warning"
+                  class="flex-initial"
+                  preset="secondary"
+                  :loading="retryingStagingLoading"
+                  @click="retryStaging"
+                >
+                  <i-mdi-refresh class="pr-2 text-2xl" />
+                  Retry Staging
                 </va-button>
 
                 <!-- Share Session Action Button-->
@@ -96,11 +155,29 @@
           </va-card>
         </div>
 
+        <!-- Associated Datasets Table -->
+        <div class="grid grid-cols-1 gap-3">
+          <SessionDatasetsTable
+            :session-id="session?.id"
+            :data-requested="session?.data_requested?.requested || false"
+            @datasets-updated="handleDatasetsUpdated"
+          />
+        </div>
+
         <!-- Associated Tracks Information -->
         <div class="grid grid-cols-1 gap-3">
           <va-card>
             <va-card-title>
-              <span class="text-lg">Associated Tracks</span>
+              <div class="flex flex-nowrap items-center w-full">
+                <span class="flex-auto text-lg">Associated Tracks</span>
+                <AddEditButton
+                  class="flex-none"
+                  show-text
+                  :edit="associatedTracks?.length > 0"
+                  @click="showTracksModal = true"
+                  v-if="canEditSession"
+                />
+              </div>
             </va-card-title>
             <va-card-content>
               <div v-if="associatedTracks?.length" class="space-y-4">
@@ -111,30 +188,30 @@
                   disable-client-side-sorting
                 >
                   <template #cell(name)="{ rowData }">
-                    <router-link
-                      :to="`/tracks/${rowData.id}`"
-                      class="va-link font-medium"
-                    >
+                    <router-link :to="`/tracks/${rowData.id}`" class="va-link font-medium">
                       {{ rowData.name }}
                     </router-link>
                   </template>
 
-                  <template #cell(file_type)="{ rowData }">
+                  <template #cell(analysis_type)="{ rowData }">
                     <va-chip
+                      v-if="rowData?.analysis_type"
                       size="small"
-                      :color="trackService._getTrackColor(rowData.file_type)"
-                      >{{ rowData.file_type }}</va-chip
+                      :color="trackService._getTrackColor(rowData.analysis_type)"
+                      >{{ rowData?.analysis_type }}</va-chip
                     >
                   </template>
 
                   <template #cell(genomeType)="{ rowData }">
-                    <va-chip size="small">{{ rowData.genomeType }}</va-chip>
+                    <va-chip v-if="rowData.genomeType" size="small">
+                      {{ rowData.genomeType }}
+                    </va-chip>
                   </template>
 
                   <template #cell(genomeValue)="{ rowData }">
-                    <va-chip size="small" outline>{{
-                      rowData.genomeValue
-                    }}</va-chip>
+                    <va-chip v-if="rowData.genomeValue" size="small" outline>
+                      {{ rowData.genomeValue }}
+                    </va-chip>
                   </template>
 
                   <template #cell(dataset_name)="{ rowData }">
@@ -232,24 +309,205 @@
       <!-- Genome Browser Integration -->
     </div>
 
-    <!-- Edit Modal -->
-    <edit-session-modal
+    <!-- Edit Session Modal -->
+    <va-modal
       v-model="showEditModal"
-      :session="session"
-      @updated="handleSessionUpdated"
+      title="Edit Session Details"
+      size="small"
+      no-outside-dismiss
+      fixed-layout
+      ok-text="Update"
+      @ok="updateSession"
+      @cancel="showEditModal = false"
+    >
+      <va-inner-loading :loading="updating">
+        <div class="space-y-4">
+          <va-input
+            v-model="editForm.title"
+            label="Session Title"
+            class="w-full"
+            :rules="[(value) => !!value || 'Session title is required']"
+          />
+
+          <va-input v-model="editForm.genome_type" label="Genome Type" class="w-full" clearable />
+
+          <va-input v-model="editForm.genome" label="Genome Value" class="w-full" clearable />
+
+          <va-checkbox v-model="editForm.is_public" label="Make session public" />
+        </div>
+      </va-inner-loading>
+    </va-modal>
+
+    <!-- Edit Tracks Modal -->
+    <va-modal
+      v-model="showTracksModal"
+      title="Manage Session Tracks"
+      size="large"
+      hide-default-actions
+      no-outside-dismiss
+    >
+      <div class="space-y-4">
+        <p class="text-sm text-gray-600">Select tracks from Data Products for this session.</p>
+
+        <TracksAsyncAutoComplete
+          v-model:search-term="trackSearch"
+          label="Search and Add Tracks"
+          placeholder="Search tracks by name"
+          multiple
+          @select="handleTrackSelect"
+        />
+
+        <!-- Selected tracks table -->
+        <div v-if="selectedTracks.length > 0" class="space-y-3">
+          <div class="flex items-center justify-between">
+            <div>
+              {{ selectedTracks.length }} track{{ selectedTracks.length !== 1 ? 's' : '' }}
+              selected
+            </div>
+          </div>
+
+          <va-scroll-container vertical style="max-height: 300px">
+            <va-data-table
+              :items="selectedTracksTableData"
+              :columns="selectedTracksColumns"
+              :loading="false"
+              disable-client-side-sorting
+            >
+              <template #cell(name)="{ value, rowData }">
+                <div class="text-sm">
+                  <router-link
+                    v-if="rowData.id"
+                    :to="`/tracks/${rowData.id}`"
+                    target="_blank"
+                    class="text-primary hover:underline"
+                  >
+                    {{ value }}
+                  </router-link>
+                  <span v-else>{{ value }}</span>
+                </div>
+              </template>
+
+              <template #cell(genome)="{ rowData }">
+                <div class="text-sm">
+                  {{
+                    (rowData.genome_type || '') +
+                    (rowData.genome_type && rowData.genome_value ? ' ' : '') +
+                    (rowData.genome_value || '')
+                  }}
+                </div>
+              </template>
+
+              <template #cell(dataset)="{ rowData }">
+                <div class="text-sm">
+                  <router-link
+                    v-if="rowData.dataset?.id"
+                    :to="`/datasets/${rowData.dataset.id}`"
+                    target="_blank"
+                    class="text-primary hover:underline"
+                  >
+                    {{ rowData.dataset.name || '' }}
+                  </router-link>
+                  <span v-else>{{ rowData.dataset?.name || '' }}</span>
+                </div>
+              </template>
+
+              <template #cell(size)="{ rowData }">
+                <div class="text-sm">
+                  {{ formatBytes(rowData.size) }}
+                </div>
+              </template>
+
+              <template #cell(actions)="{ rowData }">
+                <va-button size="small" plain color="danger" @click="removeTrack(rowData.id)">
+                  <va-icon name="delete" />
+                </va-button>
+              </template>
+            </va-data-table>
+          </va-scroll-container>
+        </div>
+
+        <div class="flex justify-end gap-3 pt-4">
+          <va-button preset="secondary" @click="showTracksModal = false"> Cancel </va-button>
+          <va-button preset="primary" :loading="updatingTracks" @click="updateSessionTracks">
+            Update Tracks
+          </va-button>
+        </div>
+      </div>
+    </va-modal>
+
+    <!-- Delete Session Modal -->
+    <DeleteSessionModal
+      ref="sessionDeleteModal"
+      :data="session"
+      @update="router.push('/sessions')"
     />
+
+    <!-- Unstaged Datasets Modal -->
+    <UnstagedDatasetsModal
+      v-model="showUnstagedModal"
+      :session-id="session?.id"
+      @close="showUnstagedModal = false"
+      @staging-requested="handleStagingRequested"
+    />
+
+    <!-- Browser Selection Modal -->
+    <BrowserSelectionModal
+      v-model="showBrowserSelectionModal"
+      @browser-selected="handleBrowserSelection"
+    />
+
+    <!-- Genome Browser Modal (IGV or WashU) -->
+    <va-modal
+      v-model="showGenomeBrowserModal"
+      :title="genomeBrowserTitle"
+      :disable-attachment="true"
+      fullscreen
+      hide-default-actions
+      no-padding
+      no-outside-dismiss
+      @close="closeGenomeBrowser"
+    >
+      <div class="h-full flex flex-col" @click.stop>
+        <!-- IGV Container -->
+        <div
+          v-if="selectedBrowserType === BROWSER_TYPES.IGV"
+          id="igv-container"
+          class="flex-1"
+          style="min-height: 600px"
+        ></div>
+
+        <!-- WashU Container - v-if ensures full destruction on modal close -->
+        <WashUBrowser
+          v-if="showGenomeBrowserModal && selectedBrowserType === BROWSER_TYPES.WASHU"
+          :key="washuMountKey"
+          :genome-name="genomeBrowserGenome"
+          :data-hub="genomeBrowserTracks"
+          :view-region="genomeBrowserRegion"
+          class="h-full flex-1"
+        />
+      </div>
+    </va-modal>
   </div>
 </template>
 
 <script setup>
-import api from "@/services/api";
-import * as datetime from "@/services/datetime";
-import toast from "@/services/toast";
-import trackService from "@/services/track";
-import { useAuthStore } from "@/stores/auth";
-import { useNavStore } from "@/stores/nav";
-import { useSessionsStore } from "@/stores/sessions";
-import config from "@/config";
+import BrowserSelectionModal from '@/components/genomeBrowser/BrowserSelectionModal.vue';
+import WashUBrowser from '@/components/genomeBrowser/WashUBrowser.vue';
+import DeleteSessionModal from '@/components/sessions/DeleteSessionModal.vue';
+import SessionDatasetsTable from '@/components/sessions/SessionDatasetsTable.vue';
+import UnstagedDatasetsModal from '@/components/sessions/UnstagedDatasetsModal.vue';
+import TracksAsyncAutoComplete from '@/components/tracks/TracksAsyncAutoComplete.vue';
+import AddEditButton from '@/components/utils/buttons/AddEditButton.vue';
+import constants from '@/constants';
+import * as datetime from '@/services/datetime';
+import sessionService from '@/services/session';
+import toast from '@/services/toast';
+import trackService from '@/services/track';
+import { formatBytes } from '@/services/utils';
+import { useAuthStore } from '@/stores/auth';
+import { useNavStore } from '@/stores/nav';
+import { useSessionsStore } from '@/stores/sessions';
+import { nextTick } from 'vue';
 
 const route = useRoute();
 const router = useRouter();
@@ -258,16 +516,30 @@ const auth = useAuthStore();
 const nav = useNavStore();
 
 // Reactive state
-const editModal = ref();
+const _editModal = ref();
 const showEditModal = ref(false);
 const requestingStaging = ref(false);
 const projectsLoading = ref(false);
 const sessionProjects = ref([]);
+const updating = ref(false);
+const editForm = ref({
+  title: '',
+  genome_type: '',
+  genome: '',
+  is_public: false,
+});
+const showTracksModal = ref(false);
+const updatingTracks = ref(false);
+const selectedTracks = ref([]);
+const trackSearch = ref('');
+const canRetryStaging = ref(false);
+const retryingStagingLoading = ref(false);
+const lastStagingStatus = ref(null);
 
 // Computed
 const session = computed(() => sessionsStore.currentSession);
 const loading = computed(() => sessionsStore.loading);
-const error = computed(() => sessionsStore.error);
+const _error = computed(() => sessionsStore.error);
 
 const canEditSession = computed(() => {
   return session.value?.user_id === auth.user?.id;
@@ -277,31 +549,88 @@ const canDeleteSession = computed(() => {
   return session.value?.user_id === auth.user?.id;
 });
 
-const hasUnstagedTracks = computed(() => {
+const _hasUnstagedTracks = computed(() => {
   if (!session.value?.session_tracks) return false;
-  return session.value.session_tracks.some(
-    (st) => !st.track.dataset_file?.dataset?.is_staged,
-  );
+  return session.value.session_tracks.some((st) => !st.track.dataset_file?.dataset?.is_staged);
 });
 
-const unstagedTracks = computed(() => {
+// Table columns for selected tracks in modal
+const selectedTracksColumns = [
+  {
+    key: 'name',
+    label: 'Track Name',
+    sortable: true,
+    width: '30%',
+  },
+  {
+    key: 'genome',
+    label: 'Genome',
+    sortable: true,
+    width: '25%',
+  },
+  {
+    key: 'dataset',
+    label: 'Dataset',
+    sortable: true,
+    width: '25%',
+  },
+  {
+    key: 'size',
+    label: 'Size',
+    sortable: true,
+    width: '10%',
+  },
+  {
+    key: 'actions',
+    label: 'Actions',
+    sortable: false,
+    width: '10%',
+  },
+];
+
+const selectedTracksTableData = computed(() => {
+  return selectedTracks.value.map((track) => ({
+    ...track,
+    name: track.name || '',
+    genome_type: track.dataset_file?.dataset?.genomic_details?.genome_type || null,
+    genome_value: track.dataset_file?.dataset?.genomic_details?.genome_value || null,
+    dataset: track.dataset_file?.dataset || null,
+    size: track.dataset_file?.size || null,
+  }));
+});
+
+const _unstagedTracks = computed(() => {
   if (!session.value?.session_tracks) return [];
-  return session.value.session_tracks.filter(
-    (st) => !st.track.dataset_file?.dataset?.is_staged,
-  );
+  return session.value.session_tracks.filter((st) => !st.track.dataset_file?.dataset?.is_staged);
 });
 
 const _stagedTracksCount = computed(() => {
   if (!session.value?.session_tracks) return 0;
-  return session.value.session_tracks.filter(
-    (st) => st.track.dataset_file?.dataset?.is_staged,
-  ).length;
+  return session.value.session_tracks.filter((st) => st.track.dataset_file?.dataset?.is_staged)
+    .length;
 });
 
-const genomeBrowserUrl = computed(() => {
-  const genomeBrowserBaseUrl = config.genomeBrowserUrl;
-  const sessionTracksUrl = `/sessions/${session.value.id}/tracks`;
-  return `${genomeBrowserBaseUrl}/?genome=${session.value.genome}&hub=${sessionTracksUrl}`;
+// Genome Browser constants
+const { browserTypes: BROWSER_TYPES, browserTitles: BROWSER_TITLES } = constants.genomeBrowser;
+
+// Unstaged datasets modal
+const showUnstagedModal = ref(false);
+
+// Genome Browser state (generic for IGV and WashU)
+const showBrowserSelectionModal = ref(false);
+const showGenomeBrowserModal = ref(false);
+const genomeBrowserLoading = ref(false);
+const selectedBrowserType = ref(null); // BROWSER_TYPES.IGV or BROWSER_TYPES.WASHU
+const genomeBrowserGenome = ref('');
+const genomeBrowserTracks = ref([]);
+const genomeBrowserRegion = ref(''); // View region for browser
+const washuMountKey = ref(0); // Force WashU remount on open
+let igvBrowser = null; // IGV browser instance
+
+const genomeBrowserTitle = computed(() => {
+  if (selectedBrowserType.value === BROWSER_TYPES.IGV) return BROWSER_TITLES.igv;
+  if (selectedBrowserType.value === BROWSER_TYPES.WASHU) return BROWSER_TITLES.washu;
+  return BROWSER_TITLES.default;
 });
 
 const associatedTracks = computed(() => {
@@ -311,36 +640,36 @@ const associatedTracks = computed(() => {
 
 const trackColumns = [
   {
-    key: "name",
-    label: "Name",
+    key: 'name',
+    label: 'Name',
     sortable: true,
-    width: "35%",
-    thAlign: "left",
-    tdAlign: "left",
+    width: '25%',
+    thAlign: 'left',
+    tdAlign: 'left',
   },
   {
-    key: "file_type",
-    label: "File Type",
+    key: 'analysis_type',
+    label: 'Analysis Type',
     sortable: true,
-    width: "25%",
+    width: '15%',
   },
   {
-    key: "genomeType",
-    label: "Genome Type",
+    key: 'genomeType',
+    label: 'Genome Type',
     sortable: true,
-    width: "25%",
+    width: '12%',
   },
   {
-    key: "genomeValue",
-    label: "Genome Value",
+    key: 'genomeValue',
+    label: 'Genome Value',
     sortable: true,
-    width: "25%",
+    width: '13%',
   },
   {
-    key: "dataset_name",
-    label: "Dataset Name",
+    key: 'dataset_name',
+    label: 'Dataset Name',
     sortable: true,
-    width: "25%",
+    width: '20%',
   },
   // {
   //   key: "is_staged",
@@ -355,63 +684,57 @@ const trackColumns = [
   //   width: "25%",
   // },
   {
-    key: "created_at",
-    label: "Created",
+    key: 'created_at',
+    label: 'Created',
     sortable: true,
-    width: "25%",
+    width: '15%',
+    thAlign: 'right',
+    tdAlign: 'right',
   },
 ];
 
 // Project table columns
-const projectColumns = [
+const _projectColumns = [
   {
-    key: "name",
-    label: "Project Name",
+    key: 'name',
+    label: 'Project Name',
     sortable: true,
-    width: "40%",
+    width: '40%',
   },
   {
-    key: "description",
-    label: "Description",
+    key: 'description',
+    label: 'Description',
     sortable: false,
-    width: "40%",
+    width: '40%',
   },
   {
-    key: "created_at",
-    label: "Created",
+    key: 'created_at',
+    label: 'Created',
     sortable: true,
-    width: "20%",
+    width: '20%',
   },
 ];
 
 // Methods
+const sessionDeleteModal = ref(null);
+
 const deleteSession = async () => {
   if (!session.value) return;
-
-  if (confirm("Are you sure you want to delete this session?")) {
-    try {
-      await sessionsStore.deleteSession(session.value.id);
-      toast.success("Session deleted successfully");
-      router.push("/sessions");
-    } catch (error) {
-      console.error("Failed to delete session:", error);
-      toast.error("Failed to delete session");
-    }
-  }
+  sessionDeleteModal.value.show();
 };
 
-const exportDataHub = async () => {
+const _exportDataHub = async () => {
   try {
-    const response = await api.get(`/sessions/${session.value.id}/datahub`);
+    const response = await sessionService.getDatahub(session.value.id);
 
     // Create a blob with the DataHub JSON data
     const blob = new Blob([JSON.stringify(response.data, null, 2)], {
-      type: "application/json",
+      type: 'application/json',
     });
 
     // Create download link
     const url = window.URL.createObjectURL(blob);
-    const link = document.createElement("a");
+    const link = document.createElement('a');
     link.href = url;
     link.download = `session-${session.value.id}-datahub.json`;
     document.body.appendChild(link);
@@ -419,34 +742,34 @@ const exportDataHub = async () => {
     document.body.removeChild(link);
     window.URL.revokeObjectURL(url);
 
-    toast.success("DataHub export downloaded successfully");
+    toast.success('DataHub export downloaded successfully');
   } catch (error) {
-    console.error("Failed to export DataHub:", error);
-    toast.error("Failed to export DataHub");
+    console.error('Failed to export DataHub:', error);
+    toast.error('Failed to export DataHub');
   }
 };
 
-const requestStaging = async () => {
+const _requestStaging = async () => {
   if (!session.value) return;
 
   requestingStaging.value = true;
   try {
-    const response = await api.post(`/sessions/${session.value.id}/stage`);
+    const response = await sessionService.stage(session.value.id);
 
     if (response.data.datasets && response.data.datasets.length > 0) {
       // Show which datasets need staging
       toast.info(
-        `${response.data.datasets.length} datasets need staging. Use the dataset staging workflow to stage them individually.`,
+        `${response.data.datasets.length} datasets need staging. Use the dataset staging workflow to stage them individually.`
       );
 
       // You could also navigate to a datasets page or show a modal with staging options
-      console.log("Datasets that need staging:", response.data.datasets);
+      console.log('Datasets that need staging:', response.data.datasets);
     } else {
-      toast.success("All datasets are already staged");
+      toast.success('All datasets are already staged');
     }
   } catch (error) {
-    console.error("Failed to check staging status:", error);
-    toast.error("Failed to check staging status");
+    console.error('Failed to check staging status:', error);
+    toast.error('Failed to check staging status');
   } finally {
     requestingStaging.value = false;
   }
@@ -455,7 +778,7 @@ const requestStaging = async () => {
 const loadSession = async () => {
   const sessionId = parseInt(route.params.id);
   if (isNaN(sessionId)) {
-    router.push("/sessions");
+    router.push('/sessions');
     return;
   }
 
@@ -467,8 +790,8 @@ const loadSession = async () => {
     if (session.value) {
       nav.setNavItems([
         {
-          label: "Sessions",
-          to: "/sessions",
+          label: 'Sessions',
+          to: '/sessions',
         },
         {
           label: session.value.title,
@@ -485,37 +808,378 @@ const loadSessionProjects = async () => {
 
   projectsLoading.value = true;
   try {
-    const response = await api.get(`/sessions/${session.value.id}/projects`);
+    const response = await sessionService.getProjects(session.value.id);
     sessionProjects.value = response.data.projects;
   } catch (error) {
-    console.error("Failed to load session projects:", error);
+    console.error('Failed to load session projects:', error);
     sessionProjects.value = [];
   } finally {
     projectsLoading.value = false;
   }
 };
 
-const handleSessionUpdated = (updatedSession) => {
-  toast.success("Session updated successfully");
+const _handleSessionUpdated = (_updatedSession) => {
+  toast.success('Session updated successfully');
   // Refresh the session data
   loadSession();
 };
 
-const openInGenomeBrowser = () => {
+/**
+ * Handle View in Genome Browser button click
+ * Check for unstaged/staged datasets before showing appropriate modal
+ */
+const handleViewInBrowser = async () => {
   if (!session.value) return;
 
-  // Open in new tab
-  window.open(genomeBrowserUrl.value, "_blank");
+  try {
+    // Check both staged and unstaged datasets
+    const [stagedResponse, unstagedResponse] = await Promise.all([
+      sessionService.getDatasets(session.value.id, { staged: true }),
+      sessionService.getDatasets(session.value.id, { staged: false }),
+    ]);
+
+    const stagedDatasets = stagedResponse.data.datasets || [];
+    const unstagedDatasets = unstagedResponse.data.datasets || [];
+
+    // If there are unstaged datasets, show the unstaged modal first
+    if (unstagedDatasets.length > 0) {
+      showUnstagedModal.value = true;
+      return;
+    }
+
+    // If there are no staged datasets at all, nothing to view
+    if (stagedDatasets.length === 0) {
+      toast.warning('No datasets available for viewing');
+      return;
+    }
+
+    // All datasets are staged, proceed to browser selection
+    showBrowserSelectionModal.value = true;
+  } catch (error) {
+    console.error('Failed to check dataset status:', error);
+    toast.error('Failed to check dataset staging status');
+  }
 };
 
+/**
+ * Handle staging requested
+ */
+const handleStagingRequested = async () => {
+  toast.info(
+    'Staging workflows have been requested. Datasets will be available once staging completes.'
+  );
+  showUnstagedModal.value = false;
+  // Reload session to update data_requested status
+  await loadSession();
+
+  // Check if there are any staged datasets to view
+  try {
+    const response = await sessionService.getDatasets(session.value.id, { staged: true });
+    const stagedDatasets = response.data.datasets || [];
+
+    if (stagedDatasets.length > 0) {
+      // There are some staged datasets, show browser selection
+      showBrowserSelectionModal.value = true;
+    }
+    // If no staged datasets yet, user will have to wait for staging to complete
+    // (no toast needed, the "staging requested" toast is already shown)
+  } catch (error) {
+    console.error('Failed to check staged datasets:', error);
+  }
+};
+
+/**
+ * Handle datasets updated from table
+ */
+const handleDatasetsUpdated = (updatedDatasets) => {
+  // Check if there are any unstaged datasets
+  const hasUnstagedDatasets = updatedDatasets.some((ds) => !ds.is_staged);
+
+  // If data requested and we have unstaged datasets, allow retry
+  canRetryStaging.value = session.value?.data_requested?.requested && hasUnstagedDatasets;
+};
+
+/**
+ * Retry staging for unstaged datasets
+ */
+const retryStaging = async () => {
+  if (!session.value?.id) return;
+
+  retryingStagingLoading.value = true;
+  try {
+    const response = await sessionService.stageDatasets(session.value.id);
+    lastStagingStatus.value = response.status;
+
+    if (response.status === 200) {
+      // All successful
+      toast.success(response.data.message);
+      canRetryStaging.value = false;
+      // Reload session to update data_requested status
+      await loadSession();
+    } else if (response.status === 207) {
+      // Partial success
+      toast.warning(response.data.message);
+      canRetryStaging.value = true;
+    } else {
+      // All failed
+      toast.error(response.data.message);
+      canRetryStaging.value = true;
+    }
+  } catch (error) {
+    console.error('Failed to retry staging:', error);
+    toast.error('Failed to initiate staging workflows');
+    canRetryStaging.value = true;
+  } finally {
+    retryingStagingLoading.value = false;
+  }
+};
+
+/**
+ * Handle browser selection from modal
+ */
+const handleBrowserSelection = async (browserType) => {
+  // Browser selection modal only shows if we have staged datasets
+  selectedBrowserType.value = browserType;
+
+  if (browserType === BROWSER_TYPES.IGV) {
+    await initializeIGV();
+  } else if (browserType === BROWSER_TYPES.WASHU) {
+    await initializeWashU();
+  }
+};
+
+/**
+ * Initialize IGV browser
+ */
+const initializeIGV = async () => {
+  if (!session.value) return;
+
+  genomeBrowserLoading.value = true;
+
+  try {
+    // Set the authentication cookie for file access
+    await sessionService.setFileCookie(session.value.id);
+
+    // Fetch the datahub configuration for IGV
+    const datahubResponse = await sessionService.getDatahub(session.value.id, BROWSER_TYPES.IGV);
+    const datahubConfig = datahubResponse?.data;
+
+    console.log('[IGV] Datahub response:', datahubConfig);
+
+    const tracks = datahubConfig?.tracks || [];
+    // const tracks ß
+    const genome = datahubConfig?.genome;
+
+    console.log('[IGV] Tracks:', tracks);
+    console.log('[IGV] Genome:', genome);
+
+    if (!tracks || tracks.length === 0) {
+      toast.error('No tracks available for this session');
+      genomeBrowserLoading.value = false;
+      return;
+    }
+
+    // Store for modal display
+    genomeBrowserGenome.value = genome;
+    genomeBrowserTracks.value = tracks;
+
+    // Show genome browser modal
+    showGenomeBrowserModal.value = true;
+
+    // Wait for DOM to update
+    await nextTick();
+
+    // Dynamically import IGV
+    const igvModule = await import('igv');
+    const igv = igvModule.default;
+
+    // Configure IGV options
+    const igvOptions = {
+      genome,
+      tracks,
+    };
+
+    // Create IGV browser instance
+    const container = document.getElementById('igv-container');
+    if (container) {
+      igvBrowser = await igv.createBrowser(container, igvOptions);
+      console.log('[IGV] Browser loaded successfully');
+    } else {
+      throw new Error('IGV container not found');
+    }
+  } catch (error) {
+    console.error('[IGV] Failed to initialize:', error);
+    toast.error('Failed to load IGV browser');
+    showGenomeBrowserModal.value = false;
+  } finally {
+    genomeBrowserLoading.value = false;
+  }
+};
+
+/**
+ * Initialize WashU browser
+ */
+const initializeWashU = async () => {
+  if (!session.value) return;
+
+  genomeBrowserLoading.value = true;
+
+  try {
+    // Set the authentication cookie for file access
+    await sessionService.setFileCookie(session.value.id);
+
+    // Fetch the datahub configuration for WashU
+    const datahubResponse = await sessionService.getDatahub(session.value.id, BROWSER_TYPES.WASHU);
+    const datahubConfig = datahubResponse.data;
+
+    console.log('[WashU] Datahub response:', datahubConfig);
+
+    const tracks = datahubConfig.tracks || [];
+    const genome = datahubConfig.genome;
+    // const genome = 'hg38';
+
+    console.log('[WashU] Tracks:', tracks);
+    console.log('[WashU] Genome:', genome);
+
+    if (!tracks || tracks.length === 0) {
+      toast.error('No tracks available for this session');
+      genomeBrowserLoading.value = false;
+      return;
+    }
+
+    // TEMPORARY TEST: Add a public BigWig file to test if WashU works at all
+    // const testTrack = {
+    //   type: 'bigwig',
+    //   // name: 'Test Public BigWig',
+    //   url: 'https://www.encodeproject.org/files/ENCFF356YES/@@download/ENCFF356YES.bigWig',
+    //   options: {
+    //     backgroundColor: '#ff0000',
+    //     height: 50,
+    //   },
+    // };
+
+    // Store for modal display
+    genomeBrowserGenome.value = genome;
+    genomeBrowserTracks.value = tracks;
+    genomeBrowserRegion.value = datahubConfig.locus || 'chr1:155000000-155050000';
+
+    // Force fresh WashU mount by incrementing key
+    washuMountKey.value++;
+
+    // Show genome browser modal (WashU component will mount automatically)
+    showGenomeBrowserModal.value = true;
+
+    console.log(
+      '[WashU] Browser will initialize via component with mount key:',
+      washuMountKey.value
+    );
+  } catch (error) {
+    console.error('[WashU] Failed to initialize:', error);
+    toast.error('Failed to load WashU browser');
+    showGenomeBrowserModal.value = false;
+  } finally {
+    genomeBrowserLoading.value = false;
+  }
+};
+
+/**
+ * Close genome browser (IGV or WashU)
+ */
+const closeGenomeBrowser = () => {
+  // Clean up IGV browser instance if it exists
+  if (igvBrowser) {
+    igvBrowser.dispose();
+    igvBrowser = null;
+  }
+
+  // WashU cleanup is handled by its component's onBeforeUnmount
+
+  showGenomeBrowserModal.value = false;
+  selectedBrowserType.value = null;
+  genomeBrowserGenome.value = '';
+  genomeBrowserTracks.value = [];
+  genomeBrowserRegion.value = '';
+
+  console.log('[Genome Browser] Closed and cleaned up');
+};
+
+const updateSession = async () => {
+  updating.value = true;
+  try {
+    await sessionsStore.updateSession(session.value.id, editForm.value);
+    toast.success('Session updated successfully');
+    showEditModal.value = false;
+  } catch (error) {
+    console.error('Failed to update session:', error);
+    toast.error('Failed to update session');
+  } finally {
+    updating.value = false;
+  }
+};
+
+const handleTrackSelect = (track) => {
+  // Add track to selected tracks if not already present
+  const existingIndex = selectedTracks.value.findIndex((t) => t.id === track.id);
+  if (existingIndex === -1) {
+    selectedTracks.value.push(track);
+  }
+};
+
+const removeTrack = (trackId) => {
+  const index = selectedTracks.value.findIndex((t) => t.id === trackId);
+  if (index > -1) {
+    selectedTracks.value.splice(index, 1);
+  }
+};
+
+const updateSessionTracks = async () => {
+  updatingTracks.value = true;
+  try {
+    const trackIds = selectedTracks.value.map((track) => track.id);
+    await sessionsStore.updateSession(session.value.id, { track_ids: trackIds });
+    toast.success('Session tracks updated successfully');
+    showTracksModal.value = false;
+    await loadSession(); // Reload session data
+  } catch (error) {
+    console.error('Failed to update session tracks:', error);
+    toast.error('Failed to update session tracks');
+  } finally {
+    updatingTracks.value = false;
+  }
+};
+
+// Watch for modal opening to initialize form
+watch(showEditModal, (isOpen) => {
+  if (isOpen && session.value) {
+    editForm.value = {
+      title: session.value.title || '',
+      genome_type: session.value.genome_type || '',
+      genome: session.value.genome || '',
+      is_public: session.value.is_public || false,
+    };
+  }
+});
+
+// Watch for tracks modal opening to initialize selected tracks
+watch(showTracksModal, (isOpen) => {
+  if (isOpen && session.value?.session_tracks) {
+    selectedTracks.value = session.value.session_tracks.map((st) => st.track);
+  }
+});
+
 // Lifecycle
-onMounted(() => {
-  loadSession();
+onMounted(async () => {
+  await loadSession();
+});
+
+onUnmounted(() => {
+  // Clean up genome browser instances
+  closeGenomeBrowser();
 });
 </script>
 
 <route lang="yaml">
 meta:
   title: Session Details
-  requiresRoles: ["operator", "admin"]
+  requiresRoles: ['operator', 'admin']
 </route>

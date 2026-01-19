@@ -1,11 +1,6 @@
 <template>
   <!--  <va-inner-loading :loading="loading" class="h-full">-->
-  <va-stepper
-    v-model="step"
-    :steps="steps"
-    controlsHidden
-    class="h-full import-stepper"
-  >
+  <va-stepper v-model="step" :steps="steps" controlsHidden class="h-full import-stepper">
     <!-- Step icons and labels -->
     <template
       v-for="(s, i) in steps"
@@ -120,9 +115,9 @@
           <va-popover>
             <template #body>
               <div class="w-96">
-                Associating a Data Product with a source Raw Data establishes a
-                clear lineage between the original data and its processed form.
-                This linkage helps to trace the origins of processed data
+                Associating a Data Product with a source Raw Data establishes a clear lineage
+                between the original data and its processed form. This linkage helps to trace the
+                origins of processed data
               </div>
             </template>
             <Icon icon="mdi:information" class="ml-2 text-xl text-gray-500" />
@@ -165,12 +160,11 @@
           <va-popover>
             <template #body>
               <div class="w-96">
-                Assigning a dataset to a project establishes a connection
-                between your data and a specific research initiatives. This
-                association helps organize and categorize datasets within the
-                context of your research projects, facilitating easier data
-                management, access control, and collaboration among team members
-                working on the same project.
+                Assigning a dataset to a project establishes a connection between your data and a
+                specific research initiatives. This association helps organize and categorize
+                datasets within the context of your research projects, facilitating easier data
+                management, access control, and collaboration among team members working on the same
+                project.
               </div>
             </template>
             <Icon icon="mdi:information" class="ml-2 text-xl text-gray-500" />
@@ -211,9 +205,7 @@
           <div class="flex items-center ml-2">
             <va-popover>
               <template #body>
-                <div class="w-72">
-                  Source instrument where this data was collected from.
-                </div>
+                <div class="w-72">Source instrument where this data was collected from.</div>
               </template>
               <Icon icon="mdi:information" class="text-xl text-gray-500" />
             </va-popover>
@@ -223,6 +215,78 @@
     </template>
 
     <template #step-content-2>
+      <!-- Genomic Details Step -->
+      <div class="flex w-full pb-6">
+        <va-select
+          v-model="selectedFileType"
+          :options="fileTypeOptions"
+          label="File Type"
+          placeholder="Select file type"
+          class="flex-grow"
+          :text-by="'text'"
+          :track-by="'value'"
+        />
+        <div class="flex items-center ml-2">
+          <va-popover>
+            <template #body>
+              <div class="w-96">
+                Type of genomic data file (e.g., FASTQ, BAM, VCF, BigWig, etc.)
+              </div>
+            </template>
+            <Icon icon="mdi:information" class="text-xl text-gray-500" />
+          </va-popover>
+        </div>
+      </div>
+
+      <div class="flex w-full pb-6">
+        <va-select
+          v-model="selectedGenomeType"
+          :options="genomeTypeOptions"
+          label="Genome Type"
+          placeholder="Select genome type"
+          class="flex-grow mr-2"
+          :text-by="'text'"
+          :track-by="'value'"
+        />
+        <div class="flex items-center ml-2">
+          <va-popover>
+            <template #body>
+              <div class="w-96">Organism type (e.g., Human, Mouse, etc.)</div>
+            </template>
+            <Icon icon="mdi:information" class="text-xl text-gray-500" />
+          </va-popover>
+        </div>
+      </div>
+
+      <div class="flex w-full pb-6" v-if="selectedGenomeType">
+        <va-select
+          v-model="selectedGenomeValue"
+          :options="availableGenomeValues"
+          label="Genome Assembly"
+          placeholder="Select genome assembly"
+          class="flex-grow mr-2"
+        />
+        <div class="flex items-center ml-2">
+          <va-popover>
+            <template #body>
+              <div class="w-96">Specific genome assembly version (e.g., hg38, mm10, etc.)</div>
+            </template>
+            <Icon icon="mdi:information" class="text-xl text-gray-500" />
+          </va-popover>
+        </div>
+      </div>
+
+      <div class="flex w-full pb-6">
+        <va-textarea
+          v-model="importNotes"
+          label="Notes (Optional)"
+          placeholder="Add any additional notes about this import"
+          class="flex-grow"
+        />
+      </div>
+    </template>
+
+    <template #step-content-3>
       <ImportInfo
         v-model:populated-dataset-name="populatedDatasetName"
         :dataset="dataset"
@@ -233,9 +297,7 @@
         :source-instrument="selectedSourceInstrument"
         :import-space="searchSpace.label"
         :created-dataset-error="formErrors[STEP_KEYS.IMPORT]"
-        :show-created-dataset-error="
-          !!formErrors[STEP_KEYS.IMPORT] && !stepIsPristine
-        "
+        :show-created-dataset-error="!!formErrors[STEP_KEYS.IMPORT] && !stepIsPristine"
       />
     </template>
 
@@ -261,7 +323,7 @@
           :color="isLastStep ? 'success' : 'primary'"
           :disabled="isNextButtonDisabled"
         >
-          {{ isLastStep ? "Import" : "Next" }}
+          {{ isLastStep ? 'Import' : 'Next' }}
         </va-button>
       </div>
     </template>
@@ -270,52 +332,56 @@
 </template>
 
 <script setup>
-import DatasetSelectAutoComplete from "@/components/dataset/DatasetSelectAutoComplete.vue";
-import config from "@/config";
-import Constants from "@/constants";
-import datasetService from "@/services/dataset";
-import fileSystemService from "@/services/fs";
-import instrumentService from "@/services/instrument";
-import toast from "@/services/toast";
-import { Icon } from "@iconify/vue";
-import { watchDebounced } from "@vueuse/core";
-import pm from "picomatch";
-import { VaPopover } from "vuestic-ui";
+import DatasetSelectAutoComplete from '@/components/dataset/DatasetSelectAutoComplete.vue';
+import config from '@/config';
+import Constants from '@/constants';
+import datasetService from '@/services/dataset';
+import fileSystemService from '@/services/fs';
+import instrumentService from '@/services/instrument';
+import toast from '@/services/toast';
+import { Icon } from '@iconify/vue';
+import { watchDebounced } from '@vueuse/core';
+import pm from 'picomatch';
+import { VaPopover } from 'vuestic-ui';
 
 const STEP_KEYS = {
-  SELECT_DIRECTORY: "selectDirectory",
-  GENERAL_INFO: "generalInfo",
-  IMPORT: "info",
+  SELECT_DIRECTORY: 'selectDirectory',
+  GENERAL_INFO: 'generalInfo',
+  GENOMIC_DETAILS: 'genomicDetails',
+  IMPORT: 'info',
 };
 
-const UNKNOWN_VALIDATION_ERROR = "An unknown error occurred";
-const DATASET_NAME_REQUIRED_ERROR = "Dataset name cannot be empty";
-const DATASET_NAME_HAS_SPACES_ERROR = "Dataset name cannot contain spaces";
-const DATASET_NAME_MIN_LENGTH_ERROR =
-  "Dataset name must have 3 or more characters.";
-const NO_FILE_SELECTED_ERROR = "A file must be selected for import";
-const IMPORT_NOT_ALLOWED_ERROR =
-  "Selected file cannot be imported as a dataset";
+const UNKNOWN_VALIDATION_ERROR = 'An unknown error occurred';
+const DATASET_NAME_REQUIRED_ERROR = 'Dataset name cannot be empty';
+const DATASET_NAME_HAS_SPACES_ERROR = 'Dataset name cannot contain spaces';
+const DATASET_NAME_MIN_LENGTH_ERROR = 'Dataset name must have 3 or more characters.';
+const NO_FILE_SELECTED_ERROR = 'A file must be selected for import';
+const IMPORT_NOT_ALLOWED_ERROR = 'Selected file cannot be imported as a dataset';
 
 const FILESYSTEM_SEARCH_SPACES = (config.filesystem_search_spaces || []).map(
-  (space) => space[Object.keys(space)[0]],
+  (space) => space[Object.keys(space)[0]]
 );
 
 const steps = [
   {
     key: STEP_KEYS.SELECT_DIRECTORY,
-    label: "Select Directory",
-    icon: "material-symbols:folder",
+    label: 'Select Directory',
+    icon: 'material-symbols:folder',
   },
   {
     key: STEP_KEYS.GENERAL_INFO,
-    label: "General Info",
-    icon: "material-symbols:info",
+    label: 'General Info',
+    icon: 'material-symbols:info',
+  },
+  {
+    key: STEP_KEYS.GENOMIC_DETAILS,
+    label: 'Genomic Details',
+    icon: 'mdi-dna',
   },
   {
     key: STEP_KEYS.IMPORT,
-    label: "Import",
-    icon: "material-symbols:play-circle",
+    label: 'Import',
+    icon: 'material-symbols:play-circle',
   },
 ];
 
@@ -330,7 +396,7 @@ const datasetTypes = [
   },
 ];
 
-const populatedDatasetName = ref("");
+const populatedDatasetName = ref('');
 const datasetTypeOptions = ref(datasetTypes);
 // `willImportRawData` determines whether the user will import a Raw Data or a
 // Data Product. By default, the user will import a Data Product.
@@ -338,7 +404,7 @@ const willImportRawData = ref(false);
 const isAssignedProject = ref(true);
 const isAssignedSourceRawData = ref(true);
 const submissionSuccess = ref(false);
-const fileListSearchText = ref("");
+const fileListSearchText = ref('');
 const fileList = ref([]);
 const dataset = ref(null);
 const loadingResources = ref(false); // determines if the initial resources needed for the stepper are being fetched
@@ -348,20 +414,23 @@ const isSubmissionAlertVisible = ref(false);
 const submitAttempted = ref(false);
 const isAssignedSourceInstrument = ref(true);
 const selectedRawData = ref(null);
-const datasetSearchText = ref("");
-const projectSearchText = ref("");
+const datasetSearchText = ref('');
+const projectSearchText = ref('');
 const selectedSourceInstrument = ref(null);
 const sourceInstrumentOptions = ref([]);
+const selectedFileType = ref(null);
+const selectedGenomeType = ref(null);
+const selectedGenomeValue = ref(null);
+const importNotes = ref('');
 const searchSpace = ref(
-  FILESYSTEM_SEARCH_SPACES instanceof Array &&
-    FILESYSTEM_SEARCH_SPACES.length > 0
+  FILESYSTEM_SEARCH_SPACES instanceof Array && FILESYSTEM_SEARCH_SPACES.length > 0
     ? FILESYSTEM_SEARCH_SPACES[0]
-    : "",
+    : ''
 );
 const step = ref(0);
 const projectSelected = ref(null);
 const selectedDatasetType = ref(
-  datasetTypes.find((e) => e.value === config.dataset.types.DATA_PRODUCT.key),
+  datasetTypes.find((e) => e.value === config.dataset.types.DATA_PRODUCT.key)
 );
 // `stepPristineStates` tracks if a step's form fields are pristine (i.e. not
 // touched by user) or not. Errors are only shown when a step's form fields are
@@ -369,6 +438,7 @@ const selectedDatasetType = ref(
 const stepPristineStates = ref([
   { [STEP_KEYS.SELECT_DIRECTORY]: true },
   { [STEP_KEYS.GENERAL_INFO]: true },
+  { [STEP_KEYS.GENOMIC_DETAILS]: true },
   { [STEP_KEYS.IMPORT]: true },
 ]);
 const isFileSearchAutocompleteOpen = ref(false);
@@ -376,6 +446,7 @@ const selectedFile = ref(null);
 const formErrors = ref({
   [STEP_KEYS.SELECT_DIRECTORY]: null,
   [STEP_KEYS.GENERAL_INFO]: null,
+  [STEP_KEYS.GENOMIC_DETAILS]: null,
   [STEP_KEYS.IMPORT]: null,
 });
 
@@ -387,9 +458,9 @@ const searchSpaceBasePath = computed(() => searchSpace.value.base_path);
 
 const _searchText = computed(() => {
   return (
-    (searchSpace.value.base_path.endsWith("/")
+    (searchSpace.value.base_path.endsWith('/')
       ? searchSpace.value.base_path
-      : searchSpace.value.base_path + "/") + fileListSearchText.value
+      : searchSpace.value.base_path + '/') + fileListSearchText.value
   );
 });
 
@@ -409,12 +480,45 @@ const stepIsPristine = computed(() => {
   return !!Object.values(stepPristineStates.value[step.value])[0];
 });
 
+const fileTypeOptions = computed(() => {
+  return [
+    { text: 'FASTQ', value: 'fastq' },
+    { text: 'BAM', value: 'bam' },
+    { text: 'BigWig', value: 'bigwig' },
+    { text: 'VCF', value: 'vcf' },
+    { text: 'BED', value: 'bed' },
+    { text: 'BigBed', value: 'bigbed' },
+    { text: 'Other', value: 'other' },
+  ];
+});
+
+const genomeTypeOptions = computed(() => {
+  return Object.entries(Constants.GENOME_TYPES).map(([key, value]) => ({
+    text: value.label,
+    value: key,
+  }));
+});
+
+const availableGenomeValues = computed(() => {
+  if (!selectedGenomeType.value) {
+    return [];
+  }
+
+  // Extract the actual genome type key from the object
+  const genomeTypeKey = selectedGenomeType.value.value || selectedGenomeType.value;
+  const genomes = Constants.GENOME_TYPES[genomeTypeKey]?.genomes || [];
+
+  return genomes;
+});
+
 const stepHasErrors = computed(() => {
   if (step.value === 0) {
     return !!formErrors.value[STEP_KEYS.SELECT_DIRECTORY];
   } else if (step.value === 1) {
     return !!formErrors.value[STEP_KEYS.GENERAL_INFO];
   } else if (step.value === 2) {
+    return !!formErrors.value[STEP_KEYS.GENOMIC_DETAILS];
+  } else if (step.value === 3) {
     return !!formErrors.value[STEP_KEYS.IMPORT];
   }
 });
@@ -426,7 +530,7 @@ const onFileSearchAutocompleteOpen = () => {
 
 const onFileSearchAutocompleteClose = () => {
   if (!selectedFile.value) {
-    fileListSearchText.value = "";
+    fileListSearchText.value = '';
   }
   fileList.value = [];
   isFileSearchAutocompleteOpen.value = false;
@@ -437,12 +541,12 @@ const onFileSearchAutocompleteClose = () => {
 
 const resetProjectSearch = () => {
   projectSelected.value = null;
-  projectSearchText.value = "";
+  projectSearchText.value = '';
 };
 
 const clearSelectedRawData = () => {
   selectedRawData.value = null;
-  datasetSearchText.value = "";
+  datasetSearchText.value = '';
 };
 
 const resetRawDataSearch = (val) => {
@@ -451,10 +555,10 @@ const resetRawDataSearch = (val) => {
     datasetTypeOptions.value = datasetTypes;
   } else {
     datasetTypeOptions.value = datasetTypes.filter(
-      (e) => e.value === config.dataset.types.DATA_PRODUCT.key,
+      (e) => e.value === config.dataset.types.DATA_PRODUCT.key
     );
     selectedDatasetType.value = datasetTypeOptions.value.find(
-      (e) => e.value === config.dataset.types.DATA_PRODUCT.key,
+      (e) => e.value === config.dataset.types.DATA_PRODUCT.key
     );
     willImportRawData.value = false;
   }
@@ -466,7 +570,7 @@ const onRawDataSearchOpen = () => {
 
 const onRawDataSearchClose = () => {
   if (!selectedRawData.value) {
-    datasetSearchText.value = "";
+    datasetSearchText.value = '';
   }
 };
 
@@ -476,16 +580,13 @@ const onProjectSearchOpen = () => {
 
 const onProjectSearchClose = () => {
   if (!projectSelected.value) {
-    projectSearchText.value = "";
+    projectSearchText.value = '';
   }
 };
 
 const isStepperButtonDisabled = (stepIndex) => {
   return (
-    submitAttempted.value ||
-    submissionSuccess.value ||
-    step.value < stepIndex ||
-    loading.value
+    submitAttempted.value || submissionSuccess.value || step.value < stepIndex || loading.value
   );
 };
 
@@ -493,6 +594,7 @@ const resetFormErrors = () => {
   formErrors.value = {
     [STEP_KEYS.SELECT_DIRECTORY]: null,
     [STEP_KEYS.GENERAL_INFO]: null,
+    [STEP_KEYS.GENOMIC_DETAILS]: null,
     [STEP_KEYS.IMPORT]: null,
   };
 };
@@ -534,8 +636,12 @@ const setFormErrors = async () => {
   }
 
   if (step.value === 2) {
-    const { isNameValid: datasetNameIsValid, error } =
-      await validateDatasetName();
+    // Genomic details step - all fields are optional
+    formErrors.value[STEP_KEYS.GENOMIC_DETAILS] = null;
+  }
+
+  if (step.value === 3) {
+    const { isNameValid: datasetNameIsValid, error } = await validateDatasetName();
     if (datasetNameIsValid) {
       formErrors.value[STEP_KEYS.IMPORT] = null;
     } else {
@@ -556,7 +662,7 @@ const validateIfExists = (value) => {
     } else {
       datasetService
         .check_if_exists({
-          type: selectedDatasetType.value["value"],
+          type: selectedDatasetType.value['value'],
           name: value,
         })
         .then((res) => {
@@ -575,7 +681,7 @@ const validateDatasetName = async () => {
     return { isNameValid: false, error: DATASET_NAME_REQUIRED_ERROR };
   } else if (populatedDatasetName.value.length < 3) {
     return { isNameValid: false, error: DATASET_NAME_MIN_LENGTH_ERROR };
-  } else if (populatedDatasetName.value.indexOf(" ") > -1) {
+  } else if (populatedDatasetName.value.indexOf(' ') > -1) {
     return { isNameValid: false, error: DATASET_NAME_HAS_SPACES_ERROR };
   }
 
@@ -583,14 +689,12 @@ const validateDatasetName = async () => {
   return validateIfExists(populatedDatasetName.value)
     .then((res) => {
       const datasetExistsError = (datasetType) => {
-        const datasetTypeLabel = datasetTypes.find(
-          (type) => type.value === datasetType,
-        ).label;
+        const datasetTypeLabel = datasetTypes.find((type) => type.value === datasetType).label;
         return `A ${datasetTypeLabel} with this name already exists.`;
       };
       return {
         isNameValid: !res,
-        error: res && datasetExistsError(selectedDatasetType.value["value"]),
+        error: res && datasetExistsError(selectedDatasetType.value['value']),
       };
     })
     .catch(() => {
@@ -603,7 +707,7 @@ const validateDatasetName = async () => {
 
 const resetSearch = () => {
   selectedFile.value = null;
-  fileListSearchText.value = "";
+  fileListSearchText.value = '';
   setRetrievedFiles([]);
   formErrors.value[STEP_KEYS.SELECT_DIRECTORY] = null;
   if (validatingForm.value) {
@@ -626,7 +730,7 @@ const searchFiles = async () => {
       if (err.response.status === 403 || err.response.status === 404) {
         setRetrievedFiles([]);
       } else {
-        toast.error("Error fetching files");
+        toast.error('Error fetching files');
       }
     })
     .finally(() => {
@@ -649,6 +753,11 @@ const preImport = () => {
       src_instrument_id: selectedSourceInstrument.value?.id,
       src_dataset_id: selectedRawData.value?.id,
       create_method: Constants.DATASET_CREATE_METHODS.IMPORT,
+      // Genomic details
+      file_type: selectedFileType.value?.value || null,
+      genome_type: selectedGenomeType.value?.value || selectedGenomeType.value || null,
+      genome_value: selectedGenomeValue.value || null,
+      import_notes: importNotes.value || null,
     });
   } else {
     return Promise.resolve({ data: dataset.value });
@@ -659,14 +768,14 @@ const initiateImport = async () => {
   return datasetService
     .initiate_workflow_on_dataset({
       dataset_id: dataset.value.id,
-      workflow: "integrated",
+      workflow: 'integrated',
     })
     .then(() => {
-      toast.success("Initiated dataset import");
+      toast.success('Initiated dataset import');
       submissionSuccess.value = true;
     })
     .catch((err) => {
-      toast.error("Failed to initiate import");
+      toast.error('Failed to initiate import');
       console.error(err);
       submissionSuccess.value = false;
     });
@@ -689,9 +798,7 @@ const onSubmit = async () => {
       .catch((err) => {
         // handle 409 error when dataset already exists
         if (err.response.status === 409) {
-          toast.error(
-            `A ${selectedDatasetType.value["label"]} with this name already exists.`,
-          );
+          toast.error(`A ${selectedDatasetType.value['label']} with this name already exists.`);
           // TODO
           return Promise.reject();
         }
@@ -701,7 +808,7 @@ const onSubmit = async () => {
         return initiateImport();
       })
       .catch((err) => {
-        toast.error("Failed to initiate import");
+        toast.error('Failed to initiate import');
         // console.error(err);
         reject(err);
       });
@@ -709,7 +816,7 @@ const onSubmit = async () => {
 };
 
 const getRestrictedImportPaths = () => {
-  return config.restricted_import_dirs[searchSpace.value.key].paths.split(",");
+  return config.restricted_import_dirs[searchSpace.value.key].paths.split(',');
 };
 
 const onNextClick = (nextStep) => {
@@ -736,6 +843,10 @@ watch(
     fileListSearchText,
     isFileSearchAutocompleteOpen,
     searchSpace,
+    selectedFileType,
+    selectedGenomeType,
+    selectedGenomeValue,
+    importNotes,
   ],
   async (newVals, oldVals) => {
     // mark step's form fields as not pristine, for fields' errors to be shown
@@ -748,26 +859,31 @@ watch(
     }
 
     await setFormErrors();
-  },
+  }
 );
 
 // separate watcher for when step changes, since we don't want to mark the form
 // fields as not pristine upon step changes
 watch(step, async () => {
-  if (step.value !== 2) {
-    // step 3 is the `Import` step
+  if (step.value !== 3) {
+    // step 4 (index 3) is the `Import` step
     await setFormErrors();
   }
 });
 
 watch(selectedDatasetType, (newVal) => {
-  if (newVal["value"] === config.dataset.types.RAW_DATA.key) {
+  if (newVal['value'] === config.dataset.types.RAW_DATA.key) {
     isAssignedSourceRawData.value = false;
     clearSelectedRawData();
     willImportRawData.value = true;
   } else {
     willImportRawData.value = false;
   }
+});
+
+// Clear genome value when genome type changes
+watch(selectedGenomeType, () => {
+  selectedGenomeValue.value = null;
 });
 
 // Set loading to true when FileListAutoComplete is either opened or typed into.
@@ -788,7 +904,7 @@ watchDebounced(
       searchFiles();
     }
   },
-  { debounce: 1000, maxWait: 3000 },
+  { debounce: 1000, maxWait: 3000 }
 );
 
 onMounted(async () => {
@@ -803,7 +919,7 @@ onMounted(() => {
       sourceInstrumentOptions.value = res.data;
     })
     .catch((err) => {
-      toast.error("Failed to load resources");
+      toast.error('Failed to load resources');
       console.error(err);
     })
     .finally(() => {

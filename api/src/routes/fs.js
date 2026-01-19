@@ -80,6 +80,16 @@ router.get(
       return;
     }
 
+    // if (process.env.NODE_ENV === 'docker') {
+    //   const files = _.range(10).map((i) => ({
+    //     name: `test${i}`,
+    //     isDir: i % 2 === 0,
+    //     path: path.join(query_path, `test${i}`),
+    //   }));
+    //   res.json(files);
+    //   return;
+    // }
+
     const mounted_search_dir = get_mounted_search_dir(req);
 
     fs.access(mounted_search_dir, constants.F_OK, (err) => {

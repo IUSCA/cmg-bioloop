@@ -33,6 +33,9 @@ def copy(celery_task, dataset_id_conversion_id, **kwargs):
     src_reports = conversion_output_dir / 'Reports'
     dst_reports = reports_target_dir / 'Reports'
 
+    # Perform any operations that may be needed to grant users access to the reports directory.
+    # grant_reports_access(reports_dir=dst_reports)
+
     if src_reports.exists():
         shutil.copytree(src_reports, dst_reports)
         print(f"Copied reports from {src_reports} to {dst_reports}")

@@ -25,11 +25,7 @@
           preset="primary"
           color="info"
           class="flex-none"
-          :disabled="
-            selectable &&
-            (selectedIds.length < 1 ||
-              selectedIds.length > MAX_DATASET_CONVERSIONS)
-          "
+          :disabled="selectable && selectedIds.length < 1"
         >
           <i-mdi-orbit-variant class="mr-1" />
           <span> Convert </span>
@@ -78,6 +74,7 @@
         hoverable
         :loading="data_loading"
         :selectable="selectable"
+        :select-mode="selectMode"
       >
         <template #cell(name)="{ rowData }">
           <router-link :to="`/datasets/${rowData.id}`" class="va-link">{{
@@ -263,6 +260,7 @@ import { formatBytes } from "@/services/utils";
 import { useAuthStore } from "@/stores/auth";
 import { useDatasetStore } from "@/stores/dataset";
 import { storeToRefs } from "pinia";
+import config from "@/config";
 
 useSearchKeyShortcut();
 
@@ -278,6 +276,12 @@ const auth = useAuthStore();
 
 const PAGE_SIZE_OPTIONS = [25, 50, 100];
 const MAX_DATASET_CONVERSIONS = 10000;
+
+// Determine selection mode based on config
+// If allow_multiple_dataset_conversions is false, use single selection mode
+const selectMode = computed(() => {
+  return config.conversion.allow_multiple_dataset_conversions ? "multiple" : "single";
+});
 
 const datasets = ref([]);
 const data_loading = ref(false);

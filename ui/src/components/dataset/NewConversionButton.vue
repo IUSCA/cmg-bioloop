@@ -33,13 +33,13 @@
 </template>
 
 <script setup>
-import conversionApiService from "@/services/conversion/api";
-import toast from "@/services/toast";
+import conversionApiService from '@/services/conversion/api';
+import toast from '@/services/toast';
 const props = defineProps({
   dataset: Object,
 });
 
-const emit = defineEmits(["update"]);
+const emit = defineEmits(['update']);
 
 const visible = ref(false);
 const loading = ref(false);
@@ -53,16 +53,18 @@ function convert_dataset() {
     .create({
       definition_id: definition.value.id,
       dataset_id: props.dataset.id,
-      argument_values: argValues.value,
+      argument_values: argValues.value.argument_values,
+      user_argument_values: argValues.value.user_argument_values,
       execution_platform: execution_metadata.value.platform,
       execution_metadata: execution_metadata.value.metadata,
     })
     .then(() => {
-      emit("update");
+      toast.success('Conversion initiated successfully');
+      emit('update');
     })
     .catch((err) => {
       console.error(err);
-      toast.error("Failed to convert dataset");
+      toast.error('Failed to convert dataset');
       if (err.response.data) {
         toast.error(err.response.data.message);
       }
@@ -86,8 +88,8 @@ const disabled = computed(() => {
 
 const reason = computed(() => {
   if (!props.dataset.is_staged) {
-    return "Please stage the dataset first";
+    return 'Please stage the dataset first';
   }
-  return "";
+  return '';
 });
 </script>

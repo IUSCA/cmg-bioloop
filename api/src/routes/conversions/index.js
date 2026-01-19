@@ -500,10 +500,10 @@ router.post(
               argument_id: Number(argument_id),
               value: conversionService.convertValueForStorage(value, definition),
             })),
-          },
-          additional_args: req.body.user_argument_values.length > 0 ? req.body.user_argument_values : null,
         },
-      });
+        additional_args: req.body.user_argument_values.length > 0 ? req.body.user_argument_values : null,
+      },
+    });
 
       // create Process Requests
       await Promise.all(req.body.process_requests.map(async (request) => {
@@ -527,12 +527,15 @@ router.post(
         });
       }));
 
-      const wf_body = datasetService.get_wf_body('conversion');
-      // create the workflow
-      const wf = (await wfService.create({
-        ...wf_body,
-        args: [conversion.id],
-      })).data;
+    const workflow_type = config.genomic_conversion_programs.includes(conversionDefinition.program.name)
+      ? 'genomic_conversion'
+      : 'conversion';
+    const wf_body = datasetService.get_wf_body(workflow_type);
+    // create the workflow
+    const wf = (await wfService.create({
+      ...wf_body,
+      args: [conversion.id],
+    })).data;
 
       // add workflow association to the dataset
       await tx.workflow.create({
@@ -630,7 +633,7 @@ async function validateAndCreateConversion(
       where: { name: 'slurm' },
       include: { arguments: true }
     });
-    
+
     if (slurmProgram) {
       // Add SLURM argument values to argVals
       slurmProcessRequests.forEach(slurmRequest => {
@@ -638,7 +641,7 @@ async function validateAndCreateConversion(
         slurmProgram.arguments.forEach(slurmArg => {
           const directiveKey = slurmArg.name.replace('--', '').replace('-', '');
           const directiveValue = directives[directiveKey];
-          
+
           if (directiveValue !== null && directiveValue !== undefined && directiveValue !== '') {
             argVals[slurmArg.id.toString()] = {
               value: conversionService.convertValueForStorage(directiveValue, slurmArg),
@@ -892,47 +895,94 @@ router.get(
   }),
 );
 
-// Serve conversion reports directory with directory listing
 router.get(
-  '/:id/reports/*',
+  '/:id/reports',
   isPermittedTo('read'),
   validate([
     param('id').isInt({ min: 1 }).toInt(),
   ]),
   asyncHandler(async (req, res, next) => {
     // #swagger.tags = ['Conversions']
+    console.log('GET /conversions/:id/reports', req.params.id);
+
     const conversionId = req.params.id;
 
-    // Get the conversion to access its output directory
     const conversion = await prisma.conversion.findUniqueOrThrow({
       where: { id: conversionId },
-      include: {
-        dataset: true,
-        definition: true,
-      },
     });
 
-    if (!conversion.definition.output_directory) {
-      return next(createError(404, 'Output directory not configured for this conversion'));
-    }
+    const conversionTargetDatasetId = conversion.dataset_id;
+    const conversionTargetDataset = await prisma.dataset.findUniqueOrThrow({
+      where: { id: conversionTargetDatasetId },
+    });
 
-    // Build the path to the conversion's output directory
-    const outputDir = conversion.definition.output_directory;
-    const conversionOutputPath = path.join(outputDir, String(conversionId), conversion.dataset.name);
+    const conversionTargetDatasetName = conversionTargetDataset.name;
 
-    // Serve static files from the conversion output directory with directory listing
-    const staticOptions = {
-      dotfiles: 'ignore',
-      etag: true,
-      index: false, // This enables directory listing
-      lastModified: true,
-      maxAge: '1d',
-      redirect: false,
-    };
+    // Use cmg_id if available (for historic conversions), otherwise use the bioloop conversion id
+    const reportsDirName = conversion.cmg_id || String(conversionId);
 
-    // Use express.static to serve the directory
-    express.static(conversionOutputPath, staticOptions)(req, res, next);
+    // Construct the URL path for accessing reports (unauthenticated endpoint)
+    const reportsUrlPath = `/api/reports/conversions/${conversionId}/files`;
+
+    console.log('reportsDirName:', reportsDirName);
+    console.log('reportsUrlPath:', reportsUrlPath);
+
+    return res.json({
+      conversion_id: conversionId,
+      cmg_id: conversion.cmg_id,
+      dataset_name: conversionTargetDatasetName,
+      reports_url: reportsUrlPath,
+      index_url: `${reportsUrlPath}/html/index.html`,
+    });
   }),
-);
+)
+
+// === AI-ATTENTION-BEGIN ===
+// I am not sure if the following implementation of exposing a Conversion's reports is correct, or
+// the one above this, which is uncommented. Keep this in mind if we need to debug this.
+// === AI-ATTENTION-END ===
+//
+// router.get(
+//   '/:id/reports',
+//   isPermittedTo('read'),
+//   validate([
+//     param('id').isInt({ min: 1 }).toInt(),
+//   ]),
+//   asyncHandler(async (req, res, next) => {
+//     // #swagger.tags = ['Conversions']
+//     console.log('GET /conversions/:id/reports', req.params.id);
+//
+//     const conversionId = req.params.id;
+//
+//     const conversion = await prisma.conversion.findUniqueOrThrow({
+//       where: { id: conversionId },
+//       include: {
+//         dataset: true,
+//         definition: true,
+//       },
+//     });
+//
+//     if (!conversion.definition.output_directory) {
+//       return next(createError(404, 'Output directory not configured for this conversion'));
+//     }
+//
+//     // Build the path to the conversion's output directory
+//     const outputDir = conversion.definition.output_directory;
+//     const conversionOutputPath = path.join(outputDir, String(conversionId), conversion.dataset.name);
+//
+//     // Serve static files from the conversion output directory with directory listing
+//     const staticOptions = {
+//       dotfiles: 'ignore',
+//       etag: true,
+//       index: false, // This enables directory listing
+//       lastModified: true,
+//       maxAge: '1d',
+//       redirect: false,
+//     };
+//
+//     // Use express.static to serve the directory
+//     express.static(conversionOutputPath, staticOptions)(req, res, next);
+//   }),
+// );
 
 module.exports = router;

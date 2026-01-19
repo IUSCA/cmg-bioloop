@@ -48,13 +48,13 @@
         </template>
 
         <template #cell(genome)="{ item }">
-          <va-chip size="small" preset="primary">
+          <va-chip v-if="item.genome" size="small" preset="primary">
             {{ item.genome }}
           </va-chip>
         </template>
 
         <template #cell(genome_type)="{ item }">
-          <va-chip size="small" preset="secondary">
+          <va-chip v-if="item.genome_type" size="small" preset="secondary">
             {{ item.genome_type }}
           </va-chip>
         </template>
@@ -82,29 +82,13 @@
 
         <template #cell(actions)="{ item }">
           <div class="flex gap-1">
-            <va-button
-              preset="plain"
-              class="flex-auto"
-              @click="viewSession(item)"
-            >
-              <va-icon name="visibility" />
-            </va-button>
-
-            <va-button
-              v-if="canEditSession(item)"
-              preset="plain"
-              class="flex-auto"
-              @click="editSession(item)"
-            >
-              <va-icon name="edit" />
-            </va-button>
 
             <va-button
               v-if="canDeleteSession(item)"
               preset="plain"
               color="danger"
               class="flex-auto"
-              @click="deleteSession(item)"
+              @click="openDeleteModal(item)"
             >
               <va-icon name="delete" />
             </va-button>
@@ -127,11 +111,11 @@
       @created="handleSessionCreated"
     />
 
-    <!-- Edit Modal -->
-    <edit-session-modal
-      v-model="showEditModal"
-      :session="editingSession"
-      @updated="handleSessionUpdated"
+    <!-- Delete Modal -->
+    <DeleteSessionModal
+      ref="deleteModal"
+      :data="selectedForDeletion"
+      @update="fetchSessions"
     />
   </div>
 </template>
@@ -142,9 +126,9 @@ import { useSessionsStore } from "@/stores/sessions";
 import { useDebounceFn } from "@vueuse/core";
 import { computed, onMounted, ref, watch } from "vue";
 import { useRouter } from "vue-router";
-import EditSessionModal from "./EditSessionModal.vue";
 import SessionSearchFilters from "./SessionSearchFilters.vue";
 import SessionSearchModal from "./SessionSearchModal.vue";
+import DeleteSessionModal from "./DeleteSessionModal.vue";
 
 const router = useRouter();
 const sessionsStore = useSessionsStore();
@@ -153,8 +137,6 @@ const auth = useAuthStore();
 // Reactive state
 const showSearchModal = ref(false);
 const showCreateModal = ref(false);
-const showEditModal = ref(false);
-const editingSession = ref(null);
 const inclusive_query = ref("");
 
 // Query parameters
@@ -272,9 +254,6 @@ const columns = [
 ];
 
 // Methods
-const canEditSession = (session) => {
-  return session.user_id === auth.user?.id;
-};
 
 const canDeleteSession = (session) => {
   return session.user_id === auth.user?.id;
@@ -342,34 +321,20 @@ const viewSession = (session) => {
   router.push(`/sessions/${session.id}`);
 };
 
-const editSession = (session) => {
-  editingSession.value = session;
-  showEditModal.value = true;
-};
 
-const deleteSession = async (session) => {
-  if (
-    confirm(`Are you sure you want to delete the session "${session.title}"?`)
-  ) {
-    try {
-      await sessionsStore.deleteSession(session.id);
-      await fetchSessions(); // Refresh the list
-    } catch (error) {
-      console.error("Error deleting session:", error);
-    }
-  }
-};
+const deleteModal = ref(null);
+const selectedForDeletion = ref({});
+
+function openDeleteModal(session) {
+  selectedForDeletion.value = session;
+  deleteModal.value.show();
+}
 
 const handleSessionCreated = () => {
   showCreateModal.value = false;
   fetchSessions(); // Refresh the list
 };
 
-const handleSessionUpdated = () => {
-  showEditModal.value = false;
-  editingSession.value = null;
-  fetchSessions(); // Refresh the list
-};
 
 // Watch for changes in query and filters
 watch(

@@ -2,7 +2,7 @@ name: bioloop
 services:
   ui:
     restart: unless-stopped
-    image: node:19
+    image: node:20
     volumes:
       - ./ui/:/opt/sca/app
       - ui_modules:/opt/sca/app/node_modules
@@ -29,6 +29,13 @@ services:
     expose:
       - 3030
     # entrypoint: [ "tail", "-f", "/dev/null" ]
+    entrypoint:
+      - sh
+      - -c
+      - |
+        npm install \
+        && npx prisma generate client \
+        && exec /opt/sca/app/node_modules/.bin/nodemon --signal SIGTERM src/index.js
     depends_on:
       - postgres
     networks:
@@ -103,7 +110,7 @@ services:
     volumes:
       - grafana_data:/var/lib/grafana                   # Mount for Grafana data (dashboards, plugins)
       - ./metrics/grafana/config:/etc/grafana           # Mount for custom Grafana configuration
-      - ./api/keys/auth.pub:/etc/grafana/auth.pub
+      # - ./api/keys/auth.pub:/etc/grafana/auth.pub
     # ports:
     #   - "3000:3000"
     depends_on:

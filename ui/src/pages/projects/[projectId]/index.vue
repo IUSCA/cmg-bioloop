@@ -110,6 +110,7 @@
                 border-color="danger"
                 class="flex-none"
                 color="danger"
+                :disabled="!!project.cmg_id"
                 @click="openModalToDeleteProject"
               >
                 <div class="flex items-center gap-2">
@@ -235,8 +236,8 @@ const users = computed(() => {
 const editModal = ref(null);
 
 function openModalToEditProject() {
-  const { name, description, browser_enabled, funding } = project.value;
-  projectFormStore.$patch({ name, description, browser_enabled, funding });
+  const { name, description, browser_enabled, funding, cmg_id } = project.value;
+  projectFormStore.$patch({ name, description, browser_enabled, funding, cmg_id });
   editModal.value.show();
 }
 

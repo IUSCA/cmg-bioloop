@@ -95,6 +95,7 @@ celery_state*
 # celery worker pid file
 celery_worker.pid
 conversion_worker.pid
+conversions_worker.pid
 
 celery_worker.state
 conversion_worker.state
@@ -104,5 +105,7 @@ conversion_worker.state
 workers/scripts/requirements.txt
 
 workers/scripts/get_size.py
-workers/config/production.py
 
+*.bak
+*.dat
+*.dir

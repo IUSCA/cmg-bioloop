@@ -29,10 +29,11 @@ ONE_GIGABYTE = 1024 * 1024 * 1024
 FIVE_MINUTES = 5 * 60
 
 config = {
-    'app_id': 'cmg-new.sca.iu.edu',
+    'app_id': 'cmg-test.sca.iu.edu',
     # cspell: disable-next-line
     'genome_file_types': ['.cbcl', '.bcl', '.bcl.gz', '.bgzf', '.fastq.gz', '.bam', '.bam.bai', '.vcf.gz',
                           '.vcf.gz.tbi', '.vcf'],
+    'trackable_extensions': ['.bam', '.bw', '.bigwig', '.vcf'],
     'api': {
         'base_url': API_BASE_URL,
         'auth_token': APP_API_TOKEN,
@@ -62,6 +63,7 @@ config = {
         'download_dir': '/path/to/download_dir',
         'conversion': {
           'reports': '/path/to/conversion_reports',
+          'reports_access': '/path/to/access/conversion_reports',
         },
         'root': '/path/to/root'
     },
@@ -155,7 +157,7 @@ config = {
             {
               "name": "convert",
               "task": "convert_dataset",
-              "queue": "conversion.cmg-new.sca.iu.edu.q"
+              "queue": "conversion.cmg-test.sca.iu.edu.q"
             },
 
           ]
@@ -166,23 +168,48 @@ config = {
             {
               "name": "convert",
               "task": "convert_genomic",
-              "queue": "conversion.cmg-new.sca.iu.edu.q"
+              "queue": "conversion.cmg-test.sca.iu.edu.q"
             },
             {
               "name": "generate qc",
               "task": "generate_qc",
-              "queue": "conversion.cmg-new.sca.iu.edu.q"
+              "queue": "conversion.cmg-test.sca.iu.edu.q"
             },
             {
               "name": "copy reports",
               "task": "copy_conversion_reports",
-              "queue": "conversion.cmg-new.sca.iu.edu.q"
+              "queue": "conversion.cmg-test.sca.iu.edu.q"
             },
             {
               "name": "derive data products",
               "task": "derive_data_products",
-              "queue": "conversion.cmg-new.sca.iu.edu.q"
+              "queue": "conversion.cmg-test.sca.iu.edu.q"
             }
+          ]
+        },
+        "file_info_population": {
+          "name": "File Info Population",
+          "steps": [
+            {
+              "name": "populate file metadata",
+              "task": "populate_file_metadata"
+            },
+            # {
+            #   "name": "archive",
+            #   "task": "archive_dataset"
+            # },
+            # {
+            #   "name": "stage",
+            #   "task": "stage_dataset"
+            # },
+            # {
+            #   "name": "validate",
+            #   "task": "validate_dataset"
+            # },
+            # {
+            #   "name": "delete_source",
+            #   "task": "delete_source"
+            # }
           ]
         }
     },
@@ -202,7 +229,7 @@ config = {
     },
     'workflow': {
         'purge': {
-            'types': ['integrated', 'stage', 'delete', 'conversion'],
+            'types': ['integrated', 'stage', 'delete', 'conversion', 'file_info_population'],
             'age_threshold_seconds': 86400,
             'max_purge_count': 10
         }
@@ -216,18 +243,33 @@ config = {
         'cellranger-atac', 'spaceranger-v3.0.1', 'spaceranger-v1.3.1', 
         'spaceranger-v1.1.0'
     ],
+    'genomic_conversion': {
+        'default_analysis_type': {
+            'enabled': True,  # Set to True to override default behavior
+            'value': 'fastq'      # Set to desired Analysis Type (e.g., 'FASTQ_CLEANED')
+        }
+    },
+    'file_info_population': {
+        'batch_size': 10,
+        'max_download_size_tb': 10,
+        'download_dir': '/opt/sca/data/file_info_downloads',
+        'state_file': '/opt/sca/data/file_info_population_state.json',
+        'skip_sda_upload': True,  # Skip SDA upload in archive step
+        'poll_interval_seconds': 300,  # 5 minutes between batch completion checks
+        'max_retries_per_dataset': 3
+    },
     'execution_platform': {
         # 'KUBERNETES': { },
         # 'AWS_BATCH': { },
         # 'CUSTOM': { },
         'SLURM': {
-          'connection': {
-            'type': 'ssh',
-            'host': 'h1.quartz.uits.iu.edu',
-            'user': 'cmguser',
-            'private_key': '~/.ssh/id_rsa',
-          },
-          'slurm_script_dir': '/slurm_scripts',
+            'connection': {
+                'type': 'ssh',
+                'host': 'h1.quartz.uits.iu.edu',
+                'user': 'cmguser',
+                'private_key': '~/.ssh/id_rsa',
+            },
+            'slurm_script_dir': '/slurm_scripts',
         },
     }
 }

@@ -46,30 +46,25 @@
       :loading="data_loading"
     >
       <template #cell(name)="{ rowData }">
-        <router-link :to="`/tracks/${rowData.id}`" class="va-link">{{
-          rowData.name
-        }}</router-link>
+        <router-link :to="`/tracks/${rowData.id}`" class="va-link">{{ rowData.name }}</router-link>
       </template>
 
       <template #cell(file_type)="{ value }">
-        <va-chip size="small" :color="trackService._getTrackColor(value)">{{
+        <va-chip v-if="value" size="small" :color="trackService._getTrackColor(value)">{{
           value
         }}</va-chip>
       </template>
 
       <template #cell(genomeType)="{ rowData }">
-        <va-chip size="small">{{ rowData.genomeType }}</va-chip>
+        <va-chip v-if="rowData.genomeType" size="small">{{ rowData.genomeType }}</va-chip>
       </template>
 
       <template #cell(genomeValue)="{ rowData }">
-        <va-chip size="small" outline>{{ rowData.genomeValue }}</va-chip>
+        <va-chip v-if="rowData.genomeValue" size="small" outline>{{ rowData.genomeValue }}</va-chip>
       </template>
 
       <template #cell(dataset)="{ rowData }">
-        <router-link
-          :to="`/datasets/${rowData.dataset_file?.dataset?.id}`"
-          class="va-link"
-        >
+        <router-link :to="`/datasets/${rowData.dataset_file?.dataset?.id}`" class="va-link">
           {{ rowData.dataset_file?.dataset?.name }}
         </router-link>
       </template>
@@ -83,20 +78,13 @@
       </template>
 
       <template #cell(actions)="{ rowData }">
-        <div class="flex gap-1">
-          <va-button
-            class="flex-auto"
-            preset="plain"
-            icon="visibility"
-            @click="viewTrack(rowData)"
-          />
+        <div class="flex gap-1 justify-end">
           <template v-if="auth.canOperate">
             <va-button
-              class="flex-auto"
               preset="plain"
               icon="delete"
               color="danger"
-              @click="deleteTrack(rowData.id)"
+              @click="openDeleteModal(rowData)"
             />
           </template>
         </div>
@@ -114,17 +102,21 @@
     />
 
     <TrackSearchModal ref="searchModal" @search="handleSearch" />
+
+    <!-- Delete Modal -->
+    <DeleteTrackModal ref="deleteModal" :data="selectedForDeletion" @update="fetch_items" />
   </div>
 </template>
 
 <script setup>
-import useQueryPersistence from "@/composables/useQueryPersistence";
-import useSearchKeyShortcut from "@/composables/useSearchKeyShortcut";
-import * as datetime from "@/services/datetime";
-import toast from "@/services/toast";
-import trackService from "@/services/track";
-import { useAuthStore } from "@/stores/auth";
-import { useTracksStore } from "@/stores/tracks";
+import DeleteTrackModal from '@/components/tracks/DeleteTrackModal.vue';
+import useQueryPersistence from '@/composables/useQueryPersistence';
+import useSearchKeyShortcut from '@/composables/useSearchKeyShortcut';
+import * as datetime from '@/services/datetime';
+import toast from '@/services/toast';
+import trackService from '@/services/track';
+import { useAuthStore } from '@/stores/auth';
+import { useTracksStore } from '@/stores/tracks';
 
 useSearchKeyShortcut();
 
@@ -139,13 +131,15 @@ const tracks = ref([]);
 const data_loading = ref(false);
 const total_results = ref(0);
 const searchModal = ref(null);
+const deleteModal = ref(null);
+const selectedForDeletion = ref({});
 
 // Query parameters
 const query = ref({
   page: 1,
   page_size: 25,
-  sort_by: "created_at",
-  sort_order: "desc",
+  sort_by: 'created_at',
+  sort_order: 'desc',
 });
 
 // Filters
@@ -161,8 +155,8 @@ const filters = ref({
 const defaultParams = () => ({
   page: 1,
   page_size: 25,
-  sort_by: "created_at",
-  sort_order: "desc",
+  sort_by: 'created_at',
+  sort_order: 'desc',
 });
 
 const defaultFilters = () => ({
@@ -177,7 +171,7 @@ const defaultFilters = () => ({
 const activeFilters = computed(() => {
   const active = [];
   Object.entries(filters.value).forEach(([key, value]) => {
-    if (value && value !== "") {
+    if (value && value !== '') {
       active.push({ key, value });
     }
   });
@@ -191,81 +185,75 @@ const offset = computed(() => (query.value.page - 1) * query.value.page_size);
 useQueryPersistence({
   refObject: query,
   defaultValueFn: defaultParams,
-  key: "q",
+  key: 'q',
   history_push: true,
 });
 
 const columns = [
   {
-    key: "name",
+    key: 'name',
     sortable: true,
-    width: "25%",
-    thAlign: "left",
-    tdAlign: "left",
-    tdStyle:
-      "white-space: pre-wrap; word-wrap: break-word; word-break: break-word;",
-    thStyle:
-      "white-space: pre-wrap; word-wrap: break-word; word-break: break-word;",
+    width: '25%',
+    thAlign: 'left',
+    tdAlign: 'left',
+    tdStyle: 'white-space: pre-wrap; word-wrap: break-word; word-break: break-word;',
+    thStyle: 'white-space: pre-wrap; word-wrap: break-word; word-break: break-word;',
   },
   {
-    key: "file_type",
-    label: "File Type",
+    key: 'file_type',
+    label: 'File Type',
     sortable: true,
-    width: "10%",
-    thAlign: "center",
-    tdAlign: "center",
+    width: '10%',
+    thAlign: 'center',
+    tdAlign: 'center',
   },
   {
-    key: "genomeType",
-    label: "Genome Type",
-    width: "10%",
-    thAlign: "center",
-    tdAlign: "center",
+    key: 'genomeType',
+    label: 'Genome Type',
+    width: '10%',
+    thAlign: 'center',
+    tdAlign: 'center',
   },
   {
-    key: "genomeValue",
-    label: "Genome Value",
-    width: "10%",
-    thAlign: "center",
-    tdAlign: "center",
+    key: 'genomeValue',
+    label: 'Genome Value',
+    width: '10%',
+    thAlign: 'center',
+    tdAlign: 'center',
   },
   {
-    key: "dataset",
-    label: "Dataset",
-    width: "20%",
-    thAlign: "center",
-    tdAlign: "center",
-    tdStyle:
-      "white-space: pre-wrap; word-wrap: break-word; word-break: break-word;",
-    thStyle:
-      "white-space: pre-wrap; word-wrap: break-word; word-break: break-word;",
+    key: 'dataset',
+    label: 'Dataset',
+    width: '20%',
+    thAlign: 'center',
+    tdAlign: 'center',
+    tdStyle: 'white-space: pre-wrap; word-wrap: break-word; word-break: break-word;',
+    thStyle: 'white-space: pre-wrap; word-wrap: break-word; word-break: break-word;',
   },
   {
-    key: "created_at",
-    label: "Created",
+    key: 'created_at',
+    label: 'Created',
     sortable: true,
-    width: "8%",
-    thAlign: "center",
-    tdAlign: "center",
-    thStyle:
-      "white-space: pre-wrap; word-wrap: break-word; word-break: break-word;",
+    width: '8%',
+    thAlign: 'center',
+    tdAlign: 'center',
+    thStyle: 'white-space: pre-wrap; word-wrap: break-word; word-break: break-word;',
   },
   {
-    key: "updated_at",
-    label: "Updated",
+    key: 'updated_at',
+    label: 'Updated',
     sortable: true,
-    width: "7%",
-    thAlign: "center",
-    tdAlign: "center",
-    thStyle:
-      "white-space: pre-wrap; word-wrap: break-word; word-break: break-word;",
+    width: '7%',
+    thAlign: 'center',
+    tdAlign: 'center',
+    thStyle: 'white-space: pre-wrap; word-wrap: break-word; word-break: break-word;',
   },
   {
-    key: "actions",
-    label: "Actions",
-    width: "5%",
-    thAlign: "right",
-    tdAlign: "right",
+    key: 'actions',
+    label: 'Actions',
+    width: '10%',
+    thAlign: 'right',
+    tdAlign: 'right',
   },
 ];
 
@@ -275,9 +263,7 @@ async function fetch_items() {
   try {
     const params = {
       ...filters.value,
-      ...(query.value.inclusive_query
-        ? { name: query.value.inclusive_query }
-        : {}),
+      ...(query.value.inclusive_query ? { name: query.value.inclusive_query } : {}),
       limit: query.value.page_size,
       offset: offset.value,
       sort_by: query.value.sort_by,
@@ -288,8 +274,8 @@ async function fetch_items() {
     tracks.value = response.tracks;
     total_results.value = response.metadata.count;
   } catch (error) {
-    console.error("Error fetching tracks:", error);
-    toast.error("Failed to fetch tracks");
+    console.error('Error fetching tracks:', error);
+    toast.error('Failed to fetch tracks');
   } finally {
     data_loading.value = false;
   }
@@ -306,7 +292,7 @@ function handleSearch(searchFilters) {
 }
 
 function removeFilter(key) {
-  filters.value[key] = "";
+  filters.value[key] = '';
   query.value.page = 1; // Reset to first page when removing filter
 }
 
@@ -321,17 +307,9 @@ function clearFilters() {
   query.value.page = 1; // Reset to first page when clearing filters
 }
 
-async function deleteTrack(id) {
-  if (confirm("Are you sure you want to delete this track?")) {
-    try {
-      await store.deleteTrack(id);
-      toast.success("Track deleted successfully");
-      await fetch_items(); // Refresh the list
-    } catch (error) {
-      console.error("Error deleting track:", error);
-      toast.error("Failed to delete track");
-    }
-  }
+function openDeleteModal(track) {
+  selectedForDeletion.value = track;
+  deleteModal.value.show();
 }
 
 function viewTrack(track) {
@@ -344,7 +322,7 @@ watch(
   () => {
     fetch_items();
   },
-  { deep: true },
+  { deep: true }
 );
 
 // Initial load

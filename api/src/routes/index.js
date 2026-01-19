@@ -3,6 +3,7 @@ const express = require('express');
 const { authenticate } = require('../middleware/auth');
 const featureService = require('../services/features');
 const uploadRouter = require('./datasets/uploads');
+const { fileExposureRouter } = require('./sessions');
 
 const router = express.Router();
 
@@ -13,6 +14,10 @@ router.use('/auth', require('./auth/index'));
 router.use('/reports', require('./reports'));
 router.use('/about', require('./about'));
 router.use('/env', require('./env'));
+
+// Mount file exposure routes BEFORE global authentication
+// These routes use cookie-based authentication instead of Bearer tokens
+router.use('/sessions', fileExposureRouter);
 
 // From this point on, all routes require authentication.
 router.use(authenticate);

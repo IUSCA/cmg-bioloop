@@ -49,10 +49,6 @@
           <td>Files</td>
           <td>{{ props.dataset.num_files }}</td>
         </tr>
-        <tr v-if="auth.isFeatureEnabled('genomeBrowser')">
-          <td>Genome Files</td>
-          <td>{{ props.dataset.metadata?.num_genome_files }}</td>
-        </tr>
         <tr>
           <td>Directories</td>
           <td>{{ props.dataset.num_directories }}</td>
@@ -63,6 +59,12 @@
         <!--            {{ datasetCreatorDisplayed }}-->
         <!--          </td>-->
         <!--        </tr>-->
+        <tr v-if="showAnalysisType">
+          <td>Analysis Type</td>
+          <td>
+            {{ humanizeAnalysisType(props.dataset?.metadata?.analysis_type) }}
+          </td>
+        </tr>
         <tr>
           <td>Description</td>
           <td>
@@ -77,13 +79,21 @@
 </template>
 
 <script setup>
-import * as datetime from "@/services/datetime";
-import { formatBytes } from "@/services/utils";
-import { useAuthStore } from "@/stores/auth";
+import config from '@/config';
+import * as datetime from '@/services/datetime';
+import { humanizeAnalysisType } from '@/services/sessionUtils';
+import { formatBytes } from '@/services/utils';
+import { useAuthStore } from '@/stores/auth';
+import { computed } from 'vue';
 
 const props = defineProps({ dataset: Object });
 
 const auth = useAuthStore();
+
+// Show Analysis Type only for DATA_PRODUCT datasets when genome browser is enabled
+const showAnalysisType = computed(() => {
+  return props.dataset?.type === 'DATA_PRODUCT' && config.enabledFeatures?.genomeBrowser;
+});
 
 // const datasetCreateLog = computed(() => {
 //   return (props.dataset?.audit_logs || []).find((e) => !!e.create_method);

@@ -9,48 +9,49 @@ datasource db {
 }
 
 model dataset {
-  id                Int                 @id @default(autoincrement())
-  name              String
-  type              String
-  num_directories   Int?
-  num_files         Int?
-  du_size           BigInt?
-  size              BigInt?
-  bundle_size       BigInt?
-  description       String?
-  created_at        DateTime            @default(now()) @db.Timestamp(6)
-  updated_at        DateTime            @default(now()) @updatedAt @db.Timestamp(6)
-  origin_path       String?
-  archive_path      String?
-  staged_path       String?
-  is_deleted        Boolean             @default(false)
-  is_staged         Boolean             @default(false)
-  metadata          Json?
-  src_instrument_id Int?
-  file_type         String?
-  workflows         workflow[]
-  files             dataset_file[]
-  audit_logs        dataset_audit[]
-  states            dataset_state[]
-  derived_datasets  dataset_hierarchy[] @relation("source_datasets")
-  source_datasets   dataset_hierarchy[] @relation("derived_datasets")
-  projects          project_dataset[]
-  accesses          data_access_log[]
-  stage_requests    stage_request_log[]
-  bundle            bundle?
-  src_instrument    instrument?         @relation(fields: [src_instrument_id], references: [id])
-  conversions       conversion[]
+  id                       Int                          @id @default(autoincrement())
+  name                     String
+  type                     String
+  num_directories          Int?
+  num_files                Int?
+  du_size                  BigInt?
+  size                     BigInt?
+  bundle_size              BigInt?
+  description              String?
+  created_at               DateTime                     @default(now()) @db.Timestamp(6)
+  updated_at               DateTime                     @default(now()) @updatedAt @db.Timestamp(6)
+  origin_path              String?
+  archive_path             String?
+  staged_path              String?
+  is_deleted               Boolean                      @default(false)
+  is_staged                Boolean                      @default(false)
+  metadata                 Json?
+  src_instrument_id        Int?
+  file_type                String?
+  workflows                workflow[]
+  files                    dataset_file[]
+  audit_logs               dataset_audit[]
+  states                   dataset_state[]
+  derived_datasets         dataset_hierarchy[]          @relation("source_datasets")
+  source_datasets          dataset_hierarchy[]          @relation("derived_datasets")
+  projects                 project_dataset[]
+  accesses                 data_access_log[]
+  stage_requests           stage_request_log[]
+  bundle                   bundle?
+  src_instrument           instrument?                  @relation(fields: [src_instrument_id], references: [id])
+  conversions              conversion[]
   derived_from_conversions conversion_derived_dataset[]
-  genomic_details dataset_genomic_attributes?
+  genomic_details          dataset_genomic_attributes?
+  cmg_id                   String?
 
   @@unique([name, type, is_deleted])
 }
 
 model dataset_genomic_attributes {
-  dataset_id Int @id
-  dataset    dataset @relation(fields: [dataset_id], references: [id], onDelete: Cascade)
-  genome_type String
-  genome_value String
+  dataset_id   Int     @id
+  dataset      dataset @relation(fields: [dataset_id], references: [id], onDelete: Cascade)
+  genome_type  String?
+  genome_value String?
 }
 
 model dataset_hierarchy {
@@ -113,6 +114,20 @@ model file_upload_log {
   dataset_upload_log_id Int?
 }
 
+model dataset_import_log {
+  id           Int           @id @default(autoincrement())
+  created_at   DateTime      @default(now()) @db.Timestamp(6)
+  updated_at   DateTime      @default(now()) @updatedAt @db.Timestamp(6)
+  cmg_id       String?       @db.VarChar(100)
+  file_type    String?
+  genome_type  String?
+  genome_value String?
+  source_run   String?
+  metadata     Json?
+  audit_log    dataset_audit @relation(fields: [audit_log_id], references: [id], onDelete: Cascade)
+  audit_log_id Int           @unique
+}
+
 model dataset_audit {
   id            Int                    @id @default(autoincrement())
   action        String
@@ -126,6 +141,7 @@ model dataset_audit {
   dataset_id    Int?
   dataset       dataset?               @relation(fields: [dataset_id], references: [id], onDelete: Cascade)
   upload        dataset_upload_log?
+  import        dataset_import_log?
 
   @@unique([dataset_id, create_method])
 }
@@ -172,31 +188,31 @@ model stage_request_log {
 }
 
 model user {
-  id                         Int                     @id @default(autoincrement())
-  username                   String                  @unique @db.VarChar(100)
-  name                       String?                 @db.VarChar(100)
-  email                      String                  @unique @db.VarChar(100)
-  cas_id                     String?                 @unique @db.VarChar(100)
+  id                         Int                      @id @default(autoincrement())
+  username                   String                   @unique @db.VarChar(100)
+  name                       String?                  @db.VarChar(100)
+  email                      String                   @unique @db.VarChar(100)
+  cas_id                     String?                  @unique @db.VarChar(100)
   notes                      String?
-  created_at                 DateTime                @default(now()) @db.Timestamp(6)
-  updated_at                 DateTime                @default(now()) @updatedAt @db.Timestamp(6)
-  is_deleted                 Boolean                 @default(false)
+  created_at                 DateTime                 @default(now()) @db.Timestamp(6)
+  updated_at                 DateTime                 @default(now()) @updatedAt @db.Timestamp(6)
+  is_deleted                 Boolean                  @default(false)
   metadata                   Json?
-  cmg_id                     String?                 @db.VarChar(100)
+  cmg_id                     String?                  @db.VarChar(100)
   user_role                  user_role[]
   settings                   user_settings?
   contacts                   contact[]
   dataset_audit              dataset_audit[]
-  projects                   project_user[]          @relation("project_user_user")
+  projects                   project_user[]           @relation("project_user_user")
   password                   user_password?
   login                      user_login?
   accesses                   data_access_log[]
   stage_requests             stage_request_log[]
   about_edits                about[]
-  project_users_assigned     project_user[]          @relation("project_user_assignor")
+  project_users_assigned     project_user[]           @relation("project_user_assignor")
   project_datasets_assigned  project_dataset[]
   project_contacts_assigned  project_contact[]
-  initiated_workflows        workflow[]              @relation("initiated_workflows")
+  initiated_workflows        workflow[]               @relation("initiated_workflows")
   acknowledged_notifications notification[]
   user_notifications         user_notification[]
   genome_browser_sessions    genome_browser_session[]
@@ -322,7 +338,7 @@ model project {
   metadata        Json?
   created_at      DateTime          @default(now()) @db.Timestamp(6)
   updated_at      DateTime          @default(now()) @updatedAt @db.Timestamp(6)
-  cmg_id          String?    
+  cmg_id          String?
   users           project_user[]
   datasets        project_dataset[]
   contacts        project_contact[]
@@ -430,70 +446,66 @@ model instrument {
 }
 
 model track {
-  id              Int          @id @default(autoincrement())
+  id              Int             @id @default(autoincrement())
   name            String
-  // todo - track file_type on Dataset instead?
-  // file_type       String?
-  // todo - track genomeType and genomeValue on Dataset instead?
-  // genomeType      String
-  // genomeValue     String
-  dataset_file_id Int          @unique
-  dataset_file    dataset_file @relation(fields: [dataset_file_id], references: [id], onDelete: Cascade)
+  dataset_file_id Int             @unique
+  dataset_file    dataset_file    @relation(fields: [dataset_file_id], references: [id], onDelete: Cascade)
   color           String?
-  created_at      DateTime     @default(now()) @db.Timestamp(6)
-  updated_at      DateTime     @default(now()) @updatedAt @db.Timestamp(6)
+  created_at      DateTime        @default(now()) @db.Timestamp(6)
+  updated_at      DateTime        @default(now()) @updatedAt @db.Timestamp(6)
   session_tracks  session_track[]
 }
 
 model genome_browser_session {
-  id              Int      @id @default(autoincrement())
-  title           String
-  genome          String
-  genome_type     String
-  user_id         Int
-  user            user     @relation(fields: [user_id], references: [id], onDelete: Cascade)
-  created_at      DateTime @default(now()) @db.Timestamp(6)
-  updated_at      DateTime @default(now()) @updatedAt @db.Timestamp(6)
-  access_count    Int      @default(0)
-  is_public       Boolean  @default(false)
-  staging_requested Json?  // Staging request details
-  staging_completed Boolean @default(false)
+  id                   Int             @id @default(autoincrement())
+  title                String?
+  genome               String?
+  genome_type          String?
+  user_id              Int?
+  user                 user?           @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  created_at           DateTime        @default(now()) @db.Timestamp(6)
+  updated_at           DateTime        @default(now()) @updatedAt @db.Timestamp(6)
+  access_count         Int             @default(0)
+  is_public            Boolean         @default(false)
+  staging_requested    Json? // Staging request details
+  staging_completed    Boolean         @default(false)
   staging_requested_by Int? // User who requested staging
-  session_tracks  session_track[]
+  cmg_id               String?         @db.VarChar(100) // CMG session ID for migration tracking
+  session_tracks       session_track[]
 }
 
 model session_track {
-  id                        Int                    @id @default(autoincrement())
-  session_id                Int
-  track_id                  Int
-  color                     String?
-  title                     String?
-  order                     Int                     @default(0)
-  session                   genome_browser_session  @relation(fields: [session_id], references: [id], onDelete: Cascade)
-  track                     track                   @relation(fields: [track_id], references: [id], onDelete: Cascade)
-  created_at                DateTime                @default(now()) @db.Timestamp(6)
-  updated_at                DateTime                @default(now()) @updatedAt @db.Timestamp(6)
+  id         Int                    @id @default(autoincrement())
+  session_id Int
+  track_id   Int
+  color      String?
+  title      String?
+  order      Int                    @default(0)
+  session    genome_browser_session @relation(fields: [session_id], references: [id], onDelete: Cascade)
+  track      track                  @relation(fields: [track_id], references: [id], onDelete: Cascade)
+  created_at DateTime               @default(now()) @db.Timestamp(6)
+  updated_at DateTime               @default(now()) @updatedAt @db.Timestamp(6)
 
   @@unique([session_id, track_id])
 }
 
 model conversion_definition {
-  id               Int      @id @default(autoincrement())
-  created_at       DateTime @default(now()) @db.Timestamp(6)
-  updated_at       DateTime @default(now()) @updatedAt @db.Timestamp(6)
-  name             String   @unique
+  id               Int              @id @default(autoincrement())
+  created_at       DateTime         @default(now()) @db.Timestamp(6)
+  updated_at       DateTime         @default(now()) @updatedAt @db.Timestamp(6)
+  name             String           @unique
   description      String?
-  enabled          Boolean  @default(false)
+  enabled          Boolean          @default(false)
   author_id        Int
   dataset_types    String[] // can run on only these datatypes
   tags             String[] // tags for searching
   program_id       Int
   output_directory String?
   logs_directory   String?
-  capture_logs     Boolean  @default(false)
-  program     cmd_line_program @relation(fields: [program_id], references: [id])
-  author      user             @relation(fields: [author_id], references: [id])
-  conversions conversion[]
+  capture_logs     Boolean          @default(false)
+  program          cmd_line_program @relation(fields: [program_id], references: [id])
+  author           user             @relation(fields: [author_id], references: [id])
+  conversions      conversion[]
 }
 
 model cmd_line_program {
@@ -528,7 +540,7 @@ model argument {
   dynamic_variable_name String? // Name of the dynamic variable (if any)
   dynamic_variable      dynamic_variable?   @relation(fields: [dynamic_variable_name], references: [name])
   program_id            Int // Foreign key to cmd_line_program
-  program               cmd_line_program @relation(fields: [program_id], references: [id])
+  program               cmd_line_program    @relation(fields: [program_id], references: [id])
   argument_values       argument_value[]
 }
 
@@ -554,30 +566,31 @@ model process_request {
 }
 
 model conversion {
-  id              Int                   @id @default(autoincrement())
-  initiated_at    DateTime              @default(now()) @db.Timestamp(6)
-  definition_id   Int
-  workflow_id     String?
-  dataset_id      Int
-  initiator_id    Int?
-  argument_values argument_value[]
-  dataset         dataset               @relation(fields: [dataset_id], references: [id], onDelete: Cascade)
-  definition      conversion_definition @relation(fields: [definition_id], references: [id])
-  initiator       user?                  @relation(fields: [initiator_id], references: [id], onDelete: SetNull)
-  additional_args Json?                 // e.g., { [ {"--no-lane-splitting": "true" }, {"--barcode-mismatches": "1"} ] }
+  id               Int                          @id @default(autoincrement())
+  cmg_id           String?
+  initiated_at     DateTime                     @default(now()) @db.Timestamp(6)
+  definition_id    Int
+  workflow_id      String?
+  dataset_id       Int?
+  initiator_id     Int?
+  argument_values  argument_value[]
+  dataset          dataset?                     @relation(fields: [dataset_id], references: [id], onDelete: Cascade)
+  definition       conversion_definition        @relation(fields: [definition_id], references: [id])
+  initiator        user?                        @relation(fields: [initiator_id], references: [id], onDelete: SetNull)
+  additional_args  Json? // e.g., { [ {"--no-lane-splitting": "true" }, {"--barcode-mismatches": "1"} ] }
   derived_datasets conversion_derived_dataset[]
   requested_processes process_request[]
   metadata Json?
 }
 
 model conversion_derived_dataset {
-  conversion_id  Int
-  dataset_id     Int
-  created_at     DateTime @default(now()) @db.Timestamp(6)
-  updated_at     DateTime @default(now()) @updatedAt @db.Timestamp(6)
-  metadata       Json?    // Additional metadata about the derived dataset process
-  conversion     conversion @relation(fields: [conversion_id], references: [id], onDelete: Cascade)
-  dataset        dataset    @relation(fields: [dataset_id], references: [id], onDelete: Cascade)
+  conversion_id Int
+  dataset_id    Int
+  created_at    DateTime   @default(now()) @db.Timestamp(6)
+  updated_at    DateTime   @default(now()) @updatedAt @db.Timestamp(6)
+  metadata      Json? // Additional metadata about the derived dataset process
+  conversion    conversion @relation(fields: [conversion_id], references: [id], onDelete: Cascade)
+  dataset       dataset    @relation(fields: [dataset_id], references: [id], onDelete: Cascade)
 
   @@id([conversion_id, dataset_id])
 }
@@ -652,4 +665,40 @@ enum argument_value_type {
   STRING
   NUMBER
   BOOLEAN
+}
+
+// CMG Sync Tables - For polling-based synchronization
+model cmg_sync_cursor {
+  poller_name       String    @id
+  last_updated_at   DateTime?
+  last_cmg_objectid String?
+  locked_by         String?
+  lock_expires_at   DateTime?
+  last_started_at   DateTime?
+  last_succeeded_at DateTime?
+  last_failed_at    DateTime?
+  last_error        String?
+  last_run_count    Int?
+  updated_at        DateTime  @updatedAt
+}
+
+model cmg_sync_retry {
+  id               Int      @id @default(autoincrement())
+  poller_name      String
+  cmg_id           String
+  failure_count    Int      @default(0)
+  last_error       String?
+  next_retry_at    DateTime?
+  updated_at       DateTime @updatedAt
+
+  @@unique([poller_name, cmg_id])
+}
+
+model cmg_sync_process_lock {
+  process_name      String    @id @db.VarChar(50)
+  locked_by         String?   @db.VarChar(200)
+  lock_expires_at   DateTime?
+  last_started_at   DateTime?
+  last_completed_at DateTime?
+  updated_at        DateTime  @updatedAt
 }

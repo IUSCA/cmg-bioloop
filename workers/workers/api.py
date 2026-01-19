@@ -335,10 +335,6 @@ def post_conversion_derived_datasets(derived_data: dict):
         r.raise_for_status()
 
 
-def create_tracks(dataset_id, files: list[dict]):
-    with APIServerSession() as s:
-        r = s.post(f'datasets/{dataset_id}/tracks', json=files)
-        r.raise_for_status()
 
 
 def get_process_request(process_request_id: int) -> dict:

@@ -18,6 +18,7 @@ const asyncHandler = require('@/middleware/asyncHandler');
 const { accessControl } = require('@/middleware/auth');
 const { validate } = require('@/middleware/validators');
 const datasetService = require('@/services/dataset');
+const { formatAnalysisType } = require('@/utils/sessionUtils');
 const authService = require('@/services/auth');
 const CONSTANTS = require('@/constants');
 const logger = require('@/services/logger');
@@ -252,6 +253,193 @@ router.post(
   }),
 );
 
+// Get import logs for all users - operator/admin only
+router.get(
+  '/imports',
+  validate([
+    query('dataset_name').optional().trim().isLength({ min: 1 }),
+    query('limit').isInt({ min: 1 }).toInt().optional(),
+    query('offset').isInt({ min: 0 }).toInt().optional(),
+  ]),
+  isPermittedTo('read'),
+  asyncHandler(async (req, res, next) => {
+    // #swagger.tags = ['datasets']
+    // #swagger.summary = 'Get import history logs for all users'
+
+    try {
+      const {
+        dataset_name, offset, limit, sort_by = 'created_at', sort_order = 'desc',
+      } = req.query;
+
+      const orderBy = {
+        [sort_by]: sort_order,
+      };
+
+      const whereClause = {};
+      if (dataset_name) {
+        whereClause.audit_log = {
+          dataset: {
+            name: {
+              contains: dataset_name,
+              mode: 'insensitive',
+            },
+          },
+        };
+      }
+
+      const filter_query = {
+        skip: offset ?? Prisma.skip,
+        take: limit ?? Prisma.skip,
+        where: whereClause,
+        orderBy,
+      };
+
+      const [importLogs, count] = await prisma.$transaction([
+        prisma.dataset_import_log.findMany({
+          ...filter_query,
+          include: {
+            audit_log: {
+              include: {
+                user: {
+                  select: {
+                    id: true,
+                    username: true,
+                    name: true,
+                    email: true,
+                  },
+                },
+                dataset: {
+                  include: {
+                    source_datasets: {
+                      include: {
+                        source_dataset: true,
+                      },
+                    },
+                    workflows: {
+                      select: {
+                        id: true,
+                        name: true,
+                        status: true,
+                        steps_done: true,
+                        total_steps: true,
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        }),
+        prisma.dataset_import_log.count({ where: whereClause }),
+      ]);
+
+      res.json({
+        imports: importLogs,
+        metadata: { count },
+      });
+    } catch (error) {
+      logger.error('Error fetching import logs:', error);
+      throw error;
+    }
+  }),
+);
+
+// Get import logs for specific user
+router.get(
+  '/imports/:username',
+  validate([
+    query('dataset_name').optional().trim().isLength({ min: 1 }),
+    query('limit').isInt({ min: 1 }).toInt().optional(),
+    query('offset').isInt({ min: 0 }).toInt().optional(),
+    param('username').trim().notEmpty(),
+  ]),
+  isPermittedTo('read', { checkOwnership: true }),
+  asyncHandler(async (req, res, next) => {
+    // #swagger.tags = ['datasets']
+    // #swagger.summary = 'Get import history logs for specific user'
+
+    try {
+      const {
+        dataset_name, offset, limit, sort_by = 'created_at', sort_order = 'desc',
+      } = req.query;
+
+      const orderBy = {
+        [sort_by]: sort_order,
+      };
+
+      const whereClause = {
+        audit_log: {
+          user: {
+            username: req.params.username,
+          },
+          ...(dataset_name && {
+            dataset: {
+              name: {
+                contains: dataset_name,
+                mode: 'insensitive',
+              },
+            },
+          }),
+        },
+      };
+
+      const filter_query = {
+        skip: offset ?? Prisma.skip,
+        take: limit ?? Prisma.skip,
+        where: whereClause,
+        orderBy,
+      };
+
+      const [importLogs, count] = await prisma.$transaction([
+        prisma.dataset_import_log.findMany({
+          ...filter_query,
+          include: {
+            audit_log: {
+              include: {
+                user: {
+                  select: {
+                    id: true,
+                    username: true,
+                    name: true,
+                    email: true,
+                  },
+                },
+                dataset: {
+                  include: {
+                    source_datasets: {
+                      include: {
+                        source_dataset: true,
+                      },
+                    },
+                    workflows: {
+                      select: {
+                        id: true,
+                        name: true,
+                        status: true,
+                        steps_done: true,
+                        total_steps: true,
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        }),
+        prisma.dataset_import_log.count({ where: whereClause }),
+      ]);
+
+      res.json({
+        imports: importLogs,
+        metadata: { count },
+      });
+    } catch (error) {
+      logger.error(`Error fetching import logs for user ${req.params.username}:`, error);
+      throw error;
+    }
+  }),
+);
+
 // Get all datasets, and the count of datasets. Results can optionally be
 // filtered and sorted by the criteria specified. Used by workers + UI.
 router.get(
@@ -337,12 +525,15 @@ router.get(
     query('initiator').optional().toBoolean(),
     query('include_conversions').toBoolean().default(false),
     query('include_source_instrument').toBoolean().optional(),
+    query('include_genomic_attributes').toBoolean().optional(),
   ]),
   datasetService.dataset_access_check,
   asyncHandler(async (req, res, next) => {
     // #swagger.tags = ['datasets']
     // only select path and md5 columns from the dataset_file table if files is
     // true
+
+    console.log('req.query', req.query);
 
     const dataset = await datasetService.get_dataset({
       id: req.params.id,
@@ -356,6 +547,7 @@ router.get(
       initiator: req.query.initiator || false,
       include_conversions: req.query.include_conversions || false,
       include_source_instrument: req.query.include_source_instrument || false,
+      include_genomic_attributes: req.query.include_genomic_attributes || false,
     });
 
     res.json(dataset);
@@ -381,6 +573,10 @@ router.post(
     body('workflow_id').optional(),
     body('state').optional(),
     body('metadata').optional(),
+    body('file_type').optional(),
+    body('genome_type').optional(),
+    body('genome_value').optional(),
+    body('import_notes').optional(),
   ]),
   asyncHandler(async (req, res, next) => {
     // #swagger.tags = ['datasets']
@@ -396,6 +592,7 @@ router.post(
     const {
       import_space, create_method, project_id, src_instrument_id, src_dataset_id,
       name, type, origin_path, du_size, size, bundle_size, workflow_id, state, metadata,
+      file_type, genome_type, genome_value, import_notes,
     } = req.body;
 
     // remove any HTML entities inserted by browser because of URL encoding
@@ -431,6 +628,10 @@ router.post(
       state,
       create_method,
       metadata,
+      file_type,
+      genome_type,
+      genome_value,
+      import_notes,
     });
 
     // idempotence: creates dataset or returns error 409 on repeated requests
@@ -599,6 +800,10 @@ router.patch(
     }
 
     const { metadata, ...data } = _.omitBy(_.isUndefined)(req.body);
+    // Format analysis_type if it exists in metadata
+    if (metadata?.analysis_type) {
+      metadata.analysis_type = formatAnalysisType(metadata.analysis_type);
+    }
     data.metadata = _.merge(datasetToUpdate?.metadata)(metadata); // deep merge
 
     if (req.body.bundle) {
@@ -643,27 +848,6 @@ router.post(
     }));
     datasetService.add_files({ dataset_id: req.params.id, data });
 
-    res.sendStatus(200);
-  }),
-);
-
-router.post(
-  '/:id/tracks',
-  isPermittedTo('update'),
-  validate([
-    param('id').isInt().toInt(),
-    body('files').isArray().notEmpty(),
-  ]),
-  asyncHandler(async (req, res, next) => {
-    // #swagger.tags = ['datasets']
-    // #swagger.summary = Associate files to a dataset as tracks
-    await prisma.transaction(async (tx) => {
-      await tx.track.createMany({
-        data: req.body.files.map((f) => ({
-          dataset_file_id: f.id,
-        })),
-      });
-    });
     res.sendStatus(200);
   }),
 );
@@ -933,8 +1117,10 @@ router.get(
 
     try {
       const download_url = await datasetService.get_download_url({ dataset, file });
+      console.log('download_url', download_url);
       res.json(download_url);
     } catch (e) {
+      console.error('Download URL generation failed:', e);
       next(createError.NotFound('Dataset is not prepared for download'));
     }
   }),

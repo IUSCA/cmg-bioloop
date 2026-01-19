@@ -57,6 +57,7 @@
     "jsonwebtoken": "^9.0.2",
     "lodash": "^4.17.21",
     "module-alias": "^2.2.3",
+    "mongodb": "5.9.2",
     "morgan": "^1.10.0",
     "multer": "2.0.1",
     "picomatch": "^4.0.2",

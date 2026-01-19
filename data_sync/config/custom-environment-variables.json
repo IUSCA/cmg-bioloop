@@ -1,0 +1,13 @@
+{
+  "cmg_mongodb": {
+    "host": "CMG_MONGO_HOST",
+    "port": "CMG_MONGO_PORT",
+    "database": "CMG_MONGO_DB",
+    "username": "CMG_MONGO_USERNAME",
+    "password": "CMG_MONGO_PASSWORD"
+  },
+  "cmg": {
+    "legacyConversionsLogsDir": "CMG_LEGACY_CONVERSIONS_LOGS_DIR"
+  },
+  "data_root": "DATA_ROOT"
+}

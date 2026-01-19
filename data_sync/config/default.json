@@ -1,0 +1,13 @@
+{
+  "cmg_mongodb": {
+    "host": "localhost",
+    "port": 27017,
+    "database": "cmg",
+    "username": "",
+    "password": ""
+  },
+  "cmg": {
+    "legacyConversionsLogsDir": "/N/project/CMG-SCA/runlogs"
+  },
+  "data_root": "/tmp"
+}

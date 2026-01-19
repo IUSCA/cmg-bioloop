@@ -64,8 +64,8 @@ class WorkflowService {
       (wf) => !this.is_workflow_done(wf),
     );
     const pending_steps = active_wfs
-      .flatMap((wf) => wf.steps)
-      .filter((step) => step.name.toLowerCase() === step_name.toLowerCase())
+      .flatMap((wf) => wf.steps || [])
+      .filter((step) => step && step.name && step.name.toLowerCase() === step_name.toLowerCase())
       .filter((step) => !DONE_STATUSES.includes(step.status));
 
     return pending_steps.length > 0;

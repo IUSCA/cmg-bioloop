@@ -4,7 +4,8 @@
 name: cmg-bioloop-2
 services:
   ui:
-    image: node:21
+    restart: unless-stopped
+    image: node:20
     ports:
       - 127.0.0.1:443:443
     env_file:
@@ -26,7 +27,7 @@ services:
       - tests/.env.default # Variables needed for testing user information
       - db/postgres/.env.default # For Postgres connection settings
       - api/.env.default  # For all default settings
-      # - api/.env? # For keys made after the first run
+      - api/.env # For keys and overrides made after the first run
     volumes:
       - ./api:/opt/sca/app
       - ./workers/:/opt/sca/app/workers/ # You don't need this in production.  This allows common volume space into the workers folder so we can create api token in .env config on api startup if needed.  You should create this manually in production and not mount workers into api.
@@ -36,7 +37,7 @@ services:
     command: ["npm", "run", "dev"] 
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3030/health"]
-      interval: 2s
+      interval: 60s
       timeout: 10s
       retries: 5
     depends_on:
@@ -149,8 +150,6 @@ services:
     depends_on:
       init_data_dirs:
         condition: service_completed_successfully
-      bcl2fastq_setup:
-        condition: service_completed_successfully
       api:
         condition: service_healthy
       mongo:
@@ -190,7 +189,9 @@ services:
   # You must clone the rhythm_api repo and place it in the rhythm folder
   rhythm:
     restart: unless-stopped
-    image: harbor.sca.iu.edu/rhythm/api:latest
+    build:
+      context: ../rhythm_api
+    # image: harbor.sca.iu.edu/rhythm/api:latest
     expose:
       - 5001
     env_file:
@@ -206,12 +207,13 @@ services:
     command: ["uvicorn", "rhythm_api.main:app", "--host", "0.0.0.0", "--port", "5001", "--root-path", "/rhythm"]
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:5001/health"]
-      interval: 2s
+      interval: 60s
       timeout: 10s
       retries: 5
     depends_on:
       - queue
       - mongo
+      # - api
 
   # Secure_download container
   secure_download:
@@ -231,7 +233,7 @@ services:
     command: ["npm", "run", "dev"]
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3060/health"]
-      interval: 2s
+      interval: 60s
       timeout: 10s
       retries: 5
 
@@ -239,7 +241,9 @@ services:
   # You must clone the signet repo and place it in the signet folder
   signet:
     restart: unless-stopped
-    image: harbor.sca.iu.edu/signet/signet:latest
+    build:
+      context: /Users/ripandey/dev/signet
+      dockerfile: Dockerfile
     expose:
       - 5050
     env_file:
@@ -250,7 +254,7 @@ services:
     command: ["exec", "gunicorn", "--bind", ":5050", "--workers", "1", "--threads", "1", "--timeout", "0", "app:app"]
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:5050/health"]
-      interval: 2s
+      interval: 60s
       timeout: 10s
       retries: 5
     depends_on:
@@ -350,77 +354,11 @@ services:
     profiles:
       - metrics
 
-  # Dedicated MongoDB instance for CMG source data used by db_conversion scripts
-  cmg_data:
-    image: mongo:5
-    expose:
-      - 27017
-    ports:
-      - 127.0.0.1:27016:27017
-    entrypoint: [
-      "/bin/sh",
-      "-lc",
-      "rm -rf /data/db/* && exec /usr/local/bin/docker-entrypoint.sh mongod"]
-    environment:
-      MONGO_INITDB_ROOT_USERNAME: appuser
-      MONGO_INITDB_ROOT_PASSWORD: example
-      MONGO_INITDB_DATABASE: cmg
-    working_dir: /opt/sca/app
-    volumes:
-      # dump is the directory which contains the dump of the MongoDB data
-      #   (json/bson files)
-      - ./cmg_data/dump:/docker-entrypoint-initdb.d/dump
-      - ./cmg_data/data:/data/db
-      - ./cmg_data/init-scripts:/docker-entrypoint-initdb.d
-
-
-  db_conversion:
-    build:
-      context: db_conversion
-      dockerfile: Dockerfile
-    volumes:
-      - ./db_conversion:/opt/sca/app
-    working_dir: /opt/sca/app
-    #    env_file: ./workers/workers/convert/.env
-    environment:
-      ##      - todo - read env vars from .env file instead of defaults
-      - MONGO_HOST=${MONGO_HOST:-cmg_data}
-      - MONGO_PORT=${MONGO_PORT:-27017}
-      - MONGO_DB=${MONGO_DB:-cmg}
-      - MONGO_AUTH_SOURCE=${MONGO_AUTH_SOURCE:-cmg}
-      - MONGO_USERNAME=${MONGO_USERNAME:-appuser}
-      - MONGO_PASSWORD=${MONGO_PASSWORD:-example}
-      - RHYTHM_MONGO_HOST=${RHYTHM_MONGO_HOST:-host.docker.internal}
-      - RHYTHM_MONGO_PORT=${RHYTHM_MONGO_PORT:-27018}
-      - RHYTHM_MONGO_DB=${RHYTHM_MONGO_DB:-celery}
-      - RHYTHM_MONGO_AUTH_SOURCE=${RHYTHM_MONGO_AUTH_SOURCE:-admin}
-      - RHYTHM_MONGO_USERNAME=${RHYTHM_MONGO_USERNAME:-root}
-      - RHYTHM_MONGO_PASSWORD=${RHYTHM_MONGO_PASSWORD:-example}
-      - PG_HOST=${PG_HOST:-postgres}
-      - PG_PORT=${PG_PORT:-5432}
-      - PG_DATABASE=${PG_DATABASE:-app}
-      - PG_USER=${PG_USER:-appuser}
-      - PG_PASSWORD=${PG_PASSWORD:-example}
-    ##    command: python -m workers.convert.db_conversion
-    entrypoint: [ "tail", "-f", "/dev/null" ]
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-    depends_on:
-      cmg_data:
-        condition: service_started
-
   # Conversion pipelines setup services
-  bcl2fastq_setup:
-    image: nfcore/bcl2fastq:2.20.0.422
-    platform: linux/amd64
-    volumes:
-      - landing_volume:/opt/sca/data
-    entrypoint: ["sh", "-c"]
-    command: >
-      "cp /usr/local/bin/bcl2fastq /opt/sca/data/conversion/bcl2fastq/bin/ && chmod +x /opt/sca/data/conversion/bcl2fastq/bin/bcl2fastq && echo 'bcl2fastq installed successfully' && /opt/sca/data/conversion/bcl2fastq/bin/bcl2fastq --version && ls -la /opt/sca/data/conversion/bcl2fastq/bin/"
-    depends_on:
-      init_data_dirs:
-        condition: service_completed_successfully
+  # To use other pipelines, mount from host:
+  # conversion_worker:
+  #   volumes:
+  #     - /path/to/cellranger-8.0.1:/opt/cellranger-8.0.1:ro
 
 
 
