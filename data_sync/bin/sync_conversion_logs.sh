@@ -28,12 +28,14 @@
 #
 #   # Sync logs to sandbox database (testing)
 #   ./bin/sync_conversion_logs.sh --target-db sandbox
+#   ./bin/sync_conversion_logs.sh --target-db=sandbox
 #
 #   # Sync logs to main application database (production)
 #   ./bin/sync_conversion_logs.sh --target-db app
+#   ./bin/sync_conversion_logs.sh --target-db=app
 #
 #   # Re-process all conversions (overwrite existing logs)
-#   ./bin/sync_conversion_logs.sh --target-db app --overwrite-existing
+#   ./bin/sync_conversion_logs.sh --target-db=app --overwrite-existing
 #
 # Environment Variables:
 #   CMG_LEGACY_CONVERSIONS_LOGS_DIR   Path to CMG conversion logs
@@ -68,6 +70,10 @@ NC='\033[0m' # No Color
 # Parse command line arguments
 while [[ $# -gt 0 ]]; do
   case $1 in
+    --target-db=*)
+      TARGET_DB="${1#*=}"
+      shift
+      ;;
     --target-db)
       TARGET_DB="$2"
       shift 2
