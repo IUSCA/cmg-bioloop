@@ -6,6 +6,19 @@ This directory contains shell scripts for managing the CMG to Bioloop database m
 
 ### 🎯 Main User-Facing Scripts
 
+1. **`migrate.sh`** - Interactive migration wrapper (⭐ recommended)
+2. **`bigbang.sh`** - One-time historical migration
+3. **`start_pollers.sh`** - Continuous sync pollers
+4. **`sync_conversion_logs.sh`** - Conversion logs sync (standalone)
+
+### 🔧 Utility Scripts
+
+5. **`sync_cmg_schema_to_app.sh`** - Sync CMG schema to app database
+6. **`pull_logs_from_prod.sh`** - Pull logs from production host
+7. **`entrypoint.sh`** - Docker container entrypoint
+
+---
+
 #### `migrate.sh` - Interactive Migration Wrapper ⭐ **RECOMMENDED**
 **Purpose:** Interactive menu-driven wrapper for database migration.
 
@@ -124,7 +137,68 @@ This directory contains shell scripts for managing the CMG to Bioloop database m
 
 ---
 
-### 🔧 Utility Scripts
+#### `sync_conversion_logs.sh` - Conversion Logs Sync (Standalone)
+**Purpose:** Populates historic CMG conversion logs from filesystem into Bioloop's `worker_process` and `log` tables.
+
+**When to use:**
+- Run independently after bigbang (if `--skip-conversion-logs` was used)
+- Re-run if log population failed during bigbang
+- Populate logs for newly discovered conversions
+- Test log discovery without writing to database (dry-run mode)
+
+**Prerequisites:**
+- Bigbang migration must have been run first (to populate conversions)
+- Access to CMG conversion logs directory (`/N/project/CMG-SCA/runlogs`)
+
+**Usage:**
+```bash
+# Dry run to see what logs would be processed
+./bin/sync_conversion_logs.sh --dry-run
+
+# Sync logs to sandbox database (testing)
+./bin/sync_conversion_logs.sh --target-db sandbox
+
+# Sync logs to production app database
+./bin/sync_conversion_logs.sh --target-db app
+```
+
+**Options:**
+- `--target-db [sandbox|app|custom]` - Target database (default: sandbox)
+- `--dry-run` - Discover and list log files without writing to database
+- `--help` - Show detailed help
+
+**Dry Run Output:**
+```
+DISCOVERED LOG FILES:
+
+Dataset: ILMN_123_Smith_RNAseq_Jan2020
+  Path: /N/project/CMG-SCA/runlogs/convert_ILMN_123_Smith_RNAseq_Jan2020.log [42.3 KB]
+  Conversions: 3 total (✓ 3 to process)
+
+Dataset: Chrm_456_Jones_WGS_Mar2021
+  Path: /N/project/CMG-SCA/runlogs/convert_Chrm_456_Jones_WGS_Mar2021.log [128.7 KB]
+  Conversions: 1 total (✓ 1 already processed)
+```
+
+**How It Works:**
+1. Queries all conversions from Bioloop database
+2. Groups conversions by dataset
+3. Constructs log file path: `convert_{dataset_name}.log`
+4. Reads log file and creates `worker_process` record for each conversion
+5. Parses log lines and inserts into `log` table
+6. Skips conversions that already have logs populated (idempotent)
+
+**Important Notes:**
+- Multiple conversions on same dataset share one log file
+- Each conversion gets its own `worker_process` record
+- Log entries are duplicated for each conversion (intentional)
+- Script is idempotent (safe to re-run)
+
+**Exit Codes:**
+- `0` - Success
+- `1` - Sync failed or logs directory not accessible
+
+---
 
 #### `sync_cmg_schema_to_app.sh` - Sync CMG Schema to App Database
 **Purpose:** Copies the `cmg` schema from data_sync postgres to main app postgres.
