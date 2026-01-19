@@ -123,6 +123,7 @@ model dataset_import_log {
   genome_type  String?
   genome_value String?
   source_run   String?
+  notes        String?
   metadata     Json?
   audit_log    dataset_audit @relation(fields: [audit_log_id], references: [id], onDelete: Cascade)
   audit_log_id Int           @unique
