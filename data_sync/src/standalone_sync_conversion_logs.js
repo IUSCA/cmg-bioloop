@@ -30,6 +30,7 @@ function parseArgs() {
   const args = {
     targetDb: 'sandbox',
     dryRun: false,
+    overwriteExisting: false,
     help: false,
   };
 
@@ -38,6 +39,8 @@ function parseArgs() {
       args.targetDb = arg.split('=')[1];
     } else if (arg === '--dry-run') {
       args.dryRun = true;
+    } else if (arg === '--overwrite-existing') {
+      args.overwriteExisting = true;
     } else if (arg === '--help') {
       args.help = true;
     } else {
@@ -71,6 +74,11 @@ Options:
                                      - Expected log file paths
                                      - Which files exist/missing
 
+  --overwrite-existing               Re-process conversions that already
+                                     have logs populated. WARNING: This
+                                     will delete existing worker_process
+                                     and log entries and recreate them.
+
   --help                             Show this help message
 
 Examples:
@@ -82,6 +90,9 @@ Examples:
 
   # Sync logs to main application database (production)
   node src/standalone_sync_conversion_logs.js --target-db=app
+
+  # Re-process all conversions (overwrite existing logs)
+  node src/standalone_sync_conversion_logs.js --target-db=app --overwrite-existing
 
 Environment Variables:
   CMG_LEGACY_CONVERSIONS_LOGS_DIR   Path to CMG conversion logs directory
@@ -290,6 +301,11 @@ async function main() {
     logger.info('[MODE] SYNC - Will populate worker_process and log tables');
   }
   logger.info(`[TARGET] Database: ${args.targetDb}`);
+  
+  if (args.overwriteExisting) {
+    logger.warn('[OPTION] ⚠️  OVERWRITE MODE: Will re-process conversions with existing logs');
+  }
+  
   logger.info('');
 
   // Set database URL based on target
@@ -364,7 +380,7 @@ async function main() {
 
   // Run sync
   try {
-    const stats = await syncConversionLogs(prisma, cmgDb);
+    const stats = await syncConversionLogs(prisma, cmgDb, { overwriteExisting: args.overwriteExisting });
 
     logger.info('');
     logger.info('='.repeat(80));
@@ -373,6 +389,7 @@ async function main() {
     logger.info('');
     logger.info(`Datasets processed: ${stats.datasetsProcessed}`);
     logger.info(`Conversions updated: ${stats.conversionsUpdated}`);
+    logger.info(`Conversions already processed (skipped): ${stats.alreadyProcessed}`);
     logger.info(`Worker processes created: ${stats.workerProcessesCreated}`);
     logger.info(`Log entries created: ${stats.logEntriesCreated}`);
     

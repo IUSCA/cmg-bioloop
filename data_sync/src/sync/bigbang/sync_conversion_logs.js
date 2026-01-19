@@ -45,7 +45,9 @@ function parseTimestamp(line) {
 /**
  * Process conversion logs for a single dataset
  */
-async function processDatasetConversionLogs(prisma, conversions, logFilePath, stats) {
+async function processDatasetConversionLogs(prisma, conversions, logFilePath, stats, options = {}) {
+  const { overwriteExisting = false } = options;
+  
   // Read log file once for all conversions on this dataset
   let logContent;
   try {
@@ -73,10 +75,15 @@ async function processDatasetConversionLogs(prisma, conversions, logFilePath, st
   // Process each conversion in this dataset
   for (const conversion of conversions) {
     try {
-      // Check if already processed
-      if (conversion.workflow_id) {
+      // Check if already processed (unless overwrite mode)
+      if (conversion.workflow_id && !overwriteExisting) {
         logger.debug(`[CONVERSION LOGS] Conversion ${conversion.id} already has workflow_id, skipping`);
+        stats.alreadyProcessed = (stats.alreadyProcessed || 0) + 1;
         continue;
+      }
+      
+      if (conversion.workflow_id && overwriteExisting) {
+        logger.warn(`[CONVERSION LOGS] ⚠️  Overwriting existing logs for conversion ${conversion.id} (workflow_id: ${conversion.workflow_id})`);
       }
       
       // Generate synthetic workflow_id
@@ -157,8 +164,14 @@ async function processDatasetConversionLogs(prisma, conversions, logFilePath, st
 /**
  * Main function to sync all conversion logs
  */
-async function syncConversionLogs(prisma, cmgDb) {
+async function syncConversionLogs(prisma, cmgDb, options = {}) {
+  const { overwriteExisting = false } = options;
+  
   logger.info('[CONVERSION LOGS] Starting historic CMG conversion logs population...');
+  
+  if (overwriteExisting) {
+    logger.warn('[CONVERSION LOGS] ⚠️  OVERWRITE MODE: Will re-process conversions with existing logs');
+  }
   
   // Get the configured logs directory
   const config = require('config');
@@ -184,6 +197,7 @@ async function syncConversionLogs(prisma, cmgDb) {
       conversionsUpdated: 0,
       workerProcessesCreated: 0,
       logEntriesCreated: 0,
+      alreadyProcessed: 0,
       missingLogFiles: [],
       errors: [],
     };
@@ -195,6 +209,7 @@ async function syncConversionLogs(prisma, cmgDb) {
     conversionsUpdated: 0,
     workerProcessesCreated: 0,
     logEntriesCreated: 0,
+    alreadyProcessed: 0,
     missingLogFiles: [],
     errors: [],
   };
@@ -247,7 +262,7 @@ async function syncConversionLogs(prisma, cmgDb) {
     
     logger.info(`[CONVERSION LOGS] [${processedCount}/${conversionsByDataset.size}] Processing ${datasetConversions.length} conversion(s) for dataset: ${datasetName}`);
     
-    await processDatasetConversionLogs(prisma, datasetConversions, logFilePath, stats);
+    await processDatasetConversionLogs(prisma, datasetConversions, logFilePath, stats, { overwriteExisting });
   }
   
   // Summary
@@ -257,6 +272,7 @@ async function syncConversionLogs(prisma, cmgDb) {
   logger.info('='.repeat(80));
   logger.info(`Datasets processed: ${stats.datasetsProcessed}`);
   logger.info(`Conversions updated: ${stats.conversionsUpdated}`);
+  logger.info(`Conversions already processed (skipped): ${stats.alreadyProcessed}`);
   logger.info(`Worker processes created: ${stats.workerProcessesCreated}`);
   logger.info(`Log entries created: ${stats.logEntriesCreated}`);
   

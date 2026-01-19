@@ -14,6 +14,7 @@
 # Options:
 #   --target-db <app|sandbox|custom>  Target database (default: sandbox)
 #   --dry-run                         Discover logs without inserting to DB
+#   --overwrite-existing              Re-process conversions with existing logs
 #   --help                            Show this help message
 #
 # Target Databases:
@@ -30,6 +31,9 @@
 #
 #   # Sync logs to main application database (production)
 #   ./bin/sync_conversion_logs.sh --target-db app
+#
+#   # Re-process all conversions (overwrite existing logs)
+#   ./bin/sync_conversion_logs.sh --target-db app --overwrite-existing
 #
 # Environment Variables:
 #   CMG_LEGACY_CONVERSIONS_LOGS_DIR   Path to CMG conversion logs
@@ -52,6 +56,7 @@ DATA_SYNC_DIR="$(dirname "$SCRIPT_DIR")"
 # Default values
 TARGET_DB="sandbox"
 DRY_RUN=""
+OVERWRITE_EXISTING=""
 
 # Colors
 RED='\033[0;31m'
@@ -68,6 +73,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --dry-run)
       DRY_RUN="--dry-run"
+      shift
+      ;;
+    --overwrite-existing)
+      OVERWRITE_EXISTING="--overwrite-existing"
       shift
       ;;
     --help)
@@ -124,6 +133,10 @@ NODE_CMD="node src/standalone_sync_conversion_logs.js --target-db=$TARGET_DB"
 
 if [[ -n "$DRY_RUN" ]]; then
   NODE_CMD="$NODE_CMD --dry-run"
+fi
+
+if [[ -n "$OVERWRITE_EXISTING" ]]; then
+  NODE_CMD="$NODE_CMD --overwrite-existing"
 fi
 
 # Run the script
