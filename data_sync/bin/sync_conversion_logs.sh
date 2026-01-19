@@ -6,9 +6,11 @@
 # Populates historic CMG conversion logs from filesystem into Bioloop's
 # worker_process and log tables.
 #
-# This script can be run independently of the bigbang migration.
+# This script MUST be run from the host (not inside the container).
+# It will automatically exec into the db_sandbox container to run the sync.
 #
-# Usage:
+# Usage (from host):
+#   cd /opt/sca/cmg/data_sync
 #   ./bin/sync_conversion_logs.sh [options]
 #
 # Options:
@@ -42,6 +44,10 @@
 #                                      Container: /opt/sca/project/ingestion_source_dir/CMG-SCA/production/runlogs
 #                                      Host: /N/project/CMG-SCA/production/runlogs
 #
+# Alternative: Run Inside Container
+#   If you're already inside the db_sandbox container, you can run directly:
+#     node /opt/sca/app/src/standalone_sync_conversion_logs.js [options]
+#
 # Notes:
 #   - This script is idempotent (safe to re-run)
 #   - Skips conversions that already have logs populated
@@ -56,111 +62,78 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DATA_SYNC_DIR="$(dirname "$SCRIPT_DIR")"
 
-# Default values
-TARGET_DB="sandbox"
-DRY_RUN=""
-OVERWRITE_EXISTING=""
-
 # Colors
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
-# Parse command line arguments
-while [[ $# -gt 0 ]]; do
-  case $1 in
-    --target-db=*)
-      TARGET_DB="${1#*=}"
-      shift
-      ;;
-    --target-db)
-      TARGET_DB="$2"
-      shift 2
-      ;;
-    --dry-run)
-      DRY_RUN="--dry-run"
-      shift
-      ;;
-    --overwrite-existing)
-      OVERWRITE_EXISTING="--overwrite-existing"
-      shift
-      ;;
-    --help)
-      grep '^#' "$0" | sed 's/^# \?//'
-      exit 0
-      ;;
-    *)
-      echo -e "${RED}Error: Unknown option $1${NC}"
-      echo "Run with --help for usage information"
-      exit 1
-      ;;
-  esac
-done
-
-# Validate target-db
-if [[ "$TARGET_DB" != "app" && "$TARGET_DB" != "sandbox" && "$TARGET_DB" != "custom" ]]; then
-  echo -e "${RED}Error: Invalid --target-db value: $TARGET_DB${NC}"
-  echo "Must be one of: app, sandbox, custom"
-  exit 1
+# Check if we're inside the container (check for container-specific env var or path)
+if [[ -d "/opt/sca/app" && -f "/opt/sca/app/src/standalone_sync_conversion_logs.js" ]]; then
+  # We're inside the container - run directly
+  echo -e "${BLUE}Detected running inside container. Executing directly...${NC}"
+  echo ""
+  exec node /opt/sca/app/src/standalone_sync_conversion_logs.js "$@"
 fi
 
+# We're on the host - need to exec into container
+
+# Parse command line arguments to check for --help
+SHOW_HELP=false
+for arg in "$@"; do
+  if [[ "$arg" == "--help" ]]; then
+    SHOW_HELP=true
+  fi
+done
+
+if $SHOW_HELP; then
+  grep '^#' "$0" | sed 's/^# \?//'
+  exit 0
+fi
+
+echo ""
 echo -e "${GREEN}===========================================================${NC}"
 echo -e "${GREEN}CMG Conversion Logs Sync - Standalone${NC}"
 echo -e "${GREEN}===========================================================${NC}"
 echo ""
-
-if [[ -n "$DRY_RUN" ]]; then
-  echo -e "${YELLOW}MODE: DRY RUN - Discovery only, no database writes${NC}"
-else
-  echo -e "${YELLOW}MODE: SYNC - Will populate worker_process and log tables${NC}"
-fi
-
-echo "Target Database: ${TARGET_DB}"
+echo -e "${BLUE}This script will exec into the db_sandbox container to run the sync.${NC}"
 echo ""
 
 # Change to data_sync directory
 cd "$DATA_SYNC_DIR"
 
-# Check if node is available
-if ! command -v node &> /dev/null; then
-  echo -e "${RED}Error: Node.js is not installed or not in PATH${NC}"
+# Check if docker compose is available
+if ! command -v docker &> /dev/null; then
+  echo -e "${RED}Error: Docker is not installed or not in PATH${NC}"
   exit 1
 fi
 
-# Check if .env file exists (optional but recommended)
-if [[ ! -f .env ]]; then
-  echo -e "${YELLOW}Warning: .env file not found in data_sync directory${NC}"
-  echo -e "${YELLOW}Using default configuration from .env.default${NC}"
+# Check if container is running
+if ! docker compose -f docker-compose.sandbox.yml ps | grep -q "bioloop_db_sandbox.*Up"; then
+  echo -e "${RED}Error: db_sandbox container is not running${NC}"
   echo ""
+  echo "Start the container first:"
+  echo -e "  ${YELLOW}cd /opt/sca/cmg/data_sync${NC}"
+  echo -e "  ${YELLOW}docker compose -f docker-compose.sandbox.yml up -d${NC}"
+  echo ""
+  exit 1
 fi
 
-# Build node command
-NODE_CMD="node src/standalone_sync_conversion_logs.js --target-db=$TARGET_DB"
-
-if [[ -n "$DRY_RUN" ]]; then
-  NODE_CMD="$NODE_CMD --dry-run"
-fi
-
-if [[ -n "$OVERWRITE_EXISTING" ]]; then
-  NODE_CMD="$NODE_CMD --overwrite-existing"
-fi
-
-# Run the script
-echo -e "${YELLOW}Executing: $NODE_CMD${NC}"
+# Execute inside container (pass all arguments)
+echo -e "${YELLOW}Executing inside db_sandbox container...${NC}"
 echo ""
 
-$NODE_CMD
+docker compose -f docker-compose.sandbox.yml exec db_sandbox node /opt/sca/app/src/standalone_sync_conversion_logs.js "$@"
 
 EXIT_CODE=$?
 
+echo ""
 if [[ $EXIT_CODE -eq 0 ]]; then
-  echo ""
   echo -e "${GREEN}✓ Conversion logs sync completed successfully${NC}"
 else
-  echo ""
   echo -e "${RED}✗ Conversion logs sync failed (exit code: $EXIT_CODE)${NC}"
 fi
+echo ""
 
 exit $EXIT_CODE
-

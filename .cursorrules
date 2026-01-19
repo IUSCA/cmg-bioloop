@@ -354,6 +354,22 @@ API and UI changes should **NOT** require restarts unless:
 - Focus on functionality first
 - Clean up linter errors only when requested
 
+### Emoji Usage Policy
+
+**NEVER use emojis in code:**
+- ❌ Code comments
+- ❌ Logging statements (`logger.info()`, `console.log()`, etc.)
+- ❌ Error messages
+- ❌ Variable/function names or code identifiers
+
+**Emojis ALLOWED in documentation only:**
+- ✅ Markdown documentation files (`.md`)
+- ✅ Strictly documentational emojis for visual clarity (✅ ❌ ⚠️ 📖)
+
+**Exception:** May use in extremely complex debugging scripts when visual markers would significantly aid debugging (rare, must be justified).
+
+**Rationale:** Code/logs should be text-based, grep-friendly, and parseable. Documentation can use emojis for readability.
+
 ---
 
 ## 🎯 Key Architectural Reminders

@@ -39,6 +39,7 @@ data_sync/
 ├── SETUP_GUIDE.md                # Complete setup and configuration guide
 ├── BIGBANG_SYNC_USAGE.md         # Big-bang script documentation
 ├── POLLER_SYNC_USAGE.md          # Poller script documentation
+├── CONVERSION_LOGS_SYNC_USAGE.md # Conversion logs sync documentation
 └── POPULATE_BUNDLES_USAGE.md     # Bundle population script documentation
 
 Note: NO local prisma/ directory - uses main app's schema at /opt/sca/api/prisma/
