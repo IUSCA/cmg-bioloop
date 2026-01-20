@@ -26,7 +26,7 @@
                 <va-button
                   :disabled="!dataset.num_files"
                   preset="primary"
-                  @click="navigateToFileBrowser"
+                  @click="handleBrowseFilesClick"
                   class="flex-none"
                   :color="isDark ? '#9171f8' : '#A020F0'"
                 >
@@ -338,11 +338,47 @@
     ref="editModal"
     @update="fetch_dataset(true)"
   />
+
+  <!-- Browse Files Staging Modal -->
+  <va-modal
+    v-model="browse_files_staging_modal"
+    hide-default-actions
+    size="medium"
+  >
+    <template #header>
+      <h2 class="va-h5">Stage Dataset</h2>
+    </template>
+
+    <div class="flex flex-col gap-4">
+      <p>
+        This dataset will need to be staged before its files can be viewed.
+      </p>
+      <p>Would you like to stage this dataset?</p>
+    </div>
+
+    <template #footer>
+      <div class="flex w-full justify-end gap-3">
+        <va-button
+          preset="secondary"
+          @click="browse_files_staging_modal = false"
+        >
+          Cancel
+        </va-button>
+        <va-button
+          color="primary"
+          @click="confirmStageAndBrowse"
+        >
+          Stage Dataset
+        </va-button>
+      </div>
+    </template>
+  </va-modal>
 </template>
 
 <script setup>
 import config from "@/config";
 import DatasetService from "@/services/dataset";
+import legacyMigrationService from "@/services/legacyMigration";
 import toast from "@/services/toast";
 import { formatBytes } from "@/services/utils";
 import workflowService from "@/services/workflow";
@@ -358,6 +394,7 @@ const props = defineProps({ datasetId: String, appendFileBrowserUrl: Boolean });
 const dataset = ref({});
 const loading = ref(false);
 const stage_modal = ref(false);
+const browse_files_staging_modal = ref(false);
 const delete_archive_modal = ref({
   visible: false,
   input: "",
@@ -496,12 +533,59 @@ function openModalToEditDataset() {
   editModal.value.show();
 }
 
+async function handleBrowseFilesClick() {
+  // Check if dataset is already staged
+  if (dataset.value.is_staged) {
+    navigateToFileBrowser();
+    return;
+  }
+
+  // If not staged, check if staging is already in progress
+  if (dataset.value.cmg_id) {
+    try {
+      const inProgress = await legacyMigrationService.isMigrationInProgress(dataset.value.id);
+      if (inProgress) {
+        toast.info("Dataset is already being staged");
+        return;
+      }
+    } catch (error) {
+      console.error("Error checking migration status:", error);
+    }
+  }
+
+  // Show staging modal
+  browse_files_staging_modal.value = true;
+}
+
 function navigateToFileBrowser() {
   if (props.appendFileBrowserUrl) {
     router.push(route.path + "/filebrowser");
   } else {
     router.push(`/datasets/${props.datasetId}/filebrowser`);
   }
+}
+
+function confirmStageAndBrowse() {
+  browse_files_staging_modal.value = false;
+  loading.value = true;
+  
+  // Trigger the stage workflow (API will determine if stage_migrated is needed)
+  DatasetService.stage_dataset(dataset.value.id)
+    .then(() => {
+      toast.success("Staging workflow initiated");
+      fetch_dataset(true);
+    })
+    .catch((err) => {
+      console.error("Error starting staging workflow:", err);
+      if (err?.response?.status === 409) {
+        toast.error("Dataset is already being staged");
+      } else {
+        toast.error("Failed to start staging workflow");
+      }
+    })
+    .finally(() => {
+      loading.value = false;
+    });
 }
 
 const downloadModal = ref(null);

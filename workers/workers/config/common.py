@@ -107,6 +107,43 @@ config = {
                 }
             ]
         },
+        'stage_migrated': {
+            'description': 'Stage and hydrate legacy CMG datasets with file and track metadata',
+            'steps': [
+                {
+                    'name': 'begin_migration',
+                    'task': 'begin_migration'
+                },
+                {
+                    'name': 'retrieve_archive',
+                    'task': 'retrieve_archive_dataset'
+                },
+                {
+                    'name': 'inspect',
+                    'task': 'inspect_dataset'
+                },
+                {
+                    'name': 'populate_metadata',
+                    'task': 'populate_metadata_dataset'
+                },
+                {
+                    'name': 'stage',
+                    'task': 'stage_dataset'
+                },
+                {
+                    'name': 'validate',
+                    'task': 'validate_dataset'
+                },
+                {
+                    'name': 'setup_download',
+                    'task': 'setup_dataset_download'
+                },
+                {
+                    'name': 'end_migration',
+                    'task': 'end_migration'
+                }
+            ]
+        },
         'integrated': {
             'steps': [
                 {

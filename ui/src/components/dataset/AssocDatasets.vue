@@ -8,7 +8,8 @@
         </va-card-title>
         <va-card-content style="margin-top: -20px">
           <AssocDatasetList
-            :dataset_ids="derived_datasets_meta.map((obj) => obj.derived_id)"
+            :datasets_meta="derived_datasets_meta"
+            show_derivation_method
           ></AssocDatasetList>
         </va-card-content>
       </va-card>
@@ -22,7 +23,7 @@
         </va-card-title>
         <va-card-content style="margin-top: -20px">
           <AssocDatasetList
-            :dataset_ids="source_datasets_meta.map((obj) => obj.source_id)"
+            :datasets_meta="source_datasets_meta"
           ></AssocDatasetList>
         </va-card-content>
       </va-card>

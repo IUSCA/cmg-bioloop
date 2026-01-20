@@ -13,6 +13,16 @@
         </router-link>
       </template>
 
+      <template #cell(derivation_method)="{ rowData }">
+        <va-chip 
+          v-if="derivation_method_map.get(rowData.id)"
+          :color="derivation_method_map.get(rowData.id) === 'conversion' ? 'info' : 'secondary'"
+          size="small"
+        >
+          {{ derivation_method_map.get(rowData.id) === 'conversion' ? 'Conversion' : 'Manual Assignment' }}
+        </va-chip>
+      </template>
+
       <template #cell(du_size)="{ source }">
         <span>{{ source != null ? formatBytes(source) : "" }}</span>
       </template>
@@ -61,19 +71,39 @@ import toast from "@/services/toast";
 import { formatBytes } from "@/services/utils";
 
 const props = defineProps({
-  dataset_ids: {
+  datasets_meta: {
     type: Array,
     default: () => [],
+  },
+  show_derivation_method: {
+    type: Boolean,
+    default: false,
   },
 });
 
 const datasets = ref([]);
 const data_loading = ref(false);
 
+// Extract dataset IDs and create a map of dataset_id -> derivation_method
+const dataset_ids = computed(() => 
+  props.datasets_meta.map((meta) => 
+    meta.derived_id || meta.source_id
+  )
+);
+
+const derivation_method_map = computed(() => {
+  const map = new Map();
+  props.datasets_meta.forEach((meta) => {
+    const id = meta.derived_id || meta.source_id;
+    map.set(id, meta.derivation_method);
+  });
+  return map;
+});
+
 // pagination
 const page = ref(1);
 const page_size = ref(10);
-const total_results = computed(() => props.dataset_ids.length);
+const total_results = computed(() => dataset_ids.value.length);
 const PAGE_SIZE_OPTIONS = [5, 10, 20, 50, 100];
 const offset = computed(() => (page.value - 1) * page_size.value);
 
@@ -81,7 +111,7 @@ const offset = computed(() => (page.value - 1) * page_size.value);
 const sort_by = ref("updated_at");
 const sort_order = ref("desc");
 
-const columns = ref([
+const baseColumns = [
   // { key: "id", sortable: true,  },
   { key: "name", sortable: true },
   { key: "type", sortable: true },
@@ -119,9 +149,25 @@ const columns = ref([
     tdAlign: "center",
     width: "80px",
   },
-]);
+];
 
-watch([() => props.dataset_ids], fetchDatasets, { immediate: true });
+const columns = computed(() => {
+  const cols = [...baseColumns];
+  if (props.show_derivation_method) {
+    // Insert derivation method column after "type"
+    cols.splice(2, 0, {
+      key: "derivation_method",
+      label: "Derivation Method",
+      sortable: false,
+      thAlign: "left",
+      tdAlign: "left",
+      width: "150px",
+    });
+  }
+  return cols;
+});
+
+watch([() => props.datasets_meta], fetchDatasets, { immediate: true });
 watch(page, fetchDatasets);
 watch([page_size, sort_by, sort_order], () => {
   if (page.value !== 1) {
@@ -132,11 +178,11 @@ watch([page_size, sort_by, sort_order], () => {
 });
 
 function fetchDatasets() {
-  if (!props.dataset_ids.length) {
+  if (!dataset_ids.value.length) {
     return;
   }
   data_loading.value = true;
-  const ids_to_fetch = props.dataset_ids.slice(
+  const ids_to_fetch = dataset_ids.value.slice(
     offset.value,
     offset.value + page_size.value,
   );

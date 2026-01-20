@@ -83,11 +83,22 @@ async function processDatasetConversionLogs(prisma, conversions, logFilePath, st
       }
       
       if (conversion.workflow_id && overwriteExisting) {
-        logger.warn(`[CONVERSION LOGS] ⚠️  Overwriting existing logs for conversion ${conversion.id} (workflow_id: ${conversion.workflow_id})`);
+        logger.warn(`[CONVERSION LOGS] Overwriting existing logs for conversion ${conversion.id} (workflow_id: ${conversion.workflow_id})`);
       }
       
       // Generate synthetic workflow_id
       const workflowId = `cmg-historic-conversion-${conversion.id}`;
+      
+      // Create workflow record first (required for FK constraint)
+      await prisma.workflow.upsert({
+        where: { id: workflowId },
+        create: {
+          id: workflowId,
+          dataset_id: conversion.dataset_id,
+          initiator_id: conversion.initiator_id,
+        },
+        update: {},
+      });
       
       // Create worker_process record
       const workerProcess = await prisma.worker_process.create({

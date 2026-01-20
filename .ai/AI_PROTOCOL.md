@@ -98,6 +98,37 @@ Then you MUST:
 
 **Exception:** Only create additional documentation files if the user explicitly requests them.
 
+---
+
+## Code Style Guidelines
+
+### Emoji Usage Policy
+
+**NEVER use emojis in:**
+- ❌ Code comments
+- ❌ Logging statements (`logger.info()`, `console.log()`, etc.)
+- ❌ Error messages
+- ❌ Variable names, function names, or any code identifiers
+- ❌ Commit messages
+- ❌ Code documentation (JSDoc, docstrings, etc.)
+
+**Emojis ALLOWED in documentation files only:**
+- ✅ Markdown documentation files (`.md`)
+- ✅ Strictly documentational emojis (✅ ❌ ⚠️ 🎯 📖 etc.)
+- ✅ Visual markers for readability in documentation
+
+**Exception for code:**
+- May use emojis in extremely complex scripts for debugging purposes
+- Only when visual markers in logs would significantly aid debugging
+- Must be explicitly justified and temporary
+
+**Rationale:**
+- Code should be text-based and emoji-free for compatibility
+- Logs should be grep-friendly and parseable
+- Documentation can use emojis for visual clarity
+
+---
+
 ### Correct entry style
 
 ```markdown

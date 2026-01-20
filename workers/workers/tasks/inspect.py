@@ -86,5 +86,9 @@ def inspect_dataset(celery_task, dataset_id, **kwargs):
     # this is to avoid large payloads to the API
     for batch in utils.batched(metadata, n=config['inspect']['file_metadata_batch_size']):
         api.add_files_to_dataset(dataset_id=dataset_id, files=batch)
+    
+    # Add INSPECTED state to track inspection completion
+    # This is used by stage_migrated workflow to track progress
+    api.add_state_to_dataset(dataset_id=dataset_id, state='INSPECTED')
 
     return dataset_id,
