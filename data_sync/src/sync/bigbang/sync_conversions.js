@@ -194,7 +194,7 @@ async function convertConversion(prisma, cmgDb, cmgConversion) {
   // Get all program arguments for this conversion definition
   const programArguments = await prisma.argument.findMany({
     where: {
-      cmd_line_program_id: conversionDefinition.program_id,
+      program_id: conversionDefinition.program_id,
     },
   });
   
