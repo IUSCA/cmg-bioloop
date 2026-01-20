@@ -13,9 +13,5 @@
       "iss": "cmg-test.sca.iu.edu",
       "ttl_milliseconds": 3600000
     }
-  },
-  "conversion": {
-    "output_directory": "/N/project/CMG-SCA/production/conversion",
-    "reports_base_path": "/opt/sca/project/ingestion_source_dir/CMG-SCA/production/conversion"
   }
 }
