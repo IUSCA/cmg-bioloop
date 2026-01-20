@@ -71,6 +71,18 @@ class WorkflowService {
     return pending_steps.length > 0;
   }
 
+  is_staging_workflow_active(workflows) {
+    // Check if any staging-related workflow is active (not done)
+    // This includes: stage, stage_migrated, and integrated workflows
+    const staging_workflow_names = ['stage', 'stage_migrated', 'integrated'];
+    
+    const active_staging_wfs = (workflows || []).filter(
+      (wf) => staging_workflow_names.includes(wf.name) && !this.is_workflow_done(wf)
+    );
+
+    return active_staging_wfs.length > 0;
+  }
+
   getWorkflowProcesses({
     workflow_id,
     step = null,

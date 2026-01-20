@@ -334,7 +334,7 @@ const rows = computed(() => {
       ...ds,
       assigned_at,
       assignor,
-      is_staging_pending: wfService.is_step_pending("VALIDATE", ds.workflows),
+      is_staging_pending: wfService.is_staging_workflow_active(ds.workflows),
       is_archival_pending: wfService.is_step_pending("ARCHIVE", ds.workflows),
     };
   });

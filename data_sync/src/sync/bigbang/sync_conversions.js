@@ -209,6 +209,14 @@ async function convertConversion(prisma, cmgDb, cmgConversion) {
   
   // Parse CMG options array - split at "wildcards" separator
   if (cmgConversion.options && Array.isArray(cmgConversion.options) && cmgConversion.options.length > 0) {
+    // DEBUG: Log raw options array from CMG
+    logger.debug(`[BIGBANG] [DEBUG] CMG Conversion ${cmgConversion._id} - Raw options array (${cmgConversion.options.length} elements):`);
+    cmgConversion.options.forEach((opt, idx) => {
+      const type = typeof opt;
+      const charCodes = opt ? Array.from(opt).map(c => c.charCodeAt(0)).join(',') : 'null';
+      logger.debug(`[BIGBANG] [DEBUG]   [${idx}] type=${type}, length=${opt ? opt.length : 0}, value="${opt}", charCodes=[${charCodes}]`);
+    });
+    
     // Find index of "wildcards" separator (exact match or starts with "wildcards ")
     let wildcardsIndex = -1;
     let wildcardsSuffix = null; // Additional args in the same element as "wildcards"
@@ -223,12 +231,14 @@ async function convertConversion(prisma, cmgDb, cmgConversion) {
       if (lowerTrimmed === 'wildcards') {
         // Exact match: "wildcards" as standalone element
         wildcardsIndex = i;
+        logger.debug(`[BIGBANG] [DEBUG] Found wildcards at index ${i} (exact match)`);
         break;
       } else if (lowerTrimmed.startsWith('wildcards ')) {
         // Starts with "wildcards ": e.g., "wildcards --use-bases-mask Y*,I8,Y*,Y*"
         wildcardsIndex = i;
         // Extract the part after "wildcards " as the first additional arg
         wildcardsSuffix = trimmed.substring('wildcards '.length).trim();
+        logger.debug(`[BIGBANG] [DEBUG] Found wildcards at index ${i} (with suffix: "${wildcardsSuffix}")`);
         break;
       }
     }
@@ -247,8 +257,22 @@ async function convertConversion(prisma, cmgDb, cmgConversion) {
       additionalOptions = [wildcardsSuffix, ...additionalOptions];
     }
     
+    // DEBUG: Log split results
+    logger.debug(`[BIGBANG] [DEBUG] Split results:`);
+    logger.debug(`[BIGBANG] [DEBUG]   wildcardsIndex: ${wildcardsIndex}`);
+    logger.debug(`[BIGBANG] [DEBUG]   predefinedOptions (${predefinedOptions.length}): ${JSON.stringify(predefinedOptions)}`);
+    logger.debug(`[BIGBANG] [DEBUG]   additionalOptions (${additionalOptions.length}): ${JSON.stringify(additionalOptions)}`);
+    logger.debug(`[BIGBANG] [DEBUG]   wildcardsSuffix: ${wildcardsSuffix ? `"${wildcardsSuffix}"` : 'null'}`);
+
+    
     // Parse predefined arguments → argument_values
     const { parsedArgs: predefinedParsed } = parseOptionsArray(predefinedOptions);
+    
+    // DEBUG: Log parsed predefined args
+    logger.debug(`[BIGBANG] [DEBUG] Parsed predefined args (${predefinedParsed.length}):`);
+    predefinedParsed.forEach((arg, idx) => {
+      logger.debug(`[BIGBANG] [DEBUG]   [${idx}] name="${arg.argument_name}", value="${arg.value}"`);
+    });
     
     for (const { argument_name, value } of predefinedParsed) {
       // Look up the argument definition
@@ -288,6 +312,12 @@ async function convertConversion(prisma, cmgDb, cmgConversion) {
     // Parse additional arguments → additional_args JSON
     if (additionalOptions.length > 0) {
       const { parsedArgs: additionalParsed } = parseOptionsArray(additionalOptions);
+      
+      // DEBUG: Log parsed additional args
+      logger.debug(`[BIGBANG] [DEBUG] Parsed additional args (${additionalParsed.length}):`);
+      additionalParsed.forEach((arg, idx) => {
+        logger.debug(`[BIGBANG] [DEBUG]   [${idx}] name="${arg.argument_name}", value="${arg.value}"`);
+      });
       
       if (additionalParsed.length > 0) {
         additionalArgs = additionalParsed;

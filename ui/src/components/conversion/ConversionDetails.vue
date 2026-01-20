@@ -97,22 +97,11 @@
               >
                 {{ filteredArgumentsString }}
               </code>
-              <div class="flex flex-col gap-5">
-                <CopyButton
-                  :text="filteredArgumentsString"
-                  preset="plain"
-                  class="flex-none"
-                />
-                <va-popover message="Expand" placement="top">
-                  <va-button
-                    preset="plain"
-                    icon="open_in_full"
-                    size="small"
-                    @click="openArgumentsModal"
-                    class="flex-none"
-                  />
-                </va-popover>
-              </div>
+              <CopyButton
+                :text="filteredArgumentsString"
+                preset="plain"
+                class="flex-none"
+              />
             </div>
           </td>
         </tr>
@@ -155,22 +144,6 @@
       </div>
     </div>
   </va-modal>
-
-  <!-- Arguments Modal -->
-  <va-modal v-model="showArgumentsModal" size="large" title="Arguments">
-    <div class="flex">
-      <CopyButton
-        :text="filteredArgumentsString"
-        preset="secondary"
-        class="items-baseline"
-      />
-      <div
-        class="bg-gray-100 dark:bg-gray-800 p-4 rounded text-sm max-h-96 overflow-auto"
-      >
-        <code class="whitespace-pre-wrap">{{ filteredArgumentsString }}</code>
-      </div>
-    </div>
-  </va-modal>
 </template>
 
 <script setup>
@@ -180,14 +153,9 @@ import { formatBytes } from "@/services/utils";
 const props = defineProps({ conversion: Object });
 
 const showSampleSheetModal = ref(false);
-const showArgumentsModal = ref(false);
 
 function openSampleSheetModal() {
   showSampleSheetModal.value = true;
-}
-
-function openArgumentsModal() {
-  showArgumentsModal.value = true;
 }
 
 const sampleSheetContent = computed(() => {

@@ -407,7 +407,7 @@ const active_wf = computed(() => {
 });
 
 const is_stage_pending = computed(() => {
-  return workflowService.is_step_pending("stage", dataset.value?.workflows);
+  return workflowService.is_staging_workflow_active(dataset.value?.workflows);
 });
 
 const is_delete_pending = computed(() => {

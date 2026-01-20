@@ -1,17 +1,15 @@
 <template>
   <div>
-    <VaPopover :disabled="!disabled" :message="reason">
-      <va-button
-        :disabled="disabled"
-        class="w-full"
-        color="primary"
-        border-color="primary"
-        preset="secondary"
-        @click="visible = !visible"
-      >
-        <i-mdi-orbit-variant class="pr-2 text-2xl" /> New Conversion
-      </va-button>
-    </VaPopover>
+    <va-button
+      :disabled="disabled"
+      class="w-full"
+      color="primary"
+      border-color="primary"
+      preset="secondary"
+      @click="visible = !visible"
+    >
+      <i-mdi-orbit-variant class="pr-2 text-2xl" /> New Conversion
+    </va-button>
 
     <va-modal
       :model-value="visible"
@@ -76,12 +74,5 @@ function close() {
 
 const disabled = computed(() => {
   return !props.dataset.is_staged;
-});
-
-const reason = computed(() => {
-  if (!props.dataset.is_staged) {
-    return 'Please stage the dataset first';
-  }
-  return '';
 });
 </script>

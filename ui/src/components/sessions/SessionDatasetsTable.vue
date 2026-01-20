@@ -157,7 +157,7 @@ const columns = [
 const datasetsWithStatus = computed(() => {
   return datasets.value.map((ds) => ({
     ...ds,
-    is_staging_pending: wfService.is_step_pending('stage', ds.workflows),
+    is_staging_pending: wfService.is_staging_workflow_active(ds.workflows),
   }));
 });
 
