@@ -365,7 +365,7 @@ echo "  URL: $URL"
 echo "  Directory: $DIR_NAME"
 
 # Run download and organization (in container or on host)
-# Downloads to /tmp, then creates directory and moves file atomically
+# Downloads to /tmp, extracts if compressed, then moves contents to destination
 run_command "
     set -e
     
@@ -420,16 +420,55 @@ run_command "
     FILE_SIZE=\$(stat -f%z '$FILENAME' 2>/dev/null || stat -c%s '$FILENAME' 2>/dev/null || echo 0)
     echo \"  File size: \$FILE_SIZE bytes\"
     
-    # Create the dataset directory in destination and move file atomically
+    # Check if file is compressed and extract if needed
+    if [[ '$FILENAME' == *.tar.gz ]] || [[ '$FILENAME' == *.tgz ]]; then
+        echo '  Detected compressed tar archive (.tar.gz), extracting...'
+        tar -xzf '$FILENAME'
+        rm '$FILENAME'
+        echo '  ✓ Extraction complete'
+    elif [[ '$FILENAME' == *.tar.bz2 ]] || [[ '$FILENAME' == *.tbz2 ]]; then
+        echo '  Detected compressed tar archive (.tar.bz2), extracting...'
+        tar -xjf '$FILENAME'
+        rm '$FILENAME'
+        echo '  ✓ Extraction complete'
+    elif [[ '$FILENAME' == *.tar.xz ]] || [[ '$FILENAME' == *.txz ]]; then
+        echo '  Detected compressed tar archive (.tar.xz), extracting...'
+        tar -xJf '$FILENAME'
+        rm '$FILENAME'
+        echo '  ✓ Extraction complete'
+    elif [[ '$FILENAME' == *.tar ]]; then
+        echo '  Detected tar archive (.tar), extracting...'
+        tar -xf '$FILENAME'
+        rm '$FILENAME'
+        echo '  ✓ Extraction complete'
+    elif [[ '$FILENAME' == *.gz ]]; then
+        echo '  Detected gzip file (.gz), decompressing...'
+        gunzip '$FILENAME'
+        echo '  ✓ Decompression complete'
+    elif [[ '$FILENAME' == *.zip ]]; then
+        echo '  Detected zip archive (.zip), extracting...'
+        unzip -q '$FILENAME'
+        rm '$FILENAME'
+        echo '  ✓ Extraction complete'
+    else
+        echo '  File is not compressed, will move as-is'
+    fi
+    
+    # Create the dataset directory in destination
     DATASET_DIR='$DESTINATION/$DIR_NAME'
     echo \"  Creating directory: \$DATASET_DIR\"
     mkdir -p \$DATASET_DIR
     
-    # Move the file into the dataset directory immediately (atomic operation)
-    echo \"  Moving file to: \$DATASET_DIR/$FILENAME\"
-    mv '$FILENAME' \$DATASET_DIR/
+    # Move all contents (extracted or original) to dataset directory
+    echo \"  Moving contents to: \$DATASET_DIR\"
+    for item in *; do
+        if [ -e \"\$item\" ]; then
+            mv \"\$item\" \$DATASET_DIR/
+        fi
+    done
     
     # Cleanup temp directory
+    cd /
     rm -rf \$TMP_DIR
     
     echo '  ✓ Complete'
