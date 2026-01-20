@@ -203,8 +203,8 @@ async function populatePipelineDefinitions(prisma, cmgUserId) {
     });
   }
 
-  // Other programs link to specific shared args
-  const sharedArgNames = ['--no-lane-splitting', '--delete-undetermined', '--filter-single-index'];
+  // Other programs link to specific shared args (including sample-sheet for CMG conversions)
+  const sharedArgNames = ['--no-lane-splitting', '--delete-undetermined', '--filter-single-index', '--sample-sheet'];
   const conversionProgramsSharedArgs = ARGUMENT_DATA.filter(arg => sharedArgNames.includes(arg.name));
 
   for (const programName of OTHER_PROGRAM_NAMES) {
