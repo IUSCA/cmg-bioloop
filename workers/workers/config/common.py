@@ -45,6 +45,7 @@ config = {
         'RAW_DATA': {
             'archive': f'development/{YEAR}/raw_data',
             'stage': '/path/to/staged/raw_data',
+            'migration': '/path/to/migration/raw_data',
             'bundle': {
                 'generate': '/path/for/raw_data/bundle/generation',
                 'stage': '/path/for/raw_data/bundle/staging',
@@ -55,6 +56,7 @@ config = {
             'upload': '/opt/sca/data',
             'archive': f'development/{YEAR}/data_products',
             'stage': '/path/to/staged/data_products',
+            'migration': '/path/to/migration/data_products',
             'bundle': {
                 'generate': '/path/for/data_products/bundle/generation',
                 'stage': '/path/for/data_products/bundle/staging',
@@ -284,6 +286,9 @@ config = {
         'default_analysis_type': {
             'enabled': True,  # Set to True to override default behavior
             'value': 'fastq'      # Set to desired Analysis Type (e.g., 'FASTQ_CLEANED')
+        },
+        'qc': {
+            'enabled': True,  # Set to False to skip QC generation (requires fastqc and multiqc)
         }
     },
     'file_info_population': {

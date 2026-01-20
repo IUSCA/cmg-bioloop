@@ -6,7 +6,9 @@ Specifically for datasets migrated from MongoDB that need metadata population.
 """
 
 from typing import Dict, Optional
+from pathlib import Path
 import workers.api as api
+from workers.config import config
 
 
 def has_reached_state(dataset_id: int, state: str) -> bool:
@@ -135,4 +137,50 @@ def get_migration_status(dataset_id: int) -> Dict[str, bool]:
             'is_validated': False,
             'is_migrated': False,
         }
+
+
+def get_retrieved_archive_retrieval_path(dataset: Dict) -> Path:
+    """
+    Get the path where the retrieved archive file should be downloaded to.
+    
+    Path structure: {migration}/retrieved_archives/{dataset_id}/
+    
+    Args:
+        dataset: The dataset dictionary (must have 'id' and 'type')
+    
+    Returns:
+        Path to the directory where the archive file will be stored
+    
+    Usage:
+        Used by retrieve_archive to determine where to download the archive file.
+    """
+    dataset_type = dataset['type']
+    dataset_id = dataset['id']
+    migration_dir = Path(config['paths'][dataset_type]['migration'])
+    return migration_dir / 'retrieved_archives' / str(dataset_id)
+
+
+def get_retrieved_archive_extraction_path(dataset: Dict) -> Path:
+    """
+    Get the path where the extracted archive contents will be placed.
+    
+    Path structure: {migration}/extracted_archives/{dataset_id}/
+    
+    This is where retrieve_archive places the extracted contents and where
+    inspect_dataset reads from for legacy datasets.
+    
+    Args:
+        dataset: The dataset dictionary (must have 'id' and 'type')
+    
+    Returns:
+        Path to the directory containing extracted archive contents
+    
+    Usage:
+        Used by both retrieve_archive (to place extracted content) and 
+        inspect_dataset (to read from for legacy datasets).
+    """
+    dataset_type = dataset['type']
+    dataset_id = dataset['id']
+    migration_dir = Path(config['paths'][dataset_type]['migration'])
+    return migration_dir / 'extracted_archives' / str(dataset_id)
 

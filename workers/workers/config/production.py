@@ -12,6 +12,7 @@ config = {
         'RAW_DATA': {
             'archive': f'archive_raw',
             'stage': '/N/scratch/cmguser/CMG-SCA/cmg-bioloop/stage/raw_data',
+            'migration': '/N/scratch/cmguser/cmg-bioloop/migration/raw_data',
             # 'stage': '/test',
             'bundle': {
                 'generate': '/N/scratch/cmguser/CMG-SCA/cmg-bioloop/stage/raw_data',
@@ -23,6 +24,7 @@ config = {
             # 'upload': '/opt/sca/uploads/cpa/data_products',
             'archive': f'archive_products',
             'stage': '/N/scratch/cmguser/cmg-bioloop/stage/data_products',
+            'migration': '/N/scratch/cmguser/cmg-bioloop/migration/data_products',
             'bundle': {
                 'generate': '/N/scratch/cmguser/cmg-bioloop/stage/data_products',
                 'stage': '/N/scratch/cmguser/cmg-bioloop/bundles/data_products',
@@ -46,7 +48,7 @@ config = {
         'DATA_PRODUCT': {
             'source_dir': '/N/scratch/cmguser/cmg-bioloop/origin/data_products',
         },
-        'recency_threshold_seconds': 0, # 0 minutes
+        'recency_threshold_seconds': 300, # 5 minutes
     },
     'stage': {
         'purge': {

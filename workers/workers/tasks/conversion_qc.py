@@ -18,6 +18,13 @@ app.config_from_object(celeryconfig)
 
 
 def generate_qc(celery_task, dataset_id_conversion_id, **kwargs):
+    # Check if QC is enabled in configuration
+    qc_enabled = config.get('genomic_conversion', {}).get('qc', {}).get('enabled', True)
+    if not qc_enabled:
+        print("QC generation is disabled in configuration, skipping...")
+        return {'dataset_id': dataset_id_conversion_id['dataset_id'], 
+                'conversion_id': dataset_id_conversion_id['conversion_id']},
+    
     conversion: dict = api.get_conversion(conversion_id=dataset_id_conversion_id['conversion_id'], include_dataset=True)
     dataset: dict = api.get_dataset(dataset_id=dataset_id_conversion_id['dataset_id'])
 

@@ -454,8 +454,35 @@ run_command "
         echo '  File is not compressed, will move as-is'
     fi
     
+    # If extraction resulted in a single directory, flatten it
+    ITEM_COUNT=\$(ls -A | wc -l)
+    if [ \"\$ITEM_COUNT\" -eq 1 ]; then
+        SINGLE_ITEM=\$(ls -A)
+        if [ -d \"\$SINGLE_ITEM\" ]; then
+            echo \"  Flattening single extracted directory: \$SINGLE_ITEM\"
+            mv \"\$SINGLE_ITEM\"/* .
+            mv \"\$SINGLE_ITEM\"/.* . 2>/dev/null || true
+            rmdir \"\$SINGLE_ITEM\"
+        fi
+    fi
+    
+    # Find next available directory name (with numeric suffix if needed)
+    BASE_DIR_NAME='$DIR_NAME'
+    FINAL_DIR_NAME=\"\$BASE_DIR_NAME\"
+    COUNTER=2
+    
+    while [ -d '$DESTINATION'/\"\$FINAL_DIR_NAME\" ]; do
+        echo \"  Directory '$DESTINATION/\$FINAL_DIR_NAME' already exists\"
+        FINAL_DIR_NAME=\"\$BASE_DIR_NAME-\$COUNTER\"
+        COUNTER=\$((COUNTER + 1))
+    done
+    
+    if [ \"\$FINAL_DIR_NAME\" != \"\$BASE_DIR_NAME\" ]; then
+        echo \"  Using directory name: \$FINAL_DIR_NAME\"
+    fi
+    
     # Create the dataset directory in destination
-    DATASET_DIR='$DESTINATION/$DIR_NAME'
+    DATASET_DIR='$DESTINATION'/\"\$FINAL_DIR_NAME\"
     echo \"  Creating directory: \$DATASET_DIR\"
     mkdir -p \$DATASET_DIR
     
@@ -463,6 +490,13 @@ run_command "
     echo \"  Moving contents to: \$DATASET_DIR\"
     for item in *; do
         if [ -e \"\$item\" ]; then
+            mv \"\$item\" \$DATASET_DIR/
+        fi
+    done
+    
+    # Move hidden files too
+    for item in .*; do
+        if [ -e \"\$item\" ] && [ \"\$item\" != \".\" ] && [ \"\$item\" != \"..\" ]; then
             mv \"\$item\" \$DATASET_DIR/
         fi
     done

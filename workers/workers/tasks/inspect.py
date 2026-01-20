@@ -10,6 +10,7 @@ import workers.config.celeryconfig as celeryconfig
 import workers.utils as utils
 from workers import exceptions as exc
 from workers.config import config
+from workers.legacy_migration import get_retrieved_archive_extraction_path, is_legacy_dataset
 
 app = Celery("tasks")
 app.config_from_object(celeryconfig)
@@ -67,7 +68,22 @@ def generate_metadata(celery_task, source: Path):
 
 def inspect_dataset(celery_task, dataset_id, **kwargs):
     dataset = api.get_dataset(dataset_id=dataset_id)
-    source = Path(dataset['origin_path']).resolve()
+    
+    # For legacy datasets, use extracted archive path instead of origin_path
+    if is_legacy_dataset(dataset):
+        source = get_retrieved_archive_extraction_path(dataset)
+        logger.info(f'Inspecting legacy dataset from extracted archive path: {source}')
+        
+        # Verify the path exists
+        if not source.exists():
+            raise exc.RetryableException(
+                f'Extracted archive path does not exist: {source}. '
+                'Ensure retrieve_archive completed successfully.'
+            )
+    else:
+        source = Path(dataset['origin_path']).resolve()
+        logger.info(f'Inspecting dataset from origin path: {source}')
+    
     du_size = cmd.total_size(source)
     num_files, num_directories, size, num_genome_files, metadata = generate_metadata(celery_task, source)
 
