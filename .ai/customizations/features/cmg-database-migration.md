@@ -411,7 +411,6 @@
 
 ---
 
-<<<<<<< Updated upstream
 ## 2026-01-19
 
 ### Conversion Logs Sync - Container Execution
@@ -446,17 +445,13 @@
   - Gracefully handles missing log directory (local/dev)
   - Safe to re-run multiple times
   - `--overwrite-existing` flag for forced re-processing
-=======
-## 2026-01-19 (Legacy Dataset Hydration Workflow)
 
-### New Workflow: stage_migrated
+### Legacy Dataset Hydration Workflow
 
 - **Change:** Implemented `stage_migrated` workflow for legacy CMG datasets
   - Purpose: Stage and hydrate legacy datasets that were migrated from MongoDB but lack complete file/track metadata
   - Steps: begin_migration → retrieve_archive → inspect → populate_metadata → stage → validate → setup_download → end_migration
   - Automatically triggered for legacy datasets (with `cmg_id`) that haven't been hydrated yet
-
-### New Workflow Tasks
 
 - **Change:** Created new workflow task files in `workers/workers/tasks/`:
   - `begin_migration.py`: Sets MIGRATION_INITIATED state
@@ -464,8 +459,6 @@
   - `populate_metadata.py`: Populates bundle metadata from existing archive, sets METADATA_POPULATED state
   - `end_migration.py`: Sets final MIGRATED state
   - All tasks registered in `workers/workers/tasks/declarations.py`
-
-### State Management
 
 - **Change:** Added new dataset states for migration tracking:
   - `MIGRATION_INITIATED`: Migration workflow has started
@@ -477,8 +470,6 @@
 - **Change:** Updated `inspect_dataset` task to add INSPECTED state
   - Enables tracking of inspection completion in stage_migrated workflow
 
-### API Routes and Services
-
 - **Change:** Created legacy migration API routes under `/legacy/`:
   - `GET /legacy/migrations/datasets/:id`: Returns migration status for a dataset
     - Fields: is_legacy, is_migration_initiated, is_retrieved, is_inspected, is_metadata_populated, is_hydrated, is_validated, is_migrated
@@ -489,15 +480,11 @@
   - Provides `getDatasetMigrationStatus()`, `getSessionMigrationStatus()`, `isMigrationInProgress()`, `hasReachedState()`
   - Checks dataset states to determine hydration/migration progress
 
-### Workflow Triggering Logic
-
 - **Decision:** POST `/datasets/:id/workflow/stage` automatically selects correct workflow
   - If dataset has `cmg_id` AND not yet hydrated: triggers `stage_migrated` workflow
   - If dataset has `cmg_id` AND already hydrated: triggers standard `stage` workflow
   - If dataset has no `cmg_id`: triggers standard `stage` workflow
   - Returns 409 error if migration already in progress
-
-### UI Implementation
 
 - **Change:** Created `ui/src/services/legacyMigration.js`
   - Client-side service for checking dataset migration status
@@ -509,22 +496,16 @@
   - Checks if migration already in progress, shows toast if so
   - Triggers appropriate workflow when user confirms
 
-### Worker Utilities
-
 - **Change:** Created `workers/workers/legacy_migration.py`
   - Helper functions for legacy migration operations in worker context
   - Functions: `has_reached_state()`, `is_legacy_dataset()`, `is_hydrated()`, `is_migrated()`, `get_migration_status()`
   - Enables workers to check migration status when needed
-
-### Configuration
 
 - **Change:** Added `stage_migrated` workflow to configuration:
   - `api/config/default.json`: Workflow definition with description and steps
   - `workers/workers/config/common.py`: Worker-side workflow configuration
   - `api/src/constants.js`: Added STAGE_MIGRATED constant and migration states
   - `workers/workers/constants/workflow.py`: Added STAGE_MIGRATED constant
-
-### Architecture Notes
 
 - **Decision:** Workflow reuses existing tasks (stage, validate, setup_download) where possible
   - Only new tasks are migration-specific: begin_migration, retrieve_archive, populate_metadata, end_migration
@@ -539,7 +520,6 @@
   - `populate_metadata` step specifically for legacy dataset hydration
   - Designed to be extensible for other metadata population needs
   - Core bundle logic in separate `populate_bundle_metadata()` function
->>>>>>> Stashed changes
 
 ---
 

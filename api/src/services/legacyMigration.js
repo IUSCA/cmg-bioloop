@@ -5,7 +5,7 @@
  * Specifically for CMG datasets migrated from MongoDB that need hydration.
  */
 
-const prisma = require('@/prisma');
+const prisma = require('@/db');
 
 /**
  * Check if a dataset has reached a specific migration state

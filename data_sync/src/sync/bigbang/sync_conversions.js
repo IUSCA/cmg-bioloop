@@ -194,7 +194,7 @@ async function convertConversion(prisma, cmgDb, cmgConversion) {
   // Get all program arguments for this conversion definition
   const programArguments = await prisma.argument.findMany({
     where: {
-      cmd_line_program_id: conversionDefinition.program_id,
+      program_id: conversionDefinition.program_id,
     },
   });
   
@@ -209,19 +209,43 @@ async function convertConversion(prisma, cmgDb, cmgConversion) {
   
   // Parse CMG options array - split at "wildcards" separator
   if (cmgConversion.options && Array.isArray(cmgConversion.options) && cmgConversion.options.length > 0) {
-    // Find index of "wildcards" separator
-    const wildcardsIndex = cmgConversion.options.findIndex(opt => 
-      opt && opt.trim().toLowerCase() === 'wildcards'
-    );
+    // Find index of "wildcards" separator (exact match or starts with "wildcards ")
+    let wildcardsIndex = -1;
+    let wildcardsSuffix = null; // Additional args in the same element as "wildcards"
+    
+    for (let i = 0; i < cmgConversion.options.length; i++) {
+      const opt = cmgConversion.options[i];
+      if (!opt) continue;
+      
+      const trimmed = opt.trim();
+      const lowerTrimmed = trimmed.toLowerCase();
+      
+      if (lowerTrimmed === 'wildcards') {
+        // Exact match: "wildcards" as standalone element
+        wildcardsIndex = i;
+        break;
+      } else if (lowerTrimmed.startsWith('wildcards ')) {
+        // Starts with "wildcards ": e.g., "wildcards --use-bases-mask Y*,I8,Y*,Y*"
+        wildcardsIndex = i;
+        // Extract the part after "wildcards " as the first additional arg
+        wildcardsSuffix = trimmed.substring('wildcards '.length).trim();
+        break;
+      }
+    }
     
     // Split options into predefined (before wildcards) and additional (after wildcards)
     const predefinedOptions = wildcardsIndex >= 0 
       ? cmgConversion.options.slice(0, wildcardsIndex)
       : cmgConversion.options; // If no wildcards, all are predefined
       
-    const additionalOptions = wildcardsIndex >= 0 
+    let additionalOptions = wildcardsIndex >= 0 
       ? cmgConversion.options.slice(wildcardsIndex + 1)
       : [];
+    
+    // If wildcards element had a suffix, prepend it to additionalOptions
+    if (wildcardsSuffix) {
+      additionalOptions = [wildcardsSuffix, ...additionalOptions];
+    }
     
     // Parse predefined arguments → argument_values
     const { parsedArgs: predefinedParsed } = parseOptionsArray(predefinedOptions);
