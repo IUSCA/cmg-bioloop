@@ -363,6 +363,15 @@ function cleanParams(params) {
   );
 }
 
+function readFileAsText(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => resolve(e.target.result);
+    reader.onerror = (e) => reject(e);
+    reader.readAsText(file);
+  });
+}
+
 export {
   arrayEquals,
   capitalize,
@@ -386,6 +395,7 @@ export {
   mapValues,
   maybePluralize,
   navigateBackSafely,
+  readFileAsText,
   setIntersection,
   union,
   validateEmail,

@@ -16,6 +16,7 @@ const { generate_stage_request_logs } = require('./seed_data/stage_request_logs'
 const { conversionDefinitions } = require('./seed_data/conversion_definitions');
 const { cmdLinePrograms } = require('./seed_data/cmd_line_programs');
 const { argumentData } = require('./seed_data/arguments');
+const { slurmArgumentsData } = require('./seed_data/platform_execution/slurm_arguments');
 const { generate_date_range } = require('../src/services/datetime');
 const datasetService = require('../src/services/dataset');
 const { readUsersFromJSON } = require('../src/utils');
@@ -374,6 +375,17 @@ async function main() {
       });
     }
   });
+
+  // SLURM program links to all SLURM arguments
+  const slurmProgramId = programMap.slurm;
+  if (slurmProgramId) {
+    slurmArgumentsData.forEach((arg) => {
+      argumentDataWithPrograms.push({
+        ...arg,
+        program_id: slurmProgramId,
+      });
+    });
+  }
 
   // create arguments
   await prisma.argument.createMany({

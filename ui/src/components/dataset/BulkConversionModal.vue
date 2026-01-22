@@ -11,6 +11,7 @@
           v-if="results === null"
           v-model:definition="definition"
           v-model:argValues="argValues"
+          v-model:execution-metadata="execution_metadata"
         />
 
         <!-- results -->
@@ -55,8 +56,11 @@
 </template>
 
 <script setup>
+import constants from "@/constants";
 import conversionApiService from "@/services/conversion/api";
 import toast from "@/services/toast";
+import { readFileAsText } from "@/services/utils";
+
 const props = defineProps({
   datasetIds: { type: Array, required: true },
 });
@@ -73,6 +77,7 @@ const loading = ref(false);
 const definition = ref();
 const argValues = ref([]);
 const results = ref(null);
+const execution_metadata = ref({});
 
 const num_datasets = computed(() => props.datasetIds?.length || 0);
 
@@ -84,14 +89,39 @@ function show() {
   visible.value = true;
 }
 
-function convert_datasets() {
+async function convert_datasets() {
   loading.value = true;
+
+  // Read file contents if execution platform is specified
+  let artifacts = [];
+  if (execution_metadata.value?.metadata?.files?.length > 0) {
+    artifacts = await Promise.all(
+      execution_metadata.value.metadata.files.map(async (file) => {
+        const content = await readFileAsText(file);
+        return {
+          artifact_type: constants.artifact_type.JOB_SCRIPT,
+          storage_type: constants.storage_type.INLINE,
+          content_inline: content,
+        };
+      }),
+    );
+  }
+
   conversionApiService
     .createBulk({
       definition_id: definition.value.id,
       dataset_ids: props.datasetIds,
       argument_values: removeNullValues(argValues.value.argument_values),
       user_argument_values: argValues.value.user_argument_values,
+      process_requests: execution_metadata.value?.platform
+        ? [
+            {
+              execution_platform: execution_metadata.value.platform,
+              artifacts: artifacts,
+              execution_config: execution_metadata.value?.metadata?.execution_config || null,
+            },
+          ]
+        : [],
     })
     .then((res) => {
       // res.data: type: {dataset_id: [status, conversion_object | {name, message}]}
@@ -184,6 +214,22 @@ function close() {
   definition.value = null;
   argValues.value = [];
   results.value = null;
+  execution_metadata.value = {};
   emit("done");
 }
+
+watch(execution_metadata, (newValue) => {
+  console.log("-------------- BulkConversionModal ------------------");
+  console.log("execution_metadata WATCH, new value:", newValue);
+  console.log("-------------- BulkConversionModal ------------------");
+});
+
+onMounted(() => {
+  console.log("-------------- BulkConversionModal ------------------");
+  console.log(
+    "execution_metadata ON MOUNTED, value:",
+    execution_metadata.value,
+  );
+  console.log("-------------- BulkConversionModal ------------------");
+});
 </script>

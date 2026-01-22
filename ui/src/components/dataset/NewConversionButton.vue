@@ -20,7 +20,11 @@
       fixed-layout
     >
       <div class="min-h-[calc(100vh-15rem)]">
-        <ConversionForm v-model:definition="definition" v-model:argValues="argValues" />
+        <ConversionForm
+          v-model:definition="definition"
+          v-model:argValues="argValues"
+          v-model:execution-metadata="execution_metadata"
+        />
       </div>
     </va-modal>
   </div>
@@ -39,6 +43,7 @@ const visible = ref(false);
 const loading = ref(false);
 const definition = ref();
 const argValues = ref([]);
+const execution_metadata = ref({});
 
 function convert_dataset() {
   loading.value = true;
@@ -48,6 +53,8 @@ function convert_dataset() {
       dataset_id: props.dataset.id,
       argument_values: argValues.value.argument_values,
       user_argument_values: argValues.value.user_argument_values,
+      execution_platform: execution_metadata.value.platform,
+      execution_metadata: execution_metadata.value.metadata,
     })
     .then(() => {
       toast.success('Conversion initiated successfully');
@@ -70,6 +77,7 @@ function close() {
   visible.value = false;
   definition.value = null;
   argValues.value = [];
+  execution_metadata.value = {};
 }
 
 const disabled = computed(() => {

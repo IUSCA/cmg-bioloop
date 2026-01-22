@@ -22,6 +22,45 @@ const prisma = new PrismaClient();
 const isPermittedTo = accessControl('conversion');
 const router = express.Router();
 
+// Validate artifact content
+function validateArtifact(artifact) {
+  // Validate artifact type
+  const validArtifactTypes = [
+    'JOB_SCRIPT',
+    'ENVIRONMENT_SETUP',
+    'RUNTIME_CONFIG',
+    'RESOURCE_MANIFEST',
+    'SECRETS',
+    'DEPENDENCY_FILE',
+    'CUSTOM',
+  ];
+  if (!validArtifactTypes.includes(artifact.artifact_type)) {
+    throw createError(400, `Invalid artifact_type: ${artifact.artifact_type}`);
+  }
+
+  // Validate storage type
+  const validStorageTypes = ['INLINE', 'FILE_PATH', 'EXTERNAL_URL'];
+  if (!validStorageTypes.includes(artifact.storage_type)) {
+    throw createError(400, `Invalid storage_type: ${artifact.storage_type}`);
+  }
+
+  // Validate content is present ,i f INLINE storage
+  if (artifact.storage_type === 'INLINE' && !artifact.content_inline) {
+    throw createError(400, 'content_inline is required for INLINE storage type');
+  }
+
+  // Validate content size (1MB limit for inline storage)
+  if (artifact.storage_type === 'INLINE' && artifact.content_inline) {
+    const sizeInBytes = Buffer.byteLength(artifact.content_inline, 'utf8');
+    const maxSize = 1024 * 1024; // 1MB
+    if (sizeInBytes > maxSize) {
+      throw createError(400, `Artifact content too large: ${sizeInBytes} bytes (max: ${maxSize} bytes)`);
+    }
+
+    // todo - check if uploaded file is proper text file
+  }
+}
+
 router.use('/definitions', require('./definitions'));
 router.use('/dynamic-arguments', require('./dynamicArguments'));
 
@@ -345,9 +384,13 @@ router.post(
       .withMessage(
         'user_argument_values must be an array of objects with argument_name and value fields',
       ),
+    body('process_requests').optional().isArray(),
   ]),
   asyncHandler(async (req, res, next) => {
     // #swagger.tags = ['Conversions']
+
+    console.log('req.user.id', req.user.id);
+    console.log('req.body', req.body);
 
     // validate if definition_id, dataset_id exists
     const conversionDefinition = await prisma.conversion_definition.findUnique({
@@ -462,6 +505,28 @@ router.post(
       },
     });
 
+      // create Process Requests
+      await Promise.all(req.body.process_requests.map(async (request) => {
+        const process_request = await tx.process_request.create({
+          data: {
+            conversion_id: conversion.id,
+            execution_platform: request.execution_platform,
+            execution_config: request.execution_config || null,
+          },
+        });
+        request.artifacts.forEach(async (artifact) => {
+          validateArtifact(artifact);
+          await tx.process_artifact.create({
+            data: {
+              process_id: process_request.id,
+              artifact_type: artifact.artifact_type,
+              storage_type: artifact.storage_type,
+              content_inline: artifact.content_inline,
+            },
+          });
+        });
+      }));
+
     const workflow_type = config.genomic_conversion_programs.includes(conversionDefinition.program.name)
       ? 'genomic_conversion'
       : 'conversion';
@@ -534,6 +599,7 @@ async function validateAndCreateConversion(
     argument_values,
     initiator_id,
     user_argument_values = [],
+    process_request = [],
   } = {},
 ) {
   const argVals = _.cloneDeep(argument_values);
@@ -558,6 +624,34 @@ async function validateAndCreateConversion(
       argVals[obj.definition.id.toString()].value = v;
     });
   await Promise.all(promises);
+
+  // Handle SLURM directives if present in process_requests
+  const slurmProcessRequests = process_request.filter(req => req.execution_platform === 'SLURM' && req.execution_config);
+  if (slurmProcessRequests.length > 0) {
+    // Get SLURM program and its arguments
+    const slurmProgram = await prisma.cmd_line_program.findFirst({
+      where: { name: 'slurm' },
+      include: { arguments: true }
+    });
+
+    if (slurmProgram) {
+      // Add SLURM argument values to argVals
+      slurmProcessRequests.forEach(slurmRequest => {
+        const directives = slurmRequest.execution_config;
+        slurmProgram.arguments.forEach(slurmArg => {
+          const directiveKey = slurmArg.name.replace('--', '').replace('-', '');
+          const directiveValue = directives[directiveKey];
+
+          if (directiveValue !== null && directiveValue !== undefined && directiveValue !== '') {
+            argVals[slurmArg.id.toString()] = {
+              value: conversionService.convertValueForStorage(directiveValue, slurmArg),
+              definition: slurmArg,
+            };
+          }
+        });
+      });
+    }
+  }
 
   // check if all required arguments are provided
   // if not, add values for missing arguments with default values
@@ -589,6 +683,28 @@ async function validateAndCreateConversion(
         additional_args: user_argument_values.length > 0 ? user_argument_values : null,
       },
     });
+
+    // create Process Request and Artifact records
+    await Promise.all(process_request.map(async (request) => {
+      const conversion_process_request = await tx.process_request.create({
+        data: {
+          conversion_id: conversion.id,
+          execution_platform: request.execution_platform,
+          execution_config: request.execution_config || null,
+        },
+      });
+      request.artifacts.forEach(async (artifact) => {
+        validateArtifact(artifact);
+        await tx.process_artifact.create({
+          data: {
+            process_id: conversion_process_request.id,
+            artifact_type: artifact.artifact_type,
+            storage_type: artifact.storage_type,
+            content_inline: artifact.content_inline,
+          },
+        });
+      });
+    }));
 
     const workflow_type = config.genomic_conversion_programs.includes(conversionDefinition.program.name)
       ? 'genomic_conversion'
@@ -630,9 +746,13 @@ router.post(
     body('dataset_ids').isArray().custom((array) => array.every(Number.isInteger)),
     body('argument_values').default([]).isArray(),
     body('user_argument_values').default([]).isArray(),
+    body('process_requests').optional().isArray(),
   ]),
   asyncHandler(async (req, res, next) => {
     // #swagger.tags = ['Conversions']
+
+    console.log('req.user.id', req.user.id);
+    console.log('req.body', req.body);
 
     // validate if definition_id, dataset_id exists
     const conversionDefinition = await prisma.conversion_definition.findUnique({
@@ -701,6 +821,7 @@ router.post(
             initiator_id: req.user.id,
             argument_values: argVals,
             user_argument_values: req.body.user_argument_values,
+            process_request: req.body.process_requests,
           },
         )),
       );
@@ -814,6 +935,54 @@ router.get(
       index_url: `${reportsUrlPath}/html/index.html`,
     });
   }),
-);
+)
+
+// === AI-ATTENTION-BEGIN ===
+// I am not sure if the following implementation of exposing a Conversion's reports is correct, or
+// the one above this, which is uncommented. Keep this in mind if we need to debug this.
+// === AI-ATTENTION-END ===
+//
+// router.get(
+//   '/:id/reports',
+//   isPermittedTo('read'),
+//   validate([
+//     param('id').isInt({ min: 1 }).toInt(),
+//   ]),
+//   asyncHandler(async (req, res, next) => {
+//     // #swagger.tags = ['Conversions']
+//     console.log('GET /conversions/:id/reports', req.params.id);
+//
+//     const conversionId = req.params.id;
+//
+//     const conversion = await prisma.conversion.findUniqueOrThrow({
+//       where: { id: conversionId },
+//       include: {
+//         dataset: true,
+//         definition: true,
+//       },
+//     });
+//
+//     if (!conversion.definition.output_directory) {
+//       return next(createError(404, 'Output directory not configured for this conversion'));
+//     }
+//
+//     // Build the path to the conversion's output directory
+//     const outputDir = conversion.definition.output_directory;
+//     const conversionOutputPath = path.join(outputDir, String(conversionId), conversion.dataset.name);
+//
+//     // Serve static files from the conversion output directory with directory listing
+//     const staticOptions = {
+//       dotfiles: 'ignore',
+//       etag: true,
+//       index: false, // This enables directory listing
+//       lastModified: true,
+//       maxAge: '1d',
+//       redirect: false,
+//     };
+//
+//     // Use express.static to serve the directory
+//     express.static(conversionOutputPath, staticOptions)(req, res, next);
+//   }),
+// );
 
 module.exports = router;

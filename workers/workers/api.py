@@ -337,5 +337,34 @@ def post_conversion_derived_datasets(derived_data: dict):
 
 
 
+def get_process_request(process_request_id: int) -> dict:
+    with APIServerSession() as s:
+        r = s.get(f'process_requests/{process_request_id}')
+        r.raise_for_status()
+        return r.json()
+
+
+def get_process_artifacts(process_request_id: int,
+                          artifact_type: str = None) -> list[dict]:
+    """
+    Get artifacts for a process request
+
+    Args:
+        process_request_id: ID of the process request
+        artifact_type: Optional filter by artifact type
+
+    Returns:
+        List of artifact dicts
+    """
+    with APIServerSession() as s:
+        params = {}
+        if artifact_type:
+            params['artifact_type'] = artifact_type
+
+        r = s.get(f'process-requests/{process_request_id}/artifacts', params=params)
+        r.raise_for_status()
+        return r.json()
+
+
 if __name__ == '__main__':
     pass

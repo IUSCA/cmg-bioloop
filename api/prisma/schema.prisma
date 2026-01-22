@@ -123,6 +123,7 @@ model dataset_import_log {
   genome_type  String?
   genome_value String?
   source_run   String?
+  notes        String?
   metadata     Json?
   audit_log    dataset_audit @relation(fields: [audit_log_id], references: [id], onDelete: Cascade)
   audit_log_id Int           @unique
@@ -314,6 +315,7 @@ model workflow {
   dataset      dataset? @relation(fields: [dataset_id], references: [id], onDelete: Cascade)
   initiator_id Int?
   initiator    user?    @relation("initiated_workflows", fields: [initiator_id], references: [id], onDelete: SetNull)
+  worker_processes worker_process[]
 }
 
 model metric {
@@ -395,12 +397,29 @@ model worker_process {
   id          Int      @id @default(autoincrement())
   pid         Int
   task_id     String
+  executor_job_id String? // ID of external process started by job (for jobs running on external platforms like Slurm/k8s)
   step        String
-  workflow_id String
+  workflow_id String?
+  workflow    workflow? @relation(fields: [workflow_id], references: [id])
   tags        Json?
   start_time  DateTime @default(now()) @db.Timestamp(6)
   hostname    String
   logs        log[]
+}
+
+model process_artifact {
+  id                  Int               @id @default(autoincrement())
+  process_id        Int
+  process            process_request @relation(fields: [process_id], references: [id], onDelete: Cascade)
+  artifact_type       artifact_type
+  storage_type        storage_type @default(INLINE)
+  content_inline      String?           // small files can be stored directly
+  file_path           String?
+  external_url        String?           // external storage (S3 etc.)
+  supports_template   Boolean @default(false)
+  template_variables  Json?             // variables/config used to render in UI
+  created_at          DateTime @default(now()) @db.Timestamp(6)
+  updated_at          DateTime @updatedAt @db.Timestamp(6)
 }
 
 model about {
@@ -536,6 +555,18 @@ model argument_value {
   conversion    conversion @relation(fields: [conversion_id], references: [id])
 }
 
+model process_request {
+  id              Int                   @id @default(autoincrement())
+  execution_platform execution_platform @default(LOCAL)
+  job_step          String? // e.g. "checksum-computation", "file-download"
+  conversion_id           Int?
+  conversion              conversion? @relation(fields: [conversion_id], references: [id], onDelete: SetNull)
+  artifacts       process_artifact[]
+  execution_config    Json?              // Execution-specific config
+  created_at      DateTime @default(now()) @db.Timestamp(6)
+  updated_at      DateTime @updatedAt @db.Timestamp(6)
+}
+
 model conversion {
   id               Int                          @id @default(autoincrement())
   cmg_id           String?
@@ -550,6 +581,8 @@ model conversion {
   initiator        user?                        @relation(fields: [initiator_id], references: [id], onDelete: SetNull)
   additional_args  Json? // e.g., { [ {"--no-lane-splitting": "true" }, {"--barcode-mismatches": "1"} ] }
   derived_datasets conversion_derived_dataset[]
+  requested_processes process_request[]
+  metadata Json?
 }
 
 model conversion_derived_dataset {
@@ -570,6 +603,31 @@ model dynamic_variable {
   created_at  DateTime   @default(now()) @db.Timestamp(6)
   updated_at  DateTime   @default(now()) @updatedAt @db.Timestamp(6)
   argument    argument[]
+}
+
+enum execution_platform {
+  LOCAL            // app host
+  // PBS          // PBS/Torque
+  SLURM          // SLURM cluster
+  KUBERNETES     // K8s Job
+  AWS_BATCH      // AWS Batch
+  CUSTOM         // User-defined
+}
+
+enum artifact_type {
+  JOB_SCRIPT
+  ENVIRONMENT_SETUP
+  RUNTIME_CONFIG
+  RESOURCE_MANIFEST
+  SECRETS
+  DEPENDENCY_FILE
+  CUSTOM
+}
+
+enum storage_type {
+  INLINE
+  FILE_PATH
+  EXTERNAL_URL
 }
 
 enum access_type {

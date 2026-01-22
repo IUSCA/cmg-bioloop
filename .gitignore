@@ -63,7 +63,12 @@ backup
 db/backups
 db/backups/*.sql
 db/backups/*.psql
+db/backups/*.dump
 todo.md
+
+# Backup files
+*.sql.gz
+backup_*.sql.gz
 
 .pm2
 

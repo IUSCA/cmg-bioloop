@@ -299,5 +299,19 @@ config = {
         'skip_sda_upload': True,  # Skip SDA upload in archive step
         'poll_interval_seconds': 300,  # 5 minutes between batch completion checks
         'max_retries_per_dataset': 3
+    },
+    'execution_platform': {
+        # 'KUBERNETES': { },
+        # 'AWS_BATCH': { },
+        # 'CUSTOM': { },
+        'SLURM': {
+            'connection': {
+                'type': 'ssh',
+                'host': 'h1.quartz.uits.iu.edu',
+                'user': 'cmguser',
+                'private_key': '~/.ssh/id_rsa',
+            },
+            'slurm_script_dir': '/slurm_scripts',
+        },
     }
 }

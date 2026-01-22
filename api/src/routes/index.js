@@ -43,6 +43,7 @@ router.use('/sessions', require('./sessions') /* #swagger.security = [{"BearerAu
 router.use('/instruments', require('./instruments') /* #swagger.security = [{"BearerAuth": []}] */);
 router.use('/uploads', require('./uploads') /* #swagger.security = [{"BearerAuth": []}] */);
 router.use('/conversions', require('./conversions') /* #swagger.security = [{"BearerAuth": []}] */);
+router.use('/process_requests', require('./process_requests') /* #swagger.security = [{"BearerAuth": []}] */);
 router.use('/legacy', require('./legacy') /* #swagger.security = [{"BearerAuth": []}] */);
 
 if (featureService.isFeatureEnabled({ key: 'fs' })) {
