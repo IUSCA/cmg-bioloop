@@ -64,14 +64,14 @@
                   border-color="primary"
                   preset="secondary"
                   class="flex-initial"
-                  @click="openInGenomeBrowser"
+                  @click="initiateGenomeBrowserSession"
                 >
                   <i-mdi-open-in-new class="pr-2 text-2xl" />
                   Open in Genome Browser
                 </va-button>
 
                 <!-- Delete Session Action Button-->
-                <va-button
+                <!-- <va-button
                   color="danger"
                   border-color="danger"
                   class="flex-initial"
@@ -79,10 +79,10 @@
                 >
                   <i-mdi-delete class="pr-2 text-2xl" />
                   Delete Session
-                </va-button>
+                </va-button> -->
 
                 <!-- Share Session Action Button-->
-                <va-button
+                <!-- <va-button
                   class="flex-initial"
                   color="primary"
                   border-color="primary"
@@ -90,7 +90,7 @@
                 >
                   <i-mdi-share-variant class="pr-2 text-2xl" />
                   Share Session
-                </va-button>
+                </va-button> -->
               </div>
             </va-card-content>
           </va-card>
@@ -249,7 +249,6 @@ import trackService from "@/services/track";
 import { useAuthStore } from "@/stores/auth";
 import { useNavStore } from "@/stores/nav";
 import { useSessionsStore } from "@/stores/sessions";
-import config from "@/config";
 
 const route = useRoute();
 const router = useRouter();
@@ -298,11 +297,6 @@ const _stagedTracksCount = computed(() => {
   ).length;
 });
 
-const genomeBrowserUrl = computed(() => {
-  const genomeBrowserBaseUrl = config.genomeBrowserUrl;
-  const sessionTracksUrl = `/sessions/${session.value.id}/tracks`;
-  return `${genomeBrowserBaseUrl}/?genome=${session.value.genome}&hub=${sessionTracksUrl}`;
-});
 
 const associatedTracks = computed(() => {
   if (!session.value?.session_tracks) return [];
@@ -323,24 +317,32 @@ const trackColumns = [
     label: "File Type",
     sortable: true,
     width: "25%",
+    thAlign: "center",
+    tdAlign: "center",
   },
   {
     key: "genomeType",
     label: "Genome Type",
     sortable: true,
     width: "25%",
+    thAlign: "center",
+    tdAlign: "center",
   },
   {
     key: "genomeValue",
     label: "Genome Value",
     sortable: true,
     width: "25%",
+    thAlign: "center",
+    tdAlign: "center",
   },
   {
     key: "dataset_name",
     label: "Dataset Name",
     sortable: true,
     width: "25%",
+    thAlign: "center",
+    tdAlign: "center",
   },
   // {
   //   key: "is_staged",
@@ -359,6 +361,8 @@ const trackColumns = [
     label: "Created",
     sortable: true,
     width: "25%",
+    thAlign: "right",
+    tdAlign: "right",
   },
 ];
 
@@ -369,88 +373,26 @@ const projectColumns = [
     label: "Project Name",
     sortable: true,
     width: "40%",
+    thAlign: "left",
+    tdAlign: "left",
   },
   {
     key: "description",
     label: "Description",
     sortable: false,
     width: "40%",
+    thAlign: "center",
+    tdAlign: "center",
   },
   {
     key: "created_at",
     label: "Created",
     sortable: true,
     width: "20%",
+    thAlign: "right",
+    tdAlign: "right",
   },
 ];
-
-// Methods
-const deleteSession = async () => {
-  if (!session.value) return;
-
-  if (confirm("Are you sure you want to delete this session?")) {
-    try {
-      await sessionsStore.deleteSession(session.value.id);
-      toast.success("Session deleted successfully");
-      router.push("/sessions");
-    } catch (error) {
-      console.error("Failed to delete session:", error);
-      toast.error("Failed to delete session");
-    }
-  }
-};
-
-const exportDataHub = async () => {
-  try {
-    const response = await api.get(`/sessions/${session.value.id}/datahub`);
-
-    // Create a blob with the DataHub JSON data
-    const blob = new Blob([JSON.stringify(response.data, null, 2)], {
-      type: "application/json",
-    });
-
-    // Create download link
-    const url = window.URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `session-${session.value.id}-datahub.json`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    window.URL.revokeObjectURL(url);
-
-    toast.success("DataHub export downloaded successfully");
-  } catch (error) {
-    console.error("Failed to export DataHub:", error);
-    toast.error("Failed to export DataHub");
-  }
-};
-
-const requestStaging = async () => {
-  if (!session.value) return;
-
-  requestingStaging.value = true;
-  try {
-    const response = await api.post(`/sessions/${session.value.id}/stage`);
-
-    if (response.data.datasets && response.data.datasets.length > 0) {
-      // Show which datasets need staging
-      toast.info(
-        `${response.data.datasets.length} datasets need staging. Use the dataset staging workflow to stage them individually.`,
-      );
-
-      // You could also navigate to a datasets page or show a modal with staging options
-      console.log("Datasets that need staging:", response.data.datasets);
-    } else {
-      toast.success("All datasets are already staged");
-    }
-  } catch (error) {
-    console.error("Failed to check staging status:", error);
-    toast.error("Failed to check staging status");
-  } finally {
-    requestingStaging.value = false;
-  }
-};
 
 const loadSession = async () => {
   const sessionId = parseInt(route.params.id);
@@ -501,14 +443,13 @@ const handleSessionUpdated = (updatedSession) => {
   loadSession();
 };
 
-const openInGenomeBrowser = () => {
+const initiateGenomeBrowserSession = async () => {
   if (!session.value) return;
 
-  // Open in new tab
-  window.open(genomeBrowserUrl.value, "_blank");
+
+
 };
 
-// Lifecycle
 onMounted(() => {
   loadSession();
 });

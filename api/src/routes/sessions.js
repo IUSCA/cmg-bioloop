@@ -908,36 +908,48 @@ router.get(
               include: {
                 dataset_file: {
                   include: {
-                    dataset: true,
+                    dataset: {
+                      include: {
+                        genomic_details: true,
+                      },
+                    },
                   },
                 },
               },
             },
           },
+          orderBy: { order: 'asc' },
         },
       },
     });
 
-    const tracks = session.session_tracks.map((st) => {
+    if (!session) {
+      return res.status(404).json({ error: 'Session not found' });
+    }
+
+    const tracks = await Promise.all(session.session_tracks.map(async (st) => {
       const { track } = st;
       const track_file = track.dataset_file;
       const dataset = track_file?.dataset;
+
+      // Get download URL
+      const downloadInfo = await datasetService.get_download_url({
+        dataset,
+        file: track_file,
+      });
+
       return {
-        name: track.name,
+        name: st.title || track.name,
         type: dataset.file_type,
+        url: downloadInfo.url,
         options: {
-          color: st.color,
+          color: st.color || track.color,
           height: 100,
         },
         showOnHubLoad: true,
-        url: datasetService.get_download_url({
-          dataset, file: track_file,
-        }),
       };
-    });
+    }));
 
-    console.log('tracks');
-    console.log(tracks);
     res.json(tracks);
   }),
 );
