@@ -182,20 +182,27 @@ class RegisterDataProduct(Register):
 
 if __name__ == "__main__":
     obs1 = Observer(
-        name='raw_data_obs',
-        dir_path=config['registration']['RAW_DATA']['source_dir'],
+        name='raw_data_obs_1',
+        dir_path=config['registration']['RAW_DATA']['source_dir_cmguser_1'],
         callback=Register('RAW_DATA').register,
         interval=config['registration']['poll_interval_seconds'],
         full_scan_every_n_scans=config['registration']['full_scan_every_n_scans']
     )
     obs2 = Observer(
-        name='data_products_obs',
-        dir_path=config['registration']['DATA_PRODUCT']['source_dir'],
-        callback=Register('DATA_PRODUCT').register,
-        # callback=RegisterDataProduct().register,
+        name='raw_data_obs_2',
+        dir_path=config['registration']['RAW_DATA']['source_dir_cmguser_2'],
+        callback=Register('RAW_DATA').register,
         interval=config['registration']['poll_interval_seconds'],
         full_scan_every_n_scans=config['registration']['full_scan_every_n_scans']
     )
+    # obs3 = Observer(
+    #     name='data_products_obs',
+    #     dir_path=config['registration']['DATA_PRODUCT']['source_dir'],
+    #     callback=Register('DATA_PRODUCT').register,
+    #     # callback=RegisterDataProduct().register,
+    #     interval=config['registration']['poll_interval_seconds'],
+    #     full_scan_every_n_scans=config['registration']['full_scan_every_n_scans']
+    # )
 
     poller = Poller()
     poller.register(obs1)

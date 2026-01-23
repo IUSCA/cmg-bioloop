@@ -99,6 +99,7 @@ conversions_worker.pid
 
 celery_worker.state
 conversion_worker.state
+conversions_worker_state.db
 
 # poetry
 # generated with "poetry export --without-hashes --format=requirements.txt > requirements.txt"

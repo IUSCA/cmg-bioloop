@@ -11,24 +11,24 @@ config = {
         'root': '/N/scratch/cmguser',
         'RAW_DATA': {
             'stage': '/N/scratch/cmguser/CMG-SCA/cmg-bioloop/stage/raw_data',
-            'migration': '/N/scratch/cmguser/cmg-bioloop/migration/raw_data',
+            'migration': '/N/scratch/cmguser/CMG-SCA/cmg-bioloop/migration/raw_data',
             # 'stage': '/test',
             'bundle': {
                 'generate': '/N/scratch/cmguser/CMG-SCA/cmg-bioloop/stage/raw_data',
                 'stage': '/N/scratch/cmguser/CMG-SCA/cmg-bioloop/bundles/raw_data',
             },
-            'qc': '/N/scratch/cmguser/cmg-bioloop/qc/raw_data'
+            'qc': '/N/scratch/cmguser/CMG-SCA/cmg-bioloop/qc/raw_data'
         },
         'DATA_PRODUCT': {
             # 'upload': '/opt/sca/uploads/cpa/data_products',
-            'stage': '/N/scratch/cmguser/cmg-bioloop/stage/data_products',
-            'migration': '/N/scratch/cmguser/cmg-bioloop/migration/data_products',
+            'stage': '/N/scratch/cmguser/CMG-SCA/cmg-bioloop/stage/data_products',
+            'migration': '/N/scratch/cmguser/CMG-SCA/cmg-bioloop/migration/data_products',
             'bundle': {
-                'generate': '/N/scratch/cmguser/cmg-bioloop/stage/data_products',
-                'stage': '/N/scratch/cmguser/cmg-bioloop/bundles/data_products',
+                'generate': '/N/scratch/cmguser/CMG-SCA/cmg-bioloop/stage/data_products',
+                'stage': '/N/scratch/cmguser/CMG-SCA/cmg-bioloop/bundles/data_products',
             },
         },
-        'download_dir': '/N/scratch/cmguser/cmg-bioloop/production/downloads',
+        'download_dir': '/N/scratch/cmguser/CMG-SCA/cmg-bioloop/production/downloads',
         'conversion': {
           # /N/project/CMG-SCA/production/conversion is the path used in CMG-Production.
           # 'reports': '/N/project/CMG-SCA/production/conversion', 
@@ -38,15 +38,32 @@ config = {
     },
     'registration': {
         'RAW_DATA': {
-            # k4: /zpool/novaseqx/novaseqx1
-            # k3: '/data/miseq', '/data/novaseq2', '/data/ns6000'
-            # k2: '/data/nextseq', '/data/ns2000/output'
-            'source_dir': '/N/project/CMG-SCA/cmg-bioloop/origin/raw_data',
+            # Slate-scratch Origin paths
+            'source_dir_scratch': '/N/scratch/cmguser/CMG-SCA/cmg-bioloop/origin/raw_data',
+            # Slate-project Origin paths
+            'source_dir_project': '/N/project/CMG-SCA/cmg-bioloop/origin/raw_data',
+            
+            # Test Origin paths
+            'source_dir_cmguser_1': '/home/cmguser/cmg-bioloop-ingestion-test/origin/raw_data_1',
+            'source_dir_cmguser_2': '/home/cmguser/cmg-bioloop-ingestion-test/origin/raw_data_2'
+            
+            # AGENT: don't delete these commented paths below
+            # K2 (Compbio) host's Origin paths
+            # 'source_dir_nextseq': '/data/nextseq',
+            # 'source_dir_ns2000': '/data/ns2000/output',
+
+            # K3 (Compbio) host's Origin paths
+            # 'source_dir_miseq': '/data/miseq',
+            # 'source_dir_novaseq2': '/data/novaseq2',
+            # 'source_dir_ns6000': '/data/ns6000',
+
+            # K4 (Compbio) host's Origin paths
+            # 'source_dir_novaseqx1': '/zpool/novaseqx/novaseqx1',
         },
         'DATA_PRODUCT': {
             'source_dir': '/N/project/CMG-SCA/cmg-bioloop/origin/data_products',
         },
-        'recency_threshold_seconds': 120, # 2 minutes
+        'recency_threshold_seconds': 60, # 1 minute
     },
     'stage': {
         'purge': {
