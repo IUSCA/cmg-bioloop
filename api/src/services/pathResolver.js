@@ -17,7 +17,7 @@ const DATA_ROOT = config.get('data_root');
  * Get the base directory for file access based on environment
  * 
  * In production:
- *   - Database stores host paths: /N/scratch/cmguser/cmg-bioloop/stage/...
+ *   - Database stores host paths: /N/scratch/cmguser/cmg-bioloop/stage/... or /N/project/CMG-SCA/cmg-bioloop/stage/...
  *   - Container accesses via mount: /opt/sca/scratch/ingestion_source_dir/cmguser/cmg-bioloop/stage/...
  *   - We construct: FILESYSTEM_MOUNT_DIR_SCRATCH + system_user.username
  * 
@@ -65,6 +65,7 @@ function resolveHostPathToContainerPath(stagedPath) {
   if (MODE === 'production') {
     // In production, staged_path is a host path like:
     // /N/scratch/cmguser/cmg-bioloop/stage/data_products/...
+    // /N/project/CMG-SCA/cmg-bioloop/stage/raw_data/...
     
     // We need to convert it to container path:
     // /opt/sca/scratch/ingestion_source_dir/cmguser/cmg-bioloop/stage/data_products/...
@@ -73,7 +74,7 @@ function resolveHostPathToContainerPath(stagedPath) {
     const baseDir = config.get('filesystem.base_dir.slateScratch') || '';
     const systemUser = config.get('system_user.username') || '';
     
-    // Remove the base_dir prefix (e.g., /N/scratch)
+    // Remove the base_dir prefix (e.g., /N/scratch or /N/project)
     let relativePath = stagedPath;
     if (baseDir && relativePath.startsWith(baseDir)) {
       relativePath = relativePath.substring(baseDir.length);

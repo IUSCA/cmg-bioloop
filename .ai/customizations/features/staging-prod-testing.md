@@ -202,6 +202,34 @@ location /data/ {
 
 ---
 
+## 2026-01-22
+
+### Path Configuration Updates
+
+**Change:** Updated production paths to use correct directory structure
+- RAW_DATA paths now use `/N/project/CMG-SCA/cmg-bioloop/`
+- DATA_PRODUCT paths now use `/N/scratch/cmguser/cmg-bioloop/`
+- Single root for chmod boundary: `/N/project/CMG-SCA/cmg-bioloop`
+- Shared download directory: `/N/project/CMG-SCA/cmg-bioloop/production/downloads`
+
+**Change:** Removed unused /files API from secure_download microservice
+- Deleted `secure_download/src/routes/files.js`
+- Removed route mount in `secure_download/src/routes/index.js`
+
+**Change:** Added volume mount environment variables for /N/project access
+- API config: `FILESYSTEM_BASE_DIR_PROJECT`, `FILESYSTEM_MOUNT_DIR_PROJECT`, `FILESYSTEM_BASE_DIR_PROJECT_1`, `FILESYSTEM_MOUNT_DIR_PROJECT_1`
+- UI config: `VITE_PROJECT_BASE_DIR`, `VITE_PROJECT_MOUNT_DIR`, `VITE_PROJECT_BASE_DIR_1`, `VITE_PROJECT_MOUNT_DIR_1`
+- Updated `api/config/custom-environment-variables.json` and `api/config/default.json`
+- Updated `api/.env.default` and `ui/.env.default`
+
+**Decision:** Reverted from multiple roots system to single root with direct paths
+- Removed templated path system that was briefly explored
+- Deleted `workers/workers/path_resolver.py` module
+- All worker tasks use direct absolute path configuration
+- Simpler configuration with explicit paths per dataset type
+
+---
+
 ## Future Entries
 
 Add entries here as investigation progresses and resolution is implemented.
@@ -218,4 +246,4 @@ Format:
 
 ---
 
-**Last Updated:** 2026-01-18
+**Last Updated:** 2026-01-22

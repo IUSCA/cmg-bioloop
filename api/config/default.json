@@ -299,11 +299,21 @@
     "search_spaces": "",
     "base_dir": {
       "slateScratch": "",
+<<<<<<< Updated upstream
       "slateProject": ""
     },
     "mount_dir": {
       "slateScratch": "",
       "slateProject": ""
+=======
+      "slateProject": "",
+      "slateProject1": ""
+    },
+    "mount_dir": {
+      "slateScratch": "",
+      "slateProject": "",
+      "slateProject1": ""
+>>>>>>> Stashed changes
     }
   },
   "restricted_import_dirs": {

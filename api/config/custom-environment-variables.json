@@ -74,11 +74,21 @@
     "search_spaces": "FILESYSTEM_SEARCH_SPACES",
     "base_dir": {
       "slateScratch": "FILESYSTEM_BASE_DIR_SCRATCH",
+<<<<<<< Updated upstream
       "slateProject": "FILESYSTEM_BASE_DIR_PROJECT"
     },
     "mount_dir": {
       "slateScratch": "FILESYSTEM_MOUNT_DIR_SCRATCH",
       "slateProject": "FILESYSTEM_MOUNT_DIR_PROJECT"
+=======
+      "slateProject": "FILESYSTEM_BASE_DIR_PROJECT",
+      "slateProject1": "FILESYSTEM_BASE_DIR_PROJECT_1"
+    },
+    "mount_dir": {
+      "slateScratch": "FILESYSTEM_MOUNT_DIR_SCRATCH",
+      "slateProject": "FILESYSTEM_MOUNT_DIR_PROJECT",
+      "slateProject1": "FILESYSTEM_MOUNT_DIR_PROJECT_1"
+>>>>>>> Stashed changes
     }
   },
   "restricted_import_dirs": {

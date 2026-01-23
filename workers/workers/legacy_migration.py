@@ -5,8 +5,9 @@ Helper functions and utilities for legacy CMG dataset migration and hydration.
 Specifically for datasets migrated from MongoDB that need metadata population.
 """
 
-from typing import Dict, Optional
 from pathlib import Path
+from typing import Dict, Optional
+
 import workers.api as api
 from workers.config import config
 
