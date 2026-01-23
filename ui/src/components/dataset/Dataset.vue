@@ -551,6 +551,16 @@ async function handleBrowseFilesClick() {
     } catch (error) {
       console.error("Error checking migration status:", error);
     }
+  } else {
+    // For non-legacy datasets, check if Integrated workflow is running
+    const integratedWorkflowActive = (dataset.value.workflows || [])
+      .filter(wf => wf.name === 'integrated')
+      .some(wf => !workflowService.is_workflow_done(wf));
+    
+    if (integratedWorkflowActive) {
+      toast.info("This data is currently pending registration, and therefore cannot be staged");
+      return;
+    }
   }
 
   // Show staging modal

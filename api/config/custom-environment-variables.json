@@ -73,13 +73,16 @@
   "filesystem": {
     "search_spaces": "FILESYSTEM_SEARCH_SPACES",
     "base_dir": {
-      "slateScratch": "FILESYSTEM_BASE_DIR_SCRATCH"
+      "slateScratch": "FILESYSTEM_BASE_DIR_SCRATCH",
+      "slateProject": "FILESYSTEM_BASE_DIR_PROJECT"
     },
     "mount_dir": {
-      "slateScratch": "FILESYSTEM_MOUNT_DIR_SCRATCH"
+      "slateScratch": "FILESYSTEM_MOUNT_DIR_SCRATCH",
+      "slateProject": "FILESYSTEM_MOUNT_DIR_PROJECT"
     }
   },
   "restricted_import_dirs": {
-    "slateScratch": "SCRATCH_IMPORT_RESTRICTED_DIRS"
+    "slateScratch": "SCRATCH_IMPORT_RESTRICTED_DIRS",
+    "slateProject": "PROJECT_IMPORT_RESTRICTED_DIRS"
   }
 }

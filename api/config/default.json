@@ -298,14 +298,17 @@
   "filesystem": {
     "search_spaces": "",
     "base_dir": {
-      "slateScratch": ""
+      "slateScratch": "",
+      "slateProject": ""
     },
     "mount_dir": {
-      "slateScratch": ""
+      "slateScratch": "",
+      "slateProject": ""
     }
   },
   "restricted_import_dirs": {
-    "slateScratch": ""
+    "slateScratch": "",
+    "slateProject": ""
   },
   "enabled_features": {
     "upload": true,

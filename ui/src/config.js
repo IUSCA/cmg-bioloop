@@ -96,6 +96,14 @@ const exports = {
         label: 'Slate-Scratch',
       },
     },
+    {
+      slateProject: {
+        base_path: import.meta.env.VITE_PROJECT_BASE_DIR || '/bioloop/project/space',
+        mount_path: import.meta.env.VITE_PROJECT_MOUNT_DIR || '/bioloop/user/project/mount/dir',
+        key: 'slateProject',
+        label: 'Slate-Project',
+      },
+    },
   ],
   trackFileTypes: [
     { name: 'BAM', id: 'bam' },
@@ -116,6 +124,10 @@ const exports = {
     slateScratch: {
       paths: import.meta.env.VITE_SCRATCH_IMPORT_RESTRICTED_DIRS || '/scratch/space/restricted',
       key: 'scratch',
+    },
+    slateProject: {
+      paths: import.meta.env.VITE_PROJECT_IMPORT_RESTRICTED_DIRS || '/project/space/restricted',
+      key: 'project',
     },
   },
   upload: {
