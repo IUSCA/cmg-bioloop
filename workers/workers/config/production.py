@@ -10,7 +10,6 @@ config = {
     'paths': {
         'root': '/N/scratch/cmguser',
         'RAW_DATA': {
-            'archive': f'archive_raw',
             'stage': '/N/scratch/cmguser/CMG-SCA/cmg-bioloop/stage/raw_data',
             'migration': '/N/scratch/cmguser/cmg-bioloop/migration/raw_data',
             # 'stage': '/test',
@@ -22,7 +21,6 @@ config = {
         },
         'DATA_PRODUCT': {
             # 'upload': '/opt/sca/uploads/cpa/data_products',
-            'archive': f'archive_products',
             'stage': '/N/scratch/cmguser/cmg-bioloop/stage/data_products',
             'migration': '/N/scratch/cmguser/cmg-bioloop/migration/data_products',
             'bundle': {
