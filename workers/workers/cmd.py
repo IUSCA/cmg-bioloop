@@ -194,7 +194,8 @@ def fastqc_parallel(fastq_files: list[Path | str], output_dir: Path | str, num_t
     @param output_dir: cmd = ['fastqc', '-t', '8'] + fastq_files + ['-o', str(output_dir)]
     @param num_threads: parallel processing threads
     """
-    cmd = ['fastqc', '-t', str(num_threads)] + [str(p) for p in fastq_files] + ['-o', str(output_dir)]
+    fastqc_path = config.get('qc_tools', {}).get('fastqc_path', 'fastqc')
+    cmd = [fastqc_path, '-t', str(num_threads)] + [str(p) for p in fastq_files] + ['-o', str(output_dir)]
     execute(cmd)
 
 
@@ -206,7 +207,8 @@ def multiqc(source_dir: Path | str, output_dir: Path | str) -> None:
     @param output_dir: (pathlib.Path): where to create multiqc_report.html and multiqc_data
     @return: none
     """
-    cmd = ['multiqc', str(source_dir), '-o', str(output_dir)]
+    multiqc_path = config.get('qc_tools', {}).get('multiqc_path', 'multiqc')
+    cmd = [multiqc_path, str(source_dir), '-o', str(output_dir)]
     execute(cmd)
 
 

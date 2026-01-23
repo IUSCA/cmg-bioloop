@@ -43,12 +43,12 @@ config = {
             # k4: /zpool/novaseqx/novaseqx1
             # k3: '/data/miseq', '/data/novaseq2', '/data/ns6000'
             # k2: '/data/nextseq', '/data/ns2000/output'
-            'source_dir': '/N/scratch/cmguser/cmg-bioloop/origin/raw_data',
+            'source_dir': '/N/project/CMG-SCA/cmg-bioloop/origin/raw_data',
         },
         'DATA_PRODUCT': {
-            'source_dir': '/N/scratch/cmguser/cmg-bioloop/origin/data_products',
+            'source_dir': '/N/project/CMG-SCA/cmg-bioloop/origin/data_products',
         },
-        'recency_threshold_seconds': 300, # 5 minutes
+        'recency_threshold_seconds': 120, # 2 minutes
     },
     'stage': {
         'purge': {

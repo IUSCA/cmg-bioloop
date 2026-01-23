@@ -266,6 +266,10 @@ config = {
         'from_addr': 'scauser@iu.edu',
         'sendmail_path': '/usr/sbin/sendmail'
     },
+    'qc_tools': {
+        'fastqc_path': 'fastqc',  # Available in PATH
+        'multiqc_path': '/opt/sca/cmg/miniconda/bin/multiqc'
+    },
     'workflow': {
         'purge': {
             'types': ['integrated', 'stage', 'delete', 'conversion', 'file_info_population'],

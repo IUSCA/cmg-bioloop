@@ -17,7 +17,7 @@ tzdata = "^2023.4"
 fire = "^0.5.0"
 pika = "^1.3.2"
 pymongo = "4.11.1"
-multiqc = "^1.28"
+fabric = "^3.2.2"        # SSH connections for SLURM executor
 
 [tool.poetry.group.dev.dependencies]
 jupyterlab = "^4.3.5"
