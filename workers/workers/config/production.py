@@ -45,7 +45,7 @@ config = {
             
             # Test Origin paths
             'source_dir_cmguser_1': '/home/cmguser/cmg-bioloop-ingestion-test/origin/raw_data_1',
-            'source_dir_cmguser_2': '/home/cmguser/cmg-bioloop-ingestion-test/origin/raw_data_2'
+            'source_dir_cmguser_2': '/home/cmguser/cmg-bioloop-ingestion-test/origin/raw_data_2',
             
             # AGENT: don't delete these commented paths below
             # K2 (Compbio) host's Origin paths
@@ -59,11 +59,16 @@ config = {
 
             # K4 (Compbio) host's Origin paths
             # 'source_dir_novaseqx1': '/zpool/novaseqx/novaseqx1',
+            
+            # Nanopore Origin paths
+            # 'source_dir_nanopore_1': '/data/p2solo',
+            # 'source_dir_nanopore_2': '/zpool/p24',
         },
         'DATA_PRODUCT': {
             'source_dir': '/N/project/CMG-SCA/cmg-bioloop/origin/data_products',
         },
-        'recency_threshold_seconds': 60, # 1 minute
+        'recency_threshold_seconds': 60,  # 1 minute for standard Illumina datasets
+        'recency_threshold_seconds_nanopore': 21600,  # 6 hours for nanopore datasets
     },
     'stage': {
         'purge': {

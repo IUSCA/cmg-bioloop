@@ -50,18 +50,56 @@ def update_progress(celery_task, mod_time, time_remaining_sec):
     celery_task.update_progress(prog_obj)
 
 
+def is_nanopore_dataset(origin_path: str) -> bool:
+    """
+    Determine if a dataset is from a nanopore source based on its origin path.
+    
+    Args:
+        origin_path: The origin path of the dataset
+        
+    Returns:
+        bool: True if the dataset is from a nanopore source, False otherwise
+    """
+    # Get nanopore source paths from config
+    nanopore_paths = []
+    reg_config = config.get('registration', {}).get('RAW_DATA', {})
+    
+    # Collect all nanopore source directories from config
+    for key, value in reg_config.items():
+        if key.startswith('source_dir_nanopore') and isinstance(value, str):
+            nanopore_paths.append(value)
+    
+    # Check if origin_path starts with any nanopore path
+    for nanopore_path in nanopore_paths:
+        if origin_path.startswith(nanopore_path):
+            return True
+    
+    return False
+
+
 def await_stability(celery_task, dataset_id, wait_seconds: int = None, recency_threshold=None, **kwargs):
     dataset = api.get_dataset(dataset_id=dataset_id)
     origin_path = Path(dataset['origin_path'])
+    origin_path_str = dataset['origin_path']
     dataset_type = dataset['type']
 
+    # Determine if this is a nanopore dataset
+    is_nanopore = is_nanopore_dataset(origin_path_str)
+    
     # recency_threshold is the time to wait before considering the dataset stable
     # precedence order:
-    # 1. recency_threshold parameter
-    # 2. config file
-    threshold = (recency_threshold or
-                 config['registration']['recency_threshold_seconds'])
-    logger.info(f'{dataset["name"]} - threshold: {threshold} seconds')
+    # 1. recency_threshold parameter (explicit override)
+    # 2. nanopore-specific threshold for nanopore datasets
+    # 3. standard threshold for other datasets
+    if recency_threshold is not None:
+        threshold = recency_threshold
+        logger.info(f'{dataset["name"]} - using explicit threshold parameter: {threshold} seconds')
+    elif is_nanopore:
+        threshold = config['registration']['recency_threshold_seconds_nanopore']
+        logger.info(f'{dataset["name"]} - nanopore dataset detected, using nanopore threshold: {threshold} seconds')
+    else:
+        threshold = config['registration']['recency_threshold_seconds']
+        logger.info(f'{dataset["name"]} - standard dataset, using standard threshold: {threshold} seconds')
 
     # wait_seconds is the time to wait between stability checks
     # precedence order:

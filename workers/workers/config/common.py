@@ -72,13 +72,14 @@ config = {
     'registration': {
         'RAW_DATA': {
             'source_dir': '/path/to/source/raw_data',
-            'rejects': ['.snapshots'],
+            'rejects': ['.snapshots', 'Log Files', 'OldFolders'],
         },
         'DATA_PRODUCT': {
             'source_dir': '/path/to/source/data_products',
-            'rejects': ['.snapshots'],
+            'rejects': ['.snapshots', 'Log Files', 'OldFolders'],
         },
-        'recency_threshold_seconds': ONE_HOUR,
+        'recency_threshold_seconds': 30,  # 30 seconds for standard Illumina datasets
+        'recency_threshold_seconds_nanopore': 21600,  # 6 hours for nanopore datasets
         'minimum_dataset_size': ONE_GIGABYTE,
         'wait_between_stability_checks_seconds': FIVE_MINUTES,
         'poll_interval_seconds': 10,
