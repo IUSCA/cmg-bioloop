@@ -31,12 +31,16 @@ const uploadFileStorage = multer.diskStorage({
         fileUploadLogId: req.body.file_upload_log_id,
       },
     );
+    logger.info(`Chunk storage directory: ${chunkStorage}`);
     await fsPromises.mkdir(chunkStorage, {
       recursive: true,
     });
+    logger.info('Chunk storage directory created');
     cb(null, chunkStorage);
   },
   filename: (req, file, cb) => {
+    logger.info('Received request to set filename for file chunk');
+    logger.info(`File chunk name: ${getFileChunkName(req.body.checksum, req.body.index)}`);
     cb(null, getFileChunkName(req.body.checksum, req.body.index));
   },
 });

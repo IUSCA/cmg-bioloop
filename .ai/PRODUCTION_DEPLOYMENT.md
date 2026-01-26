@@ -1,6 +1,6 @@
 # Production Deployment Guide
 
-**Last Updated:** 2026-01-18
+**Last Updated:** 2026-01-23
 
 This document describes the production deployment architecture and differences from local development.
 
@@ -60,29 +60,121 @@ services:
 
 **Location:** `/opt/sca/docker/scripts/cmg-new-download/docker-compose-prod.yml` (⚠️ **READ-ONLY** access)
 
+**Note:** The compose file in the repository (`secure_download/docker-compose-prod.yml`) is for reference only and is NOT the actual deployment file.
+
+#### Docker Compose Configuration
+
 ```yaml
+version: "3"
+name: cmg-bioloop
+
 services:
   api:
-    # secure_download API - handles file uploads and downloads
+    restart: unless-stopped
     build:
       context: /opt/sca/cmg-bioloop/secure_download
+      args:
+        APP_UID: ${APP_UID}  # read from .env file
+        APP_GID: ${APP_GID}  # read from .env file
     volumes:
       - /opt/sca/cmg-bioloop/secure_download/:/opt/sca/app
+      - /N/scratch/cmguser/cmg-bioloop/:/opt/sca/data/:ro  # Read-only access to data
       - api_modules:/opt/sca/app/node_modules
-      # ⚠️ MISSING: /N/scratch/cmguser/cmg-bioloop/uploads (needs write access)
     expose:
       - 3080
-  
+    networks:
+      network:
+        ipv4_address: 172.19.0.10
+
   nginx-cmg-bioloop:
-    # Reverse proxy for secure_download
+    container_name: "nginx-cmg-bioloop"
+    image: nginx-cmg-bioloop:latest
+    restart: always
     volumes:
+      - /opt/sca/docker/conf/nginx-cmg-bioloop/etc/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
       - /N/scratch/cmguser/cmg-bioloop/:/N/scratch/cmguser/cmg-bioloop/:ro
-      # ... nginx config volumes ...
+      - /opt/sca/docker/conf/nginx-cmg-bioloop/etc/nginx/conf.d/:/etc/nginx/conf.d/:ro
+    networks:
+      network:
+        ipv4_address: 172.19.0.20
+    extra_hosts:
+      - "host.docker.internal:172.21.0.1"
+
+volumes:
+  api_modules:
+    external: false
+
+networks:
+  network:
+    attachable: true
+    name: cmg-bioloop
+    ipam:
+      driver: default
+      config:
+        - subnet: 172.19.0.0/24
+          gateway: 172.19.0.1
 ```
 
-**⚠️ CRITICAL ISSUE:** The `api` service (secure_download) needs write access to `/N/scratch/cmguser/cmg-bioloop/uploads` but currently doesn't have it mounted. This causes upload errors: `EACCES: permission denied, mkdir '/N'`
+#### Key Configuration Points
 
-**Note:** The compose file in the repository (`secure_download/docker-compose-prod.yml`) is for reference only and is NOT the actual deployment file.
+**API Service:**
+- Build args (`APP_UID`, `APP_GID`) ensure correct file permissions
+- `/N/scratch/cmguser/cmg-bioloop/` mounted as `/opt/sca/data/` (read-only)
+- Repository code mounted for development/debugging
+- Exposes port 3080 internally
+
+**Nginx Service:**
+- Acts as reverse proxy to API service at `172.19.0.10:3060`
+- Has read-only access to `/N/scratch/cmguser/cmg-bioloop/` for serving download files
+- Configuration files mounted from `/opt/sca/docker/conf/nginx-cmg-bioloop/`
+
+**Networking:**
+- Custom bridge network `172.19.0.0/24`
+- API: `172.19.0.10`
+- Nginx: `172.19.0.20`
+
+#### Nginx Download Configuration
+
+**File:** `/opt/sca/docker/conf/nginx-cmg-bioloop/etc/nginx/conf.d/download.conf`
+
+```nginx
+server {
+    listen 80;
+    send_timeout 7200s;
+    client_max_body_size 5000M;
+
+    # Internal location for secure file downloads
+    location /data/ {
+        internal;
+        alias /N/scratch/cmguser/cmg-bioloop/production/downloads/;
+        
+        # Force file download headers
+        add_header Content-disposition "attachment";
+        add_header Access-Control-Allow-Origin *;
+    }
+
+    # Proxy to secure_download API
+    location / {
+        proxy_redirect off;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+
+        proxy_read_timeout 7200s;
+        proxy_connect_timeout 7200s;
+        proxy_send_timeout 7200s;
+        
+        proxy_pass http://172.19.0.10:3060/;
+    }
+}
+```
+
+**Key Nginx Settings:**
+- Large client body size (5000M) for file uploads
+- Extended timeouts (7200s / 2 hours) for large file transfers
+- `/data/` location is `internal` - only accessible via X-Accel-Redirect from API
+- Download path: `/N/scratch/cmguser/cmg-bioloop/production/downloads/`
+- API proxy target: `http://172.19.0.10:3060/`
 
 ---
 
@@ -434,26 +526,24 @@ pm2 reload all
 
 ## 🐛 Troubleshooting
 
-### Upload Errors
+### Secure Download Issues
 
-**Error:** `EACCES: permission denied, mkdir '/N'`
+**Verified Working Configuration (as of 2026-01-23):**
 
-**Cause:** The `secure_download` api container (in `/opt/sca/docker/scripts/cmg-new-download/docker-compose-prod.yml`) doesn't have write access to `/N/scratch/cmguser/cmg-bioloop/uploads`
+The secure_download service has been successfully tested with the configuration documented above. Key points:
 
-**Current state:**
-- Only nginx has `/N/scratch/cmguser/cmg-bioloop/:ro` (read-only)
-- api service has no `/N/...` mounts at all
+- API container has read-only access to `/N/scratch/cmguser/cmg-bioloop/` mounted as `/opt/sca/data/`
+- Nginx has read-only access to `/N/scratch/cmguser/cmg-bioloop/` for serving download files
+- Download path: `/N/scratch/cmguser/cmg-bioloop/production/downloads/`
+- API accessible at `172.19.0.10:3060` from nginx
+- Build args (`APP_UID`, `APP_GID`) ensure correct file permissions
 
-**Fix:** Someone with write access to `/opt/sca/docker/scripts/cmg-new-download/docker-compose-prod.yml` needs to add to the `api` service:
-```yaml
-api:
-  volumes:
-    - /opt/sca/cmg-bioloop/secure_download/:/opt/sca/app
-    - api_modules:/opt/sca/app/node_modules
-    - /N/scratch/cmguser/cmg-bioloop/uploads:/N/scratch/cmguser/cmg-bioloop/uploads  # ADD THIS
-```
+**Common Issues:**
 
-Then restart the secure_download containers.
+1. **Permission Errors:** Ensure `APP_UID` and `APP_GID` in `.env` match the user running docker
+2. **Network Issues:** Verify API is accessible at `http://172.19.0.10:3060/` from nginx container
+3. **Timeout Errors:** Check nginx timeout settings (should be 7200s for large files)
+4. **Path Issues:** Ensure `/N/scratch/cmguser/cmg-bioloop/` paths are accessible from host
 
 ### Worker Connection Issues
 
@@ -486,5 +576,5 @@ Then restart the secure_download containers.
 
 ---
 
-**Last Updated:** 2026-01-18
+**Last Updated:** 2026-01-23
 
