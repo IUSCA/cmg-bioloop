@@ -3,16 +3,91 @@ const path = require('path');
 const fs = require('fs');
 const { param } = require('express-validator');
 const createError = require('http-errors');
+const config = require('config');
 
 const prisma = require('@/db');
 const { validate } = require('../middleware/validators');
 const asyncHandler = require('../middleware/asyncHandler');
+const authService = require('../services/auth');
 
 const router = express.Router();
 
-// Serve static files for conversion reports
+// Get secure URL for viewing conversion reports via secure_download service
+router.get(
+  '/conversions/:id/url',
+  validate([
+    param('id').isInt({ min: 1 }).toInt(),
+  ]),
+  asyncHandler(async (req, res, next) => {
+    // #swagger.tags = ['Reports']
+    // #swagger.summary = Get secure URL for viewing conversion reports
+
+    const conversionId = req.params.id;
+    console.log(`[REPORTS] Generating secure URL for conversion ${conversionId}`);
+
+    // Look up conversion and dataset to determine path
+    const conversion = await prisma.conversion.findUnique({
+      where: { id: conversionId },
+      include: {
+        dataset: true,
+      },
+    });
+
+    if (!conversion) {
+      console.error(`[REPORTS] Conversion ${conversionId} not found in database`);
+      return next(createError.NotFound('Conversion not found'));
+    }
+
+    console.log(`[REPORTS] Found conversion:`, {
+      id: conversion.id,
+      cmg_id: conversion.cmg_id,
+      dataset_id: conversion.dataset_id,
+      dataset_cmg_id: conversion.dataset?.cmg_id,
+    });
+
+    if (!conversion.dataset) {
+      console.error(`[REPORTS] Dataset not found for conversion ${conversionId}`);
+      return next(createError.NotFound('Dataset not found for conversion'));
+    }
+
+    // Use cmg_id for legacy conversions/datasets, otherwise use bioloop id
+    // This matches the path structure created by clone_legacy_conversion_reports.py
+    const conversionIdentifier = conversion.cmg_id || String(conversion.id);
+    const datasetIdentifier = conversion.dataset.cmg_id || String(conversion.dataset_id);
+
+    // Construct path pattern for token scope
+    // Pattern: conversions/{conversion_id}/{dataset_id}/Reports
+    const reportsPath = `conversions/${conversionIdentifier}/${datasetIdentifier}/Reports`;
+
+    console.log(`[REPORTS] Reports path: ${reportsPath}`);
+
+    // Issue token with download_file scope (reuse existing scope for now)
+    // TODO: Create separate 'view_reports:' scope in future for better separation
+    const token = await authService.get_download_token(reportsPath);
+
+    console.log(`[REPORTS] Token issued for: ${reportsPath}`);
+
+    // Return URL to secure_download /reports endpoint
+    const reportsUrl = new URL(
+      `reports/${encodeURIComponent(reportsPath)}`,
+      config.get('download_server.base_url'),
+    );
+
+    console.log(`[REPORTS] Returning secure URL: ${reportsUrl.href}`);
+
+    return res.json({
+      url: reportsUrl.href,
+      bearer_token: token.accessToken,
+      conversion_id: conversionIdentifier,
+      dataset_id: datasetIdentifier,
+    });
+  }),
+);
+
+// Serve static files for conversion reports (LEGACY ENDPOINT - kept for backwards compatibility)
 // Handles both /api/reports/conversions/:id/files and nested paths like
 // /api/reports/conversions/:id/files/html/index.html
+// TODO: Deprecate this endpoint in favor of secure_download /reports endpoint
 router.get(
   '/conversions/:id/files*',
   validate([

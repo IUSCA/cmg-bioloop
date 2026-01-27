@@ -9,13 +9,14 @@ Source path pattern: /N/project/CMG-SCA/production/conversion/{conversion_id}/{d
 Target path pattern: {target_base}/conversions/{conversion_id}/{dataset_id}/Reports/
 
 Usage:
-    python copy_conversion_reports.py [--source-base PATH] [--target-base PATH] [--dry-run] [--verbose]
+    python clone_legacy_conversion_reports.py [--source-base PATH] [--target-base PATH] [--dry-run] [--verbose] [--list-sizes]
 
 Options:
     --source-base PATH  Source base path to conversion directory (default: /N/project/CMG-SCA/production/conversion)
     --target-base PATH  Target base path for copied reports (REQUIRED)
     --dry-run          Show what would be copied without actually copying
     --verbose          Show detailed progress
+    --list-sizes       Calculate and display directory sizes (requires --verbose)
     --skip-existing    Skip conversions where target already exists
     --continue-on-error Continue processing even if individual copies fail
 """
@@ -132,7 +133,8 @@ def copy_reports(
     dry_run: bool = False,
     skip_existing: bool = False,
     continue_on_error: bool = False,
-    verbose: bool = False
+    verbose: bool = False,
+    list_sizes: bool = False
 ) -> Dict:
     """
     Copy all conversion reports from source to target location.
@@ -144,6 +146,7 @@ def copy_reports(
         skip_existing: Skip conversions where target already exists
         continue_on_error: Continue processing even if individual copies fail
         verbose: Show detailed progress
+        list_sizes: Calculate and display sizes (only with verbose)
         
     Returns:
         Dictionary with copy results
@@ -207,16 +210,19 @@ def copy_reports(
                 if not dry_run:
                     logger.warning(f"  Will overwrite existing directory")
         
-        # Calculate source size
-        source_size = get_directory_size(source_reports_path)
-        
-        if verbose:
+        # Calculate source size only if requested for display
+        source_size = None
+        if verbose and list_sizes:
+            source_size = get_directory_size(source_reports_path)
             logger.info(f"  Source size: {format_bytes(source_size)}")
         
         if dry_run:
-            logger.info(f"  [DRY RUN] Would copy {format_bytes(source_size)}")
+            if source_size is not None:
+                logger.info(f"  [DRY RUN] Would copy {format_bytes(source_size)}")
+                total_copied_size += source_size
+            else:
+                logger.info(f"  [DRY RUN] Would copy")
             copied_count += 1
-            total_copied_size += source_size
             continue
         
         # Perform actual copy
@@ -231,9 +237,12 @@ def copy_reports(
             # Copy directory tree
             shutil.copytree(source_reports_path, target_reports_path, symlinks=False)
             
-            logger.info(f"  Successfully copied: {conversion_id}/{dataset_id} ({format_bytes(source_size)})")
+            if source_size is not None:
+                logger.info(f"  Successfully copied: {conversion_id}/{dataset_id} ({format_bytes(source_size)})")
+                total_copied_size += source_size
+            else:
+                logger.info(f"  Successfully copied: {conversion_id}/{dataset_id}")
             copied_count += 1
-            total_copied_size += source_size
         
         except PermissionError as e:
             logger.error(f"  Permission denied: {e}")
@@ -271,15 +280,20 @@ def copy_reports(
                 logger.error("Stopping due to error (use --continue-on-error to continue)")
                 break
     
-    return {
+    result = {
         'total_found': len(reports_dirs),
         'copied': copied_count,
         'skipped': skipped_count,
         'failed': failed_count,
-        'total_size_bytes': total_copied_size,
-        'total_size_human': format_bytes(total_copied_size),
         'failed_reports': failed_reports
     }
+    
+    # Only include size information if it was calculated
+    if list_sizes:
+        result['total_size_bytes'] = total_copied_size
+        result['total_size_human'] = format_bytes(total_copied_size)
+    
+    return result
 
 
 def print_summary(results: Dict, dry_run: bool = False) -> None:
@@ -295,7 +309,8 @@ def print_summary(results: Dict, dry_run: bool = False) -> None:
     print(f"Skipped (already exists): {results['skipped']}")
     print(f"Failed: {results['failed']}")
     
-    if results['copied'] > 0:
+    # Only show size summary if sizes were calculated
+    if 'total_size_bytes' in results and results['copied'] > 0:
         action = "Would copy" if dry_run else "Copied"
         print(f"\nTotal size {action.lower()}: {results['total_size_human']} ({results['total_size_bytes']:,} bytes)")
     
@@ -338,6 +353,11 @@ def main():
         help='Show detailed progress'
     )
     parser.add_argument(
+        '--list-sizes',
+        action='store_true',
+        help='Calculate and display directory sizes (requires --verbose)'
+    )
+    parser.add_argument(
         '--skip-existing',
         action='store_true',
         help='Skip conversions where target already exists'
@@ -370,6 +390,11 @@ def main():
     if args.dry_run:
         logger.info("DRY RUN MODE ENABLED")
     
+    # Validate that list_sizes requires verbose
+    if args.list_sizes and not args.verbose:
+        logger.warning("--list-sizes requires --verbose to display sizes, enabling verbose mode")
+        args.verbose = True
+    
     try:
         results = copy_reports(
             source_base=source_base,
@@ -377,7 +402,8 @@ def main():
             dry_run=args.dry_run,
             skip_existing=args.skip_existing,
             continue_on_error=args.continue_on_error,
-            verbose=args.verbose
+            verbose=args.verbose,
+            list_sizes=args.list_sizes
         )
         print_summary(results, dry_run=args.dry_run)
         
