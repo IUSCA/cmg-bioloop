@@ -57,6 +57,9 @@
   "upload": {
     "path": "UPLOAD_DIR"
   },
+  "conversion": {
+    "output_dir": "CONVERSION_OUTPUT_DIR"
+  },
   "e2e": {
     "users": {
       "admin": {

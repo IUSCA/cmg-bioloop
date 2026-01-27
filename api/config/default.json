@@ -98,6 +98,9 @@
   "upload": {
     "path": ""
   },
+  "conversion": {
+    "output_dir": "/opt/sca/data/conversions"
+  },
   "trackFileTypes": [
     { "name": "BAM", "id": "bam" },
     { "name": "BigWig", "id": "bigwig" },

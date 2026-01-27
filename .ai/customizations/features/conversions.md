@@ -162,6 +162,44 @@
 
 ---
 
+## 2026-01-27 (Later)
+
+### Report Endpoints Reorganization and Absolute Path Support
+
+**Changes:**
+
+1. **Endpoint Reorganization:**
+   - Moved endpoints from `api/src/routes/reports.js` to `api/src/routes/reports/conversions.js`
+   - Updated `reports.js` to be a simple router that mounts conversion reports subrouter
+   - Routes remain the same: `/api/reports/conversions/:id/url` and `/api/reports/conversions/:id/files*`
+
+2. **Absolute Path Implementation:**
+   - Core API now constructs absolute filesystem paths using `CONVERSION_OUTPUT_DIR` environment variable
+   - Path format: `{CONVERSION_OUTPUT_DIR}/{conversion_id}/{dataset_name}/Reports`
+   - Example: `/opt/sca/data/conversions/67efd4f32e05981ba17a8f74/20250401_LH00300_0132_B232C5VLT3/Reports`
+   - Token scope now contains the absolute path instead of relative path
+   - URLs returned include absolute path: `/reports/{absolute_path}/html/index.html?access_token={jwt}`
+
+3. **secure_download Updates:**
+   - Updated to expect absolute paths in token scope
+   - No longer prepends `baseDir` - uses token path directly
+   - Simplified path resolution since paths are already absolute
+   - Pattern changed from `/reports/conversions/{conversion_id}/{dataset_name}/Reports/*` to `/reports/{absolute_path}/*`
+
+**Configuration:**
+- `CONVERSION_OUTPUT_DIR` environment variable:
+  - Docker: `/opt/sca/data/conversions` (default)
+  - Production: Set via env var or config
+  - Falls back to `config.conversion.output_dir` if not set
+
+**Rationale:**
+- secure_download no longer needs to extrapolate filesystem paths
+- Paths work correctly in Docker container context (not host paths)
+- Cleaner separation: core API knows about filesystem structure, secure_download just serves files
+- More flexible: can support different storage locations without changing secure_download
+
+---
+
 ## Future Entries
 
 Add entries here as decisions are made, changes are implemented, or issues are resolved.

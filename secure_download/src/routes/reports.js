@@ -16,12 +16,10 @@ function remove_leading_slash(str) {
 }
 
 // Serve conversion report files
-// Pattern: /reports/conversions/{conversion_id}/{dataset_id}/Reports/*
+// Pattern: /reports/{absolute_path}/...
+// Token scope contains absolute filesystem path (e.g., /opt/sca/data/conversions/{conversion_id}/{dataset_name}/Reports)
 router.get(
-  '/:path*',
-  validate([
-    param('path').notEmpty(),
-  ]),
+  '/*',
   asyncHandler(async (req, res, next) => {
     logger.info('[REPORTS] Request received');
     
@@ -36,38 +34,37 @@ router.get(
       return next(createError.Forbidden('Invalid scope'));
     }
     
-    // Extract path from token scope
-    const token_reports_path = remove_leading_slash(
-      reports_scopes[0].slice(SCOPE_PREFIX.length)
-    );
+    // Extract absolute path from token scope
+    // Token contains absolute path like: /opt/sca/data/conversions/{conversion_id}/{dataset_name}/Reports
+    const tokenAbsolutePath = reports_scopes[0].slice(SCOPE_PREFIX.length);
     
     // Extract requested path from URL
+    // URL will be like: /reports/{absolute_path}/html/index.html
     const req_path = remove_leading_slash(req.path);
     
-    logger.info(`[REPORTS] Token path: ${token_reports_path}`);
+    logger.info(`[REPORTS] Token absolute path: ${tokenAbsolutePath}`);
     logger.info(`[REPORTS] Request path: ${req_path}`);
     
-    // Extract the file path from the URL (everything after Reports/)
-    // e.g., /conversions/123/456/Reports/html/index.html
-    const match = req_path.match(/^conversions\/[^/]+\/[^/]+\/Reports(.*)/);
-    const filePath = match && match[1] ? match[1].replace(/^\//, '') : '';
+    // The request path should start with the token's absolute path
+    // Extract the file path portion (everything after the token path)
+    if (!req_path.startsWith(remove_leading_slash(tokenAbsolutePath))) {
+      logger.error(`[REPORTS] Request path does not match token scope`);
+      return next(createError.Forbidden('Request path does not match token scope'));
+    }
+    
+    // Extract the file-specific part of the path
+    const filePath = req_path.slice(remove_leading_slash(tokenAbsolutePath).length).replace(/^\//, '');
     
     logger.info(`[REPORTS] File path: ${filePath}`);
     
-    // Construct full path
-    // In docker: /opt/sca/data/conversions/{conversion_id}/{dataset_id}/Reports
-    // In production: same pattern (volume mounted from /N/scratch/cmguser/cmg-bioloop)
-    const baseDir = process.env.NODE_ENV === 'docker' 
-      ? '/opt/sca/data' 
-      : '/N/scratch/cmguser/cmg-bioloop';
-    
-    const reportsPath = path.join(baseDir, token_reports_path, filePath);
+    // Construct full path using the absolute path from token
+    const reportsPath = filePath ? path.join(tokenAbsolutePath, filePath) : tokenAbsolutePath;
     
     logger.info(`[REPORTS] Full path: ${reportsPath}`);
     
     // Security: Ensure path is within allowed reports directory
     const resolvedPath = path.resolve(reportsPath);
-    const resolvedReportsDir = path.resolve(path.join(baseDir, token_reports_path));
+    const resolvedReportsDir = path.resolve(tokenAbsolutePath);
     
     if (!resolvedPath.startsWith(resolvedReportsDir)) {
       logger.error(`[REPORTS] Path traversal attempt: ${resolvedPath}`);
