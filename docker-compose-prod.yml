@@ -26,7 +26,7 @@ services:
       - api_modules:/opt/sca/app/node_modules
       - ${FILESYSTEM_BASE_DIR_SCRATCH}:${FILESYSTEM_MOUNT_DIR_SCRATCH}
       - ${FILESYSTEM_BASE_DIR_PROJECT}:${FILESYSTEM_MOUNT_DIR_PROJECT}
-      - ${FILESYSTEM_BASE_DIR_PROJECT_1}:${FILESYSTEM_MOUNT_DIR_PROJECT_1}
+      # - ${FILESYSTEM_BASE_DIR_PROJECT_1}:${FILESYSTEM_MOUNT_DIR_PROJECT_1}
     expose:
       - 3030
     # entrypoint: [ "tail", "-f", "/dev/null" ]

@@ -313,19 +313,16 @@
     "search_spaces": "",
     "base_dir": {
       "slateScratch": "",
-      "slateProject": "",
-      "slateProject1": ""
+      "slateProject": ""
     },
     "mount_dir": {
       "slateScratch": "",
-      "slateProject": "",
-      "slateProject1": ""
+      "slateProject": ""
     }
   },
   "restricted_import_dirs": {
     "slateScratch": "",
-    "slateProject": "",
-    "slateProject1": ""
+    "slateProject": ""
   },
   "enabled_features": {
     "upload": true,
