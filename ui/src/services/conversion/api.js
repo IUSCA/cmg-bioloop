@@ -55,6 +55,11 @@ class ConversionService {
     console.log("getReports", id);
     return api.get(`/conversions/${id}/reports`);
   }
+
+  getReportsUrl(id) {
+    console.log("getReportsUrl", id);
+    return api.get(`/reports/conversions/${id}/url`);
+  }
 }
 
 export default new ConversionService();

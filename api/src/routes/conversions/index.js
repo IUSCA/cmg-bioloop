@@ -919,12 +919,14 @@ router.get(
     const conversionTargetDatasetName = conversionTargetDataset.name;
 
     // Use cmg_id if available (for historic conversions), otherwise use the bioloop conversion id
-    const reportsDirName = conversion.cmg_id || String(conversionId);
+    const conversionIdentifier = conversion.cmg_id || String(conversionId);
+    
+    // Path structure uses dataset NAME, not dataset ID
+    // Pattern: /reports/conversions/{conversion_id}/{dataset_name}/Reports
+    const reportsUrlPath = `/reports/conversions/${conversionIdentifier}/${conversionTargetDatasetName}/Reports`;
 
-    // Construct the URL path for accessing reports (unauthenticated endpoint)
-    const reportsUrlPath = `/api/reports/conversions/${conversionId}/files`;
-
-    console.log('reportsDirName:', reportsDirName);
+    console.log('conversionIdentifier:', conversionIdentifier);
+    console.log('datasetName:', conversionTargetDatasetName);
     console.log('reportsUrlPath:', reportsUrlPath);
 
     return res.json({

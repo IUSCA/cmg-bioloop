@@ -50,14 +50,14 @@ router.get(
       return next(createError.NotFound('Dataset not found for conversion'));
     }
 
-    // Use cmg_id for legacy conversions/datasets, otherwise use bioloop id
-    // This matches the path structure created by clone_legacy_conversion_reports.py
+    // Use cmg_id for legacy conversions, otherwise use bioloop id
+    // Use dataset NAME (not ID) as the path structure uses dataset names
     const conversionIdentifier = conversion.cmg_id || String(conversion.id);
-    const datasetIdentifier = conversion.dataset.cmg_id || String(conversion.dataset_id);
+    const datasetName = conversion.dataset.name;
 
     // Construct path pattern for token scope
-    // Pattern: conversions/{conversion_id}/{dataset_id}/Reports
-    const reportsPath = `conversions/${conversionIdentifier}/${datasetIdentifier}/Reports`;
+    // Pattern: conversions/{conversion_id}/{dataset_name}/Reports
+    const reportsPath = `conversions/${conversionIdentifier}/${datasetName}/Reports`;
 
     console.log(`[REPORTS] Reports path: ${reportsPath}`);
 
@@ -67,19 +67,22 @@ router.get(
 
     console.log(`[REPORTS] Token issued for: ${reportsPath}`);
 
-    // Return URL to secure_download /reports endpoint
-    const reportsUrl = new URL(
-      `reports/${encodeURIComponent(reportsPath)}`,
-      config.get('download_server.base_url'),
-    );
+    // Construct URLs with token already appended
+    const reportsUrl = `/reports/${reportsPath}`;
+    const indexUrl = `/reports/${reportsPath}/html/index.html`;
+    
+    // Append token as query parameter
+    const reportsUrlWithToken = `${reportsUrl}?access_token=${token.accessToken}`;
+    const indexUrlWithToken = `${indexUrl}?access_token=${token.accessToken}`;
 
-    console.log(`[REPORTS] Returning secure URL: ${reportsUrl.href}`);
+    console.log(`[REPORTS] Returning URLs with token appended`);
 
     return res.json({
-      url: reportsUrl.href,
-      bearer_token: token.accessToken,
       conversion_id: conversionIdentifier,
-      dataset_id: datasetIdentifier,
+      dataset_name: datasetName,
+      reports_url: reportsUrlWithToken,
+      index_url: indexUrlWithToken,
+      bearer_token: token.accessToken,
     });
   }),
 );

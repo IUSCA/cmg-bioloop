@@ -145,15 +145,20 @@ function openReports() {
   const conversionId = props.conversionId;
   console.log("conversionId", conversionId);
 
-  console.log("will call getReports");
-  conversionApiService.getReports(conversionId)
+  console.log("will call getReportsUrl");
+  conversionApiService.getReportsUrl(conversionId)
     .then((res) => {
       console.log("res", res);
-      const indexUrl = res.data.index_url;
-      console.log("indexUrl", indexUrl);
+      // index_url already has the token appended
+      const indexUrlWithToken = res.data.index_url;
+      console.log("indexUrlWithToken", indexUrlWithToken);
       
-      // Open the reports index.html in a new tab
-      const fullUrl = `${window.location.origin}${indexUrl}`;
+      // Get secure_download base URL from environment variable
+      const secureDownloadBaseUrl = import.meta.env.VITE_UPLOAD_API_BASE_PATH;
+      console.log("secureDownloadBaseUrl (from VITE_UPLOAD_API_BASE_PATH):", secureDownloadBaseUrl);
+      
+      // Construct full URL (token already in index_url)
+      const fullUrl = `${secureDownloadBaseUrl}${indexUrlWithToken}`;
       console.log("Opening:", fullUrl);
       window.open(fullUrl, "_blank");
     })

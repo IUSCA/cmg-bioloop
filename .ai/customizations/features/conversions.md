@@ -80,7 +80,7 @@
 
 **Architecture Change:**
 - Reports previously served via `/api/reports/conversions/:id/files*` (core API)
-- Reports now served via `/secure/reports/conversions/{conversion_id}/{dataset_id}/Reports/*` (secure_download)
+- Reports now served via `/secure/reports/conversions/{conversion_id}/{dataset_name}/Reports/*` (secure_download)
 - Core API endpoint `/api/reports/conversions/:id/url` issues time-limited JWT tokens for secure access
 - Legacy endpoint kept for backwards compatibility but marked for deprecation
 
@@ -92,14 +92,15 @@
 - TODO: Create separate `view_reports:` scope for better separation from download scope
 
 **Path Resolution:**
-- Legacy conversions: Use `conversion.cmg_id` and `dataset.cmg_id` for path construction
-- New conversions: Use `conversion.id` and `dataset.id` for path construction
-- Pattern: `conversions/{conversion_id}/{dataset_id}/Reports/`
+- Legacy conversions: Use `conversion.cmg_id` for conversion identifier
+- New conversions: Use `conversion.id` for conversion identifier
+- Dataset identifier: Use `dataset.name` (NOT dataset ID or cmg_id)
+- Pattern: `conversions/{conversion_id}/{dataset_name}/Reports/`
 - Matches structure created by `clone_legacy_conversion_reports.py` script
 
 **File Locations:**
-- Legacy reports: `/N/project/CMG-SCA/production/conversion/{cmg_id}/{dataset_id}/Reports/`
-- New reports: `/N/scratch/cmguser/cmg-bioloop/conversions/{conversion_id}/{dataset_id}/Reports/`
+- Legacy reports: `/N/project/CMG-SCA/production/conversion/{cmg_id}/{dataset_name}/Reports/`
+- New reports: `/N/scratch/cmguser/cmg-bioloop/conversions/{conversion_id}/{dataset_name}/Reports/`
 - secure_download mount: `/N/scratch/cmguser/cmg-bioloop` → `/opt/sca/data` (read-only)
 
 **Implementation:**
@@ -112,6 +113,52 @@
 - Provides time-limited, scoped access to reports
 - Consistent with existing download authentication pattern
 - Enables fine-grained access control
+
+---
+
+## 2026-01-27
+
+### Report URLs Fixed to Use Secure Download Service
+
+**Issue:** The "View Reports" button was redirecting to the core API (`/api/reports/conversions/:id/files/html/index.html`) instead of the secure_download microservice, and authentication was failing because the bearer token wasn't being passed.
+
+**Solution:**
+- Use existing `/api/reports/conversions/:id/url` endpoint that generates JWT tokens
+- API returns URLs with bearer token already appended as query parameter
+- UI simply prefixes with secure_download base URL and opens the link
+
+**API Changes (`/api/reports/conversions/:id/url`):**
+- Fixed path construction to use `dataset.name` instead of `dataset.id` or `dataset.cmg_id`
+- Now returns `reports_url` and `index_url` with `?access_token={token}` already appended
+- Response includes: `conversion_id`, `dataset_name`, `reports_url`, `index_url`, `bearer_token`
+
+**UI Changes:**
+- `ConversionView.vue`: Calls `getReportsUrl()` (which calls `/api/reports/conversions/:id/url`)
+- `conversion/api.js`: Added `getReportsUrl()` method
+- UI constructs final URL: `${VITE_UPLOAD_API_BASE_PATH}${index_url}` (token already in index_url)
+
+**Path Construction:**
+- Uses `conversion.cmg_id` for legacy conversions, `conversion.id` for new conversions
+- Uses `dataset.name` (NOT dataset ID) as the second path segment
+- Final URL format: `/reports/conversions/{conversion_id}/{dataset_name}/Reports/html/index.html?access_token={jwt}`
+- Example: `/reports/conversions/67efd4f32e05981ba17a8f74/20250401_LH00300_0132_B232C5VLT3/Reports/html/index.html?access_token=eyJhbGc...`
+
+**Authentication Flow:**
+1. UI calls `/api/reports/conversions/:id/url`
+2. API generates JWT token with scope `download_file:conversions/{conversion_id}/{dataset_name}/Reports`
+3. API returns URLs with token appended
+4. UI prefixes with `VITE_UPLOAD_API_BASE_PATH` and opens URL
+5. secure_download validates token and serves files
+
+**Configuration:**
+- UI gets secure_download base URL from `VITE_UPLOAD_API_BASE_PATH` environment variable
+- Token is passed as query parameter: `?access_token={jwt}`
+
+**Rationale:** 
+- Properly routes report viewing through the secure_download microservice with authentication
+- Maintains separation of concerns between core API (business logic) and secure_download (file serving)
+- Matches actual filesystem structure: `conversions/{conversion_id}/{dataset_name}/Reports/`
+- Uses existing OAuth2 token-based authentication pattern
 
 ---
 
@@ -131,5 +178,5 @@ Format:
 
 ---
 
-**Last Updated:** 2026-01-23
+**Last Updated:** 2026-01-27
 
