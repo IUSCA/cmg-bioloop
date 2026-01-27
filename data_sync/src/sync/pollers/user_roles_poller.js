@@ -6,13 +6,8 @@ const logger = require('../../logger');
  * User Roles Poller
  * 
  * Polls CMG users collection for role changes.
- * Updates user metadata (NOT identity fields) and syncs roles.
- * 
- * Immutable fields (never updated after big-bang):
- * - username
- * - name
- * - email
- * - cas_id
+ * Updates: is_deleted status, roles
+ * Does NOT update: username, name, email, cas_id (immutable), metadata (no sync tracking)
  */
 class UserRolesPoller extends BasePoller {
   constructor(prisma, cmgDb, options = {}) {
@@ -54,21 +49,12 @@ class UserRolesPoller extends BasePoller {
     // Check if is_deleted changed
     const isDeletedChanged = bioloopUser.is_deleted !== newIsDeleted;
     
-    // Update is_deleted if changed
+    // Update is_deleted if changed (without storing sync tracking in metadata)
     if (isDeletedChanged) {
-      const existingMetadata = bioloopUser.metadata || {};
-      
       await tx.user.update({
         where: { id: bioloopUser.id },
         data: {
           is_deleted: newIsDeleted,
-          metadata: {
-            ...existingMetadata,
-            cmg_sync_state: {
-              cmg_updated_at: cmgUser.updatedAt,
-              last_sync_time: new Date(),
-            },
-          },
         },
       });
       

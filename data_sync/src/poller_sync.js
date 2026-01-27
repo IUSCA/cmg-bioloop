@@ -26,10 +26,9 @@
  * Pollers:
  * - user_roles: Syncs user role changes
  * - project_acl: Syncs project access control (users, datasets)
- * - dataset_activity: Syncs dataset paths and lifecycle flags
- * - dataset_metadata: Syncs dataset metadata (size, description, etc.)
- * - project_metadata: Syncs project metadata (name, description, funding, etc.)
- * - session_metadata: Syncs genome browser session metadata (title, access, staging, etc.)
+ * - dataset_activity: Syncs dataset paths and lifecycle flags (DEPRECATED - does nothing)
+ * - dataset_metadata: Syncs dataset metadata (description only)
+ * - project_metadata: Syncs project metadata (name, description, funding, browser_enabled)
  */
 
 require('module-alias/register');
@@ -46,7 +45,6 @@ const ProjectACLPoller = require('./sync/pollers/project_acl_poller');
 const DatasetActivityPoller = require('./sync/pollers/dataset_activity_poller');
 const DatasetMetadataPoller = require('./sync/pollers/dataset_metadata_poller');
 const ProjectMetadataPoller = require('./sync/pollers/project_metadata_poller');
-const SessionMetadataPoller = require('./sync/pollers/session_metadata_poller');
 
 // Process lock manager
 const {
@@ -328,11 +326,6 @@ async function main() {
     const projectMetadataPoller = new ProjectMetadataPoller(prisma, cmgDb);
     pollers.push(projectMetadataPoller);
     logger.info('  - project_metadata (20s interval)');
-
-    // 6. Session Metadata Poller
-    const sessionMetadataPoller = new SessionMetadataPoller(prisma, cmgDb);
-    pollers.push(sessionMetadataPoller);
-    logger.info('  - session_metadata (30s interval)');
 
     logger.info('');
     logger.info('Starting pollers...');

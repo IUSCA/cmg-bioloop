@@ -5,8 +5,8 @@ const BasePoller = require('./base_poller');
  * Project Metadata Poller
  *
  * Polls CMG projects collection for metadata changes.
- * Updates: name, description, browser_enabled, funding, metadata
- * Does NOT update: slug (derived from name), cmg_id (immutable)
+ * Updates: name, description, browser_enabled, funding
+ * Does NOT update: slug (derived from name), cmg_id (immutable), metadata (no sync tracking)
  */
 class ProjectMetadataPoller extends BasePoller {
   constructor(prisma, cmgDb, options = {}) {
@@ -77,21 +77,9 @@ class ProjectMetadataPoller extends BasePoller {
       changes.push(`funding`);
     }
 
-    // Prepare metadata update
-    const existingMetadata = bioloopProject.metadata || {};
-
     await tx.project.update({
       where: { id: bioloopProject.id },
-      data: {
-        ...updateData,
-        metadata: {
-          ...existingMetadata,
-          cmg_sync_state: {
-            cmg_updated_at: cmgProject.updatedAt,
-            last_sync_time: new Date(),
-          },
-        },
-      },
+      data: updateData,
     });
 
     logger.debug(`[${this.pollerName}] Updated project ${bioloopProject.id}: ${changes.join(', ')}`);

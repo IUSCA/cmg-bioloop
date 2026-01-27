@@ -152,6 +152,22 @@ async function insertDataset(prisma, cmgItem, datasetType, name, isDeleted) {
     updatedAt = cmgItem.updatedAt || null;
   }
   
+  // Build metadata object for DATA_PRODUCT datasets
+  let metadata = null;
+  if (datasetType === 'DATA_PRODUCT' && cmgItem.file_type) {
+    // Populate analysis_type from CMG's file_type field
+    // Format: uppercase with underscores (matches formatAnalysisType utility)
+    const analysisType = cmgItem.file_type
+      .trim()
+      .toUpperCase()
+      .replace(/\s+/g, '_')
+      .replace(/[^A-Z0-9_]/g, '');
+    
+    metadata = {
+      analysis_type: analysisType,
+    };
+  }
+  
   // Insert dataset
   const dataset = await prisma.dataset.create({
     data: {
@@ -170,7 +186,7 @@ async function insertDataset(prisma, cmgItem, datasetType, name, isDeleted) {
       archive_path: cmgItem.paths?.archive || null,
       staged_path: null, // Always null - staging state not migrated from CMG
       is_staged: false, // Always false - staging state not migrated from CMG
-      metadata: null,
+      metadata: metadata,
     },
   });
   

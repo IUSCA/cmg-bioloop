@@ -5,7 +5,8 @@ const logger = require('../../logger');
  * Dataset Metadata Poller
  * 
  * Polls CMG datasets and dataproducts collections for metadata changes.
- * Updates: description, file_type
+ * Updates: description only (user-editable field)
+ * Does NOT update: file_type (immutable after bigbang), metadata (no sync tracking)
  * Does NOT update: name, type (immutable), size, du_size, num_files, num_directories (set by Bioloop inspect_dataset worker)
  */
 class DatasetMetadataPoller extends BasePoller {
@@ -40,7 +41,8 @@ class DatasetMetadataPoller extends BasePoller {
   
   /**
    * Process a single dataset/dataproduct document
-   * Updates: description, file_type (user-editable metadata only, if changed)
+   * Updates: description only (user-editable field)
+   * Does NOT update: file_type (immutable after bigbang), metadata (no sync tracking)
    * Note: size, du_size, num_files, num_directories are computed by inspect_dataset worker, NOT synced from CMG
    */
   async processDocument(cmgDataset, tx) {
@@ -54,52 +56,26 @@ class DatasetMetadataPoller extends BasePoller {
       return;
     }
     
-    // Extract new values
+    // Extract new description value
     const newDescription = cmgDataset.description || null;
-    const newFileType = cmgDataset.file_type || null;
     
-    // Check if any fields actually changed
-    const descriptionChanged = bioloopDataset.description !== newDescription;
-    const fileTypeChanged = bioloopDataset.file_type !== newFileType;
-    
-    if (!descriptionChanged && !fileTypeChanged) {
+    // Check if description actually changed
+    if (bioloopDataset.description === newDescription) {
       logger.debug(`[${this.pollerName}] No changes detected for dataset ${bioloopDataset.id}, skipping update`);
       return;
     }
     
-    // Build update data with only changed fields
-    const updateData = {};
-    const changes = [];
-    
-    if (descriptionChanged) {
-      updateData.description = newDescription;
-      changes.push(`description: "${bioloopDataset.description}" -> "${newDescription}"`);
-    }
-    
-    if (fileTypeChanged) {
-      updateData.file_type = newFileType;
-      changes.push(`file_type: "${bioloopDataset.file_type}" -> "${newFileType}"`);
-    }
-    
-    // Update only user-editable metadata fields
+    // Update only description (user-editable field)
+    // DO NOT update: file_type (immutable), metadata (no sync tracking)
     // DO NOT sync: size, du_size, num_files, num_directories (computed by inspect_dataset worker)
-    const existingMetadata = bioloopDataset.metadata || {};
-    
     await tx.dataset.update({
       where: { id: bioloopDataset.id },
       data: {
-        ...updateData,
-        metadata: {
-          ...existingMetadata,
-          cmg_sync_state: {
-            cmg_updated_at: cmgDataset.updatedAt,
-            last_sync_time: new Date(),
-          },
-        },
+        description: newDescription,
       },
     });
     
-    logger.debug(`[${this.pollerName}] Updated dataset ${bioloopDataset.id}: ${changes.join(', ')}`);
+    logger.debug(`[${this.pollerName}] Updated dataset ${bioloopDataset.id}: description: "${bioloopDataset.description}" -> "${newDescription}"`);
   }
 }
 

@@ -523,6 +523,58 @@
 
 ---
 
+## 2026-01-26
+
+### Poller Data Pollution & Field Update Cleanup
+
+- **Problem:** All pollers were storing `cmg_sync_state: { cmg_updated_at, last_sync_time }` in entity `metadata` JSON fields
+  - Polluted application data with infrastructure concerns
+  - Overwrote any Bioloop-specific metadata
+  - Mixed sync tracking with domain data
+
+- **Decision:** Removed all `metadata` field updates from pollers
+  - Sync tracking handled at poller level via `cmg_sync_cursor` table
+  - Entity `metadata` fields now available exclusively for Bioloop application data
+  - No per-entity sync state needed (cursor-based approach sufficient)
+
+- **Change:** Stopped updating immutable and Bioloop-managed fields
+  - `dataset.origin_path`: Immutable after bigbang (removed from dataset_activity_poller)
+  - `dataset.file_type`: Immutable after bigbang (removed from dataset_metadata_poller)
+  - `genome_browser_session.access_count`: Bioloop-managed, incremented on session access (removed from session_metadata_poller)
+
+- **Change:** Deprecated `dataset_activity_poller.js`
+  - Poller now does nothing (all dataset fields immutable or Bioloop-managed)
+  - Kept for backward compatibility, but should be removed in future cleanup
+
+- **Change:** Deleted `session_metadata_poller.js` entirely
+  - File: `data_sync/src/sync/pollers/session_metadata_poller.js`
+  - Updated: `data_sync/src/poller_sync.js` (removed import and instantiation)
+  - Rationale: All session fields it updated were either Bioloop-managed (`access_count`) or unused (`staging_*`)
+
+- **Change:** Removed unused `staging_*` fields from schema
+  - Fields removed: `staging_requested`, `staging_completed`, `staging_requested_by`
+  - Table: `genome_browser_session`
+  - Rationale: CMG-specific fields, not used anywhere in Bioloop code
+  - Migration required: `npx prisma migrate dev --name remove_session_staging_fields`
+
+- **Change:** Removed `/sessions/:id/stage-datasets` API endpoint
+  - File: `api/src/routes/sessions.js`
+  - Rationale: Relied on removed `staging_*` fields, not part of Bioloop workflow
+
+- **Clarification:** Current poller field updates (after cleanup)
+  - `user_roles_poller`: `is_deleted`, user roles (via user_role table)
+  - `project_acl_poller`: `description`, `browser_enabled`, project associations
+  - `project_metadata_poller`: `name`, `description`, `browser_enabled`, `funding`
+  - `dataset_metadata_poller`: `description` only (user-editable field)
+  - `dataset_activity_poller`: Nothing (deprecated, consider removal)
+
+- **Decision:** Sync tracking strategy remains cursor-based at poller level
+  - `cmg_sync_cursor` table tracks: `last_updated_at`, `last_cmg_objectid` per poller
+  - No per-entity tracking needed (all changed entities captured by cursor query)
+  - Simpler, cleaner architecture without entity table pollution
+
+---
+
 ## Future Entries
 
 Add entries here as decisions are made, changes are implemented, or issues are resolved.
@@ -539,5 +591,5 @@ Format:
 
 ---
 
-**Last Updated:** 2026-01-19
+**Last Updated:** 2026-01-26
 

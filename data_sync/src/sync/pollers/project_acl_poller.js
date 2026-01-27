@@ -61,7 +61,7 @@ class ProjectACLPoller extends BasePoller {
       logger.debug(`[${this.pollerName}] No metadata changes for project ${bioloopProject.id}, checking associations...`);
     }
     
-    // Update project metadata if changed
+    // Update project metadata if changed (without storing sync tracking in metadata field)
     if (shouldUpdateMetadata) {
       const updateData = {};
       const changes = [];
@@ -76,23 +76,12 @@ class ProjectACLPoller extends BasePoller {
         changes.push(`browser_enabled: ${bioloopProject.browser_enabled} -> ${newBrowserEnabled}`);
       }
       
-      const existingMetadata = bioloopProject.metadata || {};
-      
       await tx.project.update({
         where: { id: bioloopProject.id },
-        data: {
-          ...updateData,
-          metadata: {
-            ...existingMetadata,
-            cmg_sync_state: {
-              cmg_updated_at: cmgProject.updatedAt,
-              last_sync_time: new Date(),
-            },
-          },
-        },
+        data: updateData,
       });
       
-      logger.debug(`[${this.pollerName}] Updated project ${bioloopProject.id} metadata: ${changes.join(', ')}`);
+      logger.debug(`[${this.pollerName}] Updated project ${bioloopProject.id}: ${changes.join(', ')}`);
     }
     
     // Rebuild project_user associations (checks for changes internally)

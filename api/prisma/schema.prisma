@@ -458,21 +458,18 @@ model track {
 }
 
 model genome_browser_session {
-  id                   Int             @id @default(autoincrement())
-  title                String?
-  genome               String?
-  genome_type          String?
-  user_id              Int?
-  user                 user?           @relation(fields: [user_id], references: [id], onDelete: Cascade)
-  created_at           DateTime        @default(now()) @db.Timestamp(6)
-  updated_at           DateTime        @default(now()) @updatedAt @db.Timestamp(6)
-  access_count         Int             @default(0)
-  is_public            Boolean         @default(false)
-  staging_requested    Json? // Staging request details
-  staging_completed    Boolean         @default(false)
-  staging_requested_by Int? // User who requested staging
-  cmg_id               String?         @db.VarChar(100) // CMG session ID for migration tracking
-  session_tracks       session_track[]
+  id             Int             @id @default(autoincrement())
+  title          String?
+  genome         String?
+  genome_type    String?
+  user_id        Int?
+  user           user?           @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  created_at     DateTime        @default(now()) @db.Timestamp(6)
+  updated_at     DateTime        @default(now()) @updatedAt @db.Timestamp(6)
+  access_count   Int             @default(0)
+  is_public      Boolean         @default(false)
+  cmg_id         String?         @db.VarChar(100) // CMG session ID for migration tracking
+  session_tracks session_track[]
 }
 
 model session_track {

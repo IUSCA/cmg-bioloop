@@ -4,10 +4,13 @@ const BasePoller = require('./base_poller');
 /**
  * Dataset Activity Poller
  *
- * Polls CMG datasets and dataproducts collections for path changes.
- * Updates: origin_path (immutable after bigbang)
- * Does NOT update: archive_path, staged_path, is_staged (set by Bioloop workers)
- * Does NOT: parse events (delegated to Workflow Status Poller), populate dataset_file
+ * DEPRECATED: This poller no longer updates any fields.
+ * - origin_path: Immutable after bigbang, should NOT be updated
+ * - archive_path, staged_path, is_staged: Managed by Bioloop workers, NOT synced from CMG
+ * - metadata: Should NOT store sync tracking data
+ *
+ * This poller is kept for backward compatibility but does nothing.
+ * Consider removing it entirely.
  */
 class DatasetActivityPoller extends BasePoller {
   constructor(prisma, cmgDb, options = {}) {
@@ -41,8 +44,7 @@ class DatasetActivityPoller extends BasePoller {
 
   /**
    * Process a single dataset/dataproduct document
-   * Updates: origin_path only (if changed)
-   * Note: archive_path, staged_path, is_staged are managed by Bioloop workers, NOT synced from CMG
+   * DOES NOTHING: All dataset fields are either immutable or Bioloop-managed
    */
   async processDocument(cmgDataset, tx) {
     // Find dataset by cmg_id
@@ -55,35 +57,11 @@ class DatasetActivityPoller extends BasePoller {
       return;
     }
 
-    // Extract paths
-    const paths = cmgDataset.paths || {};
-    const newOriginPath = paths.origin || null;
-
-    // Only update if value actually changed (avoid unnecessary writes)
-    if (bioloopDataset.origin_path === newOriginPath) {
-      logger.debug(`[${this.pollerName}] No changes detected for dataset ${bioloopDataset.id}, skipping update`);
-      return;
-    }
-
-    // Update only origin_path (immutable after bigbang)
-    // DO NOT sync: archive_path, staged_path, is_staged (managed by Bioloop workers)
-    const existingMetadata = bioloopDataset.metadata || {};
-
-    await tx.dataset.update({
-      where: { id: bioloopDataset.id },
-      data: {
-        origin_path: newOriginPath,
-        metadata: {
-          ...existingMetadata,
-          cmg_sync_state: {
-            cmg_updated_at: cmgDataset.updatedAt,
-            last_sync_time: new Date(),
-          },
-        },
-      },
-    });
-
-    logger.debug(`[${this.pollerName}] Updated origin_path for dataset ${bioloopDataset.id}: ${bioloopDataset.origin_path} -> ${newOriginPath}`);
+    // No fields to update - all dataset fields are either:
+    // - Immutable after bigbang (origin_path, name, type)
+    // - Bioloop-managed (archive_path, staged_path, is_staged, size, num_files, etc.)
+    // - Should not store sync data (metadata)
+    logger.debug(`[${this.pollerName}] No updates needed for dataset ${bioloopDataset.id} (all fields immutable or Bioloop-managed)`);
   }
 }
 
