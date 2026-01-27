@@ -72,6 +72,49 @@
 
 ---
 
+## 2026-01-23
+
+### Report Viewing Moved to Secure Download Service
+
+**Decision:** Conversion reports are now served through the secure_download microservice instead of directly from the core API.
+
+**Architecture Change:**
+- Reports previously served via `/api/reports/conversions/:id/files*` (core API)
+- Reports now served via `/secure/reports/conversions/{conversion_id}/{dataset_id}/Reports/*` (secure_download)
+- Core API endpoint `/api/reports/conversions/:id/url` issues time-limited JWT tokens for secure access
+- Legacy endpoint kept for backwards compatibility but marked for deprecation
+
+**Token-Based Authentication:**
+- UI requests secure URL from core API: `GET /api/reports/conversions/:id/url`
+- Core API validates conversion exists and issues JWT with `download_file:` scope
+- JWT token embedded in URL returned to UI
+- secure_download service validates token before serving files
+- TODO: Create separate `view_reports:` scope for better separation from download scope
+
+**Path Resolution:**
+- Legacy conversions: Use `conversion.cmg_id` and `dataset.cmg_id` for path construction
+- New conversions: Use `conversion.id` and `dataset.id` for path construction
+- Pattern: `conversions/{conversion_id}/{dataset_id}/Reports/`
+- Matches structure created by `clone_legacy_conversion_reports.py` script
+
+**File Locations:**
+- Legacy reports: `/N/project/CMG-SCA/production/conversion/{cmg_id}/{dataset_id}/Reports/`
+- New reports: `/N/scratch/cmguser/cmg-bioloop/conversions/{conversion_id}/{dataset_id}/Reports/`
+- secure_download mount: `/N/scratch/cmguser/cmg-bioloop` → `/opt/sca/data` (read-only)
+
+**Implementation:**
+- secure_download route: `/secure_download/src/routes/reports.js`
+- Core API endpoint: `/api/src/routes/reports.js` (new `/conversions/:id/url` endpoint)
+- Reuses existing OAuth2 client credentials flow from download feature
+
+**Rationale:**
+- Separates file serving from business logic (microservice architecture)
+- Provides time-limited, scoped access to reports
+- Consistent with existing download authentication pattern
+- Enables fine-grained access control
+
+---
+
 ## Future Entries
 
 Add entries here as decisions are made, changes are implemented, or issues are resolved.
@@ -88,5 +131,5 @@ Format:
 
 ---
 
-**Last Updated:** 2026-01-16
+**Last Updated:** 2026-01-23
 
