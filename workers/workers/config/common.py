@@ -261,6 +261,20 @@ config = {
             #   "task": "delete_source"
             # }
           ]
+        },
+        "hydrate_session": {
+          "name": "Hydrate Session",
+          "description": "Hydrate legacy CMG Session with Tracks",
+          "steps": [
+            {
+              "name": "hydrate_tracks",
+              "task": "hydrate_session_tracks"
+            },
+            {
+              "name": "finish_hydration",
+              "task": "finish_session_hydration"
+            }
+          ]
         }
     },
     'celery': {

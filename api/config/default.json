@@ -272,6 +272,20 @@
           "task": "populate_file_metadata"
         }
       ]
+    },
+    "hydrate_session": {
+      "name": "Hydrate Session",
+      "description": "Hydrate legacy CMG Session with Tracks",
+      "steps": [
+        {
+          "name": "hydrate_tracks",
+          "task": "hydrate_session_tracks"
+        },
+        {
+          "name": "finish_hydration",
+          "task": "finish_session_hydration"
+        }
+      ]
     }
   },
   "dataset_types": [
@@ -299,13 +313,6 @@
     "search_spaces": "",
     "base_dir": {
       "slateScratch": "",
-<<<<<<< Updated upstream
-      "slateProject": ""
-    },
-    "mount_dir": {
-      "slateScratch": "",
-      "slateProject": ""
-=======
       "slateProject": "",
       "slateProject1": ""
     },
@@ -313,12 +320,12 @@
       "slateScratch": "",
       "slateProject": "",
       "slateProject1": ""
->>>>>>> Stashed changes
     }
   },
   "restricted_import_dirs": {
     "slateScratch": "",
-    "slateProject": ""
+    "slateProject": "",
+    "slateProject1": ""
   },
   "enabled_features": {
     "upload": true,

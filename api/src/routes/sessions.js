@@ -1641,6 +1641,92 @@ router.get(
 // Files are now served securely via the secure_download microservice at /genome-browser/*
 // with proper token-based authorization
 
+//  Launch a workflow on the session - UI
+const { validate } = require('@/middleware/validators');
+const wfService = require('@/services/workflow');
+const CONSTANTS = require('@/constants');
+const { v4: uuidv4 } = require('uuid');
+
+router.post(
+  '/:id/workflows/:wf',
+  isPermittedTo('update'),
+  validate([
+    param('id').isInt().toInt(),
+    param('wf').isIn([CONSTANTS.WORKFLOWS.HYDRATE_SESSION]),
+  ]),
+  asyncHandler(async (req, res) => {
+    const sessionId = req.params.id;
+    const wfName = req.params.wf;
+
+    // Get the session
+    const session = await prisma.genome_browser_session.findUnique({
+      where: { id: sessionId },
+    });
+
+    if (!session) {
+      return res.status(404).json({ error: 'Session not found' });
+    }
+
+    // Check if user is the session owner
+    if (session.user_id !== req.user.id) {
+      return res.status(403).json({ error: 'Only the session owner can hydrate it' });
+    }
+
+    logger.info(`Starting workflow ${wfName} on session ${sessionId}`);
+
+    // Generate workflow ID
+    const workflowId = uuidv4();
+
+    // Create session_workflow record
+    await prisma.session_workflow.create({
+      data: {
+        session_id: sessionId,
+        workflow_id: workflowId,
+        initiator_id: req.user.id,
+      },
+    });
+
+    // Get workflow definition from config
+    const workflowConfig = config.get('workflow_registry')[wfName];
+    
+    if (!workflowConfig) {
+      return res.status(500).json({ error: 'Workflow configuration not found' });
+    }
+
+    // Create workflow via workflow service
+    const workflowPayload = {
+      id: workflowId,
+      name: wfName,
+      app_id: config.get('app_id'),
+      description: workflowConfig.description || wfName,
+      tasks: workflowConfig.steps.map((step) => ({
+        name: step.name,
+        task_name: step.task,
+        queue: step.queue || null,
+        kwargs: {
+          session_id: sessionId,
+        },
+      })),
+    };
+
+    try {
+      const wfResponse = await wfService.create(workflowPayload);
+      logger.info(`Workflow ${workflowId} created successfully for session ${sessionId}`);
+      return res.json(wfResponse.data);
+    } catch (error) {
+      logger.error(`Failed to create workflow for session ${sessionId}:`, error);
+      // Clean up session_workflow record on failure
+      await prisma.session_workflow.deleteMany({
+        where: {
+          session_id: sessionId,
+          workflow_id: workflowId,
+        },
+      });
+      return res.status(500).json({ error: 'Failed to create workflow' });
+    }
+  }),
+);
+
 // Export main router for authenticated routes
 module.exports = router;
 

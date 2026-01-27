@@ -122,6 +122,7 @@ const WORKFLOWS = {
   STAGE_MIGRATED: 'stage_migrated',
   PROCESS_DATASET_UPLOAD: 'process_dataset_upload',
   CANCEL_DATASET_UPLOAD: 'cancel_dataset_upload',
+  HYDRATE_SESSION: 'hydrate_session',
 };
 
 const DATASET_STATES = {

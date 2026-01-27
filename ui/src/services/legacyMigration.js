@@ -62,13 +62,13 @@ export async function isMigrationInProgress(datasetId) {
 }
 
 /**
- * Get migration status information for a session (placeholder)
+ * Get migration status information for a session
  * @param {number} sessionId - The session ID
  * @returns {Promise<Object>} - Migration status object
  */
 export async function getSessionMigrationStatus(sessionId) {
   try {
-    const response = await api.get(`/legacy/sessions/${sessionId}`);
+    const response = await api.get(`/legacy/migrations/sessions/${sessionId}`);
     return response.data;
   } catch (error) {
     console.error('Error fetching session migration status:', error);
@@ -76,11 +76,37 @@ export async function getSessionMigrationStatus(sessionId) {
   }
 }
 
+/**
+ * Check if a session is a legacy CMG session
+ * @param {Object} session - The session object
+ * @returns {boolean} - True if the session has a cmg_id
+ */
+export function isLegacySession(session) {
+  return !!(session && session.cmg_id);
+}
+
+/**
+ * Check if a session is hydrated
+ * @param {number} sessionId - The session ID
+ * @returns {Promise<boolean>} - True if the session is hydrated
+ */
+export async function isSessionHydrated(sessionId) {
+  try {
+    const status = await getSessionMigrationStatus(sessionId);
+    return status.is_hydrated;
+  } catch (error) {
+    console.error('Error checking session hydration status:', error);
+    return false;
+  }
+}
+
 export default {
   getDatasetMigrationStatus,
   getSessionMigrationStatus,
   isLegacyDataset,
+  isLegacySession,
   needsHydration,
+  isSessionHydrated,
   isMigrationInProgress,
 };
 

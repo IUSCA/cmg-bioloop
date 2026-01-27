@@ -450,6 +450,28 @@
       @staging-requested="handleStagingRequested"
     />
 
+    <!-- Hydration Modal -->
+    <va-modal
+      v-model="showHydrationModal"
+      title="Session Hydration Required"
+      size="small"
+      ok-text="Hydrate Session"
+      :ok-disabled="hydratingSession"
+      @ok="handleHydrateSession"
+      @cancel="showHydrationModal = false"
+    >
+      <va-inner-loading :loading="hydratingSession">
+        <p>
+          This session needs to be hydrated with track information before it can be viewed in the
+          genome browser. Would you like to start the hydration workflow?
+        </p>
+        <p class="mt-2 text-sm text-gray-600">
+          Note: Hydration may take a few moments. You will be able to view the session once the
+          workflow completes.
+        </p>
+      </va-inner-loading>
+    </va-modal>
+
     <!-- Browser Selection Modal -->
     <BrowserSelectionModal
       v-model="showBrowserSelectionModal"
@@ -501,6 +523,7 @@ import AddEditButton from '@/components/utils/buttons/AddEditButton.vue';
 import constants from '@/constants';
 import * as datetime from '@/services/datetime';
 import sessionService from '@/services/session';
+import legacyMigrationService from '@/services/legacyMigration';
 import toast from '@/services/toast';
 import trackService from '@/services/track';
 import { formatBytes } from '@/services/utils';
@@ -615,6 +638,10 @@ const { browserTypes: BROWSER_TYPES, browserTitles: BROWSER_TITLES } = constants
 
 // Unstaged datasets modal
 const showUnstagedModal = ref(false);
+
+// Hydration modal
+const showHydrationModal = ref(false);
+const hydratingSession = ref(false);
 
 // Genome Browser state (generic for IGV and WashU)
 const showBrowserSelectionModal = ref(false);
@@ -826,7 +853,7 @@ const _handleSessionUpdated = (_updatedSession) => {
 
 /**
  * Handle View in Genome Browser button click
- * Check for unstaged/staged datasets before showing appropriate modal
+ * Check for unstaged/staged datasets and hydration status before showing appropriate modal
  */
 const handleViewInBrowser = async () => {
   if (!session.value) return;
@@ -853,7 +880,18 @@ const handleViewInBrowser = async () => {
       return;
     }
 
-    // All datasets are staged, proceed to browser selection
+    // All datasets are staged - check if session is hydrated
+    if (session.value.cmg_id) {
+      const isHydrated = await legacyMigrationService.isSessionHydrated(session.value.id);
+      
+      if (!isHydrated) {
+        // Session needs hydration, show modal
+        showHydrationModal.value = true;
+        return;
+      }
+    }
+
+    // All datasets are staged and session is hydrated (or not a legacy session), proceed to browser selection
     showBrowserSelectionModal.value = true;
   } catch (error) {
     console.error('Failed to check dataset status:', error);
@@ -878,13 +916,42 @@ const handleStagingRequested = async () => {
     const stagedDatasets = response.data.datasets || [];
 
     if (stagedDatasets.length > 0) {
-      // There are some staged datasets, show browser selection
+      // There are some staged datasets, check hydration status before showing browser selection
+      if (session.value.cmg_id) {
+        const isHydrated = await legacyMigrationService.isSessionHydrated(session.value.id);
+        
+        if (!isHydrated) {
+          // Session needs hydration
+          showHydrationModal.value = true;
+          return;
+        }
+      }
+      // Show browser selection
       showBrowserSelectionModal.value = true;
     }
     // If no staged datasets yet, user will have to wait for staging to complete
     // (no toast needed, the "staging requested" toast is already shown)
   } catch (error) {
     console.error('Failed to check staged datasets:', error);
+  }
+};
+
+/**
+ * Handle hydration confirmation
+ */
+const handleHydrateSession = async () => {
+  if (!session.value?.id) return;
+
+  hydratingSession.value = true;
+  try {
+    await sessionService.hydrateSession(session.value.id);
+    toast.success('Session hydration workflow started. Tracks will be available once hydration completes.');
+    showHydrationModal.value = false;
+  } catch (error) {
+    console.error('Failed to start session hydration:', error);
+    toast.error('Failed to start session hydration workflow');
+  } finally {
+    hydratingSession.value = false;
   }
 };
 

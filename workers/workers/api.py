@@ -366,5 +366,105 @@ def get_process_artifacts(process_request_id: int,
         return r.json()
 
 
+def get_session(session_id: int) -> dict:
+    """
+    Get a session by ID.
+    
+    Args:
+        session_id: ID of the session to retrieve
+    
+    Returns:
+        dict: Session data
+    """
+    with APIServerSession() as s:
+        r = s.get(f'sessions/{session_id}')
+        r.raise_for_status()
+        return r.json()
+
+
+def update_session(session_id: int, update_data: dict):
+    """
+    Update a session.
+    
+    Args:
+        session_id: ID of the session to update
+        update_data: Data to update
+    """
+    with APIServerSession() as s:
+        r = s.patch(f'sessions/{session_id}', json=update_data)
+        r.raise_for_status()
+        return r.json()
+
+
+def update_session_tracks(session_id: int, track_ids: list[int]):
+    """
+    Update tracks associated with a session.
+    
+    Args:
+        session_id: ID of the session
+        track_ids: List of track IDs to associate with the session
+    """
+    with APIServerSession() as s:
+        r = s.patch(f'sessions/{session_id}', json={'track_ids': track_ids})
+        r.raise_for_status()
+        return r.json()
+
+
+def get_dataset_by_cmg_id(cmg_id: str) -> dict:
+    """
+    Get a dataset by its CMG ID.
+    
+    Args:
+        cmg_id: CMG ID of the dataset
+    
+    Returns:
+        dict: Dataset data, or None if not found
+    """
+    with APIServerSession() as s:
+        r = s.get(f'legacy/migrations/datasets/by-cmg-id/{cmg_id}')
+        if r.status_code == 404:
+            return None
+        r.raise_for_status()
+        return r.json()
+
+
+def get_dataset_file_by_name_and_dataset(filename: str, dataset_id: int) -> dict:
+    """
+    Get a dataset file by filename and dataset ID.
+    
+    Args:
+        filename: Name of the file
+        dataset_id: ID of the dataset
+    
+    Returns:
+        dict: Dataset file data, or None if not found
+    """
+    with APIServerSession() as s:
+        r = s.get(f'datasets/{dataset_id}/files', params={'name': filename})
+        r.raise_for_status()
+        data = r.json()
+        files = data.get('files', [])
+        return files[0] if files else None
+
+
+def get_track_by_dataset_file_id(dataset_file_id: int) -> dict:
+    """
+    Get a track by dataset file ID.
+    
+    Args:
+        dataset_file_id: ID of the dataset file
+    
+    Returns:
+        dict: Track data, or None if not found
+    """
+    with APIServerSession() as s:
+        r = s.get('tracks', params={'dataset_file_id': dataset_file_id})
+        r.raise_for_status()
+        data = r.json()
+        # The API returns results in a results array
+        results = data.get('results', [])
+        return results[0] if results else None
+
+
 if __name__ == '__main__':
     pass

@@ -13,7 +13,7 @@ class SlurmExecutor(ExecutorBase):
 
     def validate_config(self):
         """Validate required SLURM configuration"""
-        required_keys = ['host', 'ssh_user', 'remote_work_dir']
+        required_keys = ['host', 'user', 'type']
         missing = [k for k in required_keys if k not in self.config]
         if missing:
             raise ValueError(f"Missing required SLURM config keys: {missing}")

@@ -575,6 +575,108 @@
 
 ---
 
+## 2026-01-27
+
+### Sessions Migration Filtering
+
+- **Change:** Only migrate CMG sessions with non-empty tracks array
+  - Check added in `sync_sessions.js`: skip if `tracks` is null, not an array, or empty
+  - Rationale: Sessions without tracks are not useful in Bioloop (tracks are required for viewing)
+  - Result: Reduces unnecessary session migrations and database records
+  - Logged as: `"Skipping session {id}: no tracks"`
+
+### Sessions Migration API - Hydration Status
+
+- **Change:** `/legacy/migrations/sessions/:id` endpoint reports hydration status from metadata field
+  - `is_hydrated` returns `true` if `genome_browser_session.metadata.is_hydrated` is `true`
+  - `is_hydrated` returns `false` otherwise (if metadata is null, undefined, or is_hydrated is false)
+  - Added `metadata` JSON field to `genome_browser_session` schema
+  - Updated service: `api/src/services/legacyMigration.js`
+  - Updated route comments: `api/src/routes/legacy/migrations.js`
+  - Updated schema: `api/prisma/schema.prisma`
+  - Note: Setting `metadata.is_hydrated` is handled separately (not part of this change)
+
+### Session Hydration Workflow Implementation (2026-01-27)
+
+- **Change:** Created `hydrate_session` workflow for hydrating legacy CMG sessions with tracks
+  - Workflow added to both API and worker configs
+  - Two-step workflow: `hydrate_tracks` → `finish_hydration`
+  - Configuration: `api/config/default.json` and `workers/workers/config/common.py`
+  
+- **Change:** Workflow tasks created in `workers/workers/tasks/`
+  - `hydrate_tracks.py`: Retrieves legacy tracks from CMG API, finds corresponding dataset_files and existing tracks in Bioloop, associates tracks with session
+    - NOTE: Does NOT create tracks - tracks must already exist in database
+    - Retrieves CMG session data using `cmg_api.get_session(cmg_id)`
+    - Maps CMG dataproduct IDs to Bioloop datasets via `cmg_id` field
+    - Finds dataset_files by filename within datasets
+    - Finds existing tracks by dataset_file_id
+    - Associates found tracks with session via `session_tracks` table
+  - `finish_hydration.py`: Sets `session.metadata.is_hydrated = true`
+  - Tasks registered in `workers/workers/tasks/declarations.py`
+  
+- **Change:** API endpoints for legacy migration added to `/api/src/routes/legacy/migrations.js`
+  - `GET /legacy/migrations/datasets/by-cmg-id/:cmgId`: Get dataset by CMG ID
+  - Existing: `GET /legacy/migrations/datasets/:id`: Get dataset migration status
+  - Existing: `GET /legacy/migrations/sessions/:id`: Get session hydration status
+  
+- **Change:** Tracks API enhanced (`api/src/routes/tracks.js`)
+  - Added `dataset_file_id` query parameter to GET `/tracks` endpoint
+  - Allows filtering tracks by specific dataset file
+  
+- **Change:** Worker API helper functions added/updated in `workers/workers/api.py`
+  - `get_session()`: Get session by ID
+  - `update_session()`: Update session data
+  - `update_session_tracks()`: Update tracks associated with session
+  - `get_dataset_by_cmg_id()`: Find dataset by CMG ID (calls `/legacy/migrations/datasets/by-cmg-id/:cmgId`)
+  - `get_dataset_file_by_name_and_dataset()`: Find dataset_file by filename and dataset
+  - `get_track_by_dataset_file_id()`: Find track by dataset_file ID
+  
+- **Change:** Workflow constants added
+  - `HYDRATE_SESSION` added to `api/src/constants.js`
+  - `HYDRATE_SESSION` added to `workers/workers/constants/workflow.py`
+  
+- **Change:** Prisma schema updated with new `session_workflow` table
+  - Created NEW `session_workflow` table (did NOT modify existing `workflow` table)
+  - Fields: `session_id`, `workflow_id` (composite primary key), `initiator_id`, `created_at`
+  - Relations: links sessions to workflows and users (initiators)
+  - Added `session_workflows` relation to `genome_browser_session` table
+  - Added `initiated_session_workflows` relation to `user` table
+  - Migration required: `npx prisma migrate dev --name add_session_workflow_table`
+  
+- **Change:** Session workflow API endpoint added (`api/src/routes/sessions.js`)
+  - `POST /sessions/:id/workflows/:wf`: Trigger workflow on session
+  - Currently supports `hydrate_session` workflow
+  - Validates user is session owner
+  - Creates `session_workflow` record
+  - Calls workflow service to create and start workflow
+  - Returns workflow response
+  
+- **Change:** UI legacy migration service enhanced (`ui/src/services/legacyMigration.js`)
+  - Fixed `getSessionMigrationStatus()` to call correct endpoint: `/legacy/migrations/sessions/:id`
+  - Added `isLegacySession()`: Check if session has cmg_id
+  - Renamed `sessionNeedsHydration()` to `isSessionHydrated()`: Check if session is hydrated (returns boolean)
+  
+- **Change:** UI session service extended (`ui/src/services/session.js`)
+  - Added `hydrateSession(id)`: Trigger hydration workflow for a session
+  - Calls `POST /sessions/:id/workflows/hydrate_session`
+  
+- **Change:** Sessions view UI updated (`ui/src/pages/sessions/[id].vue`)
+  - Enhanced `handleViewInBrowser()` to check:
+    1. If datasets are staged → show UnstagedDatasetsModal if not
+    2. If session is hydrated (for legacy sessions) → show HydrationModal if not
+    3. Show browser selection modal if everything is ready
+  - Added hydration confirmation modal
+  - Added `handleHydrateSession()` function to trigger hydration workflow
+  - Updated `handleStagingRequested()` to also check hydration status after staging
+  - Imports `legacyMigrationService` for hydration status checks
+  
+- **Decision:** Hydration workflow assumes tracks already exist
+  - Tracks must be created before hydration workflow runs
+  - Hydration only associates existing tracks with sessions
+  - If no track found for a dataset_file, it's skipped with warning
+
+---
+
 ## Future Entries
 
 Add entries here as decisions are made, changes are implemented, or issues are resolved.
@@ -591,5 +693,5 @@ Format:
 
 ---
 
-**Last Updated:** 2026-01-26
+**Last Updated:** 2026-01-27
 

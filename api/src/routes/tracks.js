@@ -53,6 +53,7 @@ router.get(
   isPermittedTo('read'),
   [
     query('project_id').trim().optional(),
+    query('dataset_file_id').isInt().toInt().optional(),
     query('name').trim().optional(),
     query('file_type').trim().optional(),
     query('browser_compatible').isBoolean().toBoolean().optional(),
@@ -65,7 +66,7 @@ router.get(
   ],
   asyncHandler(async (req, res) => {
     const {
-      project_id, name, file_type, genome_type, genome_value, limit, offset, sort_by, sort_order,
+      project_id, dataset_file_id, name, file_type, genome_type, genome_value, limit, offset, sort_by, sort_order,
     } = req.query;
 
     try {
@@ -124,6 +125,10 @@ router.get(
       }
 
       // optional filters
+      if (dataset_file_id) {
+        filter_query.dataset_file_id = dataset_file_id;
+      }
+
       if (name) {
         filter_query.name = {
           contains: name,

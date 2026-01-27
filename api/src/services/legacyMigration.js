@@ -1,6 +1,6 @@
 /**
  * Legacy Migration Service
- * 
+ *
  * Handles legacy dataset and session migration status queries and utilities.
  * Specifically for CMG datasets migrated from MongoDB that need hydration.
  */
@@ -17,7 +17,7 @@ async function hasReachedState(datasetId, state) {
   const stateRecord = await prisma.dataset_state.findFirst({
     where: {
       dataset_id: datasetId,
-      state: state,
+      state,
     },
   });
   return !!stateRecord;
@@ -92,23 +92,24 @@ async function getDatasetMigrationStatus(datasetId) {
  */
 async function isMigrationInProgress(datasetId) {
   const status = await getDatasetMigrationStatus(datasetId);
-  
+
   // Migration is in progress if it's initiated but not completed
   return status.is_migration_initiated && !status.is_migrated;
 }
 
 /**
- * Get migration status information for a session (placeholder)
+ * Get migration status information for a session
  * @param {number} sessionId - The session ID
  * @returns {Promise<Object>} - Migration status object
  */
 async function getSessionMigrationStatus(sessionId) {
-  // Get the session to check if it's a legacy session
+  // Get the session to check if it's a legacy session and hydration status
   const session = await prisma.genome_browser_session.findUnique({
     where: { id: sessionId },
     select: {
       id: true,
       cmg_id: true,
+      metadata: true,
     },
   });
 
@@ -116,11 +117,12 @@ async function getSessionMigrationStatus(sessionId) {
     throw new Error(`Session with ID ${sessionId} not found`);
   }
 
-  // Placeholder implementation - can be extended later
-  // for session-specific migration tracking
+  // Session is hydrated if metadata.is_hydrated is true
+  const isHydrated = session.metadata?.is_hydrated === true;
+
   return {
     is_legacy: !!session.cmg_id,
-    is_migrated: !!session.cmg_id, // For now, if it has cmg_id, it's migrated
+    is_hydrated: isHydrated,
   };
 }
 
@@ -130,4 +132,3 @@ module.exports = {
   isMigrationInProgress,
   hasReachedState,
 };
-

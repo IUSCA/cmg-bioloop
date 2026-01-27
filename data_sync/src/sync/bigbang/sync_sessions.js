@@ -7,6 +7,7 @@ const logger = require('../../logger');
  * 
  * Note: 
  * - Sessions sync is optional (use --skip-sessions to skip)
+ * - Only sessions with non-empty tracks array are migrated
  * - Tracks are NOT migrated from CMG (users create tracks in Bioloop UI)
  * - Only session metadata is migrated: title, genome, genome_type, owner
  */
@@ -41,6 +42,12 @@ async function syncSessions(prisma, cmgDb) {
  * Convert a single CMG session
  */
 async function convertSession(prisma, cmgDb, cmgSession) {
+  // Skip sessions with no tracks (empty sessions not useful in Bioloop)
+  if (!cmgSession.tracks || !Array.isArray(cmgSession.tracks) || cmgSession.tracks.length === 0) {
+    logger.debug(`[BIGBANG] Skipping session ${cmgSession._id}: no tracks`);
+    return null;
+  }
+  
   // Map session owner
   let userId = null;
   if (cmgSession.user) {

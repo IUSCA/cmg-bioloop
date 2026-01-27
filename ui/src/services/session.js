@@ -135,6 +135,15 @@ class SessionService {
   stageDatasets(id) {
     return api.post(`/sessions/${id}/stage-datasets`);
   }
+
+  /**
+   * Trigger hydration workflow for a session
+   * @param {number} id - Session ID
+   * @returns {Promise<Object>} Workflow response
+   */
+  hydrateSession(id) {
+    return api.post(`/sessions/${id}/workflows/hydrate_session`);
+  }
 }
 
 export default new SessionService();
