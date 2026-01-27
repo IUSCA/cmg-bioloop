@@ -113,6 +113,72 @@ router.get(
       '.txt': 'text/plain',
     };
     
+    // HTML Token Propagation for Cross-Domain Scenarios
+    // ===================================================
+    // Problem: When serving HTML files cross-domain, browsers don't automatically
+    // include query parameters (like ?access_token=...) in subsequent requests for
+    // resources referenced within the HTML (CSS, JS, images, etc.).
+    //
+    // Example:
+    // - Initial request: GET /reports/.../index.html?access_token=xyz (✓ works)
+    // - Browser loads HTML, then requests: GET /reports/.../style.css (✗ no token)
+    // - Result: 401 Unauthorized for all resources
+    //
+    // Solution: For HTML files, rewrite content in-memory to inject the authentication
+    // token into all relative resource URLs before sending to browser. This ensures
+    // all nested resources include the token in their requests.
+    //
+    // Note: This is an in-memory operation - no files are modified on disk.
+    // The mount is read-only anyway (/opt/sca/data:ro).
+    if (ext === '.html') {
+      const tokenParam = req.query?.access_token || req.query?.token;
+      
+      if (!tokenParam) {
+        logger.error('[REPORTS] HTML file requested without token');
+        return next(createError.BadRequest('Authentication token required for HTML files'));
+      }
+      
+      logger.info(`[REPORTS] Serving HTML file with token propagation: ${resolvedPath}`);
+      
+      // Read HTML content from disk (read-only operation)
+      const htmlContent = await fs.promises.readFile(resolvedPath, 'utf8');
+      
+      // Inject token into relative URLs (in-memory modification)
+      // Matches href="" and src="" attributes with relative paths
+      const modifiedHtml = htmlContent
+        // Handle href attributes (links, stylesheets)
+        .replace(/(href)="([^"]*?)"/g, (match, attr, url) => {
+          // Skip absolute URLs (http://, https://, //, or protocol-relative)
+          if (url.startsWith('http://') || url.startsWith('https://') || 
+              url.startsWith('//') || url.startsWith('#') || url.startsWith('mailto:')) {
+            return match;
+          }
+          // Skip data URIs
+          if (url.startsWith('data:')) {
+            return match;
+          }
+          // Inject token into relative URLs
+          const separator = url.includes('?') ? '&' : '?';
+          return `${attr}="${url}${separator}access_token=${tokenParam}"`;
+        })
+        // Handle src attributes (scripts, images, iframes)
+        .replace(/(src)="([^"]*?)"/g, (match, attr, url) => {
+          // Skip absolute URLs
+          if (url.startsWith('http://') || url.startsWith('https://') || 
+              url.startsWith('//') || url.startsWith('data:')) {
+            return match;
+          }
+          // Inject token into relative URLs
+          const separator = url.includes('?') ? '&' : '?';
+          return `${attr}="${url}${separator}access_token=${tokenParam}"`;
+        });
+      
+      res.setHeader('Content-Type', 'text/html');
+      logger.info('[REPORTS] HTML token propagation complete, sending response');
+      return res.send(modifiedHtml);
+    }
+    
+    // For non-HTML files, serve directly
     if (contentTypes[ext]) {
       res.setHeader('Content-Type', contentTypes[ext]);
     }

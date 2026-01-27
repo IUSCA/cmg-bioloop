@@ -239,6 +239,56 @@
 
 ---
 
+## 2026-01-27 (HTML Token Propagation)
+
+### Cross-Domain HTML Resource Authentication
+
+**Problem Identified:**
+- UI opens reports in new tab on different domain (`cmg3.sca.iu.edu` vs `cmg-test.sca.iu.edu`)
+- Initial HTML request includes token in query string: `index.html?access_token=xyz` (✓ works)
+- Browser loads HTML, then requests nested resources without token: `tree.html`, `style.css` (✗ 401 errors)
+- Cookie-based auth won't work across different domains (same-origin policy)
+
+**Solution Implemented:**
+- HTML Token Propagation in secure_download service
+- When serving HTML files, service reads content and rewrites it in-memory
+- Injects authentication token into all relative resource URLs (href, src attributes)
+- Skips absolute URLs, data URIs, and protocol-relative URLs
+- Original files remain untouched (read-only filesystem mount)
+
+**Implementation Details:**
+- Location: `secure_download/src/routes/reports.js`
+- Applies only to `.html` files
+- Requires token in query string (`?access_token=` or `?token=`)
+- Uses regex to match and modify `href=""` and `src=""` attributes
+- Adds token as query parameter to relative URLs
+
+**Technical Rationale:**
+- Generic solution for cross-domain HTML file serving with token auth
+- No filesystem modifications (read-only mount at `/opt/sca/data:ro`)
+- Keeps secure_download decoupled from business logic
+- Reusable pattern for any HTML content requiring token propagation
+
+**Example Transformation:**
+```html
+<!-- Original HTML (read from disk) -->
+<link rel="stylesheet" href="style.css">
+<script src="script.js"></script>
+<a href="tree.html">Tree</a>
+
+<!-- Modified HTML (sent to browser) -->
+<link rel="stylesheet" href="style.css?access_token=xyz">
+<script src="script.js?access_token=xyz"></script>
+<a href="tree.html?access_token=xyz">Tree</a>
+```
+
+**Result:**
+- All resources (CSS, JS, images, nested HTML) include authentication token
+- Browser successfully loads complete HTML page with all resources
+- Works across different domains
+
+---
+
 ## Future Entries
 
 Add entries here as decisions are made, changes are implemented, or issues are resolved.
