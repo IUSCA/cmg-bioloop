@@ -44,6 +44,8 @@ config = {
         'scratch': '/path/to/scratch',
         'RAW_DATA': {
             'archive': f'development/{YEAR}/raw_data',
+            # archive_legacy: the legacy CMG application's archive path for Raw Data (Sequencing Runs).
+            'archive_legacy': 'archive_raw',
             'stage': '/path/to/staged/raw_data',
             'migration': '/path/to/migration/raw_data',
             'bundle': {
@@ -55,6 +57,8 @@ config = {
         'DATA_PRODUCT': {
             'upload': '/opt/sca/data',
             'archive': f'development/{YEAR}/data_products',
+            # archive_legacy: the legacy CMG application's archive path for Data Products.
+            'archive_legacy': 'archive_products',
             'stage': '/path/to/staged/data_products',
             'migration': '/path/to/migration/data_products',
             'bundle': {
@@ -172,7 +176,13 @@ config = {
                 {
                     'name': 'setup_download',
                     'task': 'setup_dataset_download'
-                }
+                },
+                # IMPORTANT:
+                # The delete_source step of the Integrated workflow
+                # should NOT be enabled if the legacy CMG application is also registering
+                # new Datasets from the same source directory. The delete_source step
+                # being run in such situations could possibly delete the source directory
+                # before the legacy CMG application can finish registering the same dataset.
             ]
         },
         'process_dataset_upload': {
@@ -318,5 +328,8 @@ config = {
             },
             'slurm_script_dir': '/slurm_scripts',
         },
-    }
+      'legacy_migration': {
+        'completed': False,
+      }
+    },
 }

@@ -41,3 +41,30 @@ def get_bundle_staged_path(dataset: dict) -> str:
 
 def get_bundle_name(dataset: dict) -> str:
     return f"{dataset['name']}.{dataset['type']}.tar"
+
+
+def is_nanopore_dataset(origin_path: str) -> bool:
+    """
+    Determine if a dataset is from a nanopore source based on its origin path.
+    
+    Args:
+        origin_path: The origin path of the dataset
+        
+    Returns:
+        bool: True if the dataset is from a nanopore source, False otherwise
+    """
+    # Get nanopore source paths from config
+    nanopore_paths = []
+    reg_config = config.get('registration', {}).get('RAW_DATA', {})
+    
+    # Collect all nanopore source directories from config
+    for key, value in reg_config.items():
+        if key.startswith('source_dir_nanopore') and isinstance(value, str):
+            nanopore_paths.append(value)
+    
+    # Check if origin_path starts with any nanopore path
+    for nanopore_path in nanopore_paths:
+        if origin_path.startswith(nanopore_path):
+            return True
+    
+    return False

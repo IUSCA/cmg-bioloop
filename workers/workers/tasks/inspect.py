@@ -1,4 +1,3 @@
-import re
 from pathlib import Path
 
 from celery import Celery
@@ -16,70 +15,6 @@ from workers.legacy_migration import get_retrieved_archive_extraction_path, is_l
 app = Celery("tasks")
 app.config_from_object(celeryconfig)
 logger = get_task_logger(__name__)
-
-
-def is_nanopore_dataset(origin_path: str) -> bool:
-    """
-    Determine if a dataset is from a nanopore source based on its origin path.
-    
-    Args:
-        origin_path: The origin path of the dataset
-        
-    Returns:
-        bool: True if the dataset is from a nanopore source, False otherwise
-    """
-    # Get nanopore source paths from config
-    nanopore_paths = []
-    reg_config = config.get('registration', {}).get('RAW_DATA', {})
-    
-    # Collect all nanopore source directories from config
-    for key, value in reg_config.items():
-        if key.startswith('source_dir_nanopore') and isinstance(value, str):
-            nanopore_paths.append(value)
-    
-    # Check if origin_path starts with any nanopore path
-    for nanopore_path in nanopore_paths:
-        if origin_path.startswith(nanopore_path):
-            return True
-    
-    return False
-
-
-def check_completion_markers(source: Path) -> bool:
-    """
-    Check if a dataset directory contains completion marker files.
-    Required for standard Illumina datasets, not required for nanopore datasets.
-    
-    Completion markers:
-    - Any file matching pattern '*CopyComplete*'
-    - Exact file 'RTAComplete.txt'
-    
-    Args:
-        source: Path to the dataset directory
-        
-    Returns:
-        bool: True if completion markers are found, False otherwise
-    """
-    try:
-        # Iterate through all files in the directory (not recursive)
-        for item in source.iterdir():
-            if item.is_file():
-                filename = item.name
-                
-                # Check for CopyComplete pattern (case-sensitive)
-                if re.search('CopyComplete', filename):
-                    logger.info(f'Found completion marker: {filename}')
-                    return True
-                
-                # Check for exact RTAComplete.txt match
-                if filename == 'RTAComplete.txt':
-                    logger.info(f'Found completion marker: {filename}')
-                    return True
-        
-        return False
-    except Exception as e:
-        logger.error(f'Error checking completion markers in {source}: {e}')
-        return False
 
 
 def generate_metadata(celery_task, source: Path):
@@ -147,34 +82,7 @@ def inspect_dataset(celery_task, dataset_id, **kwargs):
             )
     else:
         source = Path(dataset['origin_path']).resolve()
-        origin_path = dataset['origin_path']
         logger.info(f'Inspecting dataset from origin path: {source}')
-        
-        # Check if this is a new RAW_DATA dataset that needs completion marker verification
-        # Skip this check for:
-        # - Legacy datasets (already handled above)
-        # - DATA_PRODUCT datasets
-        # - Datasets that are not in their origin location
-        is_raw_data = dataset.get('type') == 'RAW_DATA'
-        is_nanopore = is_nanopore_dataset(origin_path)
-        
-        if is_raw_data and not is_nanopore:
-            # Standard Illumina dataset - check for completion markers
-            logger.info(f'Checking for completion markers (standard Illumina dataset)')
-            has_completion_markers = check_completion_markers(source)
-            
-            if not has_completion_markers:
-                error_msg = (
-                    f'Dataset {dataset["name"]} does not have required completion markers. '
-                    f'Looking for: "*CopyComplete*" or "RTAComplete.txt" in {source}'
-                )
-                logger.error(error_msg)
-                raise exc.InspectionFailed(error_msg)
-            
-            logger.info(f'Completion markers found - proceeding with inspection')
-        elif is_raw_data and is_nanopore:
-            # Nanopore dataset - no completion markers required
-            logger.info(f'Nanopore dataset detected - skipping completion marker check')
     
     du_size = cmd.total_size(source)
     num_files, num_directories, size, num_genome_files, metadata = generate_metadata(celery_task, source)
