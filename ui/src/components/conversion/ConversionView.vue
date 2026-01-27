@@ -145,8 +145,8 @@ function openReports() {
   const conversionId = props.conversionId;
   console.log("conversionId", conversionId);
 
-  console.log("will call getReportsUrl");
-  conversionApiService.getReportsUrl(conversionId)
+  console.log("will call getReports");
+  conversionApiService.getReports(conversionId)
     .then((res) => {
       console.log("res", res);
       // index_url already has the token appended

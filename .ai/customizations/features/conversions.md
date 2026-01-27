@@ -200,6 +200,45 @@
 
 ---
 
+## 2026-01-27 (Final)
+
+### API Endpoint Consolidation
+
+**Changes:**
+
+1. **Primary Endpoint:**
+   - UI now calls `/api/conversions/:id/reports` (primary endpoint)
+   - Added this endpoint to `api/src/routes/conversions/index.js`
+   - This endpoint generates tokens and returns URLs with absolute paths
+   - Removed `bearer_token` field from response (token is already in URLs)
+
+2. **Deprecated Endpoint:**
+   - `/api/reports/conversions/:id/url` remains in `api/src/routes/reports/conversions.js` for backwards compatibility
+   - Will be removed in future version
+
+3. **UI Updates:**
+   - `ConversionView.vue`: Changed from `getReportsUrl()` to `getReports()`
+   - `conversion/api.js`: Removed `getReportsUrl()` method (kept only `getReports()`)
+   - Both methods now call `/api/conversions/:id/reports`
+
+**Response Format (simplified):**
+```json
+{
+  "conversion_id": "67efd4f32e05981ba17a8f74",
+  "dataset_name": "20250401_LH00300_0132_B232C5VLT3",
+  "reports_url": "/reports/{absolute_path}?access_token={jwt}",
+  "index_url": "/reports/{absolute_path}/html/index.html?access_token={jwt}"
+}
+```
+
+**Rationale:**
+- Consolidates report URL generation under conversions endpoint
+- Cleaner API structure: conversions-related functionality under `/conversions`
+- Removed redundant `bearer_token` field (already embedded in URLs)
+- Simpler UI code with single endpoint
+
+---
+
 ## Future Entries
 
 Add entries here as decisions are made, changes are implemented, or issues are resolved.

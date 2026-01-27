@@ -895,4 +895,89 @@ router.get(
   }),
 );
 
+// Get secure URLs for viewing conversion reports via secure_download service
+router.get(
+  '/:id/reports',
+  isPermittedTo('read'),
+  validate([
+    param('id').isInt({ min: 1 }).toInt(),
+  ]),
+  asyncHandler(async (req, res, next) => {
+    // #swagger.tags = ['Conversions']
+    // #swagger.summary = Get secure URLs for viewing conversion reports
+
+    const conversionId = req.params.id;
+    console.log(`[CONVERSIONS] Generating secure URLs for conversion ${conversionId}`);
+
+    // Look up conversion and dataset to determine path
+    const conversion = await prisma.conversion.findUnique({
+      where: { id: conversionId },
+      include: {
+        dataset: true,
+      },
+    });
+
+    if (!conversion) {
+      console.error(`[CONVERSIONS] Conversion ${conversionId} not found in database`);
+      return next(createError.NotFound('Conversion not found'));
+    }
+
+    console.log(`[CONVERSIONS] Found conversion:`, {
+      id: conversion.id,
+      cmg_id: conversion.cmg_id,
+      dataset_id: conversion.dataset_id,
+      dataset_cmg_id: conversion.dataset?.cmg_id,
+    });
+
+    if (!conversion.dataset) {
+      console.error(`[CONVERSIONS] Dataset not found for conversion ${conversionId}`);
+      return next(createError.NotFound('Dataset not found for conversion'));
+    }
+
+    // Use cmg_id for legacy conversions, otherwise use bioloop id
+    // Use dataset NAME (not ID) as the path structure uses dataset names
+    const conversionIdentifier = conversion.cmg_id || String(conversion.id);
+    const datasetName = conversion.dataset.name;
+
+    // Get CONVERSION_OUTPUT_DIR from environment
+    const conversionOutputDir = process.env.CONVERSION_OUTPUT_DIR || config.get('conversion.output_dir');
+    
+    // Construct absolute path: {CONVERSION_OUTPUT_DIR}/{conversion_id}/{dataset_name}/Reports
+    const absoluteReportsPath = path.join(
+      conversionOutputDir,
+      conversionIdentifier,
+      datasetName,
+      'Reports'
+    );
+
+    console.log(`[CONVERSIONS] Absolute reports path: ${absoluteReportsPath}`);
+
+    // Issue token with download_file scope (reuse existing scope for now)
+    // TODO: Create separate 'view_reports:' scope in future for better separation
+    // Token scope uses the absolute path so secure_download doesn't need to extrapolate
+    const authService = require('../../services/auth');
+    const token = await authService.get_download_token(absoluteReportsPath);
+
+    console.log(`[CONVERSIONS] Token issued for: ${absoluteReportsPath}`);
+
+    // Construct URLs with absolute paths after /reports/
+    // secure_download will receive these absolute paths and use them directly
+    const reportsUrl = `/reports/${absoluteReportsPath}`;
+    const indexUrl = `/reports/${absoluteReportsPath}/html/index.html`;
+    
+    // Append token as query parameter
+    const reportsUrlWithToken = `${reportsUrl}?access_token=${token.accessToken}`;
+    const indexUrlWithToken = `${indexUrl}?access_token=${token.accessToken}`;
+
+    console.log(`[CONVERSIONS] Returning URLs with absolute paths and token appended`);
+
+    return res.json({
+      conversion_id: conversionIdentifier,
+      dataset_name: datasetName,
+      reports_url: reportsUrlWithToken,
+      index_url: indexUrlWithToken,
+    });
+  }),
+);
+
 module.exports = router;
