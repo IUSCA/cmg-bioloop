@@ -6,7 +6,8 @@ const authService = require('../services/auth');
 function authenticate(req, res, next) {
   const invalid_token_err = createError.Unauthorized('Authentication failed. Token is not valid.');
 
-  let token = req.query?.token;
+  // Check for token in query string (supports both 'token' and 'access_token' params)
+  let token = req.query?.token || req.query?.access_token;
   if (!token) {
     const authHeader = req.headers.authorization;
     if (!authHeader) return next(createError.Unauthorized('Authentication failed. Token not found.'));
