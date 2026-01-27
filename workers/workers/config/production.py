@@ -10,25 +10,25 @@ config = {
     'paths': {
         'root': '/N/scratch/cmguser',
         'RAW_DATA': {
-            'stage': '/N/scratch/cmguser/CMG-SCA/cmg-bioloop/stage/raw_data',
-            'migration': '/N/scratch/cmguser/CMG-SCA/cmg-bioloop/migration/raw_data',
+            'stage': '/N/scratch/cmguser/cmg-bioloop/stage/raw_data',
+            'migration': '/N/scratch/cmguser/cmg-bioloop/migration/raw_data',
             # 'stage': '/test',
             'bundle': {
-                'generate': '/N/scratch/cmguser/CMG-SCA/cmg-bioloop/stage/raw_data',
-                'stage': '/N/scratch/cmguser/CMG-SCA/cmg-bioloop/bundles/raw_data',
+                'generate': '/N/scratch/cmguser/cmg-bioloop/stage/raw_data',
+                'stage': '/N/scratch/cmguser/cmg-bioloop/bundles/raw_data',
             },
-            'qc': '/N/scratch/cmguser/CMG-SCA/cmg-bioloop/qc/raw_data'
+            'qc': '/N/scratch/cmguser/cmg-bioloop/qc/raw_data'
         },
         'DATA_PRODUCT': {
             # 'upload': '/opt/sca/uploads/cpa/data_products',
-            'stage': '/N/scratch/cmguser/CMG-SCA/cmg-bioloop/stage/data_products',
-            'migration': '/N/scratch/cmguser/CMG-SCA/cmg-bioloop/migration/data_products',
+            'stage': '/N/scratch/cmguser/cmg-bioloop/stage/data_products',
+            'migration': '/N/scratch/cmguser/cmg-bioloop/migration/data_products',
             'bundle': {
-                'generate': '/N/scratch/cmguser/CMG-SCA/cmg-bioloop/stage/data_products',
-                'stage': '/N/scratch/cmguser/CMG-SCA/cmg-bioloop/bundles/data_products',
+                'generate': '/N/scratch/cmguser/cmg-bioloop/stage/data_products',
+                'stage': '/N/scratch/cmguser/cmg-bioloop/bundles/data_products',
             },
         },
-        'download_dir': '/N/scratch/cmguser/CMG-SCA/cmg-bioloop/production/downloads',
+        'download_dir': '/N/scratch/cmguser/cmg-bioloop/production/downloads',
         'conversion': {
           # /N/project/CMG-SCA/production/conversion is the path used in CMG-Production.
           # 'reports': '/N/project/CMG-SCA/production/conversion', 
@@ -39,7 +39,7 @@ config = {
     'registration': {
         'RAW_DATA': {
             # Slate-scratch Origin paths
-            'source_dir_scratch': '/N/scratch/cmguser/CMG-SCA/cmg-bioloop/origin/raw_data',
+            'source_dir_scratch': '/N/scratch/cmguser/cmg-bioloop/origin/raw_data',
             # Slate-project Origin paths
             'source_dir_project': '/N/project/CMG-SCA/cmg-bioloop/origin/raw_data',
             
