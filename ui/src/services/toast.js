@@ -18,6 +18,13 @@ class Toast {
       color: "danger",
     });
   }
+  warning(message) {
+    init({
+      message,
+      position: "bottom-right",
+      color: "warning",
+    });
+  }
   info(message) {
     init({
       message,

@@ -43,7 +43,8 @@ def hydrate_session_tracks(celery_task, session_id, **kwargs):
     
     # Retrieve CMG session data including tracks
     try:
-        cmg_session_data = cmg_api.get_session(cmg_session_id, use_auth=False)
+        cmg_session_data = cmg_api.get_session(cmg_session_id,
+                                               use_auth=False)
     except Exception as e:
         logger.error(f'Failed to retrieve CMG session {cmg_session_id}: {e}')
         raise

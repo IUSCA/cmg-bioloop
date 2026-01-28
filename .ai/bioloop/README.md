@@ -44,6 +44,7 @@ Microservice architecture overview:
 - Service components (UI, API, Workers)
 - Database architecture
 - Cross-service communication
+- **Workflow architecture (Rhythm integration)**
 - Environment-specific behavior
 
 ### api_conventions.md
@@ -52,6 +53,7 @@ API development patterns:
 - Prisma usage
 - Transactions
 - Route handlers
+- **Workflow creation pattern (CRITICAL)**
 - Error handling
 
 ### ui_conventions.md
@@ -65,6 +67,7 @@ UI development patterns:
 Worker development patterns:
 - Configuration
 - Task definitions
+- **Workflow task pattern and argument flow**
 - Logging
 
 ### database_patterns.md
@@ -93,5 +96,5 @@ When conflicts exist, customizations take precedence.
 
 ---
 
-**Last Updated:** 2026-01-16
+**Last Updated:** 2026-01-27
 

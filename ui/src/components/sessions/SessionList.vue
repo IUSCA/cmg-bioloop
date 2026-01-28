@@ -27,7 +27,7 @@
       :filters="filters"
       @remove-filter="removeFilter"
       @clear-all="clearFilters"
-    />
+    /> 
 
     <!-- Sessions table -->
     <va-card>
@@ -35,11 +35,8 @@
         :items="sessions"
         :columns="columns"
         :loading="loading"
-        :items-per-page="query.page_size"
-        :total-items="metadata?.total || 0"
-        @update:page="handlePageChange"
-        @update:sort-by="handleSortChange"
-        @update:sort-order="handleSortChange"
+        v-model:sort-by="query.sort_by"
+        v-model:sort-order="query.sort_order"
       >
         <template #cell(title)="{ item }">
           <router-link :to="`/sessions/${item.id}`" class="va-link">
@@ -97,6 +94,16 @@
       </va-data-table>
     </va-card>
 
+    <!-- Pagination -->
+    <Pagination
+      class="mt-4"
+      v-model:page="query.page"
+      v-model:page_size="query.page_size"
+      :total_results="metadata?.count || 0"
+      :curr_items="sessions.length"
+      :page_size_options="PAGE_SIZE_OPTIONS"
+    />
+
     <!-- Search Modal -->
     <session-search-modal
       v-model="showSearchModal"
@@ -121,18 +128,22 @@
 </template>
 
 <script setup>
+import Pagination from "@/components/utils/Pagination.vue";
+import { date } from "@/services/datetime";
 import { useAuthStore } from "@/stores/auth";
 import { useSessionsStore } from "@/stores/sessions";
 import { useDebounceFn } from "@vueuse/core";
 import { computed, onMounted, ref, watch } from "vue";
 import { useRouter } from "vue-router";
+import DeleteSessionModal from "./DeleteSessionModal.vue";
 import SessionSearchFilters from "./SessionSearchFilters.vue";
 import SessionSearchModal from "./SessionSearchModal.vue";
-import DeleteSessionModal from "./DeleteSessionModal.vue";
 
 const router = useRouter();
 const sessionsStore = useSessionsStore();
 const auth = useAuthStore();
+
+const PAGE_SIZE_OPTIONS = [25, 50, 100];
 
 // Reactive state
 const showSearchModal = ref(false);
@@ -169,9 +180,15 @@ const defaultFilters = () => ({
 });
 
 // Computed
-const sessions = computed(() => sessionsStore.sessions);
+const sessions = computed(() => {
+  console.log('[SessionList] sessions:', sessionsStore.sessions.length);
+  return sessionsStore.sessions;
+});
 const loading = computed(() => sessionsStore.loading);
-const metadata = computed(() => sessionsStore.metadata);
+const metadata = computed(() => {
+  console.log('[SessionList] metadata:', sessionsStore.metadata);
+  return sessionsStore.metadata;
+});
 
 const hasActiveFilters = computed(() => {
   return Object.values(filters.value).some(
@@ -270,7 +287,9 @@ const fetchSessions = async () => {
       sort_order: query.value.sort_order,
     };
 
-    await sessionsStore.fetchSessions(params);
+    console.log('[SessionList] Fetching with params:', params);
+    const result = await sessionsStore.fetchSessions(params);
+    console.log('[SessionList] API returned:', result);
   } catch (error) {
     console.error("Error fetching sessions:", error);
   }
@@ -280,16 +299,6 @@ const handleSearch = useDebounceFn(() => {
   query.value.page = 1; // Reset to first page when searching
   fetchSessions();
 }, 300);
-
-const handlePageChange = (page) => {
-  query.value.page = page;
-};
-
-const handleSortChange = (sortBy, sortOrder) => {
-  query.value.sort_by = sortBy;
-  query.value.sort_order = sortOrder;
-  query.value.page = 1; // Reset to first page when sorting
-};
 
 const applyFilters = (newFilters) => {
   filters.value = { ...newFilters };
@@ -339,7 +348,14 @@ const handleSessionCreated = () => {
 // Watch for changes in query and filters
 watch(
   [query, filters],
-  () => {
+  (newVals, oldVals) => {
+    // Reset to page 1 when sort changes
+    if (oldVals[0] && (
+      newVals[0].sort_by !== oldVals[0].sort_by ||
+      newVals[0].sort_order !== oldVals[0].sort_order
+    )) {
+      query.value.page = 1;
+    }
     fetchSessions();
   },
   { deep: true },

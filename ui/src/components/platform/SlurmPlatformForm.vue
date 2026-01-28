@@ -21,7 +21,7 @@
       <va-file-upload
         v-model="files"
         dropzone
-        dropZoneText="Select SLURM script(s)"
+        dropZoneText="Select SLURM script"
         label="SLURM script"
         preset="bordered"
         class="w-full"

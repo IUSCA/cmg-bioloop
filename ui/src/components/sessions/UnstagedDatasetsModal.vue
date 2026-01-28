@@ -10,14 +10,14 @@
   >
     <va-inner-loading :loading="loading || stagingInProgress">
       <div class="space-y-4">
-        <div v-if="!loading && datasets.length > 0">
+        <div v-if="!loading && internalDatasets.length > 0">
           <p class="mb-4">
             The following datasets need to be staged before they can be viewed in the genome
             browser. Would you like to stage all of them?
           </p>
 
           <va-data-table
-            :items="datasets"
+            :items="internalDatasets"
             :columns="columns"
             :loading="false"
             disable-client-side-sorting
@@ -81,7 +81,7 @@
           </div>
         </div>
 
-        <div v-else-if="!loading && datasets.length === 0">
+        <div v-else-if="!loading && internalDatasets.length === 0">
           <p>All datasets for this session are already staged.</p>
         </div>
       </div>
@@ -90,8 +90,8 @@
 </template>
 
 <script setup>
+import datasetService from '@/services/dataset';
 import * as datetime from '@/services/datetime';
-import sessionService from '@/services/session';
 import toast from '@/services/toast';
 import { ref, watch } from 'vue';
 
@@ -100,6 +100,10 @@ const props = defineProps({
     type: Number,
     required: true,
   },
+  datasets: {
+    type: Array,
+    default: () => [],
+  },
 });
 
 const emit = defineEmits(['close', 'staging-requested']);
@@ -107,7 +111,7 @@ const emit = defineEmits(['close', 'staging-requested']);
 const showModal = defineModel({ type: Boolean, default: false });
 const loading = ref(false);
 const stagingInProgress = ref(false);
-const datasets = ref([]);
+const internalDatasets = ref([]);
 const stagingResults = ref([]);
 
 const columns = [
@@ -141,28 +145,17 @@ const columns = [
   },
 ];
 
-const loadUnstagedDatasets = async () => {
-  if (!props.sessionId) return;
-
-  loading.value = true;
-  try {
-    const response = await sessionService.getDatasets(props.sessionId, { staged: false });
-    datasets.value = response.data.datasets || [];
-
-    if (datasets.value.length === 0) {
-      toast.info('All datasets are already staged');
-    }
-  } catch (error) {
-    console.error('Failed to load unstaged datasets:', error);
-    toast.error('Failed to load unstaged datasets');
-    datasets.value = [];
-  } finally {
-    loading.value = false;
+const loadDatasets = () => {
+  // Use provided datasets if available, otherwise empty
+  if (props.datasets && props.datasets.length > 0) {
+    internalDatasets.value = props.datasets;
+  } else {
+    internalDatasets.value = [];
   }
 };
 
 const handleStageAll = async () => {
-  if (datasets.value.length === 0) {
+  if (internalDatasets.value.length === 0) {
     handleCancel();
     return;
   }
@@ -171,8 +164,31 @@ const handleStageAll = async () => {
   stagingResults.value = [];
 
   try {
-    const response = await sessionService.stageDatasets(props.sessionId);
-    stagingResults.value = response.data.results || [];
+    // Stage each dataset with appropriate workflow
+    for (const dataset of internalDatasets.value) {
+      try {
+        // Determine which workflow to use
+        // Use stage_migrated for legacy datasets that need migration, stage for others
+        const workflow = dataset.needs_migration ? 'stage_migrated' : 'stage';
+        
+        await datasetService.stage_dataset(dataset.id, workflow);
+        
+        stagingResults.value.push({
+          dataset_id: dataset.id,
+          dataset_name: dataset.name,
+          workflow,
+          success: true,
+        });
+      } catch (error) {
+        console.error(`Failed to stage dataset ${dataset.id}:`, error);
+        stagingResults.value.push({
+          dataset_id: dataset.id,
+          dataset_name: dataset.name,
+          success: false,
+          error: error.message || 'Unknown error',
+        });
+      }
+    }
 
     const successCount = stagingResults.value.filter((r) => r.success).length;
     const failCount = stagingResults.value.length - successCount;
@@ -200,11 +216,11 @@ const handleCancel = () => {
   emit('close');
 };
 
-// Load datasets when modal opens
-watch(showModal, (isOpen) => {
+// Load datasets when modal opens or datasets prop changes
+watch([showModal, () => props.datasets], ([isOpen]) => {
   if (isOpen) {
     stagingResults.value = [];
-    loadUnstagedDatasets();
+    loadDatasets();
   }
-});
+}, { deep: true });
 </script>

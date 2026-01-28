@@ -446,6 +446,7 @@
     <UnstagedDatasetsModal
       v-model="showUnstagedModal"
       :session-id="session?.id"
+      :datasets="datasetsToStage"
       @close="showUnstagedModal = false"
       @staging-requested="handleStagingRequested"
     />
@@ -522,8 +523,8 @@ import TracksAsyncAutoComplete from '@/components/tracks/TracksAsyncAutoComplete
 import AddEditButton from '@/components/utils/buttons/AddEditButton.vue';
 import constants from '@/constants';
 import * as datetime from '@/services/datetime';
-import sessionService from '@/services/session';
 import legacyMigrationService from '@/services/legacyMigration';
+import sessionService from '@/services/session';
 import toast from '@/services/toast';
 import trackService from '@/services/track';
 import { formatBytes } from '@/services/utils';
@@ -638,6 +639,7 @@ const { browserTypes: BROWSER_TYPES, browserTitles: BROWSER_TITLES } = constants
 
 // Unstaged datasets modal
 const showUnstagedModal = ref(false);
+const datasetsToStage = ref([]);
 
 // Hydration modal
 const showHydrationModal = ref(false);
@@ -853,13 +855,13 @@ const _handleSessionUpdated = (_updatedSession) => {
 
 /**
  * Handle View in Genome Browser button click
- * Check for unstaged/staged datasets and hydration status before showing appropriate modal
+ * New flow: Check datasets first, then staging, then hydration (for legacy)
  */
 const handleViewInBrowser = async () => {
   if (!session.value) return;
 
   try {
-    // Check both staged and unstaged datasets
+    // Get all datasets for the session (API uses metadata.datasets for legacy sessions)
     const [stagedResponse, unstagedResponse] = await Promise.all([
       sessionService.getDatasets(session.value.id, { staged: true }),
       sessionService.getDatasets(session.value.id, { staged: false }),
@@ -867,31 +869,64 @@ const handleViewInBrowser = async () => {
 
     const stagedDatasets = stagedResponse.data.datasets || [];
     const unstagedDatasets = unstagedResponse.data.datasets || [];
+    const totalDatasets = stagedDatasets.length + unstagedDatasets.length;
 
-    // If there are unstaged datasets, show the unstaged modal first
-    if (unstagedDatasets.length > 0) {
+    // If there are no datasets at all, nothing to view
+    if (totalDatasets === 0) {
+      toast.warning('No datasets associated with this session');
+      return;
+    }
+
+    // Check if any datasets need staging/migration
+    const datasetsNeedingStaging = [];
+    
+    for (const dataset of unstagedDatasets) {
+      // Check if dataset needs staging or migration
+      const needsMigration = dataset.cmg_id && dataset.migration_status && !dataset.migration_status.is_migrated;
+      
+      datasetsNeedingStaging.push({
+        ...dataset,
+        needs_migration: needsMigration,
+      });
+    }
+
+    // If there are datasets needing staging, show the staging modal
+    if (datasetsNeedingStaging.length > 0) {
+      // Store datasets that need staging for modal to use
+      datasetsToStage.value = datasetsNeedingStaging;
       showUnstagedModal.value = true;
       return;
     }
 
-    // If there are no staged datasets at all, nothing to view
-    if (stagedDatasets.length === 0) {
-      toast.warning('No datasets available for viewing');
-      return;
-    }
-
-    // All datasets are staged - check if session is hydrated
+    // All datasets are staged - now check if legacy session needs hydration
     if (session.value.cmg_id) {
+      // Check if all legacy datasets have been migrated
+      const allDatasets = [...stagedDatasets, ...unstagedDatasets];
+      const legacyDatasets = allDatasets.filter(ds => ds.cmg_id);
+      
+      if (legacyDatasets.length > 0) {
+        const allMigrated = legacyDatasets.every(
+          ds => ds.migration_status && ds.migration_status.is_migrated
+        );
+        
+        if (!allMigrated) {
+          toast.warning('Some legacy datasets are still being migrated. Please wait for migration to complete.');
+          return;
+        }
+      }
+      
+      // Check if session is hydrated
       const isHydrated = await legacyMigrationService.isSessionHydrated(session.value.id);
       
       if (!isHydrated) {
-        // Session needs hydration, show modal
+        // Session needs hydration
         showHydrationModal.value = true;
         return;
       }
     }
 
-    // All datasets are staged and session is hydrated (or not a legacy session), proceed to browser selection
+    // All datasets are staged, all legacy datasets migrated, session hydrated (if needed)
+    // Proceed to browser selection
     showBrowserSelectionModal.value = true;
   } catch (error) {
     console.error('Failed to check dataset status:', error);
@@ -901,39 +936,18 @@ const handleViewInBrowser = async () => {
 
 /**
  * Handle staging requested
+ * After staging workflows are triggered, check if we can proceed to hydration/browser
  */
 const handleStagingRequested = async () => {
   toast.info(
-    'Staging workflows have been requested. Datasets will be available once staging completes.'
+    'Staging workflows have been requested. You can proceed once all workflows complete.'
   );
   showUnstagedModal.value = false;
-  // Reload session to update data_requested status
-  await loadSession();
-
-  // Check if there are any staged datasets to view
-  try {
-    const response = await sessionService.getDatasets(session.value.id, { staged: true });
-    const stagedDatasets = response.data.datasets || [];
-
-    if (stagedDatasets.length > 0) {
-      // There are some staged datasets, check hydration status before showing browser selection
-      if (session.value.cmg_id) {
-        const isHydrated = await legacyMigrationService.isSessionHydrated(session.value.id);
-        
-        if (!isHydrated) {
-          // Session needs hydration
-          showHydrationModal.value = true;
-          return;
-        }
-      }
-      // Show browser selection
-      showBrowserSelectionModal.value = true;
-    }
-    // If no staged datasets yet, user will have to wait for staging to complete
-    // (no toast needed, the "staging requested" toast is already shown)
-  } catch (error) {
-    console.error('Failed to check staged datasets:', error);
-  }
+  datasetsToStage.value = [];
+  
+  // Note: Don't automatically proceed to next step
+  // User needs to click "View in Genome Browser" again after staging completes
+  // This allows them to monitor workflow progress first
 };
 
 /**

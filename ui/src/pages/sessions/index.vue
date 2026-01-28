@@ -46,11 +46,8 @@
       :items="sessions"
       :columns="columns"
       :loading="loading"
-      :items-per-page="query.page_size"
-      :total-items="metadata?.count || 0"
-      @update:page="handlePageChange"
-      @update:sort-by="handleSortChange"
-      @update:sort-order="handleSortChange"
+      v-model:sort-by="query.sort_by"
+      v-model:sort-order="query.sort_order"
     >
       <template #cell(title)="{ rowData }">
         <router-link :to="`/sessions/${rowData.id}`" class="va-link">
@@ -102,6 +99,16 @@
       </template>
     </va-data-table>
 
+    <!-- Pagination -->
+    <Pagination
+      class="mt-4"
+      v-model:page="query.page"
+      v-model:page_size="query.page_size"
+      :total_results="metadata?.count || 0"
+      :curr_items="sessions.length"
+      :page_size_options="PAGE_SIZE_OPTIONS"
+    />
+
     <!-- Search Modal -->
     <session-search-modal
       v-model="showSearchModal"
@@ -119,6 +126,7 @@
 import DeleteSessionModal from '@/components/sessions/DeleteSessionModal.vue';
 import SessionSearchFilters from '@/components/sessions/SessionSearchFilters.vue';
 import SessionSearchModal from '@/components/sessions/SessionSearchModal.vue';
+import Pagination from '@/components/utils/Pagination.vue';
 import { date } from '@/services/datetime';
 import { useAuthStore } from '@/stores/auth';
 import { useSessionsStore } from '@/stores/sessions';
@@ -129,6 +137,8 @@ import { useRouter } from 'vue-router';
 const router = useRouter();
 const sessionsStore = useSessionsStore();
 const auth = useAuthStore();
+
+const PAGE_SIZE_OPTIONS = [25, 50, 100];
 
 // Reactive state
 const showSearchModal = ref(false);
@@ -272,16 +282,6 @@ const handleSearch = useDebounceFn(() => {
   fetchSessions();
 }, 300);
 
-const handlePageChange = (page) => {
-  query.value.page = page;
-};
-
-const handleSortChange = (sortBy, sortOrder) => {
-  query.value.sort_by = sortBy;
-  query.value.sort_order = sortOrder;
-  query.value.page = 1; // Reset to first page when sorting
-};
-
 const applyFilters = (newFilters) => {
   filters.value = { ...newFilters };
   query.value.page = 1; // Reset to first page when filtering
@@ -323,7 +323,14 @@ function openDeleteModal(session) {
 // Watch for changes in query and filters
 watch(
   [query, filters],
-  () => {
+  (newVals, oldVals) => {
+    // Reset to page 1 when sort changes
+    if (oldVals[0] && (
+      newVals[0].sort_by !== oldVals[0].sort_by ||
+      newVals[0].sort_order !== oldVals[0].sort_order
+    )) {
+      query.value.page = 1;
+    }
     fetchSessions();
   },
   { deep: true }
