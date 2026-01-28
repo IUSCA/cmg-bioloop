@@ -52,7 +52,7 @@ async function createCMGUser(prisma) {
     cas_id: 'cmguser',
     _id: 'cmguser', // Special ID for system user
     active: true,
-    roles: ['user'],
+    roles: ['admin'],
   };
 
   // Check if user already exists
@@ -71,12 +71,12 @@ async function createCMGUser(prisma) {
       },
     });
 
-    // Assign user role
-    const userRole = await prisma.role.findFirst({ where: { name: 'user' } });
+    // Assign admin role
+    const adminRole = await prisma.role.findFirst({ where: { name: 'admin' } });
     await prisma.user_role.create({
       data: {
         user_id: user.id,
-        role_id: userRole.id,
+        role_id: adminRole.id,
       },
     });
 

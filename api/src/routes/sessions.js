@@ -223,7 +223,7 @@ function serializeTrackForIGV(sessionTrack, sessionId, filesByDataset) {
 
   if (indexFile) {
     // Use the index file's dataset object (same as primary file's dataset)
-    const indexRelativePath = getRelativeFilePath({
+    const indexRelativePath = pathResolver.getRelativeFilePath({
       dataset: indexFile.dataset || dataset,
       datasetFile: indexFile,
     });
@@ -274,7 +274,7 @@ function serializeTrackForWashU(sessionTrack, sessionId, filesByDataset) {
 
   if (indexFile) {
     // Use the index file's dataset object (same as primary file's dataset)
-    const indexRelativePath = getRelativeFilePath({
+    const indexRelativePath = pathResolver.getRelativeFilePath({
       dataset: indexFile.dataset || dataset,
       datasetFile: indexFile,
     });
@@ -735,10 +735,6 @@ router.patch(
 
     if (!existingSession) {
       return res.status(404).json({ error: 'Session not found' });
-    }
-
-    if (existingSession.user_id !== req.user.id) {
-      return res.status(403).json({ error: 'Access denied' });
     }
 
     // Validate tracks if provided
