@@ -7,6 +7,9 @@ config = {
     'api': {
         'base_url': 'https://cmg-test.sca.iu.edu/api/',  # trailing slash is required
     },
+    'cmg_api': {
+        'base_url': 'https://cmg.sca.iu.edu/api/',  # trailing slash is required
+    },
     'paths': {
         'root': '/N/scratch/cmguser',
         'RAW_DATA': {

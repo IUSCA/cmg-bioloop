@@ -507,6 +507,12 @@ router.post(
 
       // create Process Requests
       await Promise.all(req.body.process_requests.map(async (request) => {
+        logger.info('[SLURM-CONVERSION] Creating process request', {
+          conversion_id: conversion.id,
+          execution_platform: request.execution_platform,
+          execution_config: request.execution_config
+        });
+        
         const process_request = await tx.process_request.create({
           data: {
             conversion_id: conversion.id,
@@ -514,8 +520,23 @@ router.post(
             execution_config: request.execution_config || null,
           },
         });
+        
+        logger.info('[SLURM-CONVERSION] Process request created', {
+          process_request_id: process_request.id,
+          conversion_id: conversion.id,
+          execution_platform: request.execution_platform
+        });
+        
         request.artifacts.forEach(async (artifact) => {
           validateArtifact(artifact);
+          
+          logger.info('[SLURM-CONVERSION] Creating artifact', {
+            process_request_id: process_request.id,
+            artifact_type: artifact.artifact_type,
+            storage_type: artifact.storage_type,
+            content_size: artifact.content_inline?.length || 0
+          });
+          
           await tx.process_artifact.create({
             data: {
               process_id: process_request.id,
@@ -523,6 +544,11 @@ router.post(
               storage_type: artifact.storage_type,
               content_inline: artifact.content_inline,
             },
+          });
+          
+          logger.info('[SLURM-CONVERSION] Artifact created', {
+            process_request_id: process_request.id,
+            artifact_type: artifact.artifact_type
           });
         });
       }));

@@ -10,6 +10,8 @@ APP_API_TOKEN = os.environ['APP_API_TOKEN']
 # print(f'APP_API_TOKEN: {APP_API_TOKEN}')
 
 API_BASE_URL = os.environ['API_BASE_URL']
+CMG_API_BASE_URL = os.environ['CMG_API_BASE_URL']
+CMG_API_TOKEN = os.environ['CMG_API_TOKEN']
 
 QUEUE_URL = os.environ['QUEUE_URL']
 QUEUE_USER = os.environ['QUEUE_USER']
@@ -37,6 +39,12 @@ config = {
     'api': {
         'base_url': API_BASE_URL,
         'auth_token': APP_API_TOKEN,
+        'conn_timeout': 5,  # seconds
+        'read_timeout': 30  # seconds
+    },
+    'cmg_api': {
+        'base_url': CMG_API_BASE_URL,
+        'auth_token': CMG_API_TOKEN,
         'conn_timeout': 5,  # seconds
         'read_timeout': 30  # seconds
     },

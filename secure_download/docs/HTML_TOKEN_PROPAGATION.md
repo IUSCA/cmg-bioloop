@@ -219,11 +219,80 @@ User → Core API (cmg-test.sca.iu.edu/api/reports/proxy/...)
      → User
 ```
 
-**Rejected because:**
+**Rejected for immediate implementation because:**
 - ❌ Adds latency (extra hop)
 - ❌ Increases load on core API
 - ❌ Defeats purpose of separate file serving service
 - ❌ Large files would flow through API unnecessarily
+
+#### Why Option 2 is Actually Superior (Recommended for Future Implementation)
+
+**Despite the drawbacks above, Option 2 is the more secure and maintainable long-term solution:**
+
+1. **✅ No Credentials in URLs**
+   - **Current (Option 1):** Token exposed in URL query parameters
+     ```
+     GET /reports/.../index.html?access_token=eyJhbGc... 
+     ```
+   - **Option 2:** Authentication via session cookie or Authorization header
+     ```
+     GET /api/reports/proxy/.../index.html
+     Cookie: session_id=xyz (httpOnly, secure)
+     ```
+   - **Security benefit:** Tokens in URLs appear in:
+     - Browser history (persistent, surveyable)
+     - Server logs (multiple systems)
+     - Referrer headers (leaked to external sites if user clicks external links)
+     - Browser bookmark if user saves page
+   - **With Option 2:** Credentials never appear in URLs, only in secure HTTP headers/cookies
+
+2. **✅ No Token Expiration Concerns**
+   - **Current (Option 1):** Must handle token expiration within page lifetime
+     - Token expires in 30 seconds
+     - If user stays on page > 30s and clicks link → 401 error
+     - Requires JavaScript to refresh tokens or reload page
+   - **Option 2:** Session-based authentication
+     - Session can last hours without manual refresh
+     - Core API handles session validation
+     - Seamless user experience for long-running analysis sessions
+
+3. **✅ No HTML Rewriting Gymnastics**
+   - **Current (Option 1):** Complex in-memory HTML manipulation
+     - Regex patterns to match href/src attributes
+     - Edge cases with malformed HTML or dynamic content
+     - Performance overhead on every HTML request
+     - Maintenance burden when HTML patterns change
+   - **Option 2:** Serve files as-is
+     - No modification needed
+     - Zero performance overhead
+     - No risk of breaking HTML structure
+     - Works with any file type without special handling
+
+4. **✅ Better Separation of Concerns**
+   - Core API handles all authentication/authorization
+   - secure_download becomes pure file serving (as originally intended)
+   - Easier to audit security (single authentication point)
+
+5. **✅ Works for Dynamic Content**
+   - JavaScript making AJAX requests includes session cookie automatically
+   - WebSocket connections can use same session
+   - No need to pass tokens through JavaScript code
+
+#### When to Implement Option 2
+
+**Recommended timeline:**
+- **Phase 1 (Current):** Option 1 for immediate functionality
+- **Phase 2 (Future):** Implement Option 2 when:
+  - Core API infrastructure can handle proxy load
+  - Performance optimization (caching, CDN) is in place
+  - Same-domain architecture is prioritized for security
+
+**Migration path:**
+1. Implement proxy endpoint in core API (`/api/reports/proxy/*`)
+2. Add caching layer (Redis, CDN) to mitigate latency
+3. Update UI to use proxy URLs instead of direct secure_download URLs
+4. Deprecate direct secure_download access for reports
+5. Remove HTML token propagation code (no longer needed)
 
 ### Option 3: Subdomain Cookie Sharing
 

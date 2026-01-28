@@ -440,11 +440,12 @@ def get_dataset_file_by_name_and_dataset(filename: str, dataset_id: int) -> dict
         dict: Dataset file data, or None if not found
     """
     with APIServerSession() as s:
-        r = s.get(f'datasets/{dataset_id}/files', params={'name': filename})
+        r = s.get(f'datasets/{dataset_id}/files')
         r.raise_for_status()
-        data = r.json()
-        files = data.get('files', [])
-        return files[0] if files else None
+        files = r.json()  # API returns list directly
+        # Filter by filename (API doesn't support name parameter)
+        matching_files = [f for f in files if f['name'] == filename]
+        return matching_files[0] if matching_files else None
 
 
 def get_track_by_dataset_file_id(dataset_file_id: int) -> dict:
@@ -461,9 +462,9 @@ def get_track_by_dataset_file_id(dataset_file_id: int) -> dict:
         r = s.get('tracks', params={'dataset_file_id': dataset_file_id})
         r.raise_for_status()
         data = r.json()
-        # The API returns results in a results array
-        results = data.get('results', [])
-        return results[0] if results else None
+        # The API returns tracks in a tracks array
+        tracks = data.get('tracks', [])
+        return tracks[0] if tracks else None
 
 
 if __name__ == '__main__':

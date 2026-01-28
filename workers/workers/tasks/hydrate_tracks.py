@@ -58,6 +58,7 @@ def hydrate_session_tracks(celery_task, session_id, **kwargs):
     
     # Process each track
     track_ids_to_associate = []
+    errors = []
     
     for cmg_track in cmg_tracks:
         filename = cmg_track.get('filename')
@@ -70,53 +71,60 @@ def hydrate_session_tracks(celery_task, session_id, **kwargs):
         logger.info(f'Processing track: filename={filename}, cmg_dataproduct_id={cmg_dataproduct_id}')
         
         # Find the Bioloop dataset that corresponds to this CMG dataproduct
-        try:
-            # CMG dataproduct ID is stored as cmg_id in Bioloop dataset table
-            dataset = api.get_dataset_by_cmg_id(cmg_dataproduct_id)
-            
-            if not dataset:
-                logger.warning(f'No dataset found for CMG dataproduct {cmg_dataproduct_id}')
-                continue
-            
-            dataset_id = dataset['id']
-            logger.info(f'Found dataset {dataset_id} for CMG dataproduct {cmg_dataproduct_id}')
-            
-            # Find the dataset_file with matching filename in this dataset
-            dataset_file = api.get_dataset_file_by_name_and_dataset(filename, dataset_id)
-            
-            if not dataset_file:
-                logger.warning(f'No dataset_file found for filename {filename} in dataset {dataset_id}')
-                continue
-            
-            dataset_file_id = dataset_file['id']
-            logger.info(f'Found dataset_file {dataset_file_id} for filename {filename}')
-            
-            # Find the track for this dataset_file (must already exist)
-            track = api.get_track_by_dataset_file_id(dataset_file_id)
-            
-            if not track:
-                logger.warning(f'No track found for dataset_file {dataset_file_id} - tracks must exist before hydration')
-                continue
-            
-            track_id = track['id']
-            logger.info(f'Found track {track_id} for dataset_file {dataset_file_id}')
-            
-            track_ids_to_associate.append(track_id)
-            
-        except Exception as e:
-            logger.error(f'Error processing track {filename}: {e}')
+        # CMG dataproduct ID is stored as cmg_id in Bioloop dataset table
+        dataset = api.get_dataset_by_cmg_id(cmg_dataproduct_id)
+        
+        if not dataset:
+            msg = f'No dataset found for CMG dataproduct {cmg_dataproduct_id}'
+            logger.warning(msg)
+            errors.append((filename, msg))
             continue
+        
+        dataset_id = dataset['id']
+        logger.info(f'Found dataset {dataset_id} for CMG dataproduct {cmg_dataproduct_id}')
+        
+        # Find the dataset_file with matching filename in this dataset
+        dataset_file = api.get_dataset_file_by_name_and_dataset(filename, dataset_id)
+        
+        if not dataset_file:
+            msg = f'No dataset_file found for filename {filename} in dataset {dataset_id}'
+            logger.warning(msg)
+            errors.append((filename, msg))
+            continue
+        
+        dataset_file_id = dataset_file['id']
+        logger.info(f'Found dataset_file {dataset_file_id} for filename {filename}')
+        
+        # Find the track for this dataset_file (must already exist)
+        track = api.get_track_by_dataset_file_id(dataset_file_id)
+        
+        if not track:
+            msg = f'No track found for dataset_file {dataset_file_id} - tracks must exist before hydration'
+            logger.warning(msg)
+            errors.append((filename, msg))
+            continue
+        
+        track_id = track['id']
+        logger.info(f'Found track {track_id} for dataset_file {dataset_file_id}')
+        
+        track_ids_to_associate.append(track_id)
     
     logger.info(f'Found {len(track_ids_to_associate)} tracks to associate with session {session_id}')
     
+    # If we had errors processing ALL tracks, fail the task
+    if errors and not track_ids_to_associate:
+        error_summary = '\n'.join([f'  - {filename}: {msg}' for filename, msg in errors])
+        raise ValueError(f'Failed to process all {len(cmg_tracks)} tracks for session {session_id}:\n{error_summary}')
+    
+    # If we had partial errors, log them but continue
+    if errors:
+        error_summary = '\n'.join([f'  - {filename}: {msg}' for filename, msg in errors])
+        logger.warning(f'Failed to process {len(errors)} of {len(cmg_tracks)} tracks:\n{error_summary}')
+    
     # Associate all tracks with the session
     if track_ids_to_associate:
-        try:
-            api.update_session_tracks(session_id, track_ids_to_associate)
-            logger.info(f'Successfully associated {len(track_ids_to_associate)} tracks with session {session_id}')
-        except Exception as e:
-            logger.error(f'Failed to associate tracks with session {session_id}: {e}')
-            raise
+        api.update_session_tracks(session_id, track_ids_to_associate)
+        logger.info(f'Successfully associated {len(track_ids_to_associate)} tracks with session {session_id}')
     else:
         logger.warning(f'No tracks to associate with session {session_id}')
     

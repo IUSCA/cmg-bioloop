@@ -202,18 +202,20 @@ def end_migration(celery_task, dataset_id, **kwargs):
 # Session Hydration Tasks
 
 @app.task(base=WorkflowTask, bind=True, name='hydrate_session_tracks',
-          autoretry_for=(Exception,),
-          max_retries=3,
-          default_retry_delay=5)
+          # autoretry_for=(Exception,),
+          # max_retries=3,
+          # default_retry_delay=5
+          )
 def hydrate_session_tracks(celery_task, session_id, **kwargs):
     from workers.tasks.hydrate_tracks import hydrate_session_tracks as task_body
     return task_body(celery_task, session_id, **kwargs)
 
 
 @app.task(base=WorkflowTask, bind=True, name='finish_session_hydration',
-          autoretry_for=(Exception,),
-          max_retries=3,
-          default_retry_delay=5)
+          # autoretry_for=(Exception,),
+          # max_retries=3,
+          # default_retry_delay=5
+          )
 def finish_session_hydration(celery_task, session_id, **kwargs):
     from workers.tasks.finish_hydration import finish_session_hydration as task_body
     return task_body(celery_task, session_id, **kwargs)

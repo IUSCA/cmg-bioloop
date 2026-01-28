@@ -85,6 +85,9 @@ def get_program_args(arguments: list,
 
 
 def run_conversion(celery_task, conversion_id, **kwargs):
+    import logging
+    logger = logging.getLogger(__name__)
+    
     conversion = api.get_conversion(conversion_id=conversion_id,
                                     include_dataset=True,
                                     include_definition=True)
@@ -98,6 +101,13 @@ def run_conversion(celery_task, conversion_id, **kwargs):
         raise ConversionException(f"Expected 0 or 1 process requests, got {len(process_requests)}")
 
     process_request = process_requests[0] if process_requests else None
+    
+    if process_request:
+        logger.info(f"[SLURM-CONVERSION] Process request found for conversion {conversion_id}")
+        logger.info(f"[SLURM-CONVERSION] Execution platform: {process_request['execution_platform']}")
+        logger.info(f"[SLURM-CONVERSION] Process request ID: {process_request['id']}")
+    else:
+        logger.info(f"[SLURM-CONVERSION] No process request - running locally for conversion {conversion_id}")
 
     # Common preparation for both local and platform execution
     dataset_id = conversion['dataset_id']
@@ -158,12 +168,15 @@ def run_conversion(celery_task, conversion_id, **kwargs):
     if process_request is None:
         # Run locally
         print("No process requests - running locally")
+        logger.info(f"[SLURM-CONVERSION] Executing locally (no platform specified)")
         print("DEBUG: Capturing logs: ", definition_details.get('capture_logs'))
         if definition_details.get('capture_logs', False):
             print("DEBUG: Capturing logs")
+            logger.info(f"[SLURM-CONVERSION] Running with log tracking enabled")
             cmd.execute_with_log_tracking(cmd=args, celery_task=celery_task, cwd=str(cwd) if cwd else None)
         else:
             print("DEBUG: Not capturing logs")
+            logger.info(f"[SLURM-CONVERSION] Running without log tracking")
             cmd.execute(cmd=args, cwd=str(cwd) if cwd else None)
     else:
         # Run via platform
@@ -171,10 +184,17 @@ def run_conversion(celery_task, conversion_id, **kwargs):
         execution_platform = process_request['execution_platform']
 
         print(f"Found 1 process request - submitting to {execution_platform}")
+        logger.info(f"[SLURM-CONVERSION] Found process request - submitting to {execution_platform}")
 
         if execution_platform == 'SLURM':
+            logger.info(f"[SLURM-CONVERSION] Starting SLURM submission for process_request {process_request_id}")
+            
             # Get SLURM config from application config
-            slurm_config = config.get('execution_config', {}).get('SLURM', {})
+            slurm_config = config.get('execution_platform', {}).get('SLURM', {})
+            logger.info(f"[SLURM-CONVERSION] SLURM host: {slurm_config['connection']['host']}")
+            logger.info(f"[SLURM-CONVERSION] SLURM user: {slurm_config['connection']['user']}")
+            logger.info(f"[SLURM-CONVERSION] Remote work dir: {slurm_config.get('remote_work_dir', '/tmp/slurm_jobs')}")
+            
             executor_config = {
                 'host': slurm_config['connection']['host'],
                 'ssh_user': slurm_config['connection']['user'],
@@ -183,15 +203,22 @@ def run_conversion(celery_task, conversion_id, **kwargs):
             }
 
             # Create SLURM executor
+            logger.info(f"[SLURM-CONVERSION] Creating SlurmExecutor instance")
             executor = SlurmExecutor(config=executor_config, process_request_id=process_request_id)
 
             # Submit job - executor fetches artifacts and submits to SLURM
+            logger.info(f"[SLURM-CONVERSION] Submitting job to SLURM...")
             slurm_job_id = executor.submit_job()
 
             print(f"Submitted SLURM job {slurm_job_id} for process_request {process_request_id}")
+            logger.info(f"[SLURM-CONVERSION] ✓ SLURM job submitted successfully!")
+            logger.info(f"[SLURM-CONVERSION] SLURM job ID: {slurm_job_id}")
+            logger.info(f"[SLURM-CONVERSION] Process request ID: {process_request_id}")
+            logger.info(f"[SLURM-CONVERSION] Conversion ID: {conversion_id}")
 
             # TODO: store slurm_job_id in worker_process table or process_request table
         else:
+            logger.error(f"[SLURM-CONVERSION] Unsupported execution platform: {execution_platform}")
             raise ConversionException(f"Execution platform {execution_platform} not implemented")
 
     print(f"conversion_output_dir: {conversion_output_dir}")

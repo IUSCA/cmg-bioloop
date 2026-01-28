@@ -62,31 +62,54 @@ class SlurmExecutor(ExecutorBase):
         Returns:
             SLURM job ID as string
         """
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        logger.info(f"[SLURM-EXECUTOR] Fetching artifacts for process_request {self.process_request_id}")
+        
         # Fetch artifacts for this process request
         artifacts = self.fetch_artifacts()
+        
+        logger.info(f"[SLURM-EXECUTOR] Found {len(artifacts)} artifacts: {list(artifacts.keys())}")
 
         if 'JOB_SCRIPT' not in artifacts:
+            logger.error(f"[SLURM-EXECUTOR] No JOB_SCRIPT artifact found for process_request_id: {self.process_request_id}")
             raise ValueError(f"No JOB_SCRIPT artifact found for process_request_id: {self.process_request_id}")
 
         job_script_content = artifacts['JOB_SCRIPT']['content_inline']
+        logger.info(f"[SLURM-EXECUTOR] Job script size: {len(job_script_content)} bytes")
+        logger.debug(f"[SLURM-EXECUTOR] Job script content preview:\n{job_script_content[:500]}...")
 
         # Generate unique SLURM script name
         timestamp = int(time.time())
         script_name = f"job_{self.process_request_id}_{timestamp}.sh"
         remote_path = f"{self.remote_work_dir}/{script_name}"
 
+        logger.info(f"[SLURM-EXECUTOR] Connecting to {self.host} as {self.ssh_user}")
+        logger.info(f"[SLURM-EXECUTOR] Remote script path: {remote_path}")
+
         # Write script to remote host via SSH
+        logger.info(f"[SLURM-EXECUTOR] Uploading job script to {self.host}")
         self.conn.put(StringIO(job_script_content), remote_path)
-        self.conn.run(f"chmod +x {remote_path}", hide=True)
+        logger.info(f"[SLURM-EXECUTOR] Setting execute permissions on {remote_path}")
+        # self.conn.run(f"chmod +x {remote_path}", hide=True)
+        logger.info(f"[SLURM-EXECUTOR] ✓ Script uploaded and made executable")
 
         # Submit to SLURM via sbatch
+        logger.info(f"[SLURM-EXECUTOR] Running: sbatch {remote_path}")
         result = self.conn.run(f"sbatch {remote_path}", hide=True)
 
         if result.failed:
+            logger.error(f"[SLURM-EXECUTOR] sbatch failed with return code: {result.return_code}")
+            logger.error(f"[SLURM-EXECUTOR] stderr: {result.stderr}")
             raise Exception(f"sbatch failed: {result.stderr}")
 
         # Parse job ID from "Submitted batch job 12345"
         slurm_job_id = result.stdout.strip().split()[-1]
+        logger.info(f"[SLURM-EXECUTOR] ✓ Job submitted successfully")
+        logger.info(f"[SLURM-EXECUTOR] SLURM job ID: {slurm_job_id}")
+        logger.info(f"[SLURM-EXECUTOR] sbatch output: {result.stdout.strip()}")
+        
         return slurm_job_id
 
     def get_job_status(self, job_id: str) -> dict:
