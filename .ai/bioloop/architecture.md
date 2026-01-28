@@ -93,6 +93,249 @@ Bioloop is a **microservice architecture** with separate UI, API, and Worker com
 
 ---
 
+## Workflow Architecture
+
+Bioloop uses **Rhythm** (an external workflow orchestration service) to manage long-running asynchronous tasks. Understanding the workflow architecture is critical for implementing any feature that requires background processing.
+
+### Components
+
+1. **Rhythm Workflow Server** - External service that orchestrates workflow execution
+   - Generates unique workflow IDs
+   - Manages workflow lifecycle (pending, running, completed, failed)
+   - Stores workflow state and task execution history
+   - API: `wfService` in `api/src/services/workflow.js`
+
+2. **Workflow Registry** - Configuration defining available workflows
+   - Location: `api/config/default.json` → `workflow_registry`
+   - Location: `workers/workers/config/common.py` → `WORKFLOWS`
+   - Each workflow has: name, description, steps (tasks)
+
+3. **Worker Tasks** - Python functions that execute workflow steps
+   - Location: `workers/workers/tasks/*.py`
+   - Registered in: `workers/workers/tasks/declarations.py`
+   - Execute via Celery queue system
+
+4. **Database Associations** - Tracking which workflows belong to which entities
+   - `workflow` table: Links workflows to datasets
+   - `session_workflow` table: Links workflows to sessions
+   - Other entity-specific tables as needed
+
+### Workflow Creation Pattern
+
+**CRITICAL:** Rhythm generates workflow IDs. Never manually create workflow IDs.
+
+#### Standard Flow
+
+```
+1. API receives workflow request
+2. API builds workflow body from config
+3. API calls Rhythm to create workflow (Rhythm generates ID)
+4. API creates database association using Rhythm-generated ID
+5. Rhythm queues tasks for Celery workers
+6. Workers execute tasks and update status
+```
+
+#### Implementation Pattern
+
+```javascript
+// api/src/routes/entity.js
+const wfService = require('@/services/workflow');
+const config = require('config');
+
+router.post('/:id/workflows/:wf', asyncHandler(async (req, res) => {
+  const entityId = req.params.id;
+  const wfName = req.params.wf;
+
+  // 1. Get workflow definition from config
+  const workflowConfig = config.get('workflow_registry')[wfName];
+  
+  // 2. Build workflow body
+  const wfBody = {
+    ...workflowConfig,
+    name: wfName,
+    app_id: config.get('app_id'),
+    steps: workflowConfig.steps.map((step) => ({
+      ...step,
+      queue: step.queue || `${config.get('app_id')}.q`,
+    })),
+  };
+
+  // 3. Create workflow via Rhythm (Rhythm generates ID)
+  const wf = (await wfService.create({
+    ...wfBody,
+    args: [entityId], // Pass entity ID to tasks
+  })).data;
+
+  // 4. Create database association with Rhythm-generated ID
+  await prisma.entity_workflow.create({
+    data: {
+      entity_id: entityId,
+      workflow_id: wf.workflow_id, // ← From Rhythm
+      initiator_id: req.user.id,
+    },
+  });
+
+  return res.json(wf);
+}));
+```
+
+#### Key Principles
+
+1. **Rhythm is authoritative** - Never generate workflow IDs manually (no `uuid`)
+2. **Create workflow first** - Then create database association
+3. **Use returned ID** - Always use `wf.workflow_id` from Rhythm response
+4. **Pass entity ID as args** - Makes entity ID available to all workflow tasks
+5. **No cleanup in catch** - If workflow creation fails, there's no association to delete
+
+### Workflow Arguments
+
+When creating a workflow, pass entity IDs as `args`:
+
+```javascript
+// API creates workflow
+await wfService.create({
+  ...wfBody,
+  args: [datasetId], // or [sessionId], etc.
+});
+```
+
+Workers receive these args in their task functions:
+
+```python
+# workers/workers/tasks/some_task.py
+def process_entity(celery_task, entity_id, **kwargs):
+    """
+    Args:
+        celery_task: WorkflowTask instance (provided by framework)
+        entity_id: First element from workflow args array
+        **kwargs: Additional task-specific parameters
+    """
+    # Use entity_id to fetch data and process
+    pass
+```
+
+### Workflow States
+
+Workflows progress through these states:
+- **PENDING** - Created, waiting to start
+- **RUNNING** - Currently executing
+- **COMPLETED** - Finished successfully
+- **FAILED** - Encountered error
+- **PAUSED** - Manually paused
+- **CANCELLED** - Manually cancelled
+
+Check workflow status via:
+- Database: `workflow.status` (synced from Rhythm)
+- Rhythm API: `wfService.getOne(workflowId)`
+
+### Entity-Workflow Associations
+
+Different entities use different association patterns:
+
+#### Datasets (Standard Pattern)
+```javascript
+// workflow table has dataset_id column
+await prisma.workflow.create({
+  data: {
+    id: wf.workflow_id,
+    dataset_id: datasetId,
+    initiator_id: userId,
+  },
+});
+```
+
+#### Sessions (Many-to-Many Pattern)
+```javascript
+// session_workflow junction table
+await prisma.session_workflow.create({
+  data: {
+    session_id: sessionId,
+    workflow_id: wf.workflow_id,
+    initiator_id: userId,
+  },
+});
+```
+
+Choose pattern based on:
+- **One-to-many** (entity has many workflows): Use entity_id column in `workflow` table
+- **Many-to-many** (multiple entities can share workflows): Use junction table
+
+### Error Handling
+
+```javascript
+// ✅ CORRECT - Simple, no unnecessary cleanup
+let wf;
+try {
+  wf = (await wfService.create({ ...wfBody, args: [entityId] })).data;
+  logger.info(`Workflow ${wf.workflow_id} created`);
+} catch (error) {
+  logger.error('Failed to create workflow:', error);
+  return res.status(500).json({ error: 'Failed to create workflow' });
+}
+
+// Create association after successful creation
+await prisma.entity_workflow.create({
+  data: { entity_id: entityId, workflow_id: wf.workflow_id }
+});
+
+// ❌ WRONG - Don't delete association that doesn't exist yet
+try {
+  const wf = await wfService.create(wfBody);
+  await prisma.entity_workflow.create({ ... });
+} catch (error) {
+  // Don't do this - association may not exist
+  await prisma.entity_workflow.deleteMany({ where: { workflow_id } });
+}
+```
+
+### Common Workflows
+
+**Dataset Workflows:**
+- `integrated` - Full dataset processing (inspect, archive, validate)
+- `stage` - Stage dataset for viewing/download
+- `stage_migrated` - Stage legacy CMG dataset with hydration
+- `delete` - Delete archived dataset
+
+**Session Workflows:**
+- `hydrate_session` - Hydrate legacy session with tracks from CMG
+
+**Conversion Workflows:**
+- Dynamic pipeline-based workflows (bcl2fastq, cellranger, etc.)
+
+### Debugging Workflows
+
+1. **Check Rhythm status:**
+   ```bash
+   curl http://localhost:4000/workflows/{workflow_id}
+   ```
+
+2. **Check database association:**
+   ```sql
+   SELECT * FROM workflow WHERE id = '{workflow_id}';
+   SELECT * FROM session_workflow WHERE workflow_id = '{workflow_id}';
+   ```
+
+3. **Check worker logs:**
+   ```bash
+   docker logs cmg-bioloop-2-worker-1
+   # or in production
+   pm2 logs worker
+   ```
+
+4. **Check task queue:**
+   ```bash
+   docker exec -it cmg-bioloop-2-redis-1 redis-cli
+   LLEN bioloop.q  # Check queue length
+   ```
+
+### Further Reading
+
+- **API Implementation:** `.ai/bioloop/api_conventions.md` → Workflow Creation Pattern
+- **Worker Implementation:** `.ai/bioloop/worker_conventions.md` → Task Implementation
+- **Example Workflows:** `api/config/default.json` → `workflow_registry`
+
+---
+
 ## Environment-Specific Behavior
 
 ### Development
@@ -227,5 +470,5 @@ Configuration is read in this order (later overrides earlier):
 
 ---
 
-**Last Updated:** 2026-01-16
+**Last Updated:** 2026-01-27
 

@@ -1,0 +1,44 @@
+version: '3.8'
+
+services:
+  db_sandbox:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: bioloop_db_sandbox
+    env_file:
+      - .env.default
+      - .env
+    volumes:
+      - .:/opt/sca/app
+      - ../api/prisma:/opt/sca/api/prisma:ro
+      - ../api/.env:/opt/sca/api/.env:ro
+      - db_sandbox_pgdata:/var/lib/postgresql/15/main
+      - db_sandbox_node_modules:/opt/sca/app/node_modules
+    working_dir: /opt/sca/app
+    ports:
+      - "127.0.0.1:5434:5432"
+    networks:
+      - sandbox_network
+      - cmg-bioloop-2_default
+    deploy:
+      resources:
+        limits:
+          memory: 8G
+        reservations:
+          memory: 4G
+    command: ["tail", "-f", "/dev/null"]
+
+networks:
+  sandbox_network:
+    name: bioloop_sandbox
+    driver: bridge
+  cmg-bioloop-2_default:
+    external: true
+    name: cmg-bioloop-2_default
+
+volumes:
+  db_sandbox_pgdata:
+    name: bioloop_sandbox_pgdata
+  db_sandbox_node_modules:
+    name: bioloop_sandbox_node_modules

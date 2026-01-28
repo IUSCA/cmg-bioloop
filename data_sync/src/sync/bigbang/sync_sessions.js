@@ -81,7 +81,20 @@ async function convertSession(prisma, cmgDb, cmgSession) {
     return existingSession;
   }
   
-  // Insert session
+  // Extract unique CMG dataproduct IDs from tracks for later dataset lookup
+  const dataproductIds = [];
+  if (cmgSession.tracks && Array.isArray(cmgSession.tracks)) {
+    cmgSession.tracks.forEach((track) => {
+      if (track.dataproduct) {
+        const dpId = track.dataproduct.toString();
+        if (!dataproductIds.includes(dpId)) {
+          dataproductIds.push(dpId);
+        }
+      }
+    });
+  }
+  
+  // Insert session with metadata containing CMG dataproduct IDs
   const session = await prisma.genome_browser_session.create({
     data: {
       title: title,
@@ -90,8 +103,13 @@ async function convertSession(prisma, cmgDb, cmgSession) {
       user_id: userId,
       access_count: cmgSession.access_count || 0,
       cmg_id: cmgSessionId, // Track CMG session for provenance
+      metadata: {
+        datasets: dataproductIds, // CMG dataproduct IDs for dataset lookup
+      },
     },
   });
+  
+  logger.debug(`[BIGBANG] Session ${cmgSessionId} created with ${dataproductIds.length} associated dataproducts`);
   
   // Note: Tracks are NOT migrated from CMG
   // Tracks are created by users in Bioloop UI directly

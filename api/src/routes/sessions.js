@@ -7,12 +7,11 @@ const createError = require('http-errors');
 const { DONE_STATUSES, DATA_REQUEST_STATUS } = require('@/constants');
 const logger = require('@/services/logger');
 const prisma = require('@/db');
+const pathResolver = require('@/services/pathResolver');
 const asyncHandler = require('../middleware/asyncHandler');
 const { accessControl, authenticateWithCookie } = require('../middleware/auth');
 const datasetService = require('../services/dataset');
 const { findIndexFileForPrimary } = require('../utils/genomeBrowserUtils');
-
-const pathResolver = require('@/services/pathResolver');
 
 const router = express.Router();
 const fileExposureRouter = express.Router();
@@ -1348,6 +1347,7 @@ fileExposureRouter.get(
 );
 
 // GET /sessions/:id/datasets - Get datasets for a session with optional staging filter
+// For legacy sessions, uses metadata.datasets (CMG dataproduct IDs) to find associated datasets
 router.get(
   '/:id/datasets',
   isPermittedTo('read'),
@@ -1358,6 +1358,7 @@ router.get(
   asyncHandler(async (req, res) => {
     const sessionId = req.params.id;
     const stagedFilter = req.query.staged;
+    const legacyMigrationService = require('@/services/legacyMigration');
 
     const session = await prisma.genome_browser_session.findUnique({
       where: { id: sessionId },
@@ -1372,6 +1373,7 @@ router.get(
                       include: {
                         genomic_details: true,
                         workflows: true,
+                        states: true,
                       },
                     },
                   },
@@ -1387,20 +1389,57 @@ router.get(
       return res.status(404).json({ error: 'Session not found' });
     }
 
-    // Get unique datasets
-    const datasetMap = new Map();
+    let datasets = [];
 
-    session.session_tracks.forEach((st) => {
-      const dataset = st.track.dataset_file?.dataset;
-      if (dataset) {
-        // Apply staged filter if provided
-        if (stagedFilter === undefined || dataset.is_staged === stagedFilter) {
-          datasetMap.set(dataset.id, dataset);
+    // Check if this is a legacy session with metadata.datasets
+    if (session.cmg_id && session.metadata?.datasets && Array.isArray(session.metadata.datasets)) {
+      // Legacy session: use metadata.datasets (CMG dataproduct IDs)
+      logger.info(`[SESSIONS] Fetching datasets for legacy session ${sessionId} from metadata.datasets`);
+
+      const cmgDataproductIds = session.metadata.datasets;
+
+      // Find Bioloop datasets by CMG IDs
+      for (const cmgId of cmgDataproductIds) {
+        const dataset = await prisma.dataset.findFirst({
+          where: { cmg_id: cmgId },
+          include: {
+            genomic_details: true,
+            workflows: true,
+            states: true,
+          },
+        });
+
+        if (dataset) {
+          // Get migration status for legacy dataset
+          const migrationStatus = await legacyMigrationService.getDatasetMigrationStatus(dataset.id);
+
+          // Attach migration status to dataset
+          dataset.migration_status = migrationStatus;
+
+          // Apply staged filter if provided
+          if (stagedFilter === undefined || dataset.is_staged === stagedFilter) {
+            datasets.push(dataset);
+          }
+        } else {
+          logger.warn(`[SESSIONS] Dataset with CMG ID ${cmgId} not found for session ${sessionId}`);
         }
       }
-    });
+    } else {
+      // Non-legacy session or hydrated legacy session: use session_tracks
+      const datasetMap = new Map();
 
-    const datasets = Array.from(datasetMap.values());
+      session.session_tracks.forEach((st) => {
+        const dataset = st.track.dataset_file?.dataset;
+        if (dataset) {
+          // Apply staged filter if provided
+          if (stagedFilter === undefined || dataset.is_staged === stagedFilter) {
+            datasetMap.set(dataset.id, dataset);
+          }
+        }
+      });
+
+      datasets = Array.from(datasetMap.values());
+    }
 
     res.json({
       count: datasets.length,
@@ -1645,7 +1684,6 @@ router.get(
 const { validate } = require('@/middleware/validators');
 const wfService = require('@/services/workflow');
 const CONSTANTS = require('@/constants');
-const { v4: uuidv4 } = require('uuid');
 
 router.post(
   '/:id/workflows/:wf',
@@ -1658,7 +1696,7 @@ router.post(
     const sessionId = req.params.id;
     const wfName = req.params.wf;
 
-    // Get the session
+    // Get the session (existence check only - authorization handled by isPermittedTo middleware)
     const session = await prisma.genome_browser_session.findUnique({
       where: { id: sessionId },
     });
@@ -1667,63 +1705,49 @@ router.post(
       return res.status(404).json({ error: 'Session not found' });
     }
 
-    // Check if user is the session owner
-    if (session.user_id !== req.user.id) {
-      return res.status(403).json({ error: 'Only the session owner can hydrate it' });
+    logger.info(`User ${req.user.id} starting workflow ${wfName} on session ${sessionId}`);
+
+    // Build workflow body using same pattern as datasets
+    const workflowConfig = config.get('workflow_registry')[wfName];
+
+    if (!workflowConfig) {
+      logger.error(`Workflow ${wfName} not found in workflow_registry`);
+      return res.status(500).json({ error: 'Workflow configuration not found' });
     }
 
-    logger.info(`Starting workflow ${wfName} on session ${sessionId}`);
+    const wfBody = {
+      ...workflowConfig,
+      name: wfName,
+      app_id: config.get('app_id'),
+      steps: workflowConfig.steps.map((step) => ({
+        ...step,
+        queue: step.queue || `${config.get('app_id')}.q`,
+      })),
+    };
 
-    // Generate workflow ID
-    const workflowId = uuidv4();
+    // Create the workflow via workflow service (Rhythm generates the workflow ID)
+    let wf;
+    try {
+      wf = (await wfService.create({
+        ...wfBody,
+        args: [sessionId],
+      })).data;
+      logger.info(`Workflow ${wf.workflow_id} created successfully for session ${sessionId}`);
+    } catch (error) {
+      logger.error(`Failed to create workflow for session ${sessionId}:`, error);
+      return res.status(500).json({ error: 'Failed to create workflow' });
+    }
 
-    // Create session_workflow record
+    // Create session_workflow association using Rhythm-generated ID
     await prisma.session_workflow.create({
       data: {
         session_id: sessionId,
-        workflow_id: workflowId,
+        workflow_id: wf.workflow_id,
         initiator_id: req.user.id,
       },
     });
 
-    // Get workflow definition from config
-    const workflowConfig = config.get('workflow_registry')[wfName];
-    
-    if (!workflowConfig) {
-      return res.status(500).json({ error: 'Workflow configuration not found' });
-    }
-
-    // Create workflow via workflow service
-    const workflowPayload = {
-      id: workflowId,
-      name: wfName,
-      app_id: config.get('app_id'),
-      description: workflowConfig.description || wfName,
-      tasks: workflowConfig.steps.map((step) => ({
-        name: step.name,
-        task_name: step.task,
-        queue: step.queue || null,
-        kwargs: {
-          session_id: sessionId,
-        },
-      })),
-    };
-
-    try {
-      const wfResponse = await wfService.create(workflowPayload);
-      logger.info(`Workflow ${workflowId} created successfully for session ${sessionId}`);
-      return res.json(wfResponse.data);
-    } catch (error) {
-      logger.error(`Failed to create workflow for session ${sessionId}:`, error);
-      // Clean up session_workflow record on failure
-      await prisma.session_workflow.deleteMany({
-        where: {
-          session_id: sessionId,
-          workflow_id: workflowId,
-        },
-      });
-      return res.status(500).json({ error: 'Failed to create workflow' });
-    }
+    return res.json(wf);
   }),
 );
 
