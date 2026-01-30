@@ -252,7 +252,7 @@ The track will be serialized as:
 
 ```bash
 # Via API
-curl http://localhost:3030/api/datasets | jq '.datasets[] | select(.name=="bigBed_test")'
+curl http://localhost:3031/api/datasets | jq '.datasets[] | select(.name=="bigBed_test")'
 
 # Expected fields:
 # - type: "DATA_PRODUCT"
@@ -264,7 +264,7 @@ curl http://localhost:3030/api/datasets | jq '.datasets[] | select(.name=="bigBe
 
 ```bash
 # Via API
-curl http://localhost:3030/api/tracks | jq '.tracks[] | select(.name | contains("bigBed_test"))'
+curl http://localhost:3031/api/tracks | jq '.tracks[] | select(.name | contains("bigBed_test"))'
 
 # Expected:
 # - name: "bigBed_test.bigBed"

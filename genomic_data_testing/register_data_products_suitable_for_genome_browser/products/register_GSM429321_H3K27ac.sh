@@ -269,13 +269,13 @@ Step 7: Cross-reference with gene annotations
 ### 1. Check Dataset Registration
 
 ```bash
-curl http://localhost:3030/api/datasets | jq '.datasets[] | select(.name=="bigWig_GSM429321_H3K27ac_hg19")'
+curl http://localhost:3031/api/datasets | jq '.datasets[] | select(.name=="bigWig_GSM429321_H3K27ac_hg19")'
 ```
 
 ### 2. Check Track Creation
 
 ```bash
-curl http://localhost:3030/api/tracks | jq '.tracks[] | select(.name | contains("H3K27ac"))'
+curl http://localhost:3031/api/tracks | jq '.tracks[] | select(.name | contains("H3K27ac"))'
 ```
 
 ### 3. Test in Genome Browser

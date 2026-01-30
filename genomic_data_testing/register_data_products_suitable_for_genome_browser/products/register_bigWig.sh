@@ -213,13 +213,13 @@ The track will be serialized as:
 ### 1. Check Dataset Registration
 
 ```bash
-curl http://localhost:3030/api/datasets | jq '.datasets[] | select(.name=="bigWig_h3k4me3_hg19")'
+curl http://localhost:3031/api/datasets | jq '.datasets[] | select(.name=="bigWig_h3k4me3_hg19")'
 ```
 
 ### 2. Check Track Creation
 
 ```bash
-curl http://localhost:3030/api/tracks | jq '.tracks[] | select(.name | contains("GSM429321"))'
+curl http://localhost:3031/api/tracks | jq '.tracks[] | select(.name | contains("GSM429321"))'
 ```
 
 ### 3. Test in Genome Browser

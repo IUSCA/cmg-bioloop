@@ -167,7 +167,7 @@ Once registered:
 ### 1. Check Dataset Registration
 
 ```bash
-curl http://localhost:3030/api/datasets | jq '.datasets[] | select(.name=="methylation_h1_hg19")'
+curl http://localhost:3031/api/datasets | jq '.datasets[] | select(.name=="methylation_h1_hg19")'
 ```
 
 ### 2. Test in Genome Browser
