@@ -70,7 +70,7 @@ config = {
         'DATA_PRODUCT': {
             'source_dir': '/N/project/CMG-SCA/cmg-bioloop/origin/data_products',
         },
-        'recency_threshold_seconds': 60,  # 1 minute for standard Illumina datasets
+        'recency_threshold_seconds': 300,  # 1 minute for standard Illumina datasets
         'recency_threshold_seconds_nanopore': 21600,  # 6 hours for nanopore datasets
     },
     'stage': {

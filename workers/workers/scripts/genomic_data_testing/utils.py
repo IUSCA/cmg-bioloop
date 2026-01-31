@@ -90,47 +90,74 @@ def download_file_chunked(url: str, destination: Path, chunk_size: int = 25 * 10
     logger.info(f"Downloading from: {url}")
     logger.info(f"Destination: {destination}")
     
-    # Get file size
+    # Get file size if available
     head_headers = headers.copy() if headers else {}
     response = requests.head(url, headers=head_headers, allow_redirects=True, timeout=30)
     
-    if 'content-length' not in response.headers:
-        raise ValueError("Could not determine file size from server")
+    has_content_length = 'content-length' in response.headers
     
-    total_size = int(response.headers['content-length'])
-    logger.info(f"Total size: {total_size} bytes")
-    
-    # Create destination file if it doesn't exist
-    destination.touch(exist_ok=True)
-    current_size = destination.stat().st_size
-    
-    if current_size > 0:
-        logger.info(f"Resuming download from byte {current_size}")
-    
-    # Download in chunks
-    start = current_size
-    session = requests.Session()
-    
-    with open(destination, 'ab') as f:
-        while start < total_size:
-            end = min(start + chunk_size - 1, total_size - 1)
-            
-            logger.info(f"Fetching bytes {start}-{end}")
-            
-            chunk_headers = headers.copy() if headers else {}
-            chunk_headers['Range'] = f'bytes={start}-{end}'
-            
-            try:
-                response = session.get(url, headers=chunk_headers, timeout=60, stream=True)
-                response.raise_for_status()
+    if has_content_length:
+        # Server provides file size - use chunked download with resume capability
+        total_size = int(response.headers['content-length'])
+        logger.info(f"Total size: {total_size} bytes")
+        
+        # Create destination file if it doesn't exist
+        destination.touch(exist_ok=True)
+        current_size = destination.stat().st_size
+        
+        if current_size > 0:
+            logger.info(f"Resuming download from byte {current_size}")
+        
+        # Download in chunks with range requests
+        start = current_size
+        session = requests.Session()
+        
+        with open(destination, 'ab') as f:
+            while start < total_size:
+                end = min(start + chunk_size - 1, total_size - 1)
                 
+                logger.info(f"Fetching bytes {start}-{end}")
+                
+                chunk_headers = headers.copy() if headers else {}
+                chunk_headers['Range'] = f'bytes={start}-{end}'
+                
+                try:
+                    response = session.get(url, headers=chunk_headers, timeout=60, stream=True)
+                    response.raise_for_status()
+                    
+                    for data_chunk in response.iter_content(chunk_size=8192):
+                        f.write(data_chunk)
+                    
+                    start = end + 1
+                except requests.RequestException as e:
+                    logger.error(f"Download chunk failed: {e}")
+                    raise
+    else:
+        # Server uses chunked encoding - download without range requests
+        logger.warning("Server does not provide Content-Length, downloading without resume capability")
+        
+        session = requests.Session()
+        request_headers = headers.copy() if headers else {}
+        
+        try:
+            response = session.get(url, headers=request_headers, timeout=60, stream=True)
+            response.raise_for_status()
+            
+            downloaded_size = 0
+            with open(destination, 'wb') as f:
                 for data_chunk in response.iter_content(chunk_size=8192):
-                    f.write(data_chunk)
-                
-                start = end + 1
-            except requests.RequestException as e:
-                logger.error(f"Download chunk failed: {e}")
-                raise
+                    if data_chunk:
+                        f.write(data_chunk)
+                        downloaded_size += len(data_chunk)
+                        
+                        # Log progress every ~25MB
+                        if downloaded_size % (25 * 1024 * 1024) < 8192:
+                            logger.info(f"Downloaded {downloaded_size / (1024*1024):.1f} MB")
+            
+            logger.info(f"Download complete: {downloaded_size / (1024*1024):.1f} MB")
+        except requests.RequestException as e:
+            logger.error(f"Download failed: {e}")
+            raise
     
     logger.info("Download complete")
 

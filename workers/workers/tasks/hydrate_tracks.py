@@ -129,4 +129,10 @@ def hydrate_session_tracks(celery_task, session_id, **kwargs):
         logger.warning(f'No tracks to associate with session {session_id}')
     
     logger.info(f'Completed track hydration for session {session_id}')
+    
+    # Manually trigger next step since session workflows aren't auto-orchestrated
+    from workers.tasks.declarations import finish_session_hydration
+    logger.info(f'Triggering finish_session_hydration for session {session_id}')
+    finish_session_hydration.delay(session_id)
+    
     return session_id,

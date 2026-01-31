@@ -92,6 +92,9 @@ def archive(celery_task: WorkflowTask, dataset: dict, delete_local_file: bool = 
         
         # Tar the dataset directory and compute checksum
         bundle = Path(f'{config["paths"][dataset["type"]]["bundle"]["generate"]}/{dataset["name"]}.tar')
+        
+        # Ensure parent directory exists
+        bundle.parent.mkdir(parents=True, exist_ok=True)
 
         make_tarfile(celery_task=celery_task,
                      tar_path=bundle,

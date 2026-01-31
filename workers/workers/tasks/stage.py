@@ -74,6 +74,9 @@ def stage(celery_task: WorkflowTask, dataset: dict) -> (str, str):
     bundle = dataset["bundle"]
     bundle_md5 = bundle["md5"]
     bundle_download_path = Path(get_bundle_staged_path(dataset=dataset))
+    
+    # Ensure parent directory exists
+    bundle_download_path.parent.mkdir(parents=True, exist_ok=True)
 
     # Determine if archive_path is SDA or local filesystem
     # Use SDA if APP_ENV is 'production'
