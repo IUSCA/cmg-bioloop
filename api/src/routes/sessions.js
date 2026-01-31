@@ -31,9 +31,10 @@ const getAnalysisType = (dataset) => dataset?.metadata?.analysis_type || null;
 /**
  * Evaluate data request status for a session based on workflow states
  * @param {Object} session - Session object with session_tracks populated
+ * @param {Array} enrichedWorkflowsByDataset - Optional map of dataset ID to enriched workflows from Rhythm
  * @returns {Object} { requested: boolean, all_staged: boolean, request_status?: 'PENDING' | 'COMPLETE' }
  */
-function evaluateDataRequestStatus(session) {
+function evaluateDataRequestStatus(session, enrichedWorkflowsByDataset = {}) {
   if (!session?.session_tracks || session.session_tracks.length === 0) {
     return { requested: false, all_staged: true };
   }
@@ -62,7 +63,8 @@ function evaluateDataRequestStatus(session) {
   let allHaveWorkflows = true;
 
   unstagedDatasets.forEach((ds) => {
-    const workflows = ds.workflows || [];
+    // Use enriched workflows if provided, otherwise fall back to DB workflows (which only have id)
+    const workflows = enrichedWorkflowsByDataset[ds.id] || ds.workflows || [];
     const stageWorkflows = workflows.filter((wf) => wf.name === 'stage');
 
     if (stageWorkflows.length === 0) {
@@ -688,8 +690,34 @@ router.get(
       data: { access_count: { increment: 1 } },
     });
 
-    // Evaluate data request status dynamically
-    const dataRequestStatus = evaluateDataRequestStatus(session);
+    // Enrich workflows with Rhythm data for accurate status checking
+    const enrichedWorkflowsByDataset = {};
+    const datasetMap = new Map();
+    session.session_tracks.forEach((st) => {
+      const dataset = st.track?.dataset_file?.dataset;
+      if (dataset) {
+        datasetMap.set(dataset.id, dataset);
+      }
+    });
+
+    // Fetch enriched workflow data from Rhythm for each dataset
+    const wfService = require('@/services/workflow');
+    for (const [datasetId, dataset] of datasetMap) {
+      if (dataset.workflows && dataset.workflows.length > 0) {
+        try {
+          const wf_res = await wfService.getAll({
+            workflow_ids: dataset.workflows.map((x) => x.id),
+          });
+          enrichedWorkflowsByDataset[datasetId] = wf_res.data.results || [];
+        } catch (error) {
+          logger.warn(`Failed to fetch workflow details for dataset ${datasetId}`, error);
+          enrichedWorkflowsByDataset[datasetId] = [];
+        }
+      }
+    }
+
+    // Evaluate data request status dynamically with enriched workflows
+    const dataRequestStatus = evaluateDataRequestStatus(session, enrichedWorkflowsByDataset);
 
     res.json({
       ...session,

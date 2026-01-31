@@ -11,6 +11,7 @@ const createError = require('http-errors');
 const config = require('config');
 // eslint-disable-next-line lodash-fp/use-fp
 const _ = require('lodash');
+const logger = require('@/services/logger');
 const asyncHandler = require('../middleware/asyncHandler');
 const { accessControl } = require('../middleware/auth');
 
@@ -29,12 +30,23 @@ function getBaseDir(req) {
 
 function validatePath(req, res, next) {
   const query_path = req.query.path;
+
+  logger.info('[FS] validatePath called', {
+    query_path,
+    search_space: req.query.search_space,
+  });
+
   if (!query_path) {
+    logger.warn('[FS] validatePath failed: no query_path');
     return next(createError.Forbidden());
   }
 
   let p = query_path ? path.normalize(query_path) : null;
   if (!p || !path.isAbsolute(p)) {
+    logger.warn('[FS] validatePath failed: path not absolute', {
+      query_path,
+      normalized: p,
+    });
     res.status(400).send('Invalid path');
     return;
   }
@@ -42,12 +54,25 @@ function validatePath(req, res, next) {
   p = path.resolve(p);
 
   const base_dir = getBaseDir(req);
+  logger.info('[FS] validatePath checking base_dir', {
+    resolved_path: p,
+    base_dir,
+    starts_with_base: p.startsWith(base_dir),
+  });
+
   if (!p.startsWith(base_dir)) {
+    logger.warn('[FS] validatePath failed: path outside base_dir', {
+      resolved_path: p,
+      base_dir,
+    });
     res.status(403).send('Forbidden');
     return;
   }
 
   req.query.path = p;
+  logger.info('[FS] validatePath passed', {
+    final_path: p,
+  });
   next();
 }
 
@@ -75,7 +100,15 @@ router.get(
   asyncHandler(async (req, res, next) => {
     const { dirs_only, path: query_path } = req.query;
 
+    logger.info('[FS] Request received', {
+      query_path,
+      dirs_only,
+      search_space: req.query.search_space,
+      user: req.user?.username,
+    });
+
     if (!query_path) {
+      logger.info('[FS] No query_path provided, returning empty array');
       res.json([]);
       return;
     }
@@ -90,16 +123,60 @@ router.get(
     //   return;
     // }
 
+    const base_dir_key = getBaseDirKey(req);
+    const base_dir = getBaseDir(req);
+    const mount_dir = get_mount_dir(req);
     const mounted_search_dir = get_mounted_search_dir(req);
+
+    logger.info('[FS] Path resolution', {
+      base_dir_key,
+      base_dir,
+      mount_dir,
+      mounted_search_dir,
+      query_path,
+    });
 
     fs.access(mounted_search_dir, constants.F_OK, (err) => {
       if (err) {
+        logger.warn('[FS] Directory access failed', {
+          mounted_search_dir,
+          error: err.message,
+          code: err.code,
+        });
         return next(createError.NotFound());
       }
+
+      logger.info('[FS] Directory access successful', {
+        mounted_search_dir,
+      });
 
       fs.readdir(mounted_search_dir, {
         withFileTypes: true,
       }, (_err, files) => {
+        if (_err) {
+          logger.error('[FS] Error reading directory', {
+            mounted_search_dir,
+            error: _err.message,
+            code: _err.code,
+          });
+          return next(createError.InternalServerError('Error reading directory'));
+        }
+
+        logger.info('[FS] Directory read successful', {
+          mounted_search_dir,
+          total_entries: files ? files.length : 0,
+        });
+
+        const allFilesData = files.map((f) => ({
+          name: f.name,
+          isDir: f.isDirectory(),
+        }));
+
+        logger.info('[FS] All entries in directory', {
+          mounted_search_dir,
+          entries: allFilesData,
+        });
+
         let filesData = files.map((f) => {
           const file = {
             name: f.name,
@@ -112,6 +189,14 @@ router.get(
           return file;
         });
         filesData = _.compact(filesData);
+
+        logger.info('[FS] Response prepared', {
+          dirs_only,
+          total_before_filter: files ? files.length : 0,
+          total_after_filter: filesData.length,
+          result: filesData,
+        });
+
         res.json(filesData);
       });
     });

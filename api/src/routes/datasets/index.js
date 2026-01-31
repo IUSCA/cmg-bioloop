@@ -318,10 +318,6 @@ router.get(
                     workflows: {
                       select: {
                         id: true,
-                        name: true,
-                        status: true,
-                        steps_done: true,
-                        total_steps: true,
                       },
                     },
                   },
@@ -414,10 +410,6 @@ router.get(
                     workflows: {
                       select: {
                         id: true,
-                        name: true,
-                        status: true,
-                        steps_done: true,
-                        total_steps: true,
                       },
                     },
                   },

@@ -102,7 +102,20 @@ async function create_workflow(dataset, wf_name, initiator_id) {
 
   // check if a workflow with the same name is not already running / pending on
   // this dataset
-  const active_wfs_with_same_name = dataset.workflows
+  // Fetch enriched workflow data from Rhythm to check name and status
+  let enrichedWorkflows = [];
+  if (dataset.workflows && dataset.workflows.length > 0) {
+    try {
+      const wf_res = await wfService.getAll({
+        workflow_ids: dataset.workflows.map((x) => x.id),
+      });
+      enrichedWorkflows = wf_res.data.results || [];
+    } catch (error) {
+      logger.warn('Failed to fetch workflow details from Rhythm, proceeding without duplicate check', error);
+    }
+  }
+
+  const active_wfs_with_same_name = enrichedWorkflows
     .filter((_wf) => _wf.name === wf_body.name)
     .filter((_wf) => !DONE_STATUSES.includes(_wf.status));
 

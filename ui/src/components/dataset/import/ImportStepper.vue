@@ -746,7 +746,7 @@ const preImport = () => {
   if (!dataset.value) {
     return datasetService.create_dataset({
       name: populatedDatasetName.value,
-      type: config.dataset.types.DATA_PRODUCT.key,
+      type: selectedDatasetType.value?.value || config.dataset.types.DATA_PRODUCT.key,
       origin_path: selectedFile.value.path,
       import_space: searchSpace.value.key,
       project_id: projectSelected.value?.id,
