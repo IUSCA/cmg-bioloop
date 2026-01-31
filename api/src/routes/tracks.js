@@ -1,6 +1,7 @@
 const express = require('express');
 const { query, param, body } = require('express-validator');
 const config = require('config');
+const { Prisma } = require('@prisma/client');
 const prisma = require('@/db');
 const asyncHandler = require('../middleware/asyncHandler');
 const { accessControl } = require('../middleware/auth');
@@ -197,8 +198,8 @@ router.get(
               },
             },
           },
-          skip: offset,
-          take: limit,
+          skip: offset ?? Prisma.skip,
+          take: limit ?? Prisma.skip,
           orderBy: {
             [sort_by]: sort_order,
           },
@@ -761,8 +762,8 @@ router.get(
               },
             },
           },
-          skip: offset,
-          take: limit,
+          skip: offset ?? Prisma.skip,
+          take: limit ?? Prisma.skip,
           orderBy: {
             [sort_by]: sort_order,
           },
