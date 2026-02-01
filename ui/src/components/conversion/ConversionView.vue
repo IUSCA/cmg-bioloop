@@ -205,6 +205,7 @@ const formattedLogs = computed(() => {
   return logs.value.map((log) => `${log.message.trim()}`).join("\n");
 });
 
+
 const conversionOutputDir = computed(() => {
   return (
     Object.entries(conversion.value) > 0 &&

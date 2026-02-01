@@ -56,7 +56,7 @@
       </template>
 
       <template #cell(genome)="{ rowData }">
-        <va-chip v-if="rowData.genomeType || rowData.genomeValue" size="small">
+        <va-chip v-if="rowData.genomeType || rowData.genomeValue" size="small" outline>
           {{ rowData.genomeType || '' }}{{ rowData.genomeValue ? ` (${rowData.genomeValue})` : '' }}
         </va-chip>
       </template>

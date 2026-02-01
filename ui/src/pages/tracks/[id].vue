@@ -28,13 +28,14 @@
                   v-if="track.analysis_type"
                   :color="trackService._getTrackColor(track.analysis_type)"
                   size="small"
+                  outline
                 >
                   {{ track.analysis_type?.toUpperCase() }}
                 </va-chip>
               </div>
               <div class="flex justify-between">
                 <span class="font-medium">Genome</span>
-                <va-chip v-if="track.genomeType || track.genomeValue" size="small">
+                <va-chip v-if="track.genomeType || track.genomeValue" size="small" outline>
                   {{ track.genomeType || '' }}{{ track.genomeValue ? ` (${track.genomeValue})` : '' }}
                 </va-chip>
               </div>
@@ -65,7 +66,9 @@
               </div>
               <div class="flex justify-between">
                 <span class="font-medium">Dataset Type</span>
-                <span>{{ track.dataset_file.dataset.type }}</span>
+                <va-chip v-if="track.dataset_file.dataset.type" size="small" outline>
+                  {{ formatDatasetType(track.dataset_file.dataset.type) }}
+                </va-chip>
               </div>
               <div class="flex justify-between">
                 <span class="font-medium">File Name</span>
@@ -116,19 +119,9 @@
               </template>
 
               <template #cell(genome)="{ rowData }">
-                <va-chip v-if="rowData.genome_type || rowData.genome" size="small">
+                <va-chip v-if="rowData.genome_type || rowData.genome" size="small" outline>
                   {{ rowData.genome_type || '' }}{{ rowData.genome ? ` (${rowData.genome})` : '' }}
                 </va-chip>
-              </template>
-
-              <template #cell(is_public)="{ rowData }">
-                <div class="flex items-center gap-2">
-                  <va-icon
-                    :name="rowData.is_public ? 'public' : 'lock'"
-                    :color="rowData.is_public ? 'success' : 'warning'"
-                  />
-                  <span>{{ rowData.is_public ? 'Public' : 'Private' }}</span>
-                </div>
               </template>
 
               <template #cell(created_by)="{ rowData }">
@@ -179,6 +172,7 @@
 <script setup>
 import DeleteTrackModal from '@/components/tracks/DeleteTrackModal.vue';
 import * as datetime from '@/services/datetime';
+import { formatDatasetType } from '@/services/sessionUtils';
 import toast from '@/services/toast';
 import trackService from '@/services/track';
 import { useAuthStore } from '@/stores/auth';
@@ -219,13 +213,7 @@ const sessionColumns = [
     key: 'genome',
     label: 'Genome',
     sortable: true,
-    width: '20%',
-  },
-  {
-    key: 'is_public',
-    label: 'Public',
-    sortable: true,
-    width: '5%',
+    width: '25%',
   },
   {
     key: 'created_at',

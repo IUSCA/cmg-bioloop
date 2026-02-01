@@ -32,19 +32,9 @@
               </div>
               <div class="flex justify-between">
                 <span class="font-medium">Genome</span>
-                <va-chip v-if="session.genome_type || session.genome" size="small">
+                <va-chip v-if="session.genome_type || session.genome" size="small" outline>
                   {{ session.genome_type || '' }}{{ session.genome ? ` (${session.genome})` : '' }}
                 </va-chip>
-              </div>
-              <div class="flex justify-between">
-                <span class="font-medium">Visibility</span>
-                <div class="flex items-center gap-2">
-                  <va-icon
-                    :name="session.is_public ? 'public' : 'lock'"
-                    :color="session.is_public ? 'success' : 'warning'"
-                  />
-                  <span>{{ session.is_public ? 'Public' : 'Private' }}</span>
-                </div>
               </div>
               <div class="flex justify-between">
                 <span class="font-medium">Created</span>
@@ -195,20 +185,15 @@
                     <va-chip
                       v-if="rowData?.analysis_type"
                       size="small"
+                      outline
                       :color="trackService._getTrackColor(rowData.analysis_type)"
                       >{{ rowData?.analysis_type }}</va-chip
                     >
                   </template>
 
-                  <template #cell(genomeType)="{ rowData }">
-                    <va-chip v-if="rowData.genomeType" size="small">
-                      {{ rowData.genomeType }}
-                    </va-chip>
-                  </template>
-
-                  <template #cell(genomeValue)="{ rowData }">
-                    <va-chip v-if="rowData.genomeValue" size="small" outline>
-                      {{ rowData.genomeValue }}
+                  <template #cell(genome)="{ rowData }">
+                    <va-chip v-if="rowData.genomeType || rowData.genomeValue" size="small" outline>
+                      {{ rowData.genomeType || '' }}{{ rowData.genomeValue ? ` (${rowData.genomeValue})` : '' }}
                     </va-chip>
                   </template>
 
@@ -330,8 +315,6 @@
           <va-input v-model="editForm.genome_type" label="Genome Type" class="w-full" clearable />
 
           <va-input v-model="editForm.genome" label="Genome Value" class="w-full" clearable />
-
-          <va-checkbox v-model="editForm.is_public" label="Make session public" />
         </div>
       </va-inner-loading>
     </va-modal>
@@ -386,7 +369,7 @@
               </template>
 
               <template #cell(genome)="{ rowData }">
-                <va-chip v-if="rowData.genome_type || rowData.genome_value" size="small">
+                <va-chip v-if="rowData.genome_type || rowData.genome_value" size="small" outline>
                   {{ rowData.genome_type || '' }}{{ rowData.genome_value ? ` (${rowData.genome_value})` : '' }}
                 </va-chip>
               </template>
@@ -544,7 +527,6 @@ const editForm = ref({
   title: '',
   genome_type: '',
   genome: '',
-  is_public: false,
 });
 const showTracksModal = ref(false);
 const updatingTracks = ref(false);
@@ -677,16 +659,10 @@ const trackColumns = [
     width: '15%',
   },
   {
-    key: 'genomeType',
-    label: 'Genome Type',
+    key: 'genome',
+    label: 'Genome',
     sortable: true,
-    width: '12%',
-  },
-  {
-    key: 'genomeValue',
-    label: 'Genome Value',
-    sortable: true,
-    width: '13%',
+    width: '20%',
   },
   {
     key: 'dataset_name',
@@ -1230,7 +1206,6 @@ watch(showEditModal, (isOpen) => {
       title: session.value.title || '',
       genome_type: session.value.genome_type || '',
       genome: session.value.genome || '',
-      is_public: session.value.is_public || false,
     };
   }
 });

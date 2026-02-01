@@ -62,7 +62,7 @@
         <tr v-if="showAnalysisType">
           <td>Analysis Type</td>
           <td>
-            <va-chip v-if="formattedAnalysisType" size="small">
+            <va-chip v-if="formattedAnalysisType" size="small" outline>
               {{ formattedAnalysisType }}
             </va-chip>
           </td>

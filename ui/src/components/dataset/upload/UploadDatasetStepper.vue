@@ -215,7 +215,7 @@
             placeholder="Select file type"
             class="flex-grow"
           />
-          <div class="flex items-center ml-2">
+          <div class="flex items-end ml-2 pb-1">
             <va-popover message="Create new File Type">
               <va-button
                 icon="add"
@@ -345,34 +345,23 @@
     @cancel="handleCancelFileType"
     :ok-button-props="{ disabled: isFileTypeFormInvalid }"
   >
-    <div class="flex flex-col gap-4">
-      <va-input
-        v-model="newFileTypeName"
-        label="Name"
-        placeholder="e.g., FASTQ"
-        :error="!!nameValidationError"
-        :error-messages="nameValidationError ? [nameValidationError] : []"
-      />
-      <va-input
-        v-model="newFileTypeExtension"
-        label="Extension"
-        placeholder="e.g., .fastq.gz"
-        :error="!!extensionValidationError"
-        :error-messages="extensionValidationError ? [extensionValidationError] : []"
-      />
-      
-    </div>
-    
-    <!-- Duplicate warning -->
-    <va-alert
-      v-if="isDuplicateFileType"
-      color="warning"
-      icon="warning"
-      dense
-      class="mt-3 text-sm"
-    >
-      Selected file type already exists
-    </va-alert>
+      <div class="flex flex-col gap-4">
+        <va-input
+          v-model="newFileTypeName"
+          label="Name"
+          placeholder="e.g., FASTQ"
+          :rules="[(value) => !!value || 'Name is required']"
+        />
+        <va-input
+          v-model="newFileTypeExtension"
+          label="Extension"
+          placeholder="e.g., .fastq.gz"
+          :rules="[
+            (value) => !!value || 'Extension is required',
+            (value) => !checkDuplicateFileType(newFileTypeName, value) || 'This file type already exists'
+          ]"
+        />
+      </div>
   </va-modal>
 </template>
 
@@ -526,35 +515,25 @@ watch(newFileTypeExtension, (newVal) => {
 });
 
 // Validation errors
-const nameValidationError = computed(() => {
-  if (!newFileTypeName.value) return 'Name is required';
-  return '';
-});
-
-const extensionValidationError = computed(() => {
-  if (!newFileTypeExtension.value) return 'Extension is required';
-  return '';
-});
-
 // Check if name/extension combo already exists (case-insensitive)
-const isDuplicateFileType = computed(() => {
-  if (!newFileTypeName.value || !newFileTypeExtension.value) return false;
+const checkDuplicateFileType = (name, extension) => {
+  if (!name || !extension) return false;
   
   // Normalize name the same way we do when creating (to match API format)
-  const normalizedName = newFileTypeName.value.trim().toUpperCase().replace(/\s+/g, '_').replace(/[^A-Z0-9_]/g, '');
-  const normalizedExt = newFileTypeExtension.value.trim().toLowerCase();
+  const normalizedName = name.trim().toUpperCase().replace(/\s+/g, '_').replace(/[^A-Z0-9_]/g, '');
+  const normalizedExt = extension.trim().toLowerCase();
   
   return analysisTypes.value.some(at => 
     at.name.toUpperCase() === normalizedName && 
     at.extension.toLowerCase() === normalizedExt
   );
-});
+};
 
 // Form is invalid if fields are empty OR duplicate exists
 const isFileTypeFormInvalid = computed(() => {
   return !newFileTypeName.value || 
          !newFileTypeExtension.value || 
-         isDuplicateFileType.value;
+         checkDuplicateFileType(newFileTypeName.value, newFileTypeExtension.value);
 });
 
 /**

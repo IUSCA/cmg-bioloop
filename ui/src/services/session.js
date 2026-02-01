@@ -43,7 +43,6 @@ class SessionService {
    * @param {string} sessionData.genome - Genome
    * @param {string} sessionData.genome_type - Genome type
    * @param {Array<number>} sessionData.track_ids - Array of track IDs
-   * @param {boolean} sessionData.is_public - Whether session is public
    * @returns {Promise<Object>} Created session
    */
   create(sessionData) {

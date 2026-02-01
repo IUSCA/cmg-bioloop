@@ -45,7 +45,7 @@
         </template>
 
         <template #cell(genome)="{ item }">
-          <va-chip v-if="item.genome_type || item.genome" size="small">
+          <va-chip v-if="item.genome_type || item.genome" size="small" outline>
             {{ item.genome_type || '' }}{{ item.genome ? ` (${item.genome})` : '' }}
           </va-chip>
         </template>

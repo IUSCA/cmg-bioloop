@@ -31,6 +31,7 @@
               <va-chip 
                 v-if="rowData.genomic_details && (rowData.genomic_details.genome_type || rowData.genomic_details.genome_value)" 
                 size="small"
+                outline
               >
                 {{ rowData.genomic_details.genome_type || '' }}{{ rowData.genomic_details.genome_value ? ` (${rowData.genomic_details.genome_value})` : '' }}
               </va-chip>

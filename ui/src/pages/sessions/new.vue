@@ -38,10 +38,6 @@
                 :disabled="!form.genome_type"
                 clearable
               />
-
-              <div class="flex items-center">
-                <va-checkbox v-model="form.is_public" label="Make session public" />
-              </div>
             </div>
 
             <!-- File Selection -->
@@ -96,7 +92,7 @@
                     </template>
 
                     <template #cell(genome)="{ rowData }">
-                      <va-chip v-if="rowData.genome_type || rowData.genome_value" size="small">
+                      <va-chip v-if="rowData.genome_type || rowData.genome_value" size="small" outline>
                         {{ rowData.genome_type || '' }}{{ rowData.genome_value ? ` (${rowData.genome_value})` : '' }}
                       </va-chip>
                     </template>
@@ -184,7 +180,6 @@ const form = ref({
   session_name: '',
   genome_type: '',
   genome: '',
-  is_public: false,
 });
 const errors = ref({});
 const trackSearch = ref('');
@@ -488,7 +483,6 @@ const handleSubmit = async () => {
       session_name: form.value.session_name,
       genome_type: form.value.genome_type,
       genome: form.value.genome,
-      is_public: form.value.is_public,
       track_ids: selectedTracks.value.map((track) => track.id),
     };
 

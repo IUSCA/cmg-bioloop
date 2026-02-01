@@ -5,14 +5,15 @@
       class="text-2xl flex-none mr-2 va-text-secondary"
       v-if="props.showIcon"
     />
-    <span class="capitalize" v-if="props.showType">
-      {{ props.type?.toLowerCase()?.split("_")?.join(" ") }}
-    </span>
+    <va-chip v-if="props.showType" size="small" outline>
+      {{ formatDatasetType(props.type) }}
+    </va-chip>
   </div>
 </template>
 
 <script setup>
 import config from "@/config";
+import { formatDatasetType } from "@/services/sessionUtils";
 
 const props = defineProps({
   type: {

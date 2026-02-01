@@ -5,7 +5,7 @@
         <tr v-if="formattedGenome">
           <td>Genome</td>
           <td>
-            <va-chip size="small">
+            <va-chip size="small" outline>
               {{ formattedGenome }}
             </va-chip>
           </td>

@@ -32,3 +32,32 @@ export function humanizeAnalysisType(formattedType) {
     .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
     .join(' ');
 }
+
+/**
+ * Formats dataset type to display format (uppercase with spaces)
+ * Example: "raw_data" -> "RAW DATA", "DATA_PRODUCT" -> "DATA PRODUCT"
+ * @param {string} type - The dataset type
+ * @returns {string} - The formatted type
+ */
+export function formatDatasetType(type) {
+  if (!type || typeof type !== 'string') {
+    return '';
+  }
+  
+  return type.toUpperCase().replace(/_/g, ' ');
+}
+
+/**
+ * Formats genome type and value into a single string
+ * Example: ("Human", "hg38") -> "Human (hg38)"
+ * @param {string} genomeType - The genome type
+ * @param {string} genomeValue - The genome value
+ * @returns {string} - The formatted genome string
+ */
+export function formatGenome(genomeType, genomeValue) {
+  if (!genomeType && !genomeValue) return '';
+  if (!genomeValue) return genomeType;
+  if (!genomeType) return genomeValue;
+  
+  return `${genomeType} (${genomeValue})`;
+}

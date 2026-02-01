@@ -19,6 +19,9 @@ export default defineConfig(({ command, mode }) => {
   // eslint-disable-next-line no-undef
   const env = loadEnv(mode, process.cwd());
   return {
+    optimizeDeps: {
+      exclude: [],
+    },
     plugins: [
       // https://github.com/posva/unplugin-vue-router
       // ⚠️ `Vue` must be placed after VueRouter()
@@ -85,6 +88,10 @@ export default defineConfig(({ command, mode }) => {
     server: {
       host: true,
       port: 443,
+      watch: {
+        usePolling: true,
+        interval: 100,
+      },
 
       // https://vitejs.dev/config/#server-https
       https: {
