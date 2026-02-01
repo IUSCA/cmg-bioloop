@@ -36,6 +36,24 @@
               </td>
             </tr>
 
+            <tr v-if="props.fileType">
+              <td>File Type</td>
+              <td>
+                <va-chip size="small" outline>
+                  {{ formatFileType(props.fileType) }}
+                </va-chip>
+              </td>
+            </tr>
+
+            <tr v-if="props.genomeType || props.genomeValue">
+              <td>Genome</td>
+              <td>
+                <va-chip size="small" outline>
+                  {{ formatGenome(props.genomeType, props.genomeValue) }}
+                </va-chip>
+              </td>
+            </tr>
+
             <tr>
               <td>Source Raw Data</td>
               <td class="metadata">
@@ -91,6 +109,7 @@
 
 <script setup>
 import { useAuthStore } from "@/stores/auth";
+import { formatGenome } from "@/services/sessionUtils";
 
 const props = defineProps({
   // `dataset`: Dataset to be created
@@ -112,6 +131,15 @@ const props = defineProps({
     type: String,
     required: true,
   },
+  fileType: {
+    type: Object,
+  },
+  genomeType: {
+    type: String,
+  },
+  genomeValue: {
+    type: String,
+  },
   sourceInstrument: {
     type: Object,
   },
@@ -130,6 +158,12 @@ const props = defineProps({
     default: false,
   },
 });
+
+const formatFileType = (fileType) => {
+  if (!fileType) return '';
+  // fileType is an object with name and extension
+  return fileType.extension ? `${fileType.name} (${fileType.extension})` : fileType.name;
+};
 
 const emit = defineEmits(["update:populatedDatasetName"]);
 

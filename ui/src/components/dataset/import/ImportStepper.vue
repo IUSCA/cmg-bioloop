@@ -92,7 +92,7 @@
               @update:modelValue="resetRawDataSearch"
               :disabled="willImportRawData"
               color="primary"
-              label="Assign source Raw Data 2"
+              label="Assign source Raw Data"
               class="flex-grow"
             />
           </div>
@@ -292,6 +292,9 @@
         :dataset="dataset"
         :import-dir="selectedFile"
         :dataset-type="selectedDatasetType?.value"
+        :file-type="selectedFileType"
+        :genome-type="selectedGenomeType?.value || selectedGenomeType"
+        :genome-value="selectedGenomeValue"
         :project="projectSelected"
         :source-raw-data="selectedRawData"
         :source-instrument="selectedSourceInstrument"
@@ -363,10 +366,10 @@
 import DatasetSelectAutoComplete from '@/components/dataset/DatasetSelectAutoComplete.vue';
 import config from '@/config';
 import Constants from '@/constants';
+import analysisTypeService from '@/services/analysisType';
 import datasetService from '@/services/dataset';
 import fileSystemService from '@/services/fs';
 import instrumentService from '@/services/instrument';
-import analysisTypeService from '@/services/analysisType';
 import toast from '@/services/toast';
 import { Icon } from '@iconify/vue';
 import { watchDebounced } from '@vueuse/core';
