@@ -1748,8 +1748,7 @@ onBeforeUnmount(() => {
   }
 
   .upload-details {
-    height: 400px;
-    max-height: 400px;
+    min-height: 400px;
   }
 }
 </style>
