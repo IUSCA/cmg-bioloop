@@ -1271,14 +1271,25 @@ const buildDatasetCreateQuery = async (data) => {
       } else if (file_type.name && file_type.extension) {
         // Create new analysis_type
         const formattedName = file_type.name.toUpperCase().replace(/\s+/g, '_').replace(/[^A-Z0-9_]/g, '');
+        const formattedExtension = file_type.extension.trim();
         
-        // Find or create analysis_type with case-insensitive search
+        // Find or create analysis_type with case-insensitive search on composite key
         let analysisType = await prisma.analysis_type.findFirst({
           where: {
-            name: {
-              equals: formattedName,
-              mode: 'insensitive',
-            },
+            AND: [
+              {
+                name: {
+                  equals: formattedName,
+                  mode: 'insensitive',
+                },
+              },
+              {
+                extension: {
+                  equals: formattedExtension,
+                  mode: 'insensitive',
+                },
+              },
+            ],
           },
         });
         
@@ -1286,7 +1297,7 @@ const buildDatasetCreateQuery = async (data) => {
           analysisType = await prisma.analysis_type.create({
             data: {
               name: formattedName,
-              extension: file_type.extension,
+              extension: formattedExtension,
             },
           });
         }

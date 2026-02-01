@@ -33,13 +33,9 @@
                 </va-chip>
               </div>
               <div class="flex justify-between">
-                <span class="font-medium">Genome Type</span>
-                <va-chip v-if="track.genomeType" size="small">{{ track.genomeType }}</va-chip>
-              </div>
-              <div class="flex justify-between">
-                <span class="font-medium">Genome Value</span>
-                <va-chip v-if="track.genomeValue" outline size="small">
-                  {{ track.genomeValue }}
+                <span class="font-medium">Genome</span>
+                <va-chip v-if="track.genomeType || track.genomeValue" size="small">
+                  {{ track.genomeType || '' }}{{ track.genomeValue ? ` (${track.genomeValue})` : '' }}
                 </va-chip>
               </div>
               <div class="flex justify-between">
@@ -87,11 +83,11 @@
               </div>
               <div class="flex justify-between">
                 <span class="font-medium">Staged</span>
-                <div v-if="track.dataset_file.dataset.is_staged" class="text-green-700">
-                  <va-icon name="check_circle_outline" />
+                <div v-if="track.dataset_file.dataset.is_staged">
+                  <va-icon name="check_circle" color="success" />
                 </div>
-                <div v-else class="text-warning">
-                  <va-icon name="close_circle_outline" />
+                <div v-else>
+                  <va-icon name="cancel" color="danger" />
                 </div>
               </div>
             </div>
@@ -119,12 +115,10 @@
                 </router-link>
               </template>
 
-              <template #cell(genome_type)="{ rowData }">
-                <va-chip v-if="rowData.genome_type" size="small">{{ rowData.genome_type }}</va-chip>
-              </template>
-
               <template #cell(genome)="{ rowData }">
-                <va-chip v-if="rowData.genome" size="small" outline>{{ rowData.genome }}</va-chip>
+                <va-chip v-if="rowData.genome_type || rowData.genome" size="small">
+                  {{ rowData.genome_type || '' }}{{ rowData.genome ? ` (${rowData.genome})` : '' }}
+                </va-chip>
               </template>
 
               <template #cell(is_public)="{ rowData }">
@@ -222,16 +216,10 @@ const sessionColumns = [
     width: '10%',
   },
   {
-    key: 'genome_type',
-    label: 'Genome Type',
-    sortable: true,
-    width: '12%',
-  },
-  {
     key: 'genome',
-    label: 'Genome Value',
+    label: 'Genome',
     sortable: true,
-    width: '13%',
+    width: '20%',
   },
   {
     key: 'is_public',

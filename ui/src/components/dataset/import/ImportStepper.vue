@@ -230,8 +230,9 @@
           <va-popover message="Create new File Type">
             <va-button
               icon="add"
-              size="small"
-              @click="showCreateFileTypeModal = true"
+              class="px-1"
+              color="success"
+              @click="openCreateFileTypeModal"
             />
           </va-popover>
         </div>
@@ -334,22 +335,38 @@
     v-model="showCreateFileTypeModal"
     title="Create New File Type"
     size="small"
-    :before-ok="handleCreateFileType"
-    :before-cancel="handleCancelFileType"
-    :ok-button-props="{ disabled: !newFileTypeName || !newFileTypeExtension }"
+    @ok="handleCreateFileType"
+    @cancel="handleCancelFileType"
+    :ok-button-props="{ disabled: isFileTypeFormInvalid }"
   >
     <div class="flex flex-col gap-4">
       <va-input
         v-model="newFileTypeName"
         label="Name"
         placeholder="e.g., FASTQ"
+        :error="!!nameValidationError"
+        :error-messages="nameValidationError ? [nameValidationError] : []"
       />
       <va-input
         v-model="newFileTypeExtension"
         label="Extension"
         placeholder="e.g., .fastq.gz"
+        :error="!!extensionValidationError"
+        :error-messages="extensionValidationError ? [extensionValidationError] : []"
       />
+      
     </div>
+    
+    <!-- Duplicate warning -->
+    <va-alert
+      v-if="isDuplicateFileType"
+      color="warning"
+      icon="warning"
+      dense
+      class="mt-3 text-sm"
+    >
+      Selected file type already exists
+    </va-alert>
   </va-modal>
 </template>
 
@@ -450,6 +467,45 @@ const newFileTypeName = ref('');
 const newFileTypeExtension = ref('');
 const analysisTypes = ref([]);
 const newlyCreatedFileType = ref(null); // Track the file type created via modal
+
+// Auto-prepend dot to extension
+watch(newFileTypeExtension, (newVal) => {
+  if (newVal && !newVal.startsWith('.')) {
+    newFileTypeExtension.value = `.${newVal}`;
+  }
+});
+
+// Validation errors
+const nameValidationError = computed(() => {
+  if (!newFileTypeName.value) return 'Name is required';
+  return '';
+});
+
+const extensionValidationError = computed(() => {
+  if (!newFileTypeExtension.value) return 'Extension is required';
+  return '';
+});
+
+// Check if name/extension combo already exists (case-insensitive)
+const isDuplicateFileType = computed(() => {
+  if (!newFileTypeName.value || !newFileTypeExtension.value) return false;
+  
+  // Normalize name the same way we do when creating (to match API format)
+  const normalizedName = newFileTypeName.value.trim().toUpperCase().replace(/\s+/g, '_').replace(/[^A-Z0-9_]/g, '');
+  const normalizedExt = newFileTypeExtension.value.trim().toLowerCase();
+  
+  return analysisTypes.value.some(at => 
+    at.name.toUpperCase() === normalizedName && 
+    at.extension.toLowerCase() === normalizedExt
+  );
+});
+
+// Form is invalid if fields are empty OR duplicate exists
+const isFileTypeFormInvalid = computed(() => {
+  return !newFileTypeName.value || 
+         !newFileTypeExtension.value || 
+         isDuplicateFileType.value;
+});
 const searchSpace = ref(
   FILESYSTEM_SEARCH_SPACES instanceof Array && FILESYSTEM_SEARCH_SPACES.length > 0
     ? FILESYSTEM_SEARCH_SPACES[0]
@@ -933,10 +989,18 @@ const loadAnalysisTypes = () => {
     });
 };
 
+// Open modal and clear fields
+const openCreateFileTypeModal = () => {
+  newFileTypeName.value = '';
+  newFileTypeExtension.value = '';
+  showCreateFileTypeModal.value = true;
+};
+
 // Handle creating new file type
 const handleCreateFileType = () => {
-  if (!newFileTypeName.value || !newFileTypeExtension.value) {
-    return false; // Don't close modal
+  // Prevent action if form is invalid (empty fields or duplicate exists)
+  if (isFileTypeFormInvalid.value) {
+    return; // Do nothing if invalid
   }
 
   // Remove the previously created file type if it exists
@@ -953,7 +1017,7 @@ const handleCreateFileType = () => {
 
   // Create the new file type object (don't save to API yet)
   const newAnalysisType = {
-    name: newFileTypeName.value.trim(),
+    name: newFileTypeName.value.trim().toUpperCase().replace(/\s+/g, '_').replace(/[^A-Z0-9_]/g, ''),
     extension: newFileTypeExtension.value.trim(),
   };
 
@@ -966,19 +1030,18 @@ const handleCreateFileType = () => {
   // Track this as the newly created type
   newlyCreatedFileType.value = newAnalysisType;
 
-  // Reset modal state
+  // Clear fields and close modal
   newFileTypeName.value = '';
   newFileTypeExtension.value = '';
-  
-  return true; // Close modal
+  showCreateFileTypeModal.value = false;
 };
 
 // Handle canceling file type creation
 const handleCancelFileType = () => {
-  // Clear modal fields
+  // Clear fields and close modal
   newFileTypeName.value = '';
   newFileTypeExtension.value = '';
-  return true; // Close modal
+  showCreateFileTypeModal.value = false;
 };
 
 watchDebounced(

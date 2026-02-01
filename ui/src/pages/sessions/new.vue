@@ -96,13 +96,9 @@
                     </template>
 
                     <template #cell(genome)="{ rowData }">
-                      <div class="text-sm">
-                        {{
-                          (rowData.genome_type || '') +
-                          (rowData.genome_type && rowData.genome_value ? ' ' : '') +
-                          (rowData.genome_value || '')
-                        }}
-                      </div>
+                      <va-chip v-if="rowData.genome_type || rowData.genome_value" size="small">
+                        {{ rowData.genome_type || '' }}{{ rowData.genome_value ? ` (${rowData.genome_value})` : '' }}
+                      </va-chip>
                     </template>
 
                     <template #cell(dataset)="{ rowData }">

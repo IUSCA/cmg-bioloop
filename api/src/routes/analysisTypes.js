@@ -38,20 +38,31 @@ router.post(
 
     const { name, extension } = req.body;
     const formattedName = name.toUpperCase().replace(/\s+/g, '_').replace(/[^A-Z0-9_]/g, '');
+    const formattedExtension = extension.trim();
 
-    // Check if analysis type already exists (case-insensitive)
+    // Check if analysis type already exists (case-insensitive on both name and extension)
     const existing = await prisma.analysis_type.findFirst({
       where: {
-        name: {
-          equals: formattedName,
-          mode: 'insensitive',
-        },
+        AND: [
+          {
+            name: {
+              equals: formattedName,
+              mode: 'insensitive',
+            },
+          },
+          {
+            extension: {
+              equals: formattedExtension,
+              mode: 'insensitive',
+            },
+          },
+        ],
       },
     });
 
     if (existing) {
       return res.status(409).json({
-        error: 'Analysis type already exists',
+        error: 'Analysis type with this name and extension already exists',
         existing,
       });
     }
@@ -59,7 +70,7 @@ router.post(
     const analysisType = await prisma.analysis_type.create({
       data: {
         name: formattedName,
-        extension,
+        extension: formattedExtension,
       },
     });
 

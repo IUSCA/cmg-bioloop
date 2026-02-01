@@ -112,6 +112,15 @@ router.get(
       user: req.user?.username,
     });
 
+    // TEMPORARY: Hardcoded response for testing
+    logger.info('[FS] Returning hardcoded response');
+    res.json([{
+      "name": "bigWig_h3k4me3_hg19---imported",
+      "isDir": true,
+      "path": "/N/scratch/cmguser/cmg-bioloop/imports/bigWig_h3k4me3_hg19---imported"
+    }]);
+    return;
+
     if (!query_path) {
       logger.info('[FS] No query_path provided, returning empty array');
       res.json([]);

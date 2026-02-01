@@ -55,12 +55,10 @@
         }}</va-chip>
       </template>
 
-      <template #cell(genomeType)="{ rowData }">
-        <va-chip v-if="rowData.genomeType" size="small">{{ rowData.genomeType }}</va-chip>
-      </template>
-
-      <template #cell(genomeValue)="{ rowData }">
-        <va-chip v-if="rowData.genomeValue" size="small" outline>{{ rowData.genomeValue }}</va-chip>
+      <template #cell(genome)="{ rowData }">
+        <va-chip v-if="rowData.genomeType || rowData.genomeValue" size="small">
+          {{ rowData.genomeType || '' }}{{ rowData.genomeValue ? ` (${rowData.genomeValue})` : '' }}
+        </va-chip>
       </template>
 
       <template #cell(dataset)="{ rowData }">
@@ -208,16 +206,9 @@ const columns = [
     tdAlign: 'center',
   },
   {
-    key: 'genomeType',
-    label: 'Genome Type',
-    width: '10%',
-    thAlign: 'center',
-    tdAlign: 'center',
-  },
-  {
-    key: 'genomeValue',
-    label: 'Genome Value',
-    width: '10%',
+    key: 'genome',
+    label: 'Genome',
+    width: '15%',
     thAlign: 'center',
     tdAlign: 'center',
   },

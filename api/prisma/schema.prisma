@@ -58,11 +58,13 @@ model dataset_genomic_attributes {
 
 model analysis_type {
   id         Int       @id @default(autoincrement())
-  name       String    @unique // Case-insensitive via UPPER() index in migration
+  name       String
   extension  String
   created_at DateTime  @default(now()) @db.Timestamp(6)
   updated_at DateTime  @default(now()) @updatedAt @db.Timestamp(6)
   datasets   dataset[]
+
+  @@unique([name, extension], name: "analysis_type_name_extension_key")
 }
 
 model dataset_hierarchy {

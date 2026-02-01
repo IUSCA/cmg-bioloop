@@ -2,13 +2,13 @@
   <div class="va-table-responsive">
     <table class="va-table">
       <tbody>
-        <tr>
-          <td>Genome Type</td>
-          <td>{{ props.dataset?.genomic_details?.genome_type }}</td>
-        </tr>
-        <tr>
-          <td>Genome Value</td>
-          <td>{{ props.dataset?.genomic_details?.genome_value }}</td>
+        <tr v-if="formattedGenome">
+          <td>Genome</td>
+          <td>
+            <va-chip size="small">
+              {{ formattedGenome }}
+            </va-chip>
+          </td>
         </tr>
         <tr>
           <td>Genome Files</td>
@@ -20,7 +20,24 @@
 </template>
 
 <script setup>
+import { computed } from 'vue';
+
 const props = defineProps({
   dataset: Object,
+});
+
+// Format genome type and value
+const formattedGenome = computed(() => {
+  const genomicDetails = props.dataset?.genomic_details;
+  if (!genomicDetails) return '';
+  
+  const type = genomicDetails.genome_type || '';
+  const value = genomicDetails.genome_value || '';
+  
+  if (!type && !value) return '';
+  if (!value) return type;
+  if (!type) return value;
+  
+  return `${type} (${value})`;
 });
 </script>

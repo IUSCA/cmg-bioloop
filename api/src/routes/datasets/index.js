@@ -866,14 +866,25 @@ router.patch(
         };
       } else if (analysis_type.name && analysis_type.extension) {
         const formattedName = formatAnalysisType(analysis_type.name);
+        const formattedExtension = analysis_type.extension.trim();
         
-        // Find or create analysis_type with case-insensitive search
+        // Find or create analysis_type with case-insensitive search on composite key
         let foundAnalysisType = await prisma.analysis_type.findFirst({
           where: {
-            name: {
-              equals: formattedName,
-              mode: 'insensitive',
-            },
+            AND: [
+              {
+                name: {
+                  equals: formattedName,
+                  mode: 'insensitive',
+                },
+              },
+              {
+                extension: {
+                  equals: formattedExtension,
+                  mode: 'insensitive',
+                },
+              },
+            ],
           },
         });
         
@@ -881,7 +892,7 @@ router.patch(
           foundAnalysisType = await prisma.analysis_type.create({
             data: {
               name: formattedName,
-              extension: analysis_type.extension,
+              extension: formattedExtension,
             },
           });
         }

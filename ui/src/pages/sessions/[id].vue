@@ -31,12 +31,10 @@
                 <span>{{ session.title }}</span>
               </div>
               <div class="flex justify-between">
-                <span class="font-medium">Genome Type</span>
-                <va-chip v-if="session.genome_type" size="small">{{ session.genome_type }}</va-chip>
-              </div>
-              <div class="flex justify-between">
-                <span class="font-medium">Genome Value</span>
-                <va-chip v-if="session.genome" outline size="small">{{ session.genome }}</va-chip>
+                <span class="font-medium">Genome</span>
+                <va-chip v-if="session.genome_type || session.genome" size="small">
+                  {{ session.genome_type || '' }}{{ session.genome ? ` (${session.genome})` : '' }}
+                </va-chip>
               </div>
               <div class="flex justify-between">
                 <span class="font-medium">Visibility</span>
@@ -388,13 +386,9 @@
               </template>
 
               <template #cell(genome)="{ rowData }">
-                <div class="text-sm">
-                  {{
-                    (rowData.genome_type || '') +
-                    (rowData.genome_type && rowData.genome_value ? ' ' : '') +
-                    (rowData.genome_value || '')
-                  }}
-                </div>
+                <va-chip v-if="rowData.genome_type || rowData.genome_value" size="small">
+                  {{ rowData.genome_type || '' }}{{ rowData.genome_value ? ` (${rowData.genome_value})` : '' }}
+                </va-chip>
               </template>
 
               <template #cell(dataset)="{ rowData }">

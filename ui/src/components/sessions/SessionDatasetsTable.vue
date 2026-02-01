@@ -28,14 +28,12 @@
             </template>
 
             <template #cell(genome)="{ rowData }">
-              <div v-if="rowData.genomic_details" class="flex gap-2">
-                <va-chip v-if="rowData.genomic_details.genome_type" size="small">
-                  {{ rowData.genomic_details.genome_type }}
-                </va-chip>
-                <va-chip v-if="rowData.genomic_details.genome_value" size="small" outline>
-                  {{ rowData.genomic_details.genome_value }}
-                </va-chip>
-              </div>
+              <va-chip 
+                v-if="rowData.genomic_details && (rowData.genomic_details.genome_type || rowData.genomic_details.genome_value)" 
+                size="small"
+              >
+                {{ rowData.genomic_details.genome_type || '' }}{{ rowData.genomic_details.genome_value ? ` (${rowData.genomic_details.genome_value})` : '' }}
+              </va-chip>
               <span v-else>—</span>
             </template>
 

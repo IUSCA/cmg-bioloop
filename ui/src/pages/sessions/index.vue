@@ -56,14 +56,8 @@
       </template>
 
       <template #cell(genome)="{ rowData }">
-        <va-chip v-if="rowData.genome" outline size="small" preset="primary">
-          {{ rowData.genome }}
-        </va-chip>
-      </template>
-
-      <template #cell(genome_type)="{ rowData }">
-        <va-chip v-if="rowData.genome_type" size="small" preset="secondary">
-          {{ rowData.genome_type }}
+        <va-chip v-if="rowData.genome_type || rowData.genome" size="small">
+          {{ rowData.genome_type || '' }}{{ rowData.genome ? ` (${rowData.genome})` : '' }}
         </va-chip>
       </template>
 
@@ -202,16 +196,10 @@ const columns = [
     align: 'left',
   },
   {
-    key: 'genome_type',
-    label: 'Genome Type',
-    sortable: true,
-    width: '15%',
-  },
-  {
     key: 'genome',
     label: 'Genome',
     sortable: true,
-    width: '15%',
+    width: '20%',
   },
   {
     key: 'tracks_count',

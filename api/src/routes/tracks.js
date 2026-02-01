@@ -316,13 +316,24 @@ router.post(
         if (datasetId) {
           // Find or create analysis_type with the given name (case-insensitive)
           const formattedName = file_type.toUpperCase().replace(/\s+/g, '_').replace(/[^A-Z0-9_]/g, '');
+          const formattedExtension = `.${file_type.toLowerCase()}`;
           
           let analysisType = await prisma.analysis_type.findFirst({
             where: {
-              name: {
-                equals: formattedName,
-                mode: 'insensitive',
-              },
+              AND: [
+                {
+                  name: {
+                    equals: formattedName,
+                    mode: 'insensitive',
+                  },
+                },
+                {
+                  extension: {
+                    equals: formattedExtension,
+                    mode: 'insensitive',
+                  },
+                },
+              ],
             },
           });
           
@@ -330,7 +341,7 @@ router.post(
             analysisType = await prisma.analysis_type.create({
               data: {
                 name: formattedName,
-                extension: file_type.toLowerCase(),
+                extension: formattedExtension,
               },
             });
           }
@@ -549,13 +560,24 @@ router.patch(
         if (datasetId) {
           // Find or create analysis_type with the given name (case-insensitive)
           const formattedName = file_type.toUpperCase().replace(/\s+/g, '_').replace(/[^A-Z0-9_]/g, '');
+          const formattedExtension = `.${file_type.toLowerCase()}`;
           
           let analysisType = await prisma.analysis_type.findFirst({
             where: {
-              name: {
-                equals: formattedName,
-                mode: 'insensitive',
-              },
+              AND: [
+                {
+                  name: {
+                    equals: formattedName,
+                    mode: 'insensitive',
+                  },
+                },
+                {
+                  extension: {
+                    equals: formattedExtension,
+                    mode: 'insensitive',
+                  },
+                },
+              ],
             },
           });
           
@@ -563,7 +585,7 @@ router.patch(
             analysisType = await prisma.analysis_type.create({
               data: {
                 name: formattedName,
-                extension: file_type.toLowerCase(),
+                extension: formattedExtension,
               },
             });
           }

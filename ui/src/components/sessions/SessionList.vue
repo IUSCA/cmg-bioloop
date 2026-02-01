@@ -45,14 +45,8 @@
         </template>
 
         <template #cell(genome)="{ item }">
-          <va-chip v-if="item.genome" size="small" preset="primary">
-            {{ item.genome }}
-          </va-chip>
-        </template>
-
-        <template #cell(genome_type)="{ item }">
-          <va-chip v-if="item.genome_type" size="small" preset="secondary">
-            {{ item.genome_type }}
+          <va-chip v-if="item.genome_type || item.genome" size="small">
+            {{ item.genome_type || '' }}{{ item.genome ? ` (${item.genome})` : '' }}
           </va-chip>
         </template>
 
@@ -212,17 +206,7 @@ const columns = [
     key: "genome",
     label: "Genome",
     sortable: true,
-    width: "15%",
-    thStyle:
-      "white-space: pre-wrap; word-wrap: break-word; word-break: break-word;",
-    tdStyle:
-      "white-space: pre-wrap; word-wrap: break-word; word-break: break-word;",
-  },
-  {
-    key: "genome_type",
-    label: "Genome Type",
-    sortable: true,
-    width: "15%",
+    width: "20%",
     thStyle:
       "white-space: pre-wrap; word-wrap: break-word; word-break: break-word;",
     tdStyle:
