@@ -226,12 +226,15 @@
           :text-by="'text'"
           :value-by="'value'"
         />
-        <div class="flex items-end ml-2 pb-1">
+        <div class="flex items-end ml-2">
           <va-popover message="Create new File Type">
             <va-button
               icon="add"
-              class="px-1"
-              color="success"
+              class="px-3"
+              color="primary"
+              border-color="primary"
+              preset="secondary"
+              outline
               @click="openCreateFileTypeModal"
             />
           </va-popover>

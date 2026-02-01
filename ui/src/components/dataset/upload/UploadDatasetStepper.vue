@@ -215,12 +215,15 @@
             placeholder="Select file type"
             class="flex-grow"
           />
-          <div class="flex items-end ml-2 pb-1">
+          <div class="flex items-end ml-2">
             <va-popover message="Create new File Type">
               <va-button
                 icon="add"
-                class="px-1"
-                color="success"
+                class="px-3"
+                color="primary"
+                border-color="primary"
+                preset="secondary"
+                outline
                 @click="openCreateFileTypeModal"
               />
             </va-popover>
@@ -372,9 +375,9 @@
 import DatasetSelectAutoComplete from "@/components/dataset/DatasetSelectAutoComplete.vue";
 import config from "@/config";
 import Constants from "@/constants";
+import analysisTypeService from "@/services/analysisType";
 import datasetService from "@/services/dataset";
 import instrumentService from "@/services/instrument";
-import analysisTypeService from "@/services/analysisType";
 import toast from "@/services/toast";
 import uploadService from "@/services/upload";
 import { formatBytes } from "@/services/utils";
