@@ -57,7 +57,7 @@ async function convertUser(prisma, cmgUser) {
         cas_id: cmgUser.username, // CMG uses username as cas_id
         is_deleted: !cmgUser.active,
         cmg_id: cmgUser._id.toString(),
-        created_at: cmgUser.createdDate || new Date(),
+        created_at: cmgUser.createDate || new Date(), // CMG uses 'createDate' (not createdDate)
       },
     });
   } catch (error) {

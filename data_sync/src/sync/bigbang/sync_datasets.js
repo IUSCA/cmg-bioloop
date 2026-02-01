@@ -179,7 +179,9 @@ async function insertDataset(prisma, cmgItem, datasetType, name, isDeleted) {
       num_directories: cmgItem.directories || 0,
       num_files: datasetType === 'RAW_DATA' ? (cmgItem.files || 0) : 0,
       du_size: datasetType === 'RAW_DATA' ? BigInt(cmgItem.du_size || 0) : BigInt(0),
-      size: BigInt(cmgItem.size || 0),
+      // For DATA_PRODUCT: use 'size' field from CMG dataproducts collection
+      // For RAW_DATA: use 'size' field from CMG datasets collection
+      size: cmgItem.size ? BigInt(cmgItem.size) : null,
       created_at: createdAt,
       updated_at: updatedAt,
       origin_path: cmgItem.paths?.origin || null,

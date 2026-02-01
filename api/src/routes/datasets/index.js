@@ -10,8 +10,6 @@ const _ = require('lodash/fp');
 const config = require('config');
 const pm = require('picomatch');
 const he = require('he');
-
-// const logger = require('@/services/logger');
 const path = require('path');
 const prisma = require('@/db');
 const asyncHandler = require('@/middleware/asyncHandler');

@@ -103,6 +103,7 @@ async function convertSession(prisma, cmgDb, cmgSession) {
       user_id: userId,
       access_count: cmgSession.access_count || 0,
       cmg_id: cmgSessionId, // Track CMG session for provenance
+      created_at: cmgSession.createdAt || new Date(), // Preserve CMG creation timestamp
       metadata: {
         datasets: dataproductIds, // CMG dataproduct IDs for dataset lookup
       },
