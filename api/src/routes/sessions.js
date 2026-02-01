@@ -388,9 +388,9 @@ router.get(
   }),
 );
 
-// GET /sessions/:username - Get sessions for a specific user (if accessible)
+// GET /sessions/:username/all - Get sessions for a specific user (if accessible)
 router.get(
-  'all/:username',
+  '/:username/all',
   isPermittedTo('read'),
   [
     param('username').isString().trim(),

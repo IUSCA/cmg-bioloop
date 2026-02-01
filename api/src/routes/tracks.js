@@ -619,7 +619,7 @@ router.delete(
 
 // Get tracks for a specific user (ownership-based access control)
 router.get(
-  '/:username',
+  '/:username/all',
   isPermittedTo('read', { checkOwnership: true }),
   [
     param('username').isString().notEmpty(),

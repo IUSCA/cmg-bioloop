@@ -39,7 +39,7 @@
     </div>
 
     <!-- table -->
-    <va-data-table :items="pastUploads" :columns="columns">
+    <va-data-table :items="pastUploads" :columns="columns" :loading="loading">
       <template #cell(status)="{ value }">
         <va-chip size="small" :color="getStatusChipColor(value)">
           {{ value }}
@@ -60,8 +60,21 @@
       </template>
 
       <template #cell(uploaded_dataset_type)="{ value }">
-        <va-chip size="small" outline>
+        <va-chip size="small" outline v-if="value">
           {{ value }}
+        </va-chip>
+      </template>
+
+      <template #cell(file_type)="{ value }">
+        <va-chip size="small" outline v-if="value">
+          {{ value.toUpperCase() }}
+        </va-chip>
+      </template>
+
+      <template #cell(genome)="{ rowData }">
+        <va-chip size="small" outline v-if="rowData.genome_type || rowData.genome_value">
+          {{ rowData.genome_type || '' }}
+          {{ rowData.genome_value ? `(${rowData.genome_value})` : '' }}
         </va-chip>
       </template>
 
@@ -127,6 +140,7 @@ const pastUploads = ref([]);
 const currentPageIndex = ref(1);
 const pageSize = ref(10);
 const total_results = ref(0);
+const loading = ref(false);
 // used for OFFSET clause in the SQL used to retrieve the next paginated batch
 // of results
 const offset = computed(() => (currentPageIndex.value - 1) * pageSize.value);
@@ -151,11 +165,16 @@ const filter_query = computed(() => {
 });
 
 const columns = [
-  { key: "status", width: "5%" },
+  {
+    key: "status",
+    label: "Status",
+    width: "8%",
+    thAlign: "center",
+    tdAlign: "center",
+  },
   {
     key: "uploaded_dataset",
     label: "Uploaded Dataset",
-    width: "20%",
     thAlign: "center",
     tdAlign: "center",
     tdStyle:
@@ -166,14 +185,28 @@ const columns = [
   {
     key: "uploaded_dataset_type",
     label: "Dataset Type",
-    width: "20%",
+    width: "12%",
+    thAlign: "center",
+    tdAlign: "center",
+  },
+  {
+    key: "file_type",
+    label: "File Type",
+    width: "10%",
+    thAlign: "center",
+    tdAlign: "center",
+  },
+  {
+    key: "genome",
+    label: "Genome",
+    width: "15%",
     thAlign: "center",
     tdAlign: "center",
   },
   {
     key: "source_dataset",
     label: "Source Raw Data",
-    width: "20%",
+    width: "15%",
     thAlign: "center",
     tdAlign: "center",
     tdStyle:
@@ -184,7 +217,7 @@ const columns = [
   {
     key: "user",
     label: "Uploaded By",
-    width: "20%",
+    width: "15%",
     thAlign: "center",
     tdAlign: "center",
     tdStyle:
@@ -228,11 +261,13 @@ const getStatusChipColor = (value) => {
 };
 
 const getUploadLogs = async () => {
+  loading.value = true;
   return datasetService
     .getDatasetUploadLogs(filter_query.value)
     .then((res) => {
       pastUploads.value = res.data.uploads.map((e) => {
         let uploaded_dataset = e.audit_log.dataset;
+        const genomicDetails = uploaded_dataset.genomic_details?.[0];
         return {
           ...e,
           initiated_at: e.audit_log.timestamp,
@@ -243,6 +278,9 @@ const getUploadLogs = async () => {
               ? uploaded_dataset.source_datasets[0].source_dataset
               : null,
           uploaded_dataset_type: uploaded_dataset.type,
+          file_type: uploaded_dataset.file_type,
+          genome_type: genomicDetails?.genome_type,
+          genome_value: genomicDetails?.genome_value,
         };
       });
       total_results.value = res.data.metadata.count;
@@ -250,6 +288,9 @@ const getUploadLogs = async () => {
     .catch((err) => {
       toast.error("Could not retrieve past uploads");
       console.error("Error fetching upload logs:", err);
+    })
+    .finally(() => {
+      loading.value = false;
     });
 };
 

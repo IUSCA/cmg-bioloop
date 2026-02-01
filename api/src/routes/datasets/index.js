@@ -18,6 +18,7 @@ const { validate } = require('@/middleware/validators');
 const datasetService = require('@/services/dataset');
 const { formatAnalysisType } = require('@/utils/sessionUtils');
 const authService = require('@/services/auth');
+const wfService = require('@/services/workflow');
 const CONSTANTS = require('@/constants');
 const logger = require('@/services/logger');
 const utils = require('../../utils');
@@ -327,8 +328,28 @@ router.get(
         prisma.dataset_import_log.count({ where: whereClause }),
       ]);
 
+      // Enrich workflow data from Rhythm
+      const enrichedImportLogs = await Promise.all(
+        importLogs.map(async (log) => {
+          const dataset = log.audit_log.dataset;
+          if (dataset.workflows && dataset.workflows.length > 0) {
+            try {
+              const workflow_ids = dataset.workflows.map((x) => x.id);
+              const wf_res = await wfService.getAll({
+                workflow_ids,
+              });
+              dataset.workflows = wf_res.data.results || [];
+            } catch (error) {
+              logger.warn(`Failed to fetch workflow details for dataset ${dataset.id}: ${error.message}`);
+              dataset.workflows = [];
+            }
+          }
+          return log;
+        })
+      );
+
       res.json({
-        imports: importLogs,
+        imports: enrichedImportLogs,
         metadata: { count },
       });
     } catch (error) {
@@ -340,7 +361,7 @@ router.get(
 
 // Get import logs for specific user
 router.get(
-  '/imports/:username',
+  '/:username/imports',
   validate([
     query('dataset_name').optional().trim().isLength({ min: 1 }),
     query('limit').isInt({ min: 1 }).toInt().optional(),
@@ -419,8 +440,28 @@ router.get(
         prisma.dataset_import_log.count({ where: whereClause }),
       ]);
 
+      // Enrich workflow data from Rhythm
+      const enrichedImportLogs = await Promise.all(
+        importLogs.map(async (log) => {
+          const dataset = log.audit_log.dataset;
+          if (dataset.workflows && dataset.workflows.length > 0) {
+            try {
+              const workflow_ids = dataset.workflows.map((x) => x.id);
+              const wf_res = await wfService.getAll({
+                workflow_ids,
+              });
+              dataset.workflows = wf_res.data.results || [];
+            } catch (error) {
+              logger.warn(`Failed to fetch workflow details for dataset ${dataset.id}: ${error.message}`);
+              dataset.workflows = [];
+            }
+          }
+          return log;
+        })
+      );
+
       res.json({
-        imports: importLogs,
+        imports: enrichedImportLogs,
         metadata: { count },
       });
     } catch (error) {

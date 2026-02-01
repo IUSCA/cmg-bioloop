@@ -35,10 +35,11 @@
     </div>
 
     <!-- table -->
-    <va-data-table :items="pastImports" :columns="columns">
+    <va-data-table :items="pastImports" :columns="columns" :loading="loading">
       <template #cell(status)="{ rowData }">
-        <div v-if="rowData.is_integration_pending" class="flex justify-center">
-          <va-popover :message="'Dataset integration in progress'">
+        <!-- Integrated workflow running -->
+        <div v-if="rowData.integrated_status === 'ACTIVE'" class="flex justify-center">
+          <va-popover :message="'Registration in progress'">
             <half-circle-spinner
               class="flex-none"
               :animation-duration="1000"
@@ -47,8 +48,17 @@
             />
           </va-popover>
         </div>
-        <div v-else-if="rowData.integration_completed">
-          <va-icon name="check_circle" color="success" />
+        <!-- Integrated workflow succeeded -->
+        <div v-else-if="rowData.integrated_status === 'SUCCESS'" class="flex justify-center">
+          <va-popover :message="'Registration completed successfully'">
+            <va-icon name="check_circle" color="success" />
+          </va-popover>
+        </div>
+        <!-- Integrated workflow failed -->
+        <div v-else-if="rowData.integrated_status === 'FAILURE'" class="flex justify-center">
+          <va-popover :message="'Registration failed'">
+            <va-icon name="warning" color="warning" />
+          </va-popover>
         </div>
       </template>
 
@@ -74,10 +84,10 @@
       </template>
 
       <template #cell(genome)="{ rowData }">
-        <span v-if="rowData.genome_type || rowData.genome_value">
+        <va-chip size="small" outline v-if="rowData.genome_type || rowData.genome_value">
           {{ rowData.genome_type || '' }}
           {{ rowData.genome_value ? `(${rowData.genome_value})` : '' }}
-        </span>
+        </va-chip>
       </template>
 
       <template #cell(source_dataset)="{ rowData }">
@@ -99,15 +109,6 @@
         <span class="text-sm lg:text-base" v-if="value">
           {{ datetime.date(value) }}
         </span>
-      </template>
-
-      <template #cell(notes)="{ rowData }">
-        <va-popover v-if="rowData.metadata?.notes" placement="top">
-          <template #body>
-            <div class="max-w-xs">{{ rowData.metadata.notes }}</div>
-          </template>
-          <va-icon name="mdi-note-text" class="cursor-pointer" />
-        </va-popover>
       </template>
     </va-data-table>
 
@@ -152,6 +153,7 @@ const _datasets = ref({}); // Mapping of dataset_id to dataset object for pollin
 const currentPageIndex = ref(1);
 const pageSize = ref(10);
 const total_results = ref(0);
+const loading = ref(false);
 
 const offset = computed(() => (currentPageIndex.value - 1) * pageSize.value);
 
@@ -183,7 +185,6 @@ const columns = [
   {
     key: 'imported_dataset',
     label: 'Imported Dataset',
-    width: '15%',
     thAlign: 'center',
     tdAlign: 'center',
     tdStyle: 'white-space: pre-wrap; word-wrap: break-word; word-break: break-word;',
@@ -236,21 +237,16 @@ const columns = [
     tdAlign: 'right',
     thStyle: 'white-space: pre-wrap; word-wrap: break-word; word-break: break-word;',
   },
-  {
-    key: 'notes',
-    label: 'Notes',
-    width: '8%',
-    thAlign: 'center',
-    tdAlign: 'center',
-  },
 ];
 
 const getImportLogs = async () => {
+  loading.value = true;
   return datasetService
     .getDatasetImportLogs(filter_query.value)
     .then((res) => {
       pastImports.value = res.data.imports.map((e) => {
         let imported_dataset = e.audit_log.dataset;
+        const status = wfService.get_integrated_workflow_status(imported_dataset.workflows);
         return {
           ...e,
           initiated_at: e.audit_log.timestamp,
@@ -261,8 +257,7 @@ const getImportLogs = async () => {
               ? imported_dataset.source_datasets[0].source_dataset
               : null,
           imported_dataset_type: imported_dataset.type,
-          is_integration_pending: wfService.is_step_pending('VALIDATE', imported_dataset.workflows),
-          integration_completed: hasIntegratedWorkflowCompleted(imported_dataset.workflows),
+          integrated_status: status,
         };
       });
       total_results.value = res.data.metadata.count;
@@ -270,16 +265,10 @@ const getImportLogs = async () => {
     .catch((err) => {
       toast.error('Could not retrieve past imports');
       console.error('Error fetching import logs:', err);
+    })
+    .finally(() => {
+      loading.value = false;
     });
-};
-
-// Check if the integrated workflow has completed successfully
-const hasIntegratedWorkflowCompleted = (workflows) => {
-  const integratedWorkflows = (workflows || []).filter(wf => wf.name === 'integrated');
-  if (integratedWorkflows.length === 0) return false;
-  
-  // Check if any integrated workflow has completed successfully
-  return integratedWorkflows.some(wf => wf.status === 'SUCCESS');
 };
 
 // _datasets is a mapping of dataset_ids to dataset objects. While polling one
@@ -297,10 +286,10 @@ watch(
   }
 );
 
-// Track datasets that have pending integration workflows
+// Track datasets that have active integrated workflows
 const tracking = computed(() => {
   return pastImports.value
-    .filter((imp) => imp.is_integration_pending)
+    .filter((imp) => imp.integrated_status === 'ACTIVE')
     .map((imp) => imp.imported_dataset.id);
 });
 
@@ -316,11 +305,7 @@ function fetch_and_update_dataset(id) {
       );
       if (importIndex !== -1) {
         pastImports.value[importIndex].imported_dataset = res.data;
-        pastImports.value[importIndex].is_integration_pending = wfService.is_step_pending(
-          'VALIDATE',
-          res.data.workflows
-        );
-        pastImports.value[importIndex].integration_completed = hasIntegratedWorkflowCompleted(
+        pastImports.value[importIndex].integrated_status = wfService.get_integrated_workflow_status(
           res.data.workflows
         );
       }

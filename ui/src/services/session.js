@@ -24,7 +24,7 @@ class SessionService {
    * @returns {Promise<Object>} Sessions and metadata
    */
   getByUsername(username, params = {}) {
-    return api.get(`/sessions/${username}`, { params });
+    return api.get(`/sessions/${username}/all`, { params });
   }
 
   /**

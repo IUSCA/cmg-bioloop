@@ -27,7 +27,7 @@ class TrackService {
    * @returns {Promise} Object containing tracks and count
    */
   getByUsername(username, params = {}) {
-    return api.get(`/tracks/${username}`, {
+    return api.get(`/tracks/${username}/all`, {
       params,
     });
   }

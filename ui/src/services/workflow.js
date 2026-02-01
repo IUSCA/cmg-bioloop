@@ -83,6 +83,49 @@ class WorkflowService {
     return active_staging_wfs.length > 0;
   }
 
+  get_integrated_workflow_status(workflows) {
+    // Get the status of the integrated workflow specifically
+    // Returns: 'SUCCESS', 'FAILURE', 'ACTIVE', or null
+    // For Import Log table: Only SUCCESS is considered success, all other terminal states are failures
+    const ACTIVE_STATES = ['PENDING', 'STARTED'];
+    
+    console.log('[WF STATUS] Checking workflows:', workflows);
+    
+    const integratedWorkflows = (workflows || []).filter(wf => wf.name === 'integrated');
+    console.log('[WF STATUS] Found integrated workflows:', integratedWorkflows);
+    
+    if (integratedWorkflows.length === 0) {
+      console.log('[WF STATUS] No integrated workflows found, returning null');
+      return null;
+    }
+    
+    // Get the most recent integrated workflow (in case there are multiple)
+    const latestWorkflow = integratedWorkflows[integratedWorkflows.length - 1];
+    console.log('[WF STATUS] Latest workflow:', latestWorkflow);
+    
+    if (!latestWorkflow.status) {
+      console.log('[WF STATUS] No status on workflow, returning null');
+      return null;
+    }
+    
+    // Active: workflow is running (PENDING or STARTED)
+    if (ACTIVE_STATES.includes(latestWorkflow.status)) {
+      console.log('[WF STATUS] Workflow is ACTIVE');
+      return 'ACTIVE';
+    }
+    
+    // Success: ONLY the SUCCESS status
+    if (latestWorkflow.status === 'SUCCESS') {
+      console.log('[WF STATUS] Workflow is SUCCESS');
+      return 'SUCCESS';
+    }
+    
+    // Failure: Any other status (FAILURE, REVOKED, EXCEPTION, etc.)
+    // This treats all non-SUCCESS terminal states as failures
+    console.log('[WF STATUS] Workflow is FAILURE (status:', latestWorkflow.status, ')');
+    return 'FAILURE';
+  }
+
   getWorkflowProcesses({
     workflow_id,
     step = null,
