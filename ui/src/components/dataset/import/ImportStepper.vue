@@ -224,16 +224,15 @@
           placeholder="Select file type"
           class="flex-grow"
           :text-by="'text'"
-          :track-by="'value'"
+          :value-by="'value'"
         />
         <div class="flex items-center ml-2">
-          <va-popover>
-            <template #body>
-              <div class="w-96">
-                Type of genomic data file (e.g., FASTQ, BAM, VCF, BigWig, etc.)
-              </div>
-            </template>
-            <Icon icon="mdi:information" class="text-xl text-gray-500" />
+          <va-popover message="Create new File Type">
+            <va-button
+              icon="add"
+              size="small"
+              @click="showCreateFileTypeModal = true"
+            />
           </va-popover>
         </div>
       </div>
@@ -329,6 +328,29 @@
     </template>
   </va-stepper>
   <!--  </va-inner-loading>-->
+
+  <!-- Create File Type Modal -->
+  <va-modal
+    v-model="showCreateFileTypeModal"
+    title="Create New File Type"
+    size="small"
+    :before-ok="handleCreateFileType"
+    :before-cancel="handleCancelFileType"
+    :ok-button-props="{ disabled: !newFileTypeName || !newFileTypeExtension }"
+  >
+    <div class="flex flex-col gap-4">
+      <va-input
+        v-model="newFileTypeName"
+        label="Name"
+        placeholder="e.g., FASTQ"
+      />
+      <va-input
+        v-model="newFileTypeExtension"
+        label="Extension"
+        placeholder="e.g., .fastq.gz"
+      />
+    </div>
+  </va-modal>
 </template>
 
 <script setup>
@@ -338,6 +360,7 @@ import Constants from '@/constants';
 import datasetService from '@/services/dataset';
 import fileSystemService from '@/services/fs';
 import instrumentService from '@/services/instrument';
+import analysisTypeService from '@/services/analysisType';
 import toast from '@/services/toast';
 import { Icon } from '@iconify/vue';
 import { watchDebounced } from '@vueuse/core';
@@ -422,6 +445,11 @@ const selectedFileType = ref(null);
 const selectedGenomeType = ref(null);
 const selectedGenomeValue = ref(null);
 const importNotes = ref('');
+const showCreateFileTypeModal = ref(false);
+const newFileTypeName = ref('');
+const newFileTypeExtension = ref('');
+const analysisTypes = ref([]);
+const newlyCreatedFileType = ref(null); // Track the file type created via modal
 const searchSpace = ref(
   FILESYSTEM_SEARCH_SPACES instanceof Array && FILESYSTEM_SEARCH_SPACES.length > 0
     ? FILESYSTEM_SEARCH_SPACES[0]
@@ -481,15 +509,10 @@ const stepIsPristine = computed(() => {
 });
 
 const fileTypeOptions = computed(() => {
-  return [
-    { text: 'FASTQ', value: 'fastq' },
-    { text: 'BAM', value: 'bam' },
-    { text: 'BigWig', value: 'bigwig' },
-    { text: 'VCF', value: 'vcf' },
-    { text: 'BED', value: 'bed' },
-    { text: 'BigBed', value: 'bigbed' },
-    { text: 'Other', value: 'other' },
-  ];
+  return analysisTypes.value.map((at) => ({
+    text: `${at.name} (${at.extension})`,
+    value: at, // Pass the whole object
+  }));
 });
 
 const genomeTypeOptions = computed(() => {
@@ -754,7 +777,7 @@ const preImport = () => {
       src_dataset_id: selectedRawData.value?.id,
       create_method: Constants.DATASET_CREATE_METHODS.IMPORT,
       // Genomic details
-      file_type: selectedFileType.value?.value || null,
+      file_type: selectedFileType.value || null,
       genome_type: selectedGenomeType.value?.value || selectedGenomeType.value || null,
       genome_value: selectedGenomeValue.value || null,
       import_notes: importNotes.value || null,
@@ -897,6 +920,67 @@ watch([isFileSearchAutocompleteOpen, fileListSearchText], () => {
 
 // Begin search once FileListAutoComplete is opened, or typed into, but
 // after a delay.
+// Load analysis types from API
+const loadAnalysisTypes = () => {
+  analysisTypeService
+    .getAll()
+    .then((res) => {
+      analysisTypes.value = res.data;
+    })
+    .catch((err) => {
+      toast.error('Failed to load file types');
+      console.error(err);
+    });
+};
+
+// Handle creating new file type
+const handleCreateFileType = () => {
+  if (!newFileTypeName.value || !newFileTypeExtension.value) {
+    return false; // Don't close modal
+  }
+
+  // Remove the previously created file type if it exists
+  if (newlyCreatedFileType.value) {
+    const index = analysisTypes.value.findIndex(at => at === newlyCreatedFileType.value);
+    if (index !== -1) {
+      analysisTypes.value.splice(index, 1);
+    }
+    // If the removed type was selected, clear selection
+    if (selectedFileType.value === newlyCreatedFileType.value) {
+      selectedFileType.value = null;
+    }
+  }
+
+  // Create the new file type object (don't save to API yet)
+  const newAnalysisType = {
+    name: newFileTypeName.value.trim(),
+    extension: newFileTypeExtension.value.trim(),
+  };
+
+  // Add to local list
+  analysisTypes.value.push(newAnalysisType);
+
+  // Select it
+  selectedFileType.value = newAnalysisType;
+
+  // Track this as the newly created type
+  newlyCreatedFileType.value = newAnalysisType;
+
+  // Reset modal state
+  newFileTypeName.value = '';
+  newFileTypeExtension.value = '';
+  
+  return true; // Close modal
+};
+
+// Handle canceling file type creation
+const handleCancelFileType = () => {
+  // Clear modal fields
+  newFileTypeName.value = '';
+  newFileTypeExtension.value = '';
+  return true; // Close modal
+};
+
 watchDebounced(
   [isFileSearchAutocompleteOpen, fileListSearchText],
   () => {
@@ -909,6 +993,7 @@ watchDebounced(
 
 onMounted(async () => {
   await setFormErrors();
+  loadAnalysisTypes();
 });
 
 onMounted(() => {

@@ -31,6 +31,7 @@ if (featureService.isFeatureEnabled({ key: 'upload' })) {
 }
 
 router.use('/datasets', require('./datasets') /* #swagger.security = [{"BearerAuth": []}] */);
+router.use('/analysis-types', require('./analysisTypes') /* #swagger.security = [{"BearerAuth": []}] */);
 router.use('/metrics', require('./metrics') /* #swagger.security = [{"BearerAuth": []}] */);
 router.use('/users', require('./users') /* #swagger.security = [{"BearerAuth": []}] */);
 router.use('/workflows', require('./workflows') /* #swagger.security = [{"BearerAuth": []}] */);

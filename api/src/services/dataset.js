@@ -269,6 +269,7 @@ async function get_dataset({
       derived_datasets: true,
       conversions: include_conversions ? conversion_includes : false,
       projects: includeProjects,
+      analysis_type: true,
       ...(include_source_instrument ? {
         src_instrument: {
           select: {
@@ -1241,7 +1242,7 @@ const buildDatasetsFetchQuery = ({
  * connects to source instruments and datasets, sets the initial state,
  * and creates an audit log entry for the dataset creation.
  */
-const buildDatasetCreateQuery = (data) => {
+const buildDatasetCreateQuery = async (data) => {
   /* eslint-disable no-unused-vars */
   const {
     name, type, du_size, size, origin_path, bundle_size, metadata, workflow_id,
@@ -1257,6 +1258,52 @@ const buildDatasetCreateQuery = (data) => {
   ])(data);
 
   create_query.name = normalize_name(create_query.name); // normalize name
+
+  // Handle analysis_type relation (connect existing or create new)
+  if (file_type) {
+    if (typeof file_type === 'object') {
+      // New pattern: file_type is an object
+      if (file_type.id) {
+        // Connect to existing analysis_type
+        create_query.analysis_type = {
+          connect: { id: file_type.id },
+        };
+      } else if (file_type.name && file_type.extension) {
+        // Create new analysis_type
+        const formattedName = file_type.name.toUpperCase().replace(/\s+/g, '_').replace(/[^A-Z0-9_]/g, '');
+        
+        // Find or create analysis_type with case-insensitive search
+        let analysisType = await prisma.analysis_type.findFirst({
+          where: {
+            name: {
+              equals: formattedName,
+              mode: 'insensitive',
+            },
+          },
+        });
+        
+        if (!analysisType) {
+          analysisType = await prisma.analysis_type.create({
+            data: {
+              name: formattedName,
+              extension: file_type.extension,
+            },
+          });
+        }
+        
+        create_query.analysis_type = {
+          connect: { id: analysisType.id },
+        };
+      }
+    } else if (typeof file_type === 'string') {
+      // Legacy pattern: file_type is a string (for backward compatibility with workers/metadata)
+      // Store in metadata.analysis_type instead
+      create_query.metadata = {
+        ...create_query.metadata,
+        analysis_type: file_type,
+      };
+    }
+  }
 
   // create workflow association
   if (workflow_id) {
@@ -1324,9 +1371,6 @@ const buildDatasetCreateQuery = (data) => {
   if (create_method === CONSTANTS.DATASET_CREATE_METHODS.IMPORT) {
     audit_log.import = {
       create: _.omitBy(_.isNil)({
-        file_type,
-        genome_type,
-        genome_value,
         source_run: src_dataset_id ? String(src_dataset_id) : null,
         metadata: {
           import_space: data.import_space || null,

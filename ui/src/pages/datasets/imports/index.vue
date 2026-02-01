@@ -247,6 +247,7 @@ const getImportLogs = async () => {
       pastImports.value = res.data.imports.map((e) => {
         let imported_dataset = e.audit_log.dataset;
         const status = wfService.get_integrated_workflow_status(imported_dataset.workflows);
+        const genomicDetails = imported_dataset.genomic_details;
         return {
           ...e,
           initiated_at: e.audit_log.timestamp,
@@ -257,6 +258,9 @@ const getImportLogs = async () => {
               ? imported_dataset.source_datasets[0].source_dataset
               : null,
           imported_dataset_type: imported_dataset.type,
+          file_type: imported_dataset.analysis_type?.name,
+          genome_type: genomicDetails?.genome_type,
+          genome_value: genomicDetails?.genome_value,
           integrated_status: status,
         };
       });

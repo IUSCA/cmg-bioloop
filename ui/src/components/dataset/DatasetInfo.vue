@@ -62,7 +62,7 @@
         <tr v-if="showAnalysisType">
           <td>Analysis Type</td>
           <td>
-            {{ humanizeAnalysisType(props.dataset?.metadata?.analysis_type) }}
+            {{ formattedAnalysisType }}
           </td>
         </tr>
         <tr>
@@ -93,6 +93,16 @@ const auth = useAuthStore();
 // Show Analysis Type only for DATA_PRODUCT datasets when genome browser is enabled
 const showAnalysisType = computed(() => {
   return props.dataset?.type === 'DATA_PRODUCT' && config.enabledFeatures?.genomeBrowser;
+});
+
+// Format analysis type with extension
+const formattedAnalysisType = computed(() => {
+  const analysisType = props.dataset?.analysis_type;
+  if (!analysisType?.name) {
+    return '';
+  }
+  const humanized = humanizeAnalysisType(analysisType.name);
+  return analysisType.extension ? `${humanized} (${analysisType.extension})` : humanized;
 });
 
 // const datasetCreateLog = computed(() => {

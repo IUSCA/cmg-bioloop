@@ -321,6 +321,13 @@ router.get(
                         id: true,
                       },
                     },
+                    genomic_details: {
+                      select: {
+                        genome_type: true,
+                        genome_value: true,
+                      },
+                    },
+                    analysis_type: true,
                   },
                 },
               },
@@ -433,6 +440,13 @@ router.get(
                         id: true,
                       },
                     },
+                    genomic_details: {
+                      select: {
+                        genome_type: true,
+                        genome_value: true,
+                      },
+                    },
+                    analysis_type: true,
                   },
                 },
               },
@@ -646,7 +660,7 @@ router.post(
       }
     }
 
-    const createQuery = datasetService.buildDatasetCreateQuery({
+    const createQuery = await datasetService.buildDatasetCreateQuery({
       name,
       type,
       du_size,
@@ -769,8 +783,9 @@ router.post(
         } */
       /* eslint-enable */
 
-    const data = req.body.datasets
-      .map((d) => datasetService.buildDatasetCreateQuery(d));
+    const data = await Promise.all(
+      req.body.datasets.map((d) => datasetService.buildDatasetCreateQuery(d))
+    );
 
     const results = await Promise.allSettled(data.map((d) => datasetService.create(prisma, d)));
 
@@ -811,6 +826,10 @@ router.patch(
     body('bundle_size').optional().notEmpty().bail()
       .customSanitizer(BigInt),
     body('bundle').optional().isObject(),
+    body('analysis_type').optional().isObject(),
+    body('analysis_type.id').optional().isInt(),
+    body('analysis_type.name').optional().isString(),
+    body('analysis_type.extension').optional().isString(),
   ]),
   asyncHandler(async (req, res, next) => {
     /* eslint-disable */
@@ -832,12 +851,46 @@ router.patch(
       return next(createError(404));
     }
 
-    const { metadata, ...data } = _.omitBy(_.isUndefined)(req.body);
+    const { metadata, analysis_type, ...data } = _.omitBy(_.isUndefined)(req.body);
     // Format analysis_type if it exists in metadata
     if (metadata?.analysis_type) {
       metadata.analysis_type = formatAnalysisType(metadata.analysis_type);
     }
     data.metadata = _.merge(datasetToUpdate?.metadata)(metadata); // deep merge
+
+    // Handle analysis_type relation (connect existing or create new)
+    if (analysis_type) {
+      if (analysis_type.id) {
+        data.analysis_type = {
+          connect: { id: analysis_type.id },
+        };
+      } else if (analysis_type.name && analysis_type.extension) {
+        const formattedName = formatAnalysisType(analysis_type.name);
+        
+        // Find or create analysis_type with case-insensitive search
+        let foundAnalysisType = await prisma.analysis_type.findFirst({
+          where: {
+            name: {
+              equals: formattedName,
+              mode: 'insensitive',
+            },
+          },
+        });
+        
+        if (!foundAnalysisType) {
+          foundAnalysisType = await prisma.analysis_type.create({
+            data: {
+              name: formattedName,
+              extension: analysis_type.extension,
+            },
+          });
+        }
+        
+        data.analysis_type = {
+          connect: { id: foundAnalysisType.id },
+        };
+      }
+    }
 
     if (req.body.bundle) {
       data.bundle = {

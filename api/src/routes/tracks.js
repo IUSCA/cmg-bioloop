@@ -40,7 +40,7 @@ const mergeDatasetFilter = (filterQuery, datasetCondition) => {
 
 const attachDatasetAnalysisType = (track) => {
   if (track) {
-    const analysisType = track.dataset_file?.dataset?.metadata?.analysis_type ?? null;
+    const analysisType = track.dataset_file?.dataset?.analysis_type?.name ?? null;
     track.analysis_type = analysisType;
   }
   return track;
@@ -139,7 +139,15 @@ router.get(
 
       const normalizedFileTypeFilter = normalizeFileTypeFilter(file_type);
       if (normalizedFileTypeFilter) {
-        mergeDatasetFilter(filter_query, { file_type: normalizedFileTypeFilter });
+        const nameFilter = typeof normalizedFileTypeFilter === 'object' && normalizedFileTypeFilter.in
+          ? { in: normalizedFileTypeFilter.in, mode: 'insensitive' }
+          : { equals: normalizedFileTypeFilter, mode: 'insensitive' };
+        
+        mergeDatasetFilter(filter_query, {
+          analysis_type: {
+            name: nameFilter,
+          },
+        });
       }
 
       if (genome_type || genome_value) {
@@ -183,6 +191,7 @@ router.get(
                     type: true,
                     metadata: true,
                     genomic_details: true,
+                    analysis_type: true,
                     projects: {
                       select: {
                         project: {
@@ -305,20 +314,38 @@ router.post(
       if (file_type) {
         const datasetId = datasetFile.dataset?.id || datasetFile.dataset_id;
         if (datasetId) {
-          await prisma.dataset.update({
-            where: { id: datasetId },
-            data: {
-              metadata: {
-                ...datasetFile.dataset?.metadata,
-                analysis_type: file_type,
+          // Find or create analysis_type with the given name (case-insensitive)
+          const formattedName = file_type.toUpperCase().replace(/\s+/g, '_').replace(/[^A-Z0-9_]/g, '');
+          
+          let analysisType = await prisma.analysis_type.findFirst({
+            where: {
+              name: {
+                equals: formattedName,
+                mode: 'insensitive',
               },
             },
           });
+          
+          if (!analysisType) {
+            analysisType = await prisma.analysis_type.create({
+              data: {
+                name: formattedName,
+                extension: file_type.toLowerCase(),
+              },
+            });
+          }
+
+          await prisma.dataset.update({
+            where: { id: datasetId },
+            data: {
+              analysis_type: {
+                connect: { id: analysisType.id },
+              },
+            },
+          });
+          
           if (track.dataset_file?.dataset) {
-            track.dataset_file.dataset.metadata = {
-              ...track.dataset_file.dataset.metadata,
-              analysis_type: file_type,
-            };
+            track.dataset_file.dataset.analysis_type = analysisType;
           }
         }
       }
@@ -520,20 +547,38 @@ router.patch(
       if (file_type !== undefined) {
         const datasetId = existingTrack.dataset_file?.dataset?.id;
         if (datasetId) {
-          await prisma.dataset.update({
-            where: { id: datasetId },
-            data: {
-              metadata: {
-                ...existingTrack.dataset_file?.dataset?.metadata,
-                analysis_type: file_type,
+          // Find or create analysis_type with the given name (case-insensitive)
+          const formattedName = file_type.toUpperCase().replace(/\s+/g, '_').replace(/[^A-Z0-9_]/g, '');
+          
+          let analysisType = await prisma.analysis_type.findFirst({
+            where: {
+              name: {
+                equals: formattedName,
+                mode: 'insensitive',
               },
             },
           });
+          
+          if (!analysisType) {
+            analysisType = await prisma.analysis_type.create({
+              data: {
+                name: formattedName,
+                extension: file_type.toLowerCase(),
+              },
+            });
+          }
+
+          await prisma.dataset.update({
+            where: { id: datasetId },
+            data: {
+              analysis_type: {
+                connect: { id: analysisType.id },
+              },
+            },
+          });
+          
           if (track.dataset_file?.dataset) {
-            track.dataset_file.dataset.metadata = {
-              ...track.dataset_file.dataset.metadata,
-              analysis_type: file_type,
-            };
+            track.dataset_file.dataset.analysis_type = analysisType;
           }
         }
       }
@@ -703,7 +748,15 @@ router.get(
 
       const userFileTypeFilter = normalizeFileTypeFilter(file_type);
       if (userFileTypeFilter) {
-        mergeDatasetFilter(filter_query, { file_type: userFileTypeFilter });
+        const nameFilter = typeof userFileTypeFilter === 'object' && userFileTypeFilter.in
+          ? { in: userFileTypeFilter.in, mode: 'insensitive' }
+          : { equals: userFileTypeFilter, mode: 'insensitive' };
+        
+        mergeDatasetFilter(filter_query, {
+          analysis_type: {
+            name: nameFilter,
+          },
+        });
       }
 
       if (genome_type || genome_value) {
@@ -747,6 +800,7 @@ router.get(
                     type: true,
                     metadata: true,
                     genomic_details: true,
+                    analysis_type: true,
                     projects: {
                       select: {
                         project: {

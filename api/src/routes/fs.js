@@ -41,6 +41,9 @@ function validatePath(req, res, next) {
     return next(createError.Forbidden());
   }
 
+  // Preserve trailing slash information before normalization
+  req.hasTrailingSlash = query_path.endsWith('/');
+
   let p = query_path ? path.normalize(query_path) : null;
   if (!p || !path.isAbsolute(p)) {
     logger.warn('[FS] validatePath failed: path not absolute', {
@@ -58,6 +61,7 @@ function validatePath(req, res, next) {
     resolved_path: p,
     base_dir,
     starts_with_base: p.startsWith(base_dir),
+    had_trailing_slash: req.hasTrailingSlash,
   });
 
   if (!p.startsWith(base_dir)) {
@@ -72,6 +76,7 @@ function validatePath(req, res, next) {
   req.query.path = p;
   logger.info('[FS] validatePath passed', {
     final_path: p,
+    had_trailing_slash: req.hasTrailingSlash,
   });
   next();
 }
@@ -136,17 +141,100 @@ router.get(
       query_path,
     });
 
+    const hasTrailingSlash = req.hasTrailingSlash;
+
     fs.access(mounted_search_dir, constants.F_OK, (err) => {
       if (err) {
-        logger.warn('[FS] Directory access failed', {
+        logger.info('[FS] Exact path not found, attempting substring match', {
           mounted_search_dir,
           error: err.message,
           code: err.code,
         });
-        return next(createError.NotFound());
+
+        const parent_query_path = path.dirname(query_path);
+        const search_term = path.basename(query_path);
+        
+        const parent_mounted_dir = path.join(
+          mount_dir,
+          parent_query_path.slice(parent_query_path.indexOf(base_dir) + base_dir.length)
+        );
+
+        logger.info('[FS] Attempting case-insensitive substring match', {
+          parent_query_path,
+          search_term,
+          parent_mounted_dir,
+        });
+
+        if (!parent_query_path.startsWith(base_dir)) {
+          logger.warn('[FS] Parent path outside base_dir', {
+            parent_query_path,
+            base_dir,
+          });
+          res.json([]);
+          return;
+        }
+
+        fs.access(parent_mounted_dir, constants.F_OK, (parentErr) => {
+          if (parentErr) {
+            logger.warn('[FS] Parent directory access failed', {
+              parent_mounted_dir,
+              error: parentErr.message,
+            });
+            res.json([]);
+            return;
+          }
+
+          fs.readdir(parent_mounted_dir, { withFileTypes: true }, (readErr, files) => {
+            if (readErr) {
+              logger.error('[FS] Error reading parent directory', {
+                parent_mounted_dir,
+                error: readErr.message,
+              });
+              res.json([]);
+              return;
+            }
+
+            const matchingFiles = files
+              .filter((f) => {
+                const nameMatches = f.name.toLowerCase().includes(search_term.toLowerCase());
+                const isDirCheck = dirs_only ? f.isDirectory() : true;
+                return nameMatches && isDirCheck;
+              })
+              .map((f) => ({
+                name: f.name,
+                isDir: f.isDirectory(),
+                path: path.join(parent_query_path, f.name),
+              }));
+
+            logger.info('[FS] Substring match results', {
+              search_term,
+              total_matches: matchingFiles.length,
+              matches: matchingFiles,
+            });
+
+            res.json(matchingFiles);
+          });
+        });
+        return;
       }
 
-      logger.info('[FS] Directory access successful', {
+      if (!hasTrailingSlash) {
+        logger.info('[FS] Exact path found without trailing slash, returning directory as match', {
+          query_path,
+        });
+
+        const parent_query_path = path.dirname(query_path);
+        const dir_name = path.basename(query_path);
+
+        res.json([{
+          name: dir_name,
+          isDir: true,
+          path: query_path,
+        }]);
+        return;
+      }
+
+      logger.info('[FS] Exact path found with trailing slash, returning directory contents', {
         mounted_search_dir,
       });
 

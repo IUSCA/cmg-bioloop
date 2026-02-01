@@ -164,7 +164,7 @@ router.post(
       file_type, genome_type, genome_value,
     } = req.body;
 
-    const datasetCreateQuery = datasetService.buildDatasetCreateQuery({
+    const datasetCreateQuery = await datasetService.buildDatasetCreateQuery({
       name,
       type,
       project_id,

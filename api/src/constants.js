@@ -74,7 +74,7 @@ const INCLUDE_DATASET_UPLOAD_LOG_RELATIONS = {
           id: true,
           name: true,
           type: true,
-          file_type: true,
+          metadata: true,
           origin_path: true,
           source_datasets: {
             select: {
@@ -87,6 +87,7 @@ const INCLUDE_DATASET_UPLOAD_LOG_RELATIONS = {
               genome_value: true,
             },
           },
+          analysis_type: true,
         },
       },
     },

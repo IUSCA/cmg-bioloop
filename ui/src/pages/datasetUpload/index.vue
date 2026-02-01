@@ -278,7 +278,7 @@ const getUploadLogs = async () => {
               ? uploaded_dataset.source_datasets[0].source_dataset
               : null,
           uploaded_dataset_type: uploaded_dataset.type,
-          file_type: uploaded_dataset.file_type,
+          file_type: uploaded_dataset.analysis_type?.name,
           genome_type: genomicDetails?.genome_type,
           genome_value: genomicDetails?.genome_value,
         };

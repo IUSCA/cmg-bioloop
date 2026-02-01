@@ -28,6 +28,7 @@ model dataset {
   metadata                 Json?
   src_instrument_id        Int?
   file_type                String?
+  analysis_type_id         Int?
   workflows                workflow[]
   files                    dataset_file[]
   audit_logs               dataset_audit[]
@@ -39,6 +40,7 @@ model dataset {
   stage_requests           stage_request_log[]
   bundle                   bundle?
   src_instrument           instrument?                  @relation(fields: [src_instrument_id], references: [id])
+  analysis_type            analysis_type?               @relation(fields: [analysis_type_id], references: [id])
   conversions              conversion[]
   derived_from_conversions conversion_derived_dataset[]
   genomic_details          dataset_genomic_attributes?
@@ -52,6 +54,15 @@ model dataset_genomic_attributes {
   dataset      dataset @relation(fields: [dataset_id], references: [id], onDelete: Cascade)
   genome_type  String?
   genome_value String?
+}
+
+model analysis_type {
+  id         Int       @id @default(autoincrement())
+  name       String    @unique // Case-insensitive via UPPER() index in migration
+  extension  String
+  created_at DateTime  @default(now()) @db.Timestamp(6)
+  updated_at DateTime  @default(now()) @updatedAt @db.Timestamp(6)
+  datasets   dataset[]
 }
 
 model dataset_hierarchy {
@@ -119,9 +130,6 @@ model dataset_import_log {
   created_at   DateTime      @default(now()) @db.Timestamp(6)
   updated_at   DateTime      @default(now()) @updatedAt @db.Timestamp(6)
   cmg_id       String?       @db.VarChar(100)
-  file_type    String?
-  genome_type  String?
-  genome_value String?
   source_run   String?
   notes        String?
   metadata     Json?
