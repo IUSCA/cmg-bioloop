@@ -168,6 +168,82 @@ module.exports = router;
 
 ---
 
+## URL Pattern Convention
+
+**User-specific endpoints MUST follow this pattern:**
+
+```
+/:username/all              # For listing user's resources
+/:username/:id              # For specific user's resource by ID
+/:username/subresource      # For user's sub-resources
+```
+
+**NOT:**
+```
+/resource/:username         ❌ WRONG order
+/:username                  ❌ WRONG (conflicts with /:id routes)
+```
+
+### Examples
+
+**✅ CORRECT:**
+```javascript
+// Listing user resources
+router.get('/:username/all', ...)          // List user's datasets
+router.get('/:username/imports', ...)      // List user's import logs
+router.get('/:username/sessions', ...)     // List user's sessions (not used, use /:username/all)
+
+// Specific user resource
+router.get('/:username/:id', ...)          // Get user's specific project by ID
+
+// User sub-resources (proper nesting)
+router.get('/:username/:id/datasets', ...)  // Get datasets for user's project
+```
+
+**❌ WRONG:**
+```javascript
+router.get('/imports/:username', ...)      // Wrong order
+router.get('/:username', ...)              // Conflicts with /:id routes
+router.get('/all/:username', ...)          // Wrong order
+```
+
+### Why `/:username/all` and Not Just `/:username`?
+
+**Route conflict prevention:**
+- `GET /:id` - Get resource by ID (e.g., `/sessions/123`)
+- `GET /:username/all` - Get user's resources (e.g., `/sessions/john/all`)
+
+If you use just `/:username`, Express will match it before `/:id`, causing `/sessions/123` to be treated as a username "123" instead of session ID 123.
+
+**Use `/:username/all` for listing endpoints to avoid this conflict.**
+
+### Rationale
+
+1. **Semantic clarity** - "Show me USERNAME's RESOURCES" reads naturally
+2. **Consistency** - All user-scoped routes follow same pattern
+3. **RESTful** - Username acts as a namespace for user-owned resources
+4. **Authorization** - `checkOwnership: true` in middleware works with this pattern
+
+### Implementation
+
+```javascript
+// User-specific resource list
+router.get(
+  '/:username/imports',
+  isPermittedTo('read', { checkOwnership: true }),
+  asyncHandler(async (req, res) => {
+    const username = req.params.username;
+    // Fetch user's imports...
+  })
+);
+```
+
+The `checkOwnership: true` option ensures:
+- Regular users can only access their own data (`/:username/imports` where username = their username)
+- Admin/operator users can access any user's data
+
+---
+
 ## Router Mounting Order
 
 **CRITICAL:** File exposure routers must be mounted **before** global authentication middleware:

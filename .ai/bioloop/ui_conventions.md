@@ -319,6 +319,51 @@ watch(showModal, (isOpen) => {
 
 ---
 
+## Data Table Column Widths
+
+**Always use percentage widths for table columns, and leave ONE column without a width definition:**
+
+```javascript
+// ✅ CORRECT: Use % widths, leave one flexible column
+const columns = [
+  { key: 'id', label: 'ID', width: '10%' },
+  { key: 'name', label: 'Name' }, // No width - will flex to fill remaining space
+  { key: 'type', label: 'Type', width: '15%' },
+  { key: 'status', label: 'Status', width: '12%' },
+  { key: 'date', label: 'Date', width: '10%' },
+];
+// Widths add up to 47%, leaving 53% for 'name' column
+
+// ❌ WRONG: Using px widths
+const columns = [
+  { key: 'id', label: 'ID', width: '100px' },
+  { key: 'name', label: 'Name', width: '200px' },
+];
+
+// ❌ WRONG: All columns have % widths that exceed 100%
+const columns = [
+  { key: 'id', label: 'ID', width: '15%' },
+  { key: 'name', label: 'Name', width: '50%' },
+  { key: 'type', label: 'Type', width: '20%' },
+  { key: 'status', label: 'Status', width: '20%' },
+];
+// 15 + 50 + 20 + 20 = 105% (exceeds 100%)
+```
+
+**Why:**
+- Percentage widths adapt to different screen sizes and container widths
+- Leaving one column without width allows it to flex and fill remaining space
+- This ensures the table always uses 100% of available width without overflow
+- The flexible column should typically be the main content column (e.g., name, description)
+
+**Guidelines:**
+- Use `%` for all fixed-width columns
+- Leave the most important/flexible column (usually name or description) without a width
+- Ensure total widths of defined columns sum to less than 100%
+- Typical pattern: Status (8-10%), Types/Categories (10-15%), Dates (10-12%), flexible content column (remainder)
+
+---
+
 ## Quick Reference Checklist
 
 ### Starting New UI Component
@@ -329,6 +374,7 @@ watch(showModal, (isOpen) => {
 - [ ] Use icons instead of buttons for actions
 - [ ] Show toasts only for API operations
 - [ ] Never show '-' for empty table cells
+- [ ] Use % widths for tables, leave one column without width
 
 ---
 

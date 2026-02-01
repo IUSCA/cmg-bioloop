@@ -218,7 +218,7 @@ class DatasetService {
     offset = null,
     username = null,
   } = {}) {
-    const path = forSelf ? `/datasets/imports/${username}` : `/datasets/imports`;
+    const path = forSelf ? `/datasets/${username}/imports` : `/datasets/imports`;
     return api.get(path, {
       params: {
         dataset_name,
