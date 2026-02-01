@@ -90,7 +90,7 @@
 
 <script setup>
 import useQueryPersistence from "@/composables/useQueryPersistence";
-import ConversionApiService from "@/services/conversion/api";
+import conversionApiService from "@/services/conversion/api";
 import * as datetime from "@/services/datetime";
 import toast from "@/services/toast";
 import { useConversionStore } from "@/stores/conversion";
@@ -104,7 +104,6 @@ const props = defineProps({
 
 const store = useConversionStore();
 const { filters, query, params, activeFilters } = storeToRefs(store);
-import conversionApiService from "@/services/conversion/api";
 
 const PAGE_SIZE_OPTIONS = [25, 50, 100];
 

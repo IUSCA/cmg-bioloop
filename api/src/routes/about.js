@@ -4,8 +4,7 @@ const createDOMPurify = require('dompurify');
 const { JSDOM } = require('jsdom');
 
 const prisma = require('@/db');
-const { authenticate } = require('@/middleware/auth');
-const { accessControl } = require('@/middleware/auth');
+const { authenticate, accessControl } = require('@/middleware/auth');
 const asyncHandler = require('@/middleware/asyncHandler');
 const { validate } = require('@/middleware/validators');
 

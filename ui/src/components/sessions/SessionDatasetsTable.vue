@@ -66,17 +66,14 @@
             </template>
           </va-data-table>
 
-          <!-- Pagination - only show if more than one page -->
-          <div v-if="totalPages > 1" class="flex justify-between items-center">
-            <div>
-              Showing {{ startIndex + 1 }} to {{ endIndex }} of {{ datasets.length }} datasets
-            </div>
-            <va-pagination
-              v-model="currentPage"
-              :pages="totalPages"
-              :visible-pages="5"
-            />
-          </div>
+          <!-- Pagination -->
+          <Pagination
+            v-model:page="currentPage"
+            v-model:page_size="pageSize"
+            :total_results="datasets.length"
+            :curr_items="paginatedDatasets.length"
+            :page_size_options="PAGE_SIZE_OPTIONS"
+          />
         </div>
 
         <div v-else class="text-center py-8">
@@ -96,6 +93,7 @@ import sessionService from '@/services/session';
 import datasetService from '@/services/dataset';
 import wfService from '@/services/workflow';
 import config from '@/config';
+import Pagination from '@/components/utils/Pagination.vue';
 
 const props = defineProps({
   sessionId: {
@@ -114,7 +112,8 @@ const emit = defineEmits(['datasets-updated']);
 const loading = ref(false);
 const datasets = ref([]);
 const currentPage = ref(1);
-const pageSize = ref(10);
+const pageSize = ref(25);
+const PAGE_SIZE_OPTIONS = [25, 50, 100];
 
 const columns = [
   {
@@ -135,7 +134,7 @@ const columns = [
     key: 'genome',
     label: 'Genome',
     sortable: false,
-    width: '20%',
+    // Width auto-fills remaining space (30% + 15% + 10% + 15% = 70%, this takes 30%)
   },
   {
     key: 'is_staged',
@@ -162,7 +161,6 @@ const datasetsWithStatus = computed(() => {
 });
 
 // Pagination
-const totalPages = computed(() => Math.ceil(datasets.value.length / pageSize.value));
 const startIndex = computed(() => (currentPage.value - 1) * pageSize.value);
 const endIndex = computed(() => Math.min(startIndex.value + pageSize.value, datasets.value.length));
 

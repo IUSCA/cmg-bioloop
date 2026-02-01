@@ -93,6 +93,57 @@ const fetchItems = async (inputValue) => {
 
 ---
 
+## Pagination Pattern
+
+**ALWAYS use the custom `Pagination` component for tables with pagination:**
+
+```vue
+<template>
+  <va-data-table :items="paginatedItems" :columns="columns" />
+  
+  <Pagination
+    v-model:page="currentPage"
+    v-model:page_size="pageSize"
+    :total_results="totalItems"
+    :curr_items="paginatedItems.length"
+    :page_size_options="PAGE_SIZE_OPTIONS"
+  />
+</template>
+
+<script setup>
+import Pagination from '@/components/utils/Pagination.vue';
+
+const currentPage = ref(1);
+const pageSize = ref(25);
+const PAGE_SIZE_OPTIONS = [25, 50, 100];
+
+const startIndex = computed(() => (currentPage.value - 1) * pageSize.value);
+const endIndex = computed(() => 
+  Math.min(startIndex.value + pageSize.value, totalItems.value)
+);
+
+const paginatedItems = computed(() => {
+  return allItems.value.slice(startIndex.value, endIndex.value);
+});
+</script>
+```
+
+**DON'T use `va-pagination` directly** - it lacks page size controls and result counts.
+
+**Component Props:**
+- `page` (v-model): Current page number (1-indexed)
+- `page_size` (v-model): Items per page
+- `total_results`: Total number of items
+- `curr_items`: Number of items on current page
+- `page_size_options`: Array of page size options (e.g., `[25, 50, 100]`)
+
+**Examples in Codebase:**
+- `ui/src/components/project/datasets/ProjectDatasetsTable.vue`
+- `ui/src/components/sessions/SessionDatasetsTable.vue`
+- `ui/src/pages/sessions/[id].vue` (Associated Tracks)
+
+---
+
 ## CSS & Styling Preferences
 
 **DO NOT add styling classes unless explicitly asked:**

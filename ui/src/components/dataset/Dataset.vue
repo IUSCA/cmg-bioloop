@@ -46,7 +46,7 @@
             </va-card-content>
           </va-card>
           <!-- Dataset Genomic Info Card -->
-          <va-card v-if="auth.isFeatureEnabled('genomeBrowser')">
+          <va-card v-if="auth.isFeatureEnabled('genomeBrowser') && dataset.type === 'DATA_PRODUCT'">
             <va-card-title>
               <span class="text-lg">Genomic Info</span>
             </va-card-title>

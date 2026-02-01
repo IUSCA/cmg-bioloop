@@ -585,6 +585,38 @@
   - Result: Reduces unnecessary session migrations and database records
   - Logged as: `"Skipping session {id}: no tracks"`
 
+### Dataset Size Field Handling
+
+- **Change:** Improved `size` field handling for all dataset types
+  - Changed from `BigInt(cmgItem.size || 0)` to `cmgItem.size ? BigInt(cmgItem.size) : null`
+  - Preserves actual size value from CMG (both datasets and dataproducts collections)
+  - Uses `null` for missing size (semantically correct) instead of defaulting to 0
+  - Prevents conflating "missing size" with "size is 0"
+  - File: `sync_datasets.js` line 182
+
+### Timestamp Field Migration Corrections
+
+- **Fix:** User `created_at` field now uses correct CMG field name
+  - Changed from `cmgUser.createdDate` to `cmgUser.createDate`
+  - CMG users collection uses `createDate` (not `createdDate`)
+  - File: `sync_users.js`
+
+- **Fix:** Session `created_at` field now preserved from CMG
+  - Added: `created_at: cmgSession.createdAt || new Date()`
+  - Previously relied on Postgres default (lost historical timestamp)
+  - Preserves original session creation time from CMG
+  - File: `sync_sessions.js`
+
+- **Verification:** All other tables correctly use CMG timestamps
+  - `dataset`: Uses `cmgItem.createdAt` ✓
+  - `project`: Uses `cmgProject.createdAt` ✓
+  - `conversion`: Uses `cmgConversion.createdAt` (as `initiated_at`) ✓
+  - `dataset_audit`: Uses parsed event timestamp ✓
+  - `dataset_import_log`: Uses `cmgUpload.createdAt` ✓
+  - `worker_process`: Uses `conversion.initiated_at` (from CMG) ✓
+  - `log`: Uses parsed timestamp or conversion timestamp ✓
+  - `dataset_hierarchy`: No timestamp field (relationship table) ✓
+
 ### Sessions Migration API - Hydration Status
 
 - **Change:** `/legacy/migrations/sessions/:id` endpoint reports hydration status from metadata field

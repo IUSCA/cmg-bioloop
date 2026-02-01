@@ -180,9 +180,18 @@
               </div>
             </va-card-title>
             <va-card-content>
-              <div v-if="associatedTracks?.length" class="space-y-4">
+              <!-- Show message if legacy session not hydrated and no tracks -->
+              <div 
+                v-if="needsHydration && !associatedTracks?.length"
+                class="text-center py-8 text-gray-600 dark:text-gray-400"
+              >
+                Track Information is not yet available for this legacy Session.
+              </div>
+
+              <!-- Show tracks table if tracks exist -->
+              <div v-else-if="associatedTracks?.length" class="space-y-4">
                 <va-data-table
-                  :items="associatedTracks"
+                  :items="paginatedTracks"
                   :columns="trackColumns"
                   :loading="false"
                   disable-client-side-sorting
@@ -229,6 +238,20 @@
                     </span>
                   </template>
                 </va-data-table>
+
+                <!-- Pagination for tracks -->
+                <Pagination
+                  v-model:page="currentTrackPage"
+                  v-model:page_size="trackPageSize"
+                  :total_results="associatedTracks.length"
+                  :curr_items="paginatedTracks.length"
+                  :page_size_options="TRACK_PAGE_SIZE_OPTIONS"
+                />
+              </div>
+
+              <!-- Show empty state for non-legacy or hydrated sessions with no tracks -->
+              <div v-else class="text-center py-8 text-gray-600 dark:text-gray-400">
+                No tracks associated with this session.
               </div>
             </va-card-content>
           </va-card>
@@ -521,6 +544,7 @@ import SessionDatasetsTable from '@/components/sessions/SessionDatasetsTable.vue
 import UnstagedDatasetsModal from '@/components/sessions/UnstagedDatasetsModal.vue';
 import TracksAsyncAutoComplete from '@/components/tracks/TracksAsyncAutoComplete.vue';
 import AddEditButton from '@/components/utils/buttons/AddEditButton.vue';
+import Pagination from '@/components/utils/Pagination.vue';
 import constants from '@/constants';
 import * as datetime from '@/services/datetime';
 import legacyMigrationService from '@/services/legacyMigration';
@@ -564,6 +588,8 @@ const lastStagingStatus = ref(null);
 const session = computed(() => sessionsStore.currentSession);
 const loading = computed(() => sessionsStore.loading);
 const _error = computed(() => sessionsStore.error);
+
+const needsHydration = computed(() => sessionService._needsHydration(session.value));
 
 const canEditSession = computed(() => {
   return session.value?.user_id === auth.user?.id;
@@ -667,6 +693,23 @@ const associatedTracks = computed(() => {
   return session.value.session_tracks.map((st) => st.track);
 });
 
+// Track pagination
+const currentTrackPage = ref(1);
+const trackPageSize = ref(25);
+const TRACK_PAGE_SIZE_OPTIONS = [25, 50, 100];
+
+const trackStartIndex = computed(() => 
+  (currentTrackPage.value - 1) * trackPageSize.value
+);
+
+const trackEndIndex = computed(() => 
+  Math.min(trackStartIndex.value + trackPageSize.value, associatedTracks.value.length)
+);
+
+const paginatedTracks = computed(() => {
+  return associatedTracks.value.slice(trackStartIndex.value, trackEndIndex.value);
+});
+
 const trackColumns = [
   {
     key: 'name',
@@ -698,7 +741,7 @@ const trackColumns = [
     key: 'dataset_name',
     label: 'Dataset Name',
     sortable: true,
-    width: '20%',
+    // Width auto-fills remaining space (25% + 15% + 12% + 13% + 15% = 80%, this takes 20%)
   },
   // {
   //   key: "is_staged",

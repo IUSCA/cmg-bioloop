@@ -144,6 +144,51 @@ class SessionService {
   hydrateSession(id) {
     return api.post(`/sessions/${id}/workflows/hydrate_session`);
   }
+
+  /**
+   * Check if a session is legacy (migrated from CMG)
+   * @param {Object} session - The session object
+   * @returns {boolean} - True if session has cmg_id
+   */
+  _isLegacySession(session) {
+    return !!(session && session.cmg_id);
+  }
+
+  /**
+   * Check if hydration workflow has completed successfully
+   * Uses DONE_STATES = [SUCCESS] logic from backend
+   * NOTE: session_workflows must be enriched with status and name from Rhythm API
+   * @param {Array} sessionWorkflows - Array of session_workflow objects enriched with status and name
+   * @returns {boolean} - True if hydration workflow finished successfully
+   */
+  _isHydrationComplete(sessionWorkflows) {
+    if (!sessionWorkflows || sessionWorkflows.length === 0) {
+      return false;
+    }
+
+    // Find the hydrate_session workflow by NAME (workflow_id is a UUID, not the workflow name!)
+    // The backend enriches session_workflows with workflow details from Rhythm
+    const hydrationWorkflow = sessionWorkflows.find((sw) => sw.name === 'hydrate_session');
+
+    if (!hydrationWorkflow) {
+      return false;
+    }
+
+    // Check if workflow status is SUCCESS
+    return hydrationWorkflow.status === 'SUCCESS';
+  }
+
+  /**
+   * Check if a legacy session needs hydration
+   * @param {Object} session - The session object with session_workflows
+   * @returns {boolean} - True if session is legacy and not hydrated
+   */
+  _needsHydration(session) {
+    if (!this._isLegacySession(session)) {
+      return false;
+    }
+    return !this._isHydrationComplete(session.session_workflows);
+  }
 }
 
 export default new SessionService();

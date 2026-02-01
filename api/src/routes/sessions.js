@@ -4,10 +4,14 @@ const config = require('config');
 const fs = require('fs');
 const path = require('path');
 const createError = require('http-errors');
-const { DONE_STATUSES, DATA_REQUEST_STATUS } = require('@/constants');
-const logger = require('@/services/logger');
+const CONSTANTS = require('@/constants');
+const { DONE_STATUSES, DATA_REQUEST_STATUS, WORKFLOWS } = CONSTANTS;
 const prisma = require('@/db');
+const logger = require('@/services/logger');
 const pathResolver = require('@/services/pathResolver');
+const wfService = require('@/services/workflow');
+const legacyMigrationService = require('@/services/legacyMigration');
+const { validate } = require('@/middleware/validators');
 const asyncHandler = require('../middleware/asyncHandler');
 const { accessControl, authenticateWithCookie } = require('../middleware/auth');
 const datasetService = require('../services/dataset');
@@ -662,6 +666,12 @@ router.get(
           },
           orderBy: { order: 'asc' },
         },
+        session_workflows: {
+          select: {
+            workflow_id: true,
+            created_at: true,
+          },
+        },
         _count: {
           select: {
             session_tracks: true,
@@ -701,7 +711,6 @@ router.get(
     });
 
     // Fetch enriched workflow data from Rhythm for each dataset
-    const wfService = require('@/services/workflow');
     for (const [datasetId, dataset] of datasetMap) {
       if (dataset.workflows && dataset.workflows.length > 0) {
         try {
@@ -713,6 +722,29 @@ router.get(
           logger.warn(`Failed to fetch workflow details for dataset ${datasetId}`, error);
           enrichedWorkflowsByDataset[datasetId] = [];
         }
+      }
+    }
+
+    // Fetch workflow status from Rhythm for session workflows
+    if (session.session_workflows && session.session_workflows.length > 0) {
+      try {
+        const sessionWorkflowIds = session.session_workflows.map((sw) => sw.workflow_id);
+        const wf_res = await wfService.getAll({
+          workflow_ids: sessionWorkflowIds,
+        });
+
+        // Enrich session_workflows with status and name from Rhythm
+        session.session_workflows = session.session_workflows.map((sw) => {
+          const enrichedWf = wf_res.data.results.find((w) => w.id === sw.workflow_id);
+          return {
+            ...sw,
+            status: enrichedWf?.status || null,
+            name: enrichedWf?.name || null,
+          };
+        });
+      } catch (error) {
+        logger.warn(`Failed to fetch workflow status for session ${id}`, error);
+        // Keep session_workflows but without status enrichment
       }
     }
 
@@ -1382,7 +1414,6 @@ router.get(
   asyncHandler(async (req, res) => {
     const sessionId = req.params.id;
     const stagedFilter = req.query.staged;
-    const legacyMigrationService = require('@/services/legacyMigration');
 
     const session = await prisma.genome_browser_session.findUnique({
       where: { id: sessionId },
@@ -1406,6 +1437,11 @@ router.get(
             },
           },
         },
+        session_workflows: {
+          select: {
+            workflow_id: true,
+          },
+        },
       },
     });
 
@@ -1414,15 +1450,50 @@ router.get(
     }
 
     let datasets = [];
+    const datasetMap = new Map(); // Track unique datasets
 
-    // Check if this is a legacy session with metadata.datasets
-    if (session.cmg_id && session.metadata?.datasets && Array.isArray(session.metadata.datasets)) {
-      // Legacy session: use metadata.datasets (CMG dataproduct IDs)
-      logger.info(`[SESSIONS] Fetching datasets for legacy session ${sessionId} from metadata.datasets`);
+    // Helper function to check if hydration workflow has completed successfully
+    const isHydrationComplete = async (sessionWorkflows) => {
+      if (!sessionWorkflows || sessionWorkflows.length === 0) {
+        return false;
+      }
 
+      // Fetch workflow details from Rhythm to get workflow names and statuses
+      try {
+        const wf_res = await wfService.getAll({
+          workflow_ids: sessionWorkflows.map((sw) => sw.workflow_id),
+        });
+
+        // Find the hydrate_session workflow by NAME (not by UUID workflow_id)
+        const hydrationWorkflow = wf_res.data.results.find(
+          (wf) => wf.name === WORKFLOWS.HYDRATE_SESSION
+        );
+
+        if (!hydrationWorkflow) {
+          return false;
+        }
+
+        // Check if workflow status is SUCCESS (DONE_STATUSES = ['REVOKED', 'FAILURE', 'SUCCESS'])
+        return hydrationWorkflow.status === 'SUCCESS';
+      } catch (error) {
+        logger.warn(`Failed to fetch hydration workflow status for session ${sessionId}`, error);
+        // If can't fetch status, assume not hydrated
+        return false;
+      }
+    };
+
+    const isLegacy = !!(session.cmg_id);
+    const needsHydration = isLegacy && !(await isHydrationComplete(session.session_workflows));
+
+    // If legacy AND not hydrated: fetch from BOTH sources
+    if (isLegacy && needsHydration && session.metadata?.datasets && Array.isArray(session.metadata.datasets)) {
+      logger.info(
+        `[SESSIONS] Legacy session ${sessionId} not hydrated - ` +
+        `fetching from BOTH metadata.datasets and session_tracks`
+      );
+
+      // SOURCE 1: metadata.datasets (legacy datasets from CMG)
       const cmgDataproductIds = session.metadata.datasets;
-
-      // Find Bioloop datasets by CMG IDs
       for (const cmgId of cmgDataproductIds) {
         const dataset = await prisma.dataset.findFirst({
           where: { cmg_id: cmgId },
@@ -1434,28 +1505,35 @@ router.get(
         });
 
         if (dataset) {
-          // Get migration status for legacy dataset
           const migrationStatus = await legacyMigrationService.getDatasetMigrationStatus(dataset.id);
-
-          // Attach migration status to dataset
           dataset.migration_status = migrationStatus;
 
-          // Apply staged filter if provided
           if (stagedFilter === undefined || dataset.is_staged === stagedFilter) {
-            datasets.push(dataset);
+            datasetMap.set(dataset.id, dataset); // Use Map to avoid duplicates
           }
         } else {
           logger.warn(`[SESSIONS] Dataset with CMG ID ${cmgId} not found for session ${sessionId}`);
         }
       }
+
+      // SOURCE 2: session_tracks (newly added tracks before hydration)
+      session.session_tracks.forEach((st) => {
+        const dataset = st.track.dataset_file?.dataset;
+        if (dataset) {
+          if (stagedFilter === undefined || dataset.is_staged === stagedFilter) {
+            datasetMap.set(dataset.id, dataset); // Add to map (won't duplicate)
+          }
+        }
+      });
+
+      datasets = Array.from(datasetMap.values());
     } else {
-      // Non-legacy session or hydrated legacy session: use session_tracks
-      const datasetMap = new Map();
+      // Non-legacy OR legacy+hydrated: use ONLY session_tracks
+      logger.info(`[SESSIONS] Fetching datasets for session ${sessionId} from session_tracks only`);
 
       session.session_tracks.forEach((st) => {
         const dataset = st.track.dataset_file?.dataset;
         if (dataset) {
-          // Apply staged filter if provided
           if (stagedFilter === undefined || dataset.is_staged === stagedFilter) {
             datasetMap.set(dataset.id, dataset);
           }
@@ -1705,10 +1783,6 @@ router.get(
 // with proper token-based authorization
 
 //  Launch a workflow on the session - UI
-const { validate } = require('@/middleware/validators');
-const wfService = require('@/services/workflow');
-const CONSTANTS = require('@/constants');
-
 router.post(
   '/:id/workflows/:wf',
   isPermittedTo('update'),
