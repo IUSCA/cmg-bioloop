@@ -136,7 +136,21 @@ Only these commands are available (see `.cursorrules` for full list):
 
 ### Docker Restart Pattern
 
-**After bringing down containers, restart with:**
+**⚠️ IMPORTANT: Avoid Restarting Containers When Possible**
+
+**Docker/Localhost Mode Uses Hot Reloading:**
+- **API:** Uses `nodemon` - automatically restarts on file changes
+- **UI:** Uses Vite HMR - live reloads on file changes
+- **Workers:** Use PM2 with watch mode - restart on changes
+
+**DO NOT restart containers for code changes** - nodemon/Vite/PM2 handle it automatically.
+
+**Container Dependencies:**
+- Restarting the API container brings down dependent containers
+- Always check `docker compose ps` before and after operations
+- Prefer waiting for auto-reload over manual restarts
+
+**If you MUST restart containers:**
 ```bash
 docker compose up -d
 ```

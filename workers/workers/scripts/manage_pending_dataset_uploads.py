@@ -94,14 +94,11 @@ def restart_process_dataset_upload_workflow(dataset_id: str, dry_run: bool = Tru
     dataset = api.get_dataset(dataset_id=dataset_id, workflows=True)
 
     logger.info(f"Checking for active workflows of type "
-                f"{WORKFLOWS['PROCESS_DATASET_UPLOAD']} or {WORKFLOWS['CANCEL_DATASET_UPLOAD']} "
+                f"{WORKFLOWS['PROCESS_DATASET_UPLOAD']} "
                 f"running on dataset {dataset_id}")
     active_process_dataset_upload_wfs = [
         wf for wf in dataset['workflows'] if (
-                (
-                        wf['name'] == WORKFLOWS['PROCESS_DATASET_UPLOAD'] or
-                        wf['name'] == WORKFLOWS['CANCEL_DATASET_UPLOAD']
-                ) and
+                wf['name'] == WORKFLOWS['PROCESS_DATASET_UPLOAD'] and
                 wf['status'] not in WORKFLOW_FINISHED_STATUSES
         )
     ]
@@ -109,8 +106,6 @@ def restart_process_dataset_upload_workflow(dataset_id: str, dry_run: bool = Tru
     # - If workflow `process_dataset_upload` has been initiated, do nothing.
     #     - For workflows of this type that are stuck or failing, admin or operators
     #       are expected to investigate and manually resume this workflow from the portal.
-    # - If workflow `cancel_dataset_upload` is running, workflow `process_dataset_upload`
-    #   should not be restarted.
     if len(active_process_dataset_upload_wfs) > 0:
         logger.info(f"The following upload workflows "
                     f"are currently running for dataset {dataset_id}:")
@@ -119,8 +114,7 @@ def restart_process_dataset_upload_workflow(dataset_id: str, dry_run: bool = Tru
             logger.info(f"Workflow name: {wf['name']}")
         logger.info(f"A new workflow will not be started.")
     else:
-        logger.info(f"No workflows of type {WORKFLOWS['PROCESS_DATASET_UPLOAD']} or "
-                    f"{WORKFLOWS['CANCEL_DATASET_UPLOAD']} are running "
+        logger.info(f"No workflows of type {WORKFLOWS['PROCESS_DATASET_UPLOAD']} are running "
                     f"on dataset {dataset_id}")
         if dry_run:
             logger.info("Dry run mode enabled.")

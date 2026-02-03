@@ -561,7 +561,7 @@ async function get_dataset_creator({ dataset_id }) {
  * The access rules are as follows:
  * 1. Users with `admin` or `operator` roles are always allowed to initiate any workflows.
  * 2. Users with 'user' role:
- *     - For `integrated`, `process_dataset_upload`, or `cancel_dataset_upload` workflows:
+ *     - For `integrated` or `process_dataset_upload` workflows:
  *       - They are allowed to proceed only if they created the dataset.
  *     - For other allowed workflows (like `stage`):
  *       - They are allowed to proceed if they are assigned to a project associated with the dataset.
@@ -600,7 +600,6 @@ async function has_workflow_access({ workflow, dataset_id, user_id }) {
   let user_has_workflow_access = false;
 
   if ([CONSTANTS.WORKFLOWS.PROCESS_DATASET_UPLOAD,
-    CONSTANTS.WORKFLOWS.CANCEL_DATASET_UPLOAD,
     CONSTANTS.WORKFLOWS.INTEGRATED]
     .includes(workflow)) {
     const dataset_creator = await get_dataset_creator({ dataset_id });
@@ -1032,13 +1031,12 @@ const dataset_access_check = asyncHandler(async (req, res, next) => {
  * - The second check determines if the requested workflow is in the list of workflows that the user's role is allowed
  * to initiate.
  *    - Role `admin` and `operator` are allowed to initiate any workflow.
- *    - Role `user` is allowed to initiate workflows `integrated`, `stage`, `process_dataset_upload`,
- *    and `cancel_dataset_upload`
+ *    - Role `user` is allowed to initiate workflows `integrated`, `stage`, and `process_dataset_upload`
  * - The third check determines if the user has the necessary permissions to initiate the requested
  * workflow on the requested dataset.
  *    - Role `admin` and `operator` are allowed to initiate any workflow on any dataset.
  *    - Role `user`:
- *      - is allowed to initiate workflows `integrated`, `process_dataset_upload` and `cancel_dataset_upload` if they
+ *      - is allowed to initiate workflows `integrated` and `process_dataset_upload` if they
  *      created the dataset.
  *      - is allowed to initiate workflow `stage` if they are associated to the dataset via a project that they are a
  *      part of.
@@ -1412,29 +1410,14 @@ const buildDatasetCreateQuery = async (data) => {
  * @property {string|null} workflowInitiationError - Error message if workflow initiation failed, or null if successful.
  *
  * @description
- * This function attempts to initiate either the 'process_dataset_upload' or the 'cancel_dataset_upload' workflow
- * on a given dataset.
+ * This function initiates the 'process_dataset_upload' workflow on a given dataset.
  *
  * `process_dataset_upload` -> This workflow initiates the processing of a dataset upload,
  * which registers the dataset in the system. This workflow is triggered after the entirety of the dataset's contents
  * have been uploaded.
  *
- * `cancel_dataset_upload`  -> This workflow cancels an incomplete dataset upload.
- *  A dataset upload is considered incomplete if one of the following conditions is met:
- * - All files have not been uploaded
- * - All files have been uploaded but the `process_dataset_upload` has not been initiated.
- *
- * It is possible that the API may receive requests to initiate both of these workflows on the same dataset in
- * proximity, thus triggering both of these workflows in parallel, which would result in a conflict.
- * To avoid this:
- * - Workflow `process_dataset_upload` should not be initiated if workflow `cancel_dataset_upload` is
- * already in progress.
- * - Workflow `cancel_dataset_upload` should not be initiated if workflow `process_dataset_upload` is already
- * in progress.
- *
- * This function checks for a potential conflicting workflow that may already be in progress before initiating
- * the requested workflow. If a conflicting workflow is found, the function will not initiate the requested workflow
- * and will return an error message instead.
+ * This function checks if a workflow is already in progress before initiating a new one.
+ * If a workflow is found, the function will not initiate a new workflow and will return an error message instead.
  */
 const initiateUploadWorkflow = async ({ dataset = null, requestedWorkflow = null, user = null } = {}) => {
   // return {
@@ -1450,14 +1433,9 @@ const initiateUploadWorkflow = async ({ dataset = null, requestedWorkflow = null
   let requestedWorkflowInitiated;
   let workflowInitiationError;
 
-  const conflictingUploadWorkflow = requestedWorkflow === CONSTANTS.WORKFLOWS.PROCESS_DATASET_UPLOAD
-    ? CONSTANTS.WORKFLOWS.CANCEL_DATASET_UPLOAD
-    : CONSTANTS.WORKFLOWS.PROCESS_DATASET_UPLOAD;
-  logger.info(`Workflow ${requestedWorkflow} will not be started if conflicting workflow `
-      + `${conflictingUploadWorkflow} is running on dataset ${dataset.id}`);
-  logger.info(`Checking if conflicting workflow ${conflictingUploadWorkflow} is running on dataset ${dataset.id}`);
+  logger.info(`Checking if workflow ${requestedWorkflow} is already running on dataset ${dataset.id}`);
   const foundConflictingUploadWorkflow = uploadedDataset.workflows.find(
-    (wf) => wf.name === conflictingUploadWorkflow,
+    (wf) => wf.name === requestedWorkflow,
   );
   if (!foundConflictingUploadWorkflow) {
     logger.info(`Conflicting workflow ${conflictingUploadWorkflow} is not running on dataset ${dataset.id}`);

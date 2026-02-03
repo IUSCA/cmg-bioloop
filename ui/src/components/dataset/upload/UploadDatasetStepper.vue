@@ -270,7 +270,9 @@
       </template>
 
       <template #step-content-3>
+        <!-- Always show two cards: Left (metadata with dataset name) and Right (file list with upload progress) -->
         <div class="flex flex-row" v-if="selectingFiles || selectingDirectory">
+          <!-- LEFT CARD: Dataset Metadata -->
           <div class="flex-1">
             <va-card class="upload-details">
               <va-card-title>
@@ -306,8 +308,31 @@
           </div>
 
           <va-divider vertical />
+          
+          <!-- RIGHT CARD: File List and Upload Progress -->
           <div class="flex-1">
-            <DatasetFileUploadTable :files="displayedFilesToUpload" />
+            <va-card>
+              <va-card-title>Files to Upload</va-card-title>
+              <va-card-content>
+                <!-- File list -->
+                <div class="file-list" style="max-height: 400px; overflow-y: auto">
+                  <div v-for="file in displayedFilesToUpload" :key="file.name" class="mb-2 pb-2 border-b border-gray-200 last:border-b-0">
+                    <div class="flex items-center justify-between">
+                      <span class="truncate flex-grow mr-2">{{ file.name }}</span>
+                      <span class="text-sm text-gray-500 whitespace-nowrap">{{ file.formattedSize }}</span>
+                    </div>
+                  </div>
+                </div>
+                
+                <!-- Overall upload progress (only shown during upload) -->
+                <div v-if="submitAttempted && submissionStatus === Constants.UPLOAD_STATUSES.UPLOADING" class="mt-4 pt-4 border-t border-gray-300">
+                  <div class="text-sm font-semibold mb-2">
+                    Upload Progress: {{ tusFilesUploaded }} / {{ tusTotalFiles }} files ({{ tusOverallProgress }}%)
+                  </div>
+                  <va-progress-bar :model-value="tusOverallProgress" />
+                </div>
+              </va-card-content>
+            </va-card>
           </div>
         </div>
       </template>
@@ -379,13 +404,12 @@ import analysisTypeService from "@/services/analysisType";
 import datasetService from "@/services/dataset";
 import instrumentService from "@/services/instrument";
 import toast from "@/services/toast";
-import uploadService from "@/services/upload";
 import { formatBytes } from "@/services/utils";
 import { useAuthStore } from "@/stores/auth";
 import { Icon } from "@iconify/vue";
 import { jwtDecode } from "jwt-decode";
 import _ from "lodash";
-import SparkMD5 from "spark-md5";
+import * as tus from "tus-js-client";
 import { VaDivider, VaPopover } from "vuestic-ui";
 
 const auth = useAuthStore();
@@ -542,6 +566,11 @@ const isFileTypeFormInvalid = computed(() => {
          checkDuplicateFileType(newFileTypeName.value, newFileTypeExtension.value);
 });
 
+// TUS-related state
+const tusOverallProgress = ref(0);
+const tusFilesUploaded = ref(0);
+const tusTotalFiles = ref(0);
+
 /**
  * Determines if the upload process has been completed.
  *
@@ -624,14 +653,7 @@ const uploadFormData = computed(() => {
     file_type: selectedFileType.value || null,
     genome_type: selectedGenomeType.value?.value || selectedGenomeType.value || null,
     genome_value: selectedGenomeValue.value || null,
-    files_metadata: filesToUpload.value.map((e) => {
-      return {
-        name: e.name,
-        checksum: e.fileChecksum,
-        num_chunks: e.numChunks,
-        path: e.path,
-      };
-    }),
+    // Note: files_metadata removed - TUS tracks files internally, not in database
   };
 });
 
@@ -1198,9 +1220,20 @@ const onSubmit = async () => {
         submissionSuccess.value = true;
         submissionStatus.value = Constants.UPLOAD_STATUSES.UPLOADING;
 
-        const filesUploaded = await uploadFiles(filesNotUploaded.value);
-        // const filesUploaded = true; // placeholder for actual upload logic
-        if (filesUploaded) {
+        // Use TUS for upload instead of old chunk system
+        // Get the actual File objects to upload
+        const filesToUploadList = filesToUpload.value.map(f => f.file);
+        
+        tusTotalFiles.value = filesToUploadList.length;
+        tusFilesUploaded.value = 0;
+        tusOverallProgress.value = 0;
+
+        // TUS endpoint - absolute URL so relative Location headers resolve correctly
+        const tusEndpoint = `${window.location.origin}${config.apiBasePath}/uploads/files`;
+        const uploaded = await uploadFilesWithTus(filesToUploadList, tusEndpoint);
+        
+        if (uploaded) {
+          handleTusComplete();
           resolve();
         } else {
           submissionStatus.value = Constants.UPLOAD_STATUSES.UPLOAD_FAILED;
@@ -1238,42 +1271,16 @@ const postSubmit = () => {
     return;
   }
 
+  // TUS handles file tracking internally, no need to update individual file statuses
+  // Just set the overall success state
   setPostSubmissionSuccessState();
-
-  const failedFileUpdates = filesNotUploaded.value.map((file) => {
-    return {
-      id: datasetUploadLog.value.files.find((f) => f.md5 === file.fileChecksum)
-        .id,
-      data: {
-        status: Constants.UPLOAD_STATUSES.UPLOAD_FAILED,
-      },
-    };
-  });
-
-  if (datasetUploadLog.value) {
-    createOrUpdateUploadLog({
-      status: someFilesPendingUpload.value
-        ? Constants.UPLOAD_STATUSES.UPLOAD_FAILED
-        : Constants.UPLOAD_STATUSES.UPLOADED,
-      files: failedFileUpdates,
-    })
-      .then((res) => {
-        datasetUploadLog.value = res.data;
-      })
-      .catch((err) => {
-        console.error(err);
-      });
-  }
 };
 
 const handleSubmit = () => {
-  onSubmit() // resolves once all files have been uploaded
+  onSubmit() // resolves once all files have been uploaded (TUS handles workflow triggering internally)
     .then(() => {
-      return !uploadCancelled.value
-        ? datasetService.processDatasetUpload(
-            datasetUploadLog.value.audit_log.dataset.id,
-          )
-        : Promise.reject();
+      // TUS upload complete - handleTusComplete() already triggered the workflow
+      // Nothing more to do here
     })
     .catch(() => {
       submissionSuccess.value = false;
@@ -1303,7 +1310,8 @@ const onNextClick = (nextStep) => {
 
 // Evaluates selected file checksums, logs the upload
 const preUpload = async () => {
-  await evaluateChecksums(filesNotUploaded.value);
+  // TUS doesn't need pre-calculated checksums - it handles that internally
+  // Just create or update the upload log
 
   const logData = datasetUploadLog.value?.id
     ? {
@@ -1317,7 +1325,7 @@ const preUpload = async () => {
     const res = await createOrUpdateUploadLog(logData);
     datasetUploadLog.value = res.data;
   } catch (err) {
-    // console.error(err);
+    console.error(err);
     throw new Error("Error logging dataset upload");
   }
 };
@@ -1582,11 +1590,7 @@ onBeforeRouteLeave(() => {
 
 onBeforeUnmount(() => {
   uploadCancelled.value = true;
-  if (isUploadIncomplete.value && datasetUploadLog.value) {
-    datasetService.cancelDatasetUpload(
-      datasetUploadLog.value.audit_log.dataset.id,
-    );
-  }
+  // Upload cleanup will be handled by background monitoring process
 });
 
 /**
@@ -1694,6 +1698,113 @@ onBeforeUnmount(() => {
 //   }
 //   isClosingBrowserTab.value = false;
 // };
+
+// TUS upload logic
+const uploadFilesWithTus = async (files, endpoint) => {
+  // Safety check: ensure upload log exists
+  if (!datasetUploadLog.value || !datasetUploadLog.value.audit_log || !datasetUploadLog.value.audit_log.dataset) {
+    console.error('Dataset upload log not initialized');
+    throw new Error('Dataset upload log not initialized');
+  }
+
+  // Get token directly from localStorage (more reliable than Pinia store in this context)
+  const userToken = localStorage.getItem('token');
+  if (!userToken) {
+    console.error('No authentication token available');
+    throw new Error('Authentication token not found');
+  }
+
+  console.log('Starting TUS upload with token:', userToken ? `Token exists (length: ${userToken.length})` : 'No token');
+
+  let uploadedCount = 0;
+  let totalBytes = 0;
+  let uploadedBytes = 0;
+
+  // Calculate total size
+  files.forEach(file => {
+    totalBytes += file.size;
+  });
+
+  const uploadPromises = files.map((file, index) => {
+    return new Promise((resolve, reject) => {
+      const upload = new tus.Upload(file, {
+        endpoint,
+        retryDelays: [0, 3000, 5000, 10000, 20000],
+        metadata: {
+          entity_type: 'dataset',
+          entity_id: String(datasetUploadLog.value.audit_log.dataset.id),
+          filename: file.name,
+          filetype: file.type || 'application/octet-stream',
+          selection_mode: selectingDirectory.value ? 'directory' : 'files',
+          relative_path: file.webkitRelativePath || file.name,
+          directory_name: selectingDirectory.value && selectedDirectory.value ? selectedDirectory.value.name : '',
+        },
+        headers: {
+          Authorization: `Bearer ${userToken}`,
+        },
+        onError: (error) => {
+          console.error(`Failed to upload ${file.name}:`, error);
+          reject(error);
+        },
+        onProgress: (bytesUploaded, bytesTotal) => {
+          // Update overall progress
+          const totalUploadedSoFar = uploadedBytes + bytesUploaded;
+          tusOverallProgress.value = Math.round((totalUploadedSoFar / totalBytes) * 100);
+        },
+        onSuccess: async () => {
+          uploadedCount++;
+          uploadedBytes += file.size;
+          tusFilesUploaded.value = uploadedCount;
+          tusOverallProgress.value = Math.round((uploadedBytes / totalBytes) * 100);
+          
+          // Call /complete endpoint to finalize this file upload
+          try {
+            const tusId = upload.url.split('/').pop(); // Extract TUS ID from upload URL
+            await datasetService.completeDatasetUpload(
+              datasetUploadLog.value.audit_log.dataset.id,
+              {
+                tus_id: tusId,
+                selection_mode: selectingDirectory.value ? 'directory' : 'files',
+                directory_name: selectingDirectory.value && selectedDirectory.value ? selectedDirectory.value.name : '',
+                relative_path: file.webkitRelativePath || file.name,
+              }
+            );
+            console.log(`Completed upload for ${file.name} (tus_id: ${tusId})`);
+          } catch (error) {
+            // Don't fail the upload - async process will handle it
+            console.error(`Failed to call /complete for ${file.name}:`, error);
+          }
+          
+          resolve();
+        },
+      });
+
+      // Start the upload
+      upload.start();
+    });
+  });
+
+  try {
+    await Promise.all(uploadPromises);
+    return true;
+  } catch (error) {
+    console.error('Upload failed:', error);
+    return false;
+  }
+};
+
+const handleTusComplete = () => {
+  submissionStatus.value = Constants.UPLOAD_STATUSES.UPLOADED;
+  statusChipColor.value = "success";
+  submissionAlert.value = "All files have been uploaded successfully! Processing will begin shortly.";
+  submissionAlertColor.value = "success";
+  isSubmissionAlertVisible.value = true;
+  submissionSuccess.value = true;
+  
+  // Workflow will be triggered by Python monitoring process
+  // No need to manually trigger here
+};
+
 //
 // onMounted(() => {
 //   window.addEventListener("beforeunload", onBeforeUnload);

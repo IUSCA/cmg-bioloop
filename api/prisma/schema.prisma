@@ -108,24 +108,21 @@ model dataset_file_hierarchy {
 }
 
 model dataset_upload_log {
-  id           Int               @id @default(autoincrement())
-  status       upload_status
-  files        file_upload_log[]
-  updated_at   DateTime          @default(now()) @updatedAt @db.Timestamp(6)
-  audit_log    dataset_audit     @relation(fields: [audit_log_id], references: [id], onDelete: Cascade)
-  audit_log_id Int               @unique
+  id               Int           @id @default(autoincrement())
+  status           upload_status
+  tus_id           String?       // TUS upload ID for resumability
+  file_path        String?       // Path where TUS wrote the file(s)
+  file_size        BigInt?       // Total size of uploaded file(s)
+  selection_mode   String?       // 'files' or 'directory'
+  directory_name   String?       // Original directory name if applicable
+  retry_count      Int           @default(0) // Track workflow retry attempts
+  failure_reason   String?       // Last error message if failed
+  updated_at       DateTime      @default(now()) @updatedAt @db.Timestamp(6)
+  audit_log        dataset_audit @relation(fields: [audit_log_id], references: [id], onDelete: Cascade)
+  audit_log_id     Int           @unique
 }
 
-model file_upload_log {
-  id                    Int                 @id @default(autoincrement())
-  name                  String
-  md5                   String
-  num_chunks            Int
-  status                upload_status
-  path                  String?
-  dataset_upload_log    dataset_upload_log? @relation(fields: [dataset_upload_log_id], references: [id], onDelete: Cascade)
-  dataset_upload_log_id Int?
-}
+// file_upload_log table removed - TUS handles chunk tracking internally
 
 model dataset_import_log {
   id           Int           @id @default(autoincrement())
@@ -669,6 +666,7 @@ enum upload_status {
   PROCESSING_FAILED
   COMPLETE
   FAILED
+  PERMANENTLY_FAILED // After 3 retry attempts
 }
 
 enum upload_type {

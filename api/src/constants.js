@@ -47,8 +47,8 @@ const INCLUDE_AUDIT_LOGS = {
       upload: {
         select: {
           id: true,
-          files: true,
           status: true,
+          // Note: 'files' field removed - file_upload_log table no longer exists in TUS migration
         },
       },
     },
@@ -92,14 +92,7 @@ const INCLUDE_DATASET_UPLOAD_LOG_RELATIONS = {
       },
     },
   },
-  files: {
-    select: {
-      id: true,
-      md5: true,
-      name: true,
-      path: true,
-    },
-  },
+  // Note: 'files' relation removed - file_upload_log table no longer exists in TUS migration
 };
 
 const DATASET_CREATE_METHODS = {
@@ -129,7 +122,6 @@ const WORKFLOWS = {
   STAGE: 'stage',
   STAGE_MIGRATED: 'stage_migrated',
   PROCESS_DATASET_UPLOAD: 'process_dataset_upload',
-  CANCEL_DATASET_UPLOAD: 'cancel_dataset_upload',
   HYDRATE_SESSION: 'hydrate_session',
 };
 
