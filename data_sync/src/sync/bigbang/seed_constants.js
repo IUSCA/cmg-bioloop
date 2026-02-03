@@ -255,9 +255,63 @@ async function populatePipelineDefinitions(prisma, cmgUserId) {
   logger.info('[BIGBANG] Pipeline definitions populated successfully');
 }
 
+/**
+ * Seed analysis_type table with CMG legacy file types
+ * These are the file types that existed in CMG's dataproducts collection
+ */
+async function seedAnalysisTypes(prisma) {
+  logger.info('[BIGBANG] Seeding analysis types...');
+  
+  // Analysis types from CMG migration - matches api/prisma/migrations/20260201041113_add_analysis_type_table_and_relation/migration.sql
+  const analysisTypes = [
+    { name: 'FASTQ', extension: '.fastq' },
+    { name: 'BAM', extension: '.bam' },
+    { name: 'BIGWIG', extension: '.bw' },
+    { name: 'VCF', extension: '.vcf' },
+    { name: 'IMAGE_HE', extension: '.tif' },
+    { name: 'IMAGE_CYT', extension: '.tif' },
+    { name: 'WEB_SUMMARY', extension: '.html' },
+    { name: 'CLOUPE', extension: '.cloupe' },
+    { name: 'FASTA', extension: '.fa' },
+    { name: 'NEXTCLADE', extension: '.xlsx' },
+    { name: 'CRAM', extension: '.cram' },
+    { name: 'SPACERANGER', extension: '.tar.gz' },
+    { name: 'CELLRANGER', extension: '.gz' },
+    { name: 'UNALINGED-BAM', extension: '.bam' },
+  ];
+
+  let createdCount = 0;
+  for (const analysisType of analysisTypes) {
+    // Check if this name/extension combo already exists (case-insensitive)
+    const existing = await prisma.analysis_type.findFirst({
+      where: {
+        name: { equals: analysisType.name, mode: 'insensitive' },
+        extension: { equals: analysisType.extension, mode: 'insensitive' },
+      },
+    });
+    
+    if (!existing) {
+      await prisma.analysis_type.create({
+        data: {
+          name: analysisType.name,
+          extension: analysisType.extension,
+        },
+      });
+      createdCount++;
+    }
+  }
+
+  if (createdCount > 0) {
+    logger.info(`[BIGBANG] Inserted ${createdCount} analysis types`);
+  } else {
+    logger.info('[BIGBANG] All analysis types already exist');
+  }
+}
+
 module.exports = {
   createRoles,
   createCMGUser,
   populatePipelineDefinitions,
+  seedAnalysisTypes,
 };
 

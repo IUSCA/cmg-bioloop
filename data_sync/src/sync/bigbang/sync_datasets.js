@@ -152,20 +152,30 @@ async function insertDataset(prisma, cmgItem, datasetType, name, isDeleted) {
     updatedAt = cmgItem.updatedAt || null;
   }
   
-  // Build metadata object for DATA_PRODUCT datasets
-  let metadata = null;
+  // Look up analysis_type for DATA_PRODUCT datasets
+  // Read from CMG's file_type field and connect to analysis_type table
+  let analysisTypeConnect = null;
   if (datasetType === 'DATA_PRODUCT' && cmgItem.file_type) {
-    // Populate analysis_type from CMG's file_type field
-    // Format: uppercase with underscores (matches formatAnalysisType utility)
-    const analysisType = cmgItem.file_type
+    // Normalize file_type from CMG (uppercase with underscores)
+    const normalizedName = cmgItem.file_type
       .trim()
       .toUpperCase()
       .replace(/\s+/g, '_')
-      .replace(/[^A-Z0-9_]/g, '');
+      .replace(/[^A-Z0-9_-]/g, '');
     
-    metadata = {
-      analysis_type: analysisType,
-    };
+    // Look up analysis_type in database (case-insensitive)
+    const analysisType = await prisma.analysis_type.findFirst({
+      where: {
+        name: { equals: normalizedName, mode: 'insensitive' },
+      },
+    });
+    
+    if (analysisType) {
+      analysisTypeConnect = { connect: { id: analysisType.id } };
+    } else {
+      // Log warning if file_type from CMG doesn't match any seeded analysis type
+      logger.warn(`[BIGBANG] No analysis_type found for CMG file_type: "${cmgItem.file_type}" (normalized: "${normalizedName}") on dataset ${cmgItem._id}`);
+    }
   }
   
   // Insert dataset
@@ -188,7 +198,9 @@ async function insertDataset(prisma, cmgItem, datasetType, name, isDeleted) {
       archive_path: cmgItem.paths?.archive || null,
       staged_path: null, // Always null - staging state not migrated from CMG
       is_staged: false, // Always false - staging state not migrated from CMG
-      metadata: metadata,
+      metadata: null, // No metadata needed - analysis_type now via relation
+      // Connect to analysis_type via foreign key
+      ...(analysisTypeConnect && { analysis_type: analysisTypeConnect }),
     },
   });
   

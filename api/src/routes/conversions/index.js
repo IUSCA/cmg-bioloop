@@ -505,29 +505,30 @@ router.post(
       },
     });
 
-      // create Process Requests
-      await Promise.all(req.body.process_requests.map(async (request) => {
-        logger.info('[SLURM-CONVERSION] Creating process request', {
-          conversion_id: conversion.id,
-          execution_platform: request.execution_platform,
-          execution_config: request.execution_config
-        });
-        
-        const process_request = await tx.process_request.create({
-          data: {
+      // create Process Requests (optional field, only if provided)
+      if (req.body.process_requests && req.body.process_requests.length > 0) {
+        await Promise.all(req.body.process_requests.map(async (request) => {
+          logger.info('[SLURM-CONVERSION] Creating process request', {
             conversion_id: conversion.id,
             execution_platform: request.execution_platform,
-            execution_config: request.execution_config || null,
-          },
-        });
-        
-        logger.info('[SLURM-CONVERSION] Process request created', {
-          process_request_id: process_request.id,
-          conversion_id: conversion.id,
-          execution_platform: request.execution_platform
-        });
-        
-        request.artifacts.forEach(async (artifact) => {
+            execution_config: request.execution_config
+          });
+          
+          const process_request = await tx.process_request.create({
+            data: {
+              conversion_id: conversion.id,
+              execution_platform: request.execution_platform,
+              execution_config: request.execution_config || null,
+            },
+          });
+          
+          logger.info('[SLURM-CONVERSION] Process request created', {
+            process_request_id: process_request.id,
+            conversion_id: conversion.id,
+            execution_platform: request.execution_platform
+          });
+          
+          request.artifacts.forEach(async (artifact) => {
           validateArtifact(artifact);
           
           logger.info('[SLURM-CONVERSION] Creating artifact', {
@@ -552,6 +553,7 @@ router.post(
           });
         });
       }));
+      }
 
     const workflow_type = config.genomic_conversion_programs.includes(conversionDefinition.program.name)
       ? 'genomic_conversion'
