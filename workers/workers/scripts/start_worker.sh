@@ -5,7 +5,7 @@ python -m celery \
   --loglevel INFO \
   -O fair \
   --pidfile celery_worker.pid \
-  --hostname 'cmg-test-celery-w1@%h' \
+  --hostname 'cmg-test-celery-v2-w1@%h' \
   --autoscale 8,3 \
-  --queues 'cmg-test.sca.iu.edu.q'
+  --queues 'cmg-bioloop-v2.cmg-test.sca.iu.edu.q'
   # --detach
