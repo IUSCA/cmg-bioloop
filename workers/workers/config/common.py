@@ -215,7 +215,7 @@ config = {
             {
               "name": "convert",
               "task": "convert_dataset",
-              "queue": "conversion.cmg-test.sca.iu.edu.q"
+              "queue": "conversion-v2.cmg-test.sca.iu.edu.q"
             },
 
           ]
@@ -226,22 +226,22 @@ config = {
             {
               "name": "convert",
               "task": "convert_genomic",
-              "queue": "conversion.cmg-test.sca.iu.edu.q"
+              "queue": "conversion-v2.cmg-test.sca.iu.edu.q"
             },
             {
               "name": "generate qc",
               "task": "generate_qc",
-              "queue": "conversion.cmg-test.sca.iu.edu.q"
+              "queue": "conversion-v2.cmg-test.sca.iu.edu.q"
             },
             {
               "name": "copy reports",
               "task": "copy_conversion_reports",
-              "queue": "conversion.cmg-test.sca.iu.edu.q"
+              "queue": "conversion-v2.cmg-test.sca.iu.edu.q"
             },
             {
               "name": "derive data products",
               "task": "derive_data_products",
-              "queue": "conversion.cmg-test.sca.iu.edu.q"
+              "queue": "conversion-v2.cmg-test.sca.iu.edu.q"
             }
           ]
         },
