@@ -201,14 +201,6 @@ config = {
                 }
             ]
         },
-        'cancel_dataset_upload': {
-            'steps': [
-                {
-                    'name': 'Cancel Dataset Upload',
-                    'task': 'cancel_dataset_upload'
-                }
-            ]
-        },
         "conversion": {
           "name": "Conversion",
           "steps": [

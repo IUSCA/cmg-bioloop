@@ -16,6 +16,7 @@ const {
   axiosErrorHandler,
   prismaConstraintFailedHandler,
 } = require('./middleware/error');
+const { authenticate } = require('./middleware/auth');
 
 // Register application
 const app = express();
@@ -23,6 +24,37 @@ const app = express();
 // TEMPORARY: Debug logging for datahub endpoint
 // remove fingerprinting header
 app.disable('x-powered-by');
+
+// Mount TUS server BEFORE ALL middleware (including morgan)
+// TUS needs completely raw request/response objects
+const uploadService = require('./services/upload');
+const tusServer = uploadService.getServer();
+const logger = require('./services/logger');
+
+logger.info('Mounting TUS server directly in app.js BEFORE all middleware');
+
+// Mount TUS at root level so it can see full paths
+// But only handle /uploads/files requests
+app.use((req, res, next) => {
+  if (req.path.startsWith('/uploads/files')) {
+    logger.info(`TUS middleware: ${req.method} ${req.path}`);
+    // Authenticate first
+    authenticate(req, res, (err) => {
+      if (err) {
+        return next(err);
+      }
+      // Add /api prefix back for TUS to generate correct Location headers
+      const originalUrl = req.url;
+      req.url = '/api' + req.url;
+      // Then hand off to TUS - don't catch errors, let Express handle them
+      return tusServer.handle(req, res);
+    });
+  } else {
+    next();
+  }
+});
+
+logger.info('TUS server mounted at /uploads/files');
 
 // request logger - https://github.com/expressjs/morgan
 if (config.get('mode') === 'production') {
@@ -41,10 +73,15 @@ app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: false }));
 app.use(cookieParser());
 
-// compress all responses EXCEPT binary genomic files
+// compress all responses EXCEPT binary genomic files and TUS upload endpoints
 // Binary files (BigWig, BAM, etc.) must not be compressed for genome browsers to parse them
+// TUS endpoints must not be compressed to avoid interfering with protocol
 app.use(compression({
   filter: (req, res) => {
+    // Don't compress TUS upload endpoints
+    if (req.path && req.path.startsWith('/uploads/files')) {
+      return false;
+    }
     // Don't compress file exposure endpoints (genome browser files)
     if (req.path && req.path.includes('/files/expose')) {
       return false;

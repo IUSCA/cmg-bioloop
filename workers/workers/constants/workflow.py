@@ -3,7 +3,6 @@ WORKFLOWS = {
     'STAGE': 'stage',
     'STAGE_MIGRATED': 'stage_migrated',
     'PROCESS_DATASET_UPLOAD': 'process_dataset_upload',
-    'CANCEL_DATASET_UPLOAD': 'cancel_dataset_upload',
     'FILE_INFO_POPULATION': 'file_info_population',
     'HYDRATE_SESSION': 'hydrate_session'
 }

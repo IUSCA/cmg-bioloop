@@ -6,6 +6,8 @@ const {
 const _ = require('lodash/fp');
 const { Prisma } = require('@prisma/client');
 const config = require('config');
+const fs = require('fs');
+const path = require('path');
 
 const asyncHandler = require('@/middleware/asyncHandler');
 const { accessControl } = require('@/middleware/auth');
@@ -139,7 +141,7 @@ router.get(
   }),
 );
 
-// - Register an uploaded dataset in the system
+// - Register an uploaded dataset in the system (TUS Upload)
 // - Used by UI
 router.post(
   '/',
@@ -148,7 +150,6 @@ router.post(
     body('type').trim().notEmpty().isIn(config.dataset_types),
     body('name').trim().notEmpty().isLength({ min: 3 }),
     body('src_dataset_id').optional().isInt().toInt(),
-    body('files_metadata').isArray(),
     body('project_id').optional(),
     body('src_instrument_id').optional(),
     body('file_type').optional(),
@@ -157,10 +158,10 @@ router.post(
   ]),
   asyncHandler(async (req, res, next) => {
     // #swagger.tags = ['datasets']
-    // #swagger.summary = 'Register an uploaded dataset in the system'
+    // #swagger.summary = 'Register an uploaded dataset in the system (TUS Upload)'
 
     const {
-      project_id, src_instrument_id, src_dataset_id, name, type, files_metadata,
+      project_id, src_instrument_id, src_dataset_id, name, type,
       file_type, genome_type, genome_value,
     } = req.body;
 
@@ -193,18 +194,10 @@ router.post(
         },
       });
 
+      // Create dataset_upload_log (TUS handles file tracking internally)
       const created_dataset_upload_log = await tx.dataset_upload_log.create({
         data: {
           status: CONSTANTS.UPLOAD_STATUSES.UPLOADING,
-          files: {
-            create: files_metadata.map((file) => ({
-              name: file.name,
-              md5: file.checksum,
-              num_chunks: file.num_chunks,
-              path: file.path ?? Prisma.skip,
-              status: CONSTANTS.UPLOAD_STATUSES.UPLOADING,
-            })),
-          },
           audit_log: {
             connect: {
               id: audit_log.id,
@@ -216,6 +209,7 @@ router.post(
         },
       });
 
+      // Set origin_path for the dataset
       await tx.dataset.update({
         where: { id: createdDataset.id },
         data: {
@@ -231,6 +225,162 @@ router.post(
     });
 
     res.json(dataset_upload_log);
+  }),
+);
+
+// - Complete a TUS upload (called after UI finishes uploading)
+// - Updates dataset_upload_log, moves files, prepares for workflow
+router.post(
+  '/:id/complete',
+  isPermittedTo(
+    'update',
+    { checkOwnership: true },
+    async (req, res, next) => { // resourceOwnerFn
+      try {
+        const dataset_creator = await datasetService.get_dataset_creator({ dataset_id: parseInt(req.params.id, 10) });
+        return dataset_creator.username;
+      } catch (error) {
+        logger.error(error);
+        return next(createError.InternalServerError());
+      }
+    },
+  ),
+  [
+    body('tus_id').isString().notEmpty(),
+    body('selection_mode').optional().isString(),
+    body('directory_name').optional().isString(),
+    body('relative_path').optional().isString(),
+  ],
+  asyncHandler(async (req, res, next) => {
+    // #swagger.tags = ['datasets']
+    // #swagger.summary = 'Mark TUS upload as complete and prepare for processing'
+
+    const datasetId = parseInt(req.params.id, 10);
+    const { tus_id, selection_mode, directory_name, relative_path } = req.body;
+
+    logger.info(`Complete upload request for dataset ${datasetId}, tus_id: ${tus_id}`);
+
+    try {
+      // Find the upload log
+      const uploadLog = await prisma.dataset_upload_log.findFirst({
+        where: {
+          audit_log: {
+            dataset_id: datasetId,
+            create_method: CONSTANTS.DATASET_CREATE_METHODS.UPLOAD,
+          },
+        },
+        include: {
+          audit_log: {
+            include: {
+              dataset: true,
+            },
+          },
+        },
+      });
+
+      if (!uploadLog) {
+        logger.error(`No upload log found for dataset ${datasetId}`);
+        return res.status(404).json({ error: 'Upload log not found' });
+      }
+
+      // Get TUS upload info to verify completion and get file details
+      const uploadPath = config.get('upload.path');
+      const tusFilePath = path.join(uploadPath, tus_id);
+      const tusInfoPath = `${tusFilePath}.info`;
+
+      // Check if TUS files exist
+      if (!fs.existsSync(tusFilePath)) {
+        logger.error(`TUS file not found: ${tusFilePath}`);
+        return res.status(404).json({ error: 'Upload file not found' });
+      }
+
+      // Read TUS metadata
+      let tusMetadata = {};
+      let fileSize = 0;
+      
+      if (fs.existsSync(tusInfoPath)) {
+        const infoContent = fs.readFileSync(tusInfoPath, 'utf8');
+        tusMetadata = JSON.parse(infoContent);
+        logger.info(`TUS metadata: ${JSON.stringify(tusMetadata)}`);
+      }
+
+      // Get file size
+      const stats = fs.statSync(tusFilePath);
+      fileSize = stats.size;
+
+      // Determine final file path
+      let finalPath = tusFilePath;
+      
+      // For directory uploads, preserve directory structure
+      if (selection_mode === 'directory' && relative_path) {
+        const datasetUploadDir = path.join(
+          uploadPath,
+          `dataset_${datasetId}`,
+          directory_name || 'upload',
+        );
+        
+        finalPath = path.join(datasetUploadDir, relative_path);
+        
+        logger.info(`Preserving directory structure: ${tusFilePath} -> ${finalPath}`);
+        
+        // Create parent directory if needed
+        const parentDir = path.dirname(finalPath);
+        if (!fs.existsSync(parentDir)) {
+          fs.mkdirSync(parentDir, { recursive: true });
+        }
+        
+        // Move file to preserve structure
+        fs.renameSync(tusFilePath, finalPath);
+        
+        logger.info(`File moved to ${finalPath}`);
+      }
+
+      // Update upload log
+      const updateData = {
+        status: CONSTANTS.UPLOAD_STATUSES.UPLOADED,
+        tus_id,
+        file_path: finalPath,
+        file_size: BigInt(fileSize),
+        selection_mode: selection_mode || 'files',
+        directory_name,
+        updated_at: new Date(),
+      };
+
+      const updatedLog = await prisma.dataset_upload_log.update({
+        where: { id: uploadLog.id },
+        data: updateData,
+        include: CONSTANTS.INCLUDE_DATASET_UPLOAD_LOG_RELATIONS,
+      });
+
+      logger.info(`Updated dataset_upload_log for dataset ${datasetId}: status=${updatedLog.status}`);
+
+      res.json({
+        success: true,
+        upload_log: updatedLog,
+      });
+    } catch (error) {
+      logger.error(`Failed to complete upload for dataset ${datasetId}:`, error);
+      
+      // Try to update status to failed
+      try {
+        await prisma.dataset_upload_log.updateMany({
+          where: {
+            audit_log: {
+              dataset_id: datasetId,
+              create_method: CONSTANTS.DATASET_CREATE_METHODS.UPLOAD,
+            },
+          },
+          data: {
+            status: CONSTANTS.UPLOAD_STATUSES.PROCESSING_FAILED,
+            failure_reason: error.message,
+          },
+        });
+      } catch (updateError) {
+        logger.error('Failed to update upload log status:', updateError);
+      }
+      
+      return res.status(500).json({ error: 'Failed to complete upload', details: error.message });
+    }
   }),
 );
 
@@ -261,13 +411,12 @@ router.patch(
   validate([
     body('status').optional().trim().isIn(Object.values(CONSTANTS.UPLOAD_STATUSES)),
     param('id').isInt().toInt(),
-    body('files').isArray().optional(),
   ]),
   asyncHandler(async (req, res, next) => {
     // #swagger.tags = ['uploads']
     // #swagger.summary = 'Update the metadata related to a dataset upload event'
 
-    const { status, files = [] } = req.body;
+    const { status } = req.body;
     const dataset_upload_log_update_query = _.omitBy(_.isUndefined)({
       status,
     });
@@ -293,17 +442,6 @@ router.patch(
         });
       }
 
-      if (files.length > 0) {
-        // eslint-disable-next-line no-restricted-syntax
-        for (const f of files) {
-          // eslint-disable-next-line no-await-in-loop
-          await tx.file_upload_log.update({
-            where: { id: f.id },
-            data: f.data,
-          });
-        }
-      }
-
       ds_upload_log = await tx.dataset_upload_log.findUniqueOrThrow({
         where: { id: ds_upload_log.id },
         include: CONSTANTS.INCLUDE_DATASET_UPLOAD_LOG_RELATIONS,
@@ -325,14 +463,12 @@ router.post(
     param('id').isInt().toInt(),
     param('wf').isIn([
       CONSTANTS.WORKFLOWS.PROCESS_DATASET_UPLOAD,
-      CONSTANTS.WORKFLOWS.CANCEL_DATASET_UPLOAD,
     ]),
   ]),
   asyncHandler(async (req, res, next) => {
     // #swagger.tags = ['datasets']
     // #swagger.summary = Create and start a workflow to process a Dataset's upload, and associate it with the uploaded
     // Dataset.
-    // Allowed workflows are process_dataset_upload, and cancel_dataset_upload.
 
     const wf_name = req.params.wf;
 
@@ -345,8 +481,7 @@ router.post(
       return next(createError(404, 'Dataset not found'));
     }
 
-    if (wf_name !== CONSTANTS.WORKFLOWS.PROCESS_DATASET_UPLOAD
-          && wf_name !== CONSTANTS.WORKFLOWS.CANCEL_DATASET_UPLOAD) {
+    if (wf_name !== CONSTANTS.WORKFLOWS.PROCESS_DATASET_UPLOAD) {
       return next(createError(400, 'Invalid workflow name'));
     }
 
