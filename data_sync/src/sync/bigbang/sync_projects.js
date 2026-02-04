@@ -81,7 +81,7 @@ async function syncProjects(prisma, cmgDb) {
     }
     
     // Get all users (direct + from groups)
-    const directUsers = cmgProject.users || [];
+    const directUsers = Array.isArray(cmgProject.users) ? cmgProject.users : [];
     const groupUsers = await expandGroups(cmgDb, cmgProject.groups || []);
     const allUserIds = [...new Set([...directUsers.map(id => id.toString()), ...groupUsers])];
     

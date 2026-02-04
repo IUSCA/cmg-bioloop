@@ -290,7 +290,7 @@ curl http://localhost:3030/api/tracks | jq '.tracks[] | select(.name | contains(
 **Solution:**
 ```bash
 # Check file metadata
-docker exec cmg-bioloop-2-api-1 node -e "
+docker exec cmg-bioloop-3-api-1 node -e "
 const prisma = require('./src/db');
 (async () => {
   const files = await prisma.dataset_file.findMany({

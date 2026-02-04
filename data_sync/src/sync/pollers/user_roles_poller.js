@@ -33,7 +33,7 @@ class UserRolesPoller extends BasePoller {
       where: { cmg_id: cmgUser._id.toString() },
       include: {
         user_role: {
-          include: { role: true },
+          include: { roles: true },
         },
       },
     });
@@ -75,7 +75,7 @@ class UserRolesPoller extends BasePoller {
     // Map CMG roles to Bioloop roles
     const targetRoleNames = mapCMGRolesToBioloop(cmgRoles);
     
-    const existingRoleNames = existingUserRoles.map(ur => ur.role.name);
+    const existingRoleNames = existingUserRoles.map(ur => ur.roles.name);
     
     // Add missing roles
     const rolesToAdd = targetRoleNames.filter(name => !existingRoleNames.includes(name));
@@ -95,7 +95,7 @@ class UserRolesPoller extends BasePoller {
     // Remove extra roles
     const rolesToRemove = existingRoleNames.filter(name => !targetRoleNames.includes(name));
     for (const roleName of rolesToRemove) {
-      const userRole = existingUserRoles.find(ur => ur.role.name === roleName);
+      const userRole = existingUserRoles.find(ur => ur.roles.name === roleName);
       if (userRole) {
         await tx.user_role.delete({
           where: { id: userRole.id },

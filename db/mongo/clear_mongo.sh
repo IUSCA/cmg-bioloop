@@ -9,27 +9,27 @@
 # ===============
 # 
 # 1. Clear workflows by status:
-#    docker exec -it cmg-bioloop-2-mongo-1 /docker-entrypoint-initdb.d/clear_mongo.sh --status PENDING
-#    docker exec -it cmg-bioloop-2-mongo-1 /docker-entrypoint-initdb.d/clear_mongo.sh -s SUCCESS
+#    docker exec -it cmg-bioloop-3-mongo-1 /docker-entrypoint-initdb.d/clear_mongo.sh --status PENDING
+#    docker exec -it cmg-bioloop-3-mongo-1 /docker-entrypoint-initdb.d/clear_mongo.sh -s SUCCESS
 # 
 # 2. Clear ALL workflows (any status):
-#    docker exec -it cmg-bioloop-2-mongo-1 /docker-entrypoint-initdb.d/clear_mongo.sh --status ALL
-#    docker exec -it cmg-bioloop-2-mongo-1 /docker-entrypoint-initdb.d/clear_mongo.sh
+#    docker exec -it cmg-bioloop-3-mongo-1 /docker-entrypoint-initdb.d/clear_mongo.sh --status ALL
+#    docker exec -it cmg-bioloop-3-mongo-1 /docker-entrypoint-initdb.d/clear_mongo.sh
 # 
 # 3. Run interactively:
-#    docker exec -it cmg-bioloop-2-mongo-1 bash
+#    docker exec -it cmg-bioloop-3-mongo-1 bash
 #    # /docker-entrypoint-initdb.d/clear_mongo.sh --status PENDING
 # 
 # 4. Run with verbose output:
-#    docker exec -it cmg-bioloop-2-mongo-1 bash -c "set -x; /docker-entrypoint-initdb.d/clear_mongo.sh -s PENDING"
+#    docker exec -it cmg-bioloop-3-mongo-1 bash -c "set -x; /docker-entrypoint-initdb.d/clear_mongo.sh -s PENDING"
 # 
 # 4. Run with specific database (if different from default):
-#    docker exec -it cmg-bioloop-2-mongo-1 bash -c "MONGO_DB=your_db_name /docker-entrypoint-initdb.d/clear_mongo.sh"
+#    docker exec -it cmg-bioloop-3-mongo-1 bash -c "MONGO_DB=your_db_name /docker-entrypoint-initdb.d/clear_mongo.sh"
 # 
 # PREREQUISITES:
 # ==============
 # - MongoDB container must be running
-# - Container name should be 'cmg-bioloop-2-mongo-1' (adjust if different)
+# - Container name should be 'cmg-bioloop-3-mongo-1' (adjust if different)
 # - Script must be mounted in the container at /docker-entrypoint-initdb.d/
 # - mongosh must be available in the container
 # 

@@ -15,12 +15,17 @@ services:
       - ../api/.env:/opt/sca/api/.env:ro
       - db_sandbox_pgdata:/var/lib/postgresql/15/main
       - db_sandbox_node_modules:/opt/sca/app/node_modules
+      # Shared mount for CMG<->Bioloop sync testing coordination
+      # Contains: test queue/results, agent status, coordination logs, and all testing documentation
+      # Both CMG and Bioloop agents can read/write to this directory in real-time
+      - /tmp/cmg-bioloop:/tmp/cmg-bioloop
     working_dir: /opt/sca/app
     ports:
-      - "127.0.0.1:5434:5432"
+      - "127.0.0.1:5435:5432"
     networks:
       - sandbox_network
-      - cmg-bioloop-2_default
+      - cmg-bioloop-3_default
+      - cmg_cmg-network
     deploy:
       resources:
         limits:
@@ -33,9 +38,12 @@ networks:
   sandbox_network:
     name: bioloop_sandbox
     driver: bridge
-  cmg-bioloop-2_default:
+  cmg-bioloop-3_default:
     external: true
-    name: cmg-bioloop-2_default
+    name: cmg-bioloop-3_default
+  cmg_cmg-network:
+    external: true
+    name: cmg_cmg-network
 
 volumes:
   db_sandbox_pgdata:

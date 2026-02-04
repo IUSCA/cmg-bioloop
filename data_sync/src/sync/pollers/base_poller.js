@@ -269,10 +269,7 @@ class BasePoller {
       
       // Update cursor to last successfully processed document
       if (lastDoc) {
-        await updateCursor(tx, this.pollerName, {
-          last_updated_at: lastDoc.updatedAt,
-          last_cmg_objectid: lastDoc._id.toString(),
-        });
+        await updateCursor(tx, this.pollerName, lastDoc);
       }
     });
     

@@ -9,27 +9,27 @@
 # ===============
 #
 # 1. Run from celery_worker container (RECOMMENDED - only way that works):
-#    docker exec -it cmg-bioloop-2-celery_worker-1 /opt/sca/app/clear_celery_queue.sh
+#    docker exec -it cmg-bioloop-3-celery_worker-1 /opt/sca/app/clear_celery_queue.sh
 #
 # 2. Run from conversion_worker container:
-#    docker exec -it cmg-bioloop-2-conversion_worker-1 /opt/sca/app/clear_celery_queue.sh
+#    docker exec -it cmg-bioloop-3-conversion_worker-1 /opt/sca/app/clear_celery_queue.sh
 #
 # 3. Run from watch container:
-#    docker exec -it cmg-bioloop-2-watch-1 /opt/sca/app/clear_celery_queue.sh
+#    docker exec -it cmg-bioloop-3-watch-1 /opt/sca/app/clear_celery_queue.sh
 #
 # 4. Run interactively (if you want to inspect first):
-#    docker exec -it cmg-bioloop-2-celery_worker-1 bash
+#    docker exec -it cmg-bioloop-3-celery_worker-1 bash
 #    # cd /opt/sca/app && ./clear_celery_queue.sh
 #
 # 5. Run with verbose output:
-#    docker exec -it cmg-bioloop-2-celery_worker-1 bash -c "set -x; /opt/sca/app/clear_celery_queue.sh"
+#    docker exec -it cmg-bioloop-3-celery_worker-1 bash -c "set -x; /opt/sca/app/clear_celery_queue.sh"
 #
 # PREREQUISITES:
 # ==============
 # - Worker containers must be running (celery_worker, conversion_worker, or watch)
 # - Celery app must be accessible at workers.workers.celery_app
 # - Script is available at /opt/sca/app/ in worker containers
-# - Container names should match the pattern 'cmg-bioloop-2-*-1' (adjust if different)
+# - Container names should match the pattern 'cmg-bioloop-3-*-1' (adjust if different)
 #
 # WHAT IT CLEARS:
 # ===============
@@ -105,7 +105,7 @@ purge_celery_queues() {
         fi
     else
         echo "  ❌ ERROR: Celery command not available! This script must be run from a worker container."
-        echo "     Run: docker exec -it cmg-bioloop-2-celery_worker-1 /opt/sca/app/clear_celery_queue.sh"
+        echo "     Run: docker exec -it cmg-bioloop-3-celery_worker-1 /opt/sca/app/clear_celery_queue.sh"
         return 1
     fi
 }
@@ -136,7 +136,7 @@ if [ "$celery_exit_code" -eq 0 ]; then
 else
     echo "❌ Celery queue clear operation failed!"
     echo "   Make sure you're running this from a worker container:"
-    echo "   docker exec -it cmg-bioloop-2-celery_worker-1 /opt/sca/app/clear_celery_queue.sh"
+    echo "   docker exec -it cmg-bioloop-3-celery_worker-1 /opt/sca/app/clear_celery_queue.sh"
     exit 1
 fi
 
@@ -147,4 +147,4 @@ echo "Active workers and their processes are not affected."
 echo ""
 echo "To verify the cleanup:"
 echo "  - Check RabbitMQ management UI: http://localhost:15672"
-echo "  - Check Celery status: docker exec -it cmg-bioloop-2-celery_worker-1 celery -A workers.celery_app inspect active"
+echo "  - Check Celery status: docker exec -it cmg-bioloop-3-celery_worker-1 celery -A workers.celery_app inspect active"

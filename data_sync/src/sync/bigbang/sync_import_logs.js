@@ -173,10 +173,6 @@ async function syncImportLogs(prisma, cmgDb, cmgUserId) {
           await prisma.dataset_import_log.create({
             data: {
               cmg_id: uploadId,
-              // NOTE: file_type, genome_type, genome_value columns removed from import log table
-              // These values are now stored on the dataset itself:
-              // - file_type → dataset.analysis_type_id (foreign key to analysis_type table)
-              // - genome_type/genome_value → dataset_genomic_attributes table
               source_run: sourceRun,
               notes: cmgUpload.notes || null,
               metadata: {
@@ -185,6 +181,9 @@ async function syncImportLogs(prisma, cmgDb, cmgUserId) {
                 cmg_source_dataset: cmgUpload.dataset ? cmgUpload.dataset.toString() : null,
                 cmg_source_dataproduct: cmgUpload.dataproduct ? cmgUpload.dataproduct.toString() : null,
                 cmg_upload_data: uploadData,
+                file_type: cmgUpload.file_type || null,
+                genome_type: cmgUpload.genomeType || null,
+                genome_value: cmgUpload.genomeValue || null,
               },
               audit_log_id: auditLog.id,
             },
