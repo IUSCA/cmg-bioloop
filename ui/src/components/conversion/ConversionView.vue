@@ -3,93 +3,88 @@
     <!-- Content -->
     <div class="flex flex-col gap-3">
       <!-- Conversion Info Card -->
-      <div class="grid gird-cols-1 lg:grid-cols-2 gap-3">
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-3">
         <!-- Conversion Info -->
-        <div class="">
-          <va-card>
-            <va-card-title>
-              <div class="flex flex-nowrap items-center w-full">
-                <span class="flex-auto text-lg"> Conversion Info </span>
-              </div>
-            </va-card-title>
-            <va-card-content>
-              <ConversionDetails :conversion="conversion"></ConversionDetails>
-            </va-card-content>
-          </va-card>
-        </div>
+        <va-card class="min-w-0">
+          <va-card-title>
+            <div class="flex flex-nowrap items-center w-full">
+              <span class="flex-auto text-lg"> Conversion Info </span>
+            </div>
+          </va-card-title>
+          <va-card-content>
+            <ConversionDetails :conversion="conversion"></ConversionDetails>
+          </va-card-content>
+        </va-card>
 
-        <div>
-          <va-card>
+        <!-- Run Info -->
+        <va-card class="flex flex-col min-w-0">
             <va-card-title>
               <span class="text-lg"> Run Info </span>
             </va-card-title>
-            <va-card-content>
-              <!-- output and log directories -->
-              <div
-                class="flex gap-2 items-center w-full"
-                v-if="conversionOutputDir"
-              >
-                <i-mdi-folder class="text-lg" />
-                <span class="font-semibold flex-none">
-                  Output Directory :
-                </span>
-
-                <CopyText
-                  :text="getConversionOutputDir(conversion)"
-                  class="w-96"
-                />
-              </div>
-
-              <!-- Reports Button -->
-              <div class="mt-4">
-                <div class="flex gap-2 items-center w-full">
-                  <i-mdi-file-document-multiple class="text-lg" />
-                  <span class="font-semibold flex-none">Reports</span>
-                  <va-button
-                    preset="secondary"
-                    icon="open_in_new"
-                    size="small"
-                    @click="openReports"
-                  >
-                    View Reports
-                  </va-button>
-                </div>
-              </div>
-
-              <!-- Logs Section -->
-              <div class="mt-4" v-if="logs.length > 0">
-                <div class="flex items-start gap-2">
-                  <span class="font-semibold flex-none">Logs</span>
-                  <div class="flex items-start gap-2">
-                    <div
-                      class="bg-gray-100 dark:bg-gray-800 px-3 py-2 rounded text-sm overflow-x-auto overflow-y-auto max-h-32 max-w-md"
-                    >
-                      <pre class="whitespace-pre">{{ formattedLogs }}</pre>
-                    </div>
-                    <div class="flex flex-col gap-5">
-                      <CopyButton
-                        :text="formattedLogs"
-                        preset="plain"
-                        class="flex-none"
-                      />
-                      <va-popover message="Expand" placement="top">
-                        <va-button
-                          preset="plain"
-                          icon="open_in_full"
-                          size="small"
-                          @click="openLogsModal"
-                          class="flex-none"
+            <va-card-content class="flex-1 flex flex-col min-w-0">
+              <div class="va-table-responsive min-w-0">
+                <table class="va-table">
+                  <tbody>
+                    <!-- Output Directory -->
+                    <tr v-if="conversionOutputDir">
+                      <td>Output Directory</td>
+                      <td>
+                        <CopyText
+                          :text="getConversionOutputDir(conversion)"
                         />
-                      </va-popover>
-                    </div>
-                  </div>
-                </div>
-              </div>
+                      </td>
+                    </tr>
 
-              <div class="flex gap-2 items-center w-full"></div>
+                    <!-- Reports -->
+                    <tr>
+                      <td>Reports</td>
+                      <td>
+                        <va-button
+                          preset="secondary"
+                          icon="open_in_new"
+                          size="small"
+                          @click="openReports"
+                        >
+                          View Reports
+                        </va-button>
+                      </td>
+                    </tr>
+
+                    <!-- Logs -->
+                    <tr v-if="logs.length > 0">
+                      <td>Logs</td>
+                      <td>
+                        <div class="flex items-start gap-2">
+                          <div
+                            class="bg-gray-100 dark:bg-gray-800 px-3 py-2 rounded text-sm overflow-x-auto overflow-y-auto max-w-md"
+                            style="min-height: 150px; max-height: 400px;"
+                          >
+                            <pre class="whitespace-pre">{{ formattedLogs }}</pre>
+                          </div>
+                          <div class="flex flex-col gap-5">
+                            <CopyButton
+                              :text="formattedLogs"
+                              preset="plain"
+                              class="flex-none"
+                            />
+                            <va-popover message="Expand" placement="top">
+                              <va-button
+                                preset="plain"
+                                icon="open_in_full"
+                                size="small"
+                                @click="openLogsModal"
+                                class="flex-none"
+                              />
+                            </va-popover>
+                          </div>
+                        </div>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
             </va-card-content>
-          </va-card>
-        </div>
+        </va-card>
       </div>
 
       <!-- Derived Datasets Card -->
@@ -103,6 +98,34 @@
           <ConversionDerivedDatasets :conversion-id="conversion?.id" />
         </va-card-content>
       </va-card>
+
+      <!-- Workflows -->
+      <div v-if="conversion?.workflow_id">
+        <span class="flex text-xl my-2 font-bold">WORKFLOW</span>
+        <div v-if="workflow && Object.keys(workflow).length > 0" class="space-y-2">
+          <Collapsible v-model="workflow.collapse_model">
+            <template #header-content>
+              <WorkflowCompact :workflow="workflow" />
+            </template>
+
+            <div>
+              <Workflow
+                :workflow="workflow"
+                @update="fetch_conversion(true)"
+              ></Workflow>
+            </div>
+          </Collapsible>
+        </div>
+        <div
+          v-else
+          class="text-center bg-slate-200 dark:bg-slate-800 py-2 rounded shadow"
+        >
+          <i-mdi-card-remove-outline class="inline-block text-4xl pr-3" />
+          <span class="text-lg">
+            Loading workflow...
+          </span>
+        </div>
+      </div>
     </div>
   </va-inner-loading>
 
@@ -124,13 +147,16 @@
 </template>
 
 <script setup>
+import config from "@/config";
 import { getConversionOutputDir } from "@/services/conversion";
 import conversionApiService from "@/services/conversion/api";
 import toast from "@/services/toast";
+import workflowService from "@/services/workflow";
 
 const props = defineProps({ conversionId: String });
 
 const conversion = ref({});
+const workflow = ref({});
 const logs = ref([]);
 const loading = ref(false);
 const showLogsModal = ref(false);
@@ -187,8 +213,11 @@ function fetch_conversion(show_loading = false) {
     .then(([conversionRes, logsRes]) => {
       conversion.value = conversionRes.data;
       logs.value = logsRes.data;
-      // console.log("conversion.value", conversion.value);
-      // console.log("logs.value", logs.value);
+      
+      // Fetch workflow if workflow_id exists
+      if (conversion.value.workflow_id) {
+        fetch_workflow(conversion.value.workflow_id);
+      }
     })
     .catch((err) => {
       console.error(err);
@@ -198,6 +227,22 @@ function fetch_conversion(show_loading = false) {
     })
     .finally(() => {
       loading.value = false;
+    });
+}
+
+function fetch_workflow(workflow_id) {
+  workflowService.getById(workflow_id, true, true)
+    .then((res) => {
+      const _workflow = res.data;
+      // Keep collapse_model state if it exists
+      _workflow.collapse_model = 
+        !workflowService.is_workflow_done(_workflow) ||
+        workflow.value?.collapse_model ||
+        false;
+      workflow.value = _workflow;
+    })
+    .catch((err) => {
+      console.error("Error fetching workflow:", err);
     });
 }
 
@@ -213,8 +258,52 @@ const conversionOutputDir = computed(() => {
   );
 });
 
+const active_wf = computed(() => {
+  if (!workflow.value || Object.keys(workflow.value).length === 0) {
+    return false;
+  }
+  return !workflowService.is_workflow_done(workflow.value);
+});
+
+const polling_interval = computed(() => {
+  return active_wf.value ? config.dataset_polling_interval : null;
+});
+
 onMounted(() => {
   console.log("ConversionView onMounted", props.conversionId);
   fetch_conversion(true);
 });
+
+// Set up polling for active workflows
+const poll = useIntervalFn(fetch_conversion, polling_interval);
+
+watch(active_wf, (newVal, _) => {
+  if (newVal) {
+    poll.resume();
+  } else {
+    poll.pause();
+  }
+});
 </script>
+
+<style lang="scss" scoped>
+div.va-table-responsive {
+  overflow: auto;
+
+  table.va-table {
+    width: auto;
+  }
+
+  // first column fixed width to match Conversion Info card
+  td:first-child {
+    width: 135px;
+    min-width: 135px;
+    white-space: nowrap;
+  }
+  
+  // second column should shrink to fit content
+  td:last-child {
+    width: 1%;
+  }
+}
+</style>

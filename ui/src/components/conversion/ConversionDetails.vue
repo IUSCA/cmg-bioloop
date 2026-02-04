@@ -208,9 +208,20 @@ const filteredArgumentsString = computed(() => {
 div.va-table-responsive {
   overflow: auto;
 
-  // first column min width
+  table.va-table {
+    width: auto;
+  }
+
+  // first column fixed width for consistent spacing
   td:first-child {
+    width: 135px;
     min-width: 135px;
+    white-space: nowrap;
+  }
+  
+  // second column should shrink to fit content
+  td:last-child {
+    width: 1%;
   }
 }
 </style>
