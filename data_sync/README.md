@@ -144,6 +144,7 @@ See **POPULATE_BUNDLES_USAGE.md** for full documentation.
 - **SETUP_GUIDE.md** - Complete setup and configuration (includes network isolation warning)
 - **BIGBANG_SYNC_USAGE.md** - One-time migration documentation
 - **POLLER_SYNC_USAGE.md** - Continuous sync documentation
+- **CMG_BIOLOOP_FIELD_MAPPING.md** - Field mapping reference for testing and validation
 - **POPULATE_BUNDLES_USAGE.md** - Bundle population script for legacy archived datasets
 - **TARGET_DATABASE_CONFIGURATION.md** - Choose between sandbox and production databases
 - **LOGS.md** - Log locations, accessing logs, pulling from production
