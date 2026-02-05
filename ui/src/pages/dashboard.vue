@@ -6,6 +6,17 @@
       <Storage></Storage>
     </div>
 
+    <!-- Legacy migration notice -->
+    <va-alert
+      v-if="config.legacy?.enabled"
+      color="warning"
+      dense
+      class="w-full text-sm"
+      icon="warning"
+    >
+      Genomic File Count may not be reflected accurately for legacy Datasets, until they are migrated from CMG.
+    </va-alert>
+
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-3">
       <!-- Raw Data Stats -->
       <div class="">
@@ -60,6 +71,7 @@
 </template>
 
 <script setup>
+import config from "@/config";
 import DatasetService from "@/services/dataset";
 import toast from "@/services/toast";
 // import workflowService from "@/services/workflow";

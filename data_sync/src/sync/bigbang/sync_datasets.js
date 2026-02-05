@@ -178,6 +178,25 @@ async function insertDataset(prisma, cmgItem, datasetType, name, isDeleted) {
     }
   }
   
+  // Calculate num_files based on dataset type:
+  // - RAW_DATA: cmgItem.files is a Number (from CMG dataset collection)
+  // - DATA_PRODUCT: cmgItem.files is an Array (from CMG dataproduct collection)
+  const numFilesValue = datasetType === 'RAW_DATA'
+    ? (cmgItem.files || 0)
+    : (Array.isArray(cmgItem.files) ? cmgItem.files.length : 0);
+
+  // Calculate metadata.num_genome_files:
+  // - RAW_DATA: from cmgItem.cbcls field (count of genome files)
+  // - DATA_PRODUCT: same as num_files (all files in dataproduct are genome files)
+  const metadataValue = (() => {
+    if (datasetType === 'RAW_DATA') {
+      return cmgItem.cbcls ? { num_genome_files: cmgItem.cbcls } : null;
+    } else {
+      // DATA_PRODUCT: num_genome_files = num_files
+      return numFilesValue > 0 ? { num_genome_files: numFilesValue } : null;
+    }
+  })();
+
   // Insert dataset
   const dataset = await prisma.dataset.create({
     data: {
@@ -187,8 +206,9 @@ async function insertDataset(prisma, cmgItem, datasetType, name, isDeleted) {
       cmg_id: cmgItem._id.toString(),
       description: cmgItem.description || null,
       num_directories: cmgItem.directories || 0,
-      num_files: datasetType === 'RAW_DATA' ? (cmgItem.files || 0) : 0,
-      du_size: datasetType === 'RAW_DATA' ? BigInt(cmgItem.du_size || 0) : BigInt(0),
+      num_files: numFilesValue,
+      // du_size: RAW_DATA uses du_size field, DATA_PRODUCT uses size (same as size column)
+      du_size: datasetType === 'RAW_DATA' ? BigInt(cmgItem.du_size || 0) : BigInt(cmgItem.size || 0),
       // For DATA_PRODUCT: use 'size' field from CMG dataproducts collection
       // For RAW_DATA: use 'size' field from CMG datasets collection
       size: cmgItem.size ? BigInt(cmgItem.size) : null,
@@ -198,7 +218,7 @@ async function insertDataset(prisma, cmgItem, datasetType, name, isDeleted) {
       archive_path: cmgItem.paths?.archive || null,
       staged_path: null, // Always null - staging state not migrated from CMG
       is_staged: false, // Always false - staging state not migrated from CMG
-      metadata: null, // No metadata needed - analysis_type now via relation
+      metadata: metadataValue,
       // Connect to analysis_type via foreign key
       ...(analysisTypeConnect && { analysis_type: analysisTypeConnect }),
     },

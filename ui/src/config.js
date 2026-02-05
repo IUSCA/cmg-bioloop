@@ -58,13 +58,24 @@ const exports = {
   dashboard: {
     active_tasks: {
       steps: [
+        // Integrated workflow
         'await stability',
         'inspect',
         'archive',
         'stage',
         'validate',
-        'setup download',
+        'setup_download',
         'delete source',
+        // Stage_migrated workflow (additional steps)
+        'begin_migration',
+        'retrieve_archive',
+        'populate_metadata',
+        'end_migration',
+        // Genomic conversion workflow
+        'convert',
+        'generate qc',
+        'copy reports',
+        'derive data products',
       ],
       refresh_interval_ms: 10000,
     },
@@ -152,6 +163,9 @@ const exports = {
   ],
   genomeBrowserUrl:
     import.meta.env.VITE_GENOME_BROWSER_URL || 'https://epigenomegateway.wustl.edu/browser',
+  legacy: {
+    enabled: true,
+  }
 };
 
 export default exports;
