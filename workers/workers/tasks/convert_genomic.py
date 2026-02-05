@@ -231,5 +231,5 @@ def run_conversion(celery_task, conversion_id, **kwargs):
     print(f"task convert returned dataset_id, conversion_id")
     print(f"dataset_id: {dataset_id}")
     print(f"conversion_id: {conversion_id}")
-    return {'dataset_id': dataset_id, 'conversion_id': conversion_id}
+    return {'dataset_id': dataset_id, 'conversion_id': conversion_id},
 

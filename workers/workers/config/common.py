@@ -33,6 +33,7 @@ FIVE_MINUTES = 5 * 60
 
 config = {
     'app_id': 'cmg-test.sca.iu.edu',
+    'default_queue': 'cmg-bioloop-v2.cmg-test.sca.iu.edu.q',
     # cspell: disable-next-line
     'genome_file_types': ['.cbcl', '.bcl', '.bcl.gz', '.bgzf', '.fastq.gz', '.bam', '.bam.bai', '.vcf.gz',
                           '.vcf.gz.tbi', '.vcf'],
@@ -64,7 +65,6 @@ config = {
             'qc': '/path/to/qc'
         },
         'DATA_PRODUCT': {
-            'upload': '/opt/sca/data',
             'archive': f'development/{YEAR}/data_products',
             # archive_legacy: the legacy CMG application's archive path for Data Products.
             'archive_legacy': 'archive_products',

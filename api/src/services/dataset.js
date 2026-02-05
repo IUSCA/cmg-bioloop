@@ -71,9 +71,10 @@ function get_wf_body(wf_name) {
 
   wf_body.name = wf_name;
   wf_body.app_id = config.app_id;
+  const defaultQueue = config.default_queue || `${config.app_id}.q`;
   wf_body.steps = wf_body.steps.map((step) => ({
     ...step,
-    queue: step.queue || `${config.app_id}.q`,
+    queue: step.queue || defaultQueue,
   }));
   return wf_body;
 }

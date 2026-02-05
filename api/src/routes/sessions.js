@@ -1813,13 +1813,14 @@ router.post(
       return res.status(500).json({ error: 'Workflow configuration not found' });
     }
 
+    const defaultQueue = config.get('default_queue') || `${config.get('app_id')}.q`;
     const wfBody = {
       ...workflowConfig,
       name: wfName,
       app_id: config.get('app_id'),
       steps: workflowConfig.steps.map((step) => ({
         ...step,
-        queue: step.queue || `${config.get('app_id')}.q`,
+        queue: step.queue || defaultQueue,
       })),
     };
 

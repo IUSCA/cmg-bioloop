@@ -78,7 +78,7 @@ task_soft_time_limit = ONE_DAY - TEN_MINUTES
 
 # default value is 'celery'
 # https://docs.celeryq.dev/en/stable/userguide/configuration.html#task-default-queue
-task_default_queue = f'{config["app_id"]}.q'
+task_default_queue = config.get('default_queue', f'{config["app_id"]}.q')
 
 # https://docs.celeryq.dev/en/stable/userguide/routing.html#rabbitmq-message-priorities
 task_queue_max_priority = 10

@@ -26,9 +26,10 @@ def get_wf_body(wf_name: str) -> dict:
     wf_body = config['workflow_registry'][wf_name]
     wf_body['name'] = wf_body.get('name', wf_name)
     wf_body['app_id'] = config['app_id']
+    default_queue = config.get('default_queue', f'{config["app_id"]}.q')
     for step in wf_body['steps']:
         if 'queue' not in step:
-            step['queue'] = f'{config["app_id"]}.q'
+            step['queue'] = default_queue
     return wf_body
 
 

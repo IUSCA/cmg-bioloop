@@ -4,6 +4,7 @@ YEAR = datetime.datetime.now().year
 
 config = {
     'app_id': 'cmg-test.sca.iu.edu',
+    'default_queue': 'cmg-bioloop-v2.cmg-test.sca.iu.edu.q',
     'api': {
         'base_url': 'https://cmg-test.sca.iu.edu/api/',  # trailing slash is required
     },
@@ -33,9 +34,7 @@ config = {
         },
         'download_dir': '/N/scratch/cmguser/cmg-bioloop/production/downloads',
         'conversion': {
-          # /N/project/CMG-SCA/production/conversion is the path used in CMG-Production.
-          # 'reports': '/N/project/CMG-SCA/production/conversion', 
-          # '/opt/sca/cmg/api/public/reports' is the path used in CMG-Production.
+          'reports': '/N/scratch/cmguser/cmg-bioloop/conversions/reports',
           # 'reports_access': '/opt/sca/cmg/api/public/reports', 
         },
     },

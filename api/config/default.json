@@ -1,6 +1,7 @@
 {
   "mode": "default",
   "app_id": "cmg-test.sca.iu.edu",
+  "default_queue": "cmg-bioloop-v2.cmg-test.sca.iu.edu.q",
   "express": {
     "port": 3030,
     "host": "localhost"
