@@ -94,7 +94,7 @@ const exports = {
     uploads: {
       enabledForRoles: ['admin'],
     },
-    upload_verify_checksums: false, // Enable BLAKE3 manifest-based checksum verification for uploads
+    upload_verify_checksums: true, // Enable BLAKE3 manifest-based checksum verification for uploads
   },
   notifications: {
     pollingInterval: 5000, // milliseconds

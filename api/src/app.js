@@ -40,7 +40,7 @@ logger.info('Mounting TUS server directly in app.js BEFORE all middleware');
 app.use((req, res, next) => {
   // Check for both paths - TUS client may use either depending on context
   const isTusPath = req.path.startsWith('/uploads/files') || req.path.startsWith('/api/uploads/files');
-  
+
   if (isTusPath) {
     logger.info(`TUS middleware: ${req.method} ${req.path}`);
     // Authenticate first
