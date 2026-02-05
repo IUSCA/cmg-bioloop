@@ -189,17 +189,17 @@ if __name__ == "__main__":
         full_scan_every_n_scans=config['registration']['full_scan_every_n_scans']
     )
 
-    obs2 = Observer(
-        name='raw_data_obs_1',
-        dir_path=config['registration']['RAW_DATA']['source_dir_project'],
-        callback=Register('RAW_DATA').register,
-        interval=config['registration']['poll_interval_seconds'],
-        full_scan_every_n_scans=config['registration']['full_scan_every_n_scans']
-    )
+    # obs2 = Observer(
+    #     name='raw_data_obs_1',
+    #     dir_path=config['registration']['RAW_DATA']['source_dir_project'],
+    #     callback=Register('RAW_DATA').register,
+    #     interval=config['registration']['poll_interval_seconds'],
+    #     full_scan_every_n_scans=config['registration']['full_scan_every_n_scans']
+    # )
 
     obs3 = Observer(
         name='data_products_obs',
-        dir_path=config['registration']['DATA_PRODUCT']['source_dir'],
+        dir_path=config['registration']['DATA_PRODUCT']['source_dir_scratch'],
         callback=Register('DATA_PRODUCT').register,
         interval=config['registration']['poll_interval_seconds'],
         full_scan_every_n_scans=config['registration']['full_scan_every_n_scans']
@@ -215,7 +215,6 @@ if __name__ == "__main__":
 
     poller = Poller()
     poller.register(obs1)
-    poller.register(obs2)
     poller.register(obs3)
     poller.poll()
 

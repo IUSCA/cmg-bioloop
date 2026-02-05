@@ -9,6 +9,7 @@ CONVERSION_QUEUE = f'conversion.{APP_ID}.q'
 
 config = {
     'app_id': APP_ID,
+    'service_user': 'cmguser',
     'default_queue': FETCH_QUEUE,
     'fetch_queue': FETCH_QUEUE,
     'archive_queue': ARCHIVE_QUEUE,
@@ -54,8 +55,8 @@ config = {
             'source_dir_project': '/N/project/CMG-SCA/cmg-bioloop/origin/raw_data',
             
             # Test Origin paths
-            'source_dir_cmguser_1': '/home/cmguser/cmg-bioloop-ingestion-test/origin/raw_data_1',
-            'source_dir_cmguser_2': '/home/cmguser/cmg-bioloop-ingestion-test/origin/raw_data_2',
+            # 'source_dir_cmguser_1': '/home/cmguser/cmg-bioloop-ingestion-test/origin/raw_data_1',
+            # 'source_dir_cmguser_2': '/home/cmguser/cmg-bioloop-ingestion-test/origin/raw_data_2',
             
             # AGENT: don't delete these commented paths below
             # K2 (Compbio) host's Origin paths
@@ -75,7 +76,7 @@ config = {
             # 'source_dir_nanopore_2': '/zpool/p24',
         },
         'DATA_PRODUCT': {
-            'source_dir': '/N/project/CMG-SCA/cmg-bioloop/origin/data_products',
+            'source_dir_scratch': '/N/scratch/cmguser/cmg-bioloop/origin/data_products',
         },
         'recency_threshold_seconds': 300,  # 1 minute for standard Illumina datasets
         'recency_threshold_seconds_nanopore': 21600,  # 6 hours for nanopore datasets
