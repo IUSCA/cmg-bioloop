@@ -200,7 +200,8 @@ Content for checksum testing: ${Math.random().toString(36)}
     const fileHash = await blake3(fileContent);
     
     // Build manifest matching worker format
-    const relativePath = 'uploaded_file'; // TUS renames to this
+    // Use the actual filename (same as what UI would use via file.name)
+    const relativePath = 'test-upload-e2e.txt';
     const manifestLines = [
       'blake3-manifest-v1',
       `${relativePath}\t${fileSize}\t${fileHash}`

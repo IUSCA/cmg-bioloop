@@ -347,7 +347,7 @@
   },
   "enabled_features": {
     "upload": true,
-    "upload_verify_checksums": false,
+    "upload_verify_checksums": true,
     "fs": true,
     "downloads": true,
     "signup": true,

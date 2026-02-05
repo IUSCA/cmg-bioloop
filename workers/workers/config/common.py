@@ -367,6 +367,6 @@ config = {
         'completed': False,
     },
     'upload': {
-      'verify_checksums': False,
+      'verify_checksums': True,
     }
 }
