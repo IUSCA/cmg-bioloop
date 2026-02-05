@@ -71,10 +71,11 @@ RabbitMQ serves as the message broker for Celery in Bioloop. Its uses include:
 
 The maximum number of active (i.e. not 'PENDING') tasks that can run at a time is determined by the number of Celery workers, which is currently set to 8.
 
-This config can be found in `ecosystem.config.js`, under app `celery_worker`:
+This config can be found in `fetch.ecosystem.config.js` and `archive.ecosystem.config.js`:
 
 ```
--m celery -A workers.celery_app worker ... --autoscale=8,2
+-m celery -A workers.fetch_celery_app worker ... --autoscale=8,2 --queues 'fetch.cmg-test.sca.iu.edu.q'
+-m celery -A workers.archive_celery_app worker ... --autoscale=8,2 --queues 'archive.cmg-test.sca.iu.edu.q'
 ```
 
 ### Hot Module Replacement
@@ -83,8 +84,8 @@ Worker automatically run with updated code except for the code in
 
 - workers.config.*
 - workers.utils
-- workers.celery_app
-- workers.task.declaration
+- workers.fetch_celery_app
+- workers.archive_celery_app
 
 ## Deployment
 
@@ -210,7 +211,12 @@ colo23> git pull
 colo23> cd workers
 colo23> poetry install
 colo23> poetry shell
-colo23> python -m celery -A workers.celery_app worker --loglevel INFO -O fair --pidfile celery_worker.pid --hostname 'bioloop-dev-celery-w1@%h' --autoscale=2,1
+
+# Start fetch worker (staging/validation tasks)
+colo23> python -m celery -A workers.fetch_celery_app worker --loglevel INFO -O fair --pidfile fetch_worker.pid --hostname 'bioloop-dev-celery-fetch-w1@%h' --autoscale=2,1 --queues 'fetch.cmg-test.sca.iu.edu.q'
+
+# In another terminal, start archive worker (inspection/archival tasks)
+colo23> python -m celery -A workers.archive_celery_app worker --loglevel INFO -O fair --pidfile archive_worker.pid --hostname 'bioloop-dev-celery-archive-w1@%h' --autoscale=2,1 --queues 'archive.cmg-test.sca.iu.edu.q'
 ```
 
 

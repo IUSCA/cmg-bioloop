@@ -7,7 +7,7 @@ from sca_rhythm import Workflow
 import workers.api as api
 import workers.workflow_utils as wf_utils
 from workers.api import DatasetAlreadyExistsError
-from workers.celery_app import app as celery_app
+from workers.archive_celery_app import app as celery_app
 from workers.config import config
 from workers.services.watchlib import Observer, Poller
 from workers.utils import batched

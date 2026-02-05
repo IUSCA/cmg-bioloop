@@ -213,28 +213,24 @@ pm2 start ecosystem.config.js
 pm2 save  # Optional: save PM2 process list
 ```
 
-### PM2 Configuration (ecosystem.config.js)
+### PM2 Configuration (fetch.ecosystem.config.js / archive.ecosystem.config.js)
 
-The workers are defined in `workers/ecosystem.config.js`:
+Workers run on separate fetch and archive nodes. The fetch node handles staging/validation, while the archive node handles inspection/archival and dataset registration.
+
+**Fetch Node** (`workers/fetch.ecosystem.config.js`):
 
 ```javascript
 apps: [
   {
-    name: "celery_worker",
+    name: "fetch_worker",
     script: "python",
-    args: "-m celery -A workers.celery_app worker --loglevel INFO -O fair --pidfile celery_worker.pid --hostname 'cmg-test-celery-w1@%h' --autoscale=8,2 --queues 'cmg-test.sca.iu.edu.q'",
+    args: "-m celery -A workers.fetch_celery_app worker --loglevel INFO -O fair --pidfile fetch_worker.pid --hostname 'cmg-test-celery-fetch-w1@%h' --autoscale=8,2 --queues 'fetch.cmg-test.sca.iu.edu.q'",
     // ... logging and restart config
   },
   {
     name: "conversions_worker",
     script: "python",
     args: "-m celery -A workers.conversions_app worker --loglevel INFO -O fair --pidfile conversions_worker.pid --hostname 'cmg-test-celery-w1@%h' --autoscale=8,2 --queues 'conversion.cmg-test.sca.iu.edu.q'",
-    // ... logging and restart config
-  },
-  {
-    name: "watch",
-    script: "python",
-    args: "-u -m workers.scripts.watch",
     // ... logging and restart config
   },
   {
