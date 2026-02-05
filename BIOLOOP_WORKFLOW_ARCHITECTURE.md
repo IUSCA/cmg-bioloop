@@ -450,7 +450,7 @@ function get_wf_body(wf_name) {
 ```python
 from sca_rhythm import Workflow
 import workers.workflow_utils as wf_utils
-from workers.archive_celery_app import app as celery_app
+from workers.celery_app import app as celery_app
 
 # 1. Get workflow definition
 wf_body = wf_utils.get_wf_body(wf_name='integrated')

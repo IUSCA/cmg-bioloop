@@ -6,7 +6,7 @@ from sca_rhythm import Workflow
 
 import workers.api as api
 import workers.workflow_utils as wf_utils
-from workers.fetch_celery_app import app as celery_app
+from workers.celery_app import app as celery_app
 
 # Setup logging
 logger = logging.getLogger(__name__)

@@ -1,10 +1,7 @@
 {
   "mode": "production",
   "app_id": "cmg-test.sca.iu.edu",
-  "default_queue": "fetch.cmg-test.sca.iu.edu.q",
-  "fetch_queue": "fetch.cmg-test.sca.iu.edu.q",
-  "archive_queue": "archive.cmg-test.sca.iu.edu.q",
-  "conversion_queue": "conversion.cmg-test.sca.iu.edu.q",
+  "default_queue": "cmg-bioloop-v2.cmg-test.sca.iu.edu.q",
   "express": {
     "host": "0.0.0.0"
   },

@@ -2,18 +2,9 @@ import datetime
 
 YEAR = datetime.datetime.now().year
 
-APP_ID = 'cmg-test.sca.iu.edu'
-FETCH_QUEUE = f'fetch.{APP_ID}.q'
-ARCHIVE_QUEUE = f'archive.{APP_ID}.q'
-CONVERSION_QUEUE = f'conversion.{APP_ID}.q'
-
 config = {
-    'app_id': APP_ID,
-    'service_user': 'cmguser',
-    'default_queue': FETCH_QUEUE,
-    'fetch_queue': FETCH_QUEUE,
-    'archive_queue': ARCHIVE_QUEUE,
-    'conversion_queue': CONVERSION_QUEUE,
+    'app_id': 'cmg-test.sca.iu.edu',
+    'default_queue': 'cmg-bioloop-v2.cmg-test.sca.iu.edu.q',
     'api': {
         'base_url': 'https://cmg-test.sca.iu.edu/api/',  # trailing slash is required
     },

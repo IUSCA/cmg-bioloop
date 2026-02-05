@@ -1,10 +1,7 @@
 {
   "mode": "default",
   "app_id": "cmg-test.sca.iu.edu",
-  "default_queue": "fetch.cmg-test.sca.iu.edu.q",
-  "fetch_queue": "fetch.cmg-test.sca.iu.edu.q",
-  "archive_queue": "archive.cmg-test.sca.iu.edu.q",
-  "conversion_queue": "conversion.cmg-test.sca.iu.edu.q",
+  "default_queue": "cmg-bioloop-v2.cmg-test.sca.iu.edu.q",
   "express": {
     "port": 3030,
     "host": "localhost"
@@ -135,33 +132,27 @@
       "steps": [
         {
           "name": "await stability",
-          "task": "await_stability",
-          "queue": "archive.cmg-test.sca.iu.edu.q"
+          "task": "await_stability"
         },
         {
           "name": "inspect",
-          "task": "inspect_dataset",
-          "queue": "archive.cmg-test.sca.iu.edu.q"
+          "task": "inspect_dataset"
         },
         {
           "name": "archive",
-          "task": "archive_dataset",
-          "queue": "archive.cmg-test.sca.iu.edu.q"
+          "task": "archive_dataset"
         },
         {
           "name": "stage",
-          "task": "stage_dataset",
-          "queue": "fetch.cmg-test.sca.iu.edu.q"
+          "task": "stage_dataset"
         },
         {
           "name": "validate",
-          "task": "validate_dataset",
-          "queue": "fetch.cmg-test.sca.iu.edu.q"
+          "task": "validate_dataset"
         },
         {
           "name": "setup_download",
-          "task": "setup_dataset_download",
-          "queue": "fetch.cmg-test.sca.iu.edu.q"
+          "task": "setup_dataset_download"
         }
       ]
     },
@@ -169,18 +160,15 @@
       "steps": [
         {
           "name": "stage",
-          "task": "stage_dataset",
-          "queue": "fetch.cmg-test.sca.iu.edu.q"
+          "task": "stage_dataset"
         },
         {
           "name": "validate",
-          "task": "validate_dataset",
-          "queue": "fetch.cmg-test.sca.iu.edu.q"
+          "task": "validate_dataset"
         },
         {
           "name": "setup_download",
-          "task": "setup_dataset_download",
-          "queue": "fetch.cmg-test.sca.iu.edu.q"
+          "task": "setup_dataset_download"
         }
       ]
     },
@@ -189,43 +177,35 @@
       "steps": [
         {
           "name": "begin_migration",
-          "task": "begin_migration",
-          "queue": "fetch.cmg-test.sca.iu.edu.q"
+          "task": "begin_migration"
         },
         {
           "name": "retrieve_archive",
-          "task": "retrieve_archive_dataset",
-          "queue": "fetch.cmg-test.sca.iu.edu.q"
+          "task": "retrieve_archive_dataset"
         },
         {
           "name": "inspect",
-          "task": "inspect_dataset",
-          "queue": "archive.cmg-test.sca.iu.edu.q"
+          "task": "inspect_dataset"
         },
         {
           "name": "populate_metadata",
-          "task": "populate_metadata_dataset",
-          "queue": "fetch.cmg-test.sca.iu.edu.q"
+          "task": "populate_metadata_dataset"
         },
         {
           "name": "stage",
-          "task": "stage_dataset",
-          "queue": "fetch.cmg-test.sca.iu.edu.q"
+          "task": "stage_dataset"
         },
         {
           "name": "validate",
-          "task": "validate_dataset",
-          "queue": "fetch.cmg-test.sca.iu.edu.q"
+          "task": "validate_dataset"
         },
         {
           "name": "setup_download",
-          "task": "setup_dataset_download",
-          "queue": "fetch.cmg-test.sca.iu.edu.q"
+          "task": "setup_dataset_download"
         },
         {
           "name": "end_migration",
-          "task": "end_migration",
-          "queue": "fetch.cmg-test.sca.iu.edu.q"
+          "task": "end_migration"
         }
       ]
     },
@@ -233,8 +213,7 @@
       "steps": [
         {
           "name": "delete",
-          "task": "delete_dataset",
-          "queue": "archive.cmg-test.sca.iu.edu.q"
+          "task": "delete_dataset"
         }
       ]
     },
@@ -242,8 +221,7 @@
       "steps": [
         {
           "name": "Process Dataset Upload",
-          "task": "process_dataset_upload",
-          "queue": "fetch.cmg-test.sca.iu.edu.q"
+          "task": "process_dataset_upload"
         }
       ]
     },
@@ -253,7 +231,7 @@
         {
           "name": "convert",
           "task": "convert_dataset",
-          "queue": "conversion.cmg-test.sca.iu.edu.q"
+          "queue": "conversion-v2.cmg-test.sca.iu.edu.q"
         }
       ]
     },
@@ -263,22 +241,22 @@
         {
           "name": "convert",
           "task": "convert_genomic",
-          "queue": "conversion.cmg-test.sca.iu.edu.q"
+          "queue": "conversion-v2.cmg-test.sca.iu.edu.q"
         },
         {
           "name": "generate qc",
           "task": "generate_qc",
-          "queue": "conversion.cmg-test.sca.iu.edu.q"
+          "queue": "conversion-v2.cmg-test.sca.iu.edu.q"
         },
         {
           "name": "copy reports",
           "task": "copy_conversion_reports",
-          "queue": "conversion.cmg-test.sca.iu.edu.q"
+          "queue": "conversion-v2.cmg-test.sca.iu.edu.q"
         },
         {
           "name": "derive data products",
           "task": "derive_data_products",
-          "queue": "conversion.cmg-test.sca.iu.edu.q"
+          "queue": "conversion-v2.cmg-test.sca.iu.edu.q"
         }
       ]
     },
@@ -287,8 +265,7 @@
       "steps": [
         {
           "name": "populate file metadata",
-          "task": "populate_file_metadata",
-          "queue": "fetch.cmg-test.sca.iu.edu.q"
+          "task": "populate_file_metadata"
         }
       ]
     },
@@ -298,13 +275,11 @@
       "steps": [
         {
           "name": "hydrate_tracks",
-          "task": "hydrate_session_tracks",
-          "queue": "fetch.cmg-test.sca.iu.edu.q"
+          "task": "hydrate_session_tracks"
         },
         {
           "name": "finish_hydration",
-          "task": "finish_session_hydration",
-          "queue": "fetch.cmg-test.sca.iu.edu.q"
+          "task": "finish_session_hydration"
         }
       ]
     }
@@ -347,7 +322,7 @@
   },
   "enabled_features": {
     "upload": true,
-    "upload_verify_checksums": true,
+    "upload_verify_checksums": false,
     "fs": true,
     "downloads": true,
     "signup": true,

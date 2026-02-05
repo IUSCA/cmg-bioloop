@@ -13,7 +13,7 @@ One of the fixes is to ensure that there are no messages in the queue and delete
 with correct properties when it starts again.
 """
 
-from workers.archive_celery_app import app
+from workers.celery_app import app
 
 queue_name = app.conf.get('task_default_queue')
 

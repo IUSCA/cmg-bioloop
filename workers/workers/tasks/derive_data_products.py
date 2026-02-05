@@ -12,7 +12,7 @@ from this import d
 import workers.api as api
 import workers.config.celeryconfig as celeryconfig
 import workers.workflow_utils as wf_utils
-from workers.fetch_celery_app import app as celery_app
+from workers.celery_app import app as celery_app
 from workers.config import config
 from workers.conversion import get_conversion_output_dir
 

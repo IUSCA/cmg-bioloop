@@ -206,10 +206,5 @@ colo23> git pull
 colo23> cd workers
 colo23> poetry install
 colo23> poetry shell
-
-# Start fetch worker (staging/validation tasks)
-colo23> python -m celery -A workers.fetch_celery_app worker --loglevel INFO -O fair --pidfile fetch_worker.pid --hostname 'bioloop-dev-celery-fetch-w1@%h' --autoscale=2,1 --queues 'fetch.cmg-test.sca.iu.edu.q'
-
-# In another terminal, start archive worker (inspection/archival tasks)
-colo23> python -m celery -A workers.archive_celery_app worker --loglevel INFO -O fair --pidfile archive_worker.pid --hostname 'bioloop-dev-celery-archive-w1@%h' --autoscale=2,1 --queues 'archive.cmg-test.sca.iu.edu.q'
+colo23> python -m celery -A workers.celery_app worker --loglevel INFO -O fair --pidfile celery_worker.pid --hostname 'bioloop-dev-celery-w1@%h' --autoscale=2,1
 ```

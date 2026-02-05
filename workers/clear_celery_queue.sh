@@ -27,7 +27,7 @@
 # PREREQUISITES:
 # ==============
 # - Worker containers must be running (celery_worker, conversion_worker, or watch)
-# - Celery app must be accessible at workers.fetch_celery_app or workers.archive_celery_app
+# - Celery app must be accessible at workers.workers.celery_app
 # - Script is available at /opt/sca/app/ in worker containers
 # - Container names should match the pattern 'cmg-bioloop-3-*-1' (adjust if different)
 #
@@ -35,7 +35,7 @@
 # ===============
 # - All Celery queues (uses Celery's purge command which clears all registered queues)
 # - All pending tasks/messages in those queues
-# - This includes: celery, fetch.cmg-test.sca.iu.edu.q, archive.cmg-test.sca.iu.edu.q, conversion.cmg-test.sca.iu.edu.q, etc.
+# - This includes: celery, cmg-bioloop-v2.cmg-test.sca.iu.edu.q, conversion-v2.cmg-test.sca.iu.edu.q, etc.
 # - Preserves queue structure and worker processes
 #
 # SAFETY NOTES:
@@ -61,7 +61,7 @@ if [ -f "/usr/local/bin/clear_celery_queue.sh" ]; then
     # Running in queue container
     CONTAINER_TYPE="queue"
     echo "Running from RabbitMQ queue container"
-elif [ -f "/opt/sca/app/workers/fetch_celery_app.py" ]; then
+elif [ -f "/opt/sca/app/workers/celery_app.py" ]; then
     # Running in worker container
     CONTAINER_TYPE="worker"
     echo "Running from worker container"
@@ -69,7 +69,7 @@ else
     echo "❌ Error: Script not found in expected locations. Make sure you're running this from within a container."
     echo "   Looking for:"
     echo "   - /usr/local/bin/clear_celery_queue.sh (queue container)"
-    echo "   - /opt/sca/app/workers/fetch_celery_app.py (worker container)"
+    echo "   - /opt/sca/app/workers/celery_app.py (worker container)"
     exit 1
 fi
 
@@ -95,8 +95,8 @@ purge_celery_queues() {
         cd /opt/sca/app
         
         # Purge all queues - this is the proper way to clear Celery queues
-        echo "Executing: celery -A workers.fetch_celery_app purge -f"
-        if celery -A workers.fetch_celery_app purge -f; then
+        echo "Executing: celery -A workers.celery_app purge -f"
+        if celery -A workers.celery_app purge -f; then
             echo "  ✅ All Celery queues purged successfully"
             return 0
         else
@@ -147,4 +147,4 @@ echo "Active workers and their processes are not affected."
 echo ""
 echo "To verify the cleanup:"
 echo "  - Check RabbitMQ management UI: http://localhost:15672"
-echo "  - Check Celery status: docker exec -it cmg-bioloop-3-celery_worker-1 celery -A workers.fetch_celery_app inspect active"
+echo "  - Check Celery status: docker exec -it cmg-bioloop-3-celery_worker-1 celery -A workers.celery_app inspect active"
