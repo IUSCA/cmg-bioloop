@@ -55,7 +55,7 @@
     "base_url": "DOWNLOAD_SERVER_BASE_URL"
   },
   "upload": {
-    "path": "UPLOAD_DIR"
+    "path": "UPLOAD_HOST_DIR"
   },
   "conversion": {
     "output_dir": "CONVERSION_OUTPUT_DIR"
