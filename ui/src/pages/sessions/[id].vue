@@ -128,7 +128,7 @@
                   Retry Staging
                 </va-button>
 
-                <!-- Share Session Action Button-->
+                <!-- Share Session Action Button (commented out)
                 <va-button
                   class="flex-initial"
                   color="primary"
@@ -138,6 +138,7 @@
                   <i-mdi-share-variant class="pr-2 text-2xl" />
                   Share Session
                 </va-button>
+                -->
               </div>
             </va-card-content>
           </va-card>

@@ -108,16 +108,14 @@ model dataset_file_hierarchy {
 }
 
 model dataset_upload_log {
-  id             Int           @id @default(autoincrement())
-  status         upload_status
-  process_id     String?       // Generic upload identifier (TUS ID, S3 key, etc.)
-  selection_mode String?       // 'files' or 'directory'
-  directory_name String?       // Original directory name for directory uploads
-  retry_count    Int           @default(0) // Track workflow retry attempts
-  metadata       Json?         // { checksum?: {...}, failure_reason?: "..." }
-  updated_at     DateTime      @default(now()) @updatedAt @db.Timestamp(6)
-  audit_log      dataset_audit @relation(fields: [audit_log_id], references: [id], onDelete: Cascade)
-  audit_log_id   Int           @unique
+  id           Int           @id @default(autoincrement())
+  status       upload_status
+  process_id   String?       // Generic upload identifier (TUS ID, S3 key, etc.)
+  retry_count  Int           @default(0) // Track workflow retry attempts
+  metadata     Json?         // { checksum?: {...}, failure_reason?: "..." }
+  updated_at   DateTime      @default(now()) @updatedAt @db.Timestamp(6)
+  audit_log    dataset_audit @relation(fields: [audit_log_id], references: [id], onDelete: Cascade)
+  audit_log_id Int           @unique
 }
 
 // file_upload_log table removed - TUS handles chunk tracking internally

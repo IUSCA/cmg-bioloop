@@ -147,20 +147,21 @@ export const useSessionsStore = defineStore('sessions', () => {
     }
   };
 
-  const shareSession = async (sessionId, shareData) => {
-    loading.value = true;
-    error.value = null;
+  // Share Session function (commented out)
+  // const shareSession = async (sessionId, shareData) => {
+  //   loading.value = true;
+  //   error.value = null;
 
-    try {
-      const response = await api.post(`/sessions/${sessionId}/share`, shareData);
-      return response.data;
-    } catch (err) {
-      error.value = err.response?.data?.error || 'Failed to share session';
-      throw err;
-    } finally {
-      loading.value = false;
-    }
-  };
+  //   try {
+  //     const response = await api.post(`/sessions/${sessionId}/share`, shareData);
+  //     return response.data;
+  //   } catch (err) {
+  //     error.value = err.response?.data?.error || 'Failed to share session';
+  //     throw err;
+  //   } finally {
+  //     loading.value = false;
+  //   }
+  // };
 
   const clearError = () => {
     error.value = null;
@@ -192,7 +193,7 @@ export const useSessionsStore = defineStore('sessions', () => {
     updateSession,
     deleteSession,
     requestStaging,
-    shareSession,
+    // shareSession, // commented out
     clearError,
     clearCurrentSession,
   };

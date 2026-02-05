@@ -113,8 +113,6 @@ async function onUploadFinish(req, res, upload, filePath, fileSize) {
     const updateData = {
       status: 'UPLOADED',
       process_id: upload.id, // Store last TUS/upload ID
-      selection_mode: selectionMode,
-      directory_name: directoryName,
       updated_at: new Date(),
     };
     

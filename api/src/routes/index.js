@@ -47,8 +47,10 @@ router.use('/notifications', require('./notifications') /* #swagger.security = [
 router.use('/tracks', require('./tracks') /* #swagger.security = [{"BearerAuth": []}] */);
 router.use('/sessions', require('./sessions') /* #swagger.security = [{"BearerAuth": []}] */);
 router.use('/instruments', require('./instruments') /* #swagger.security = [{"BearerAuth": []}] */);
+
 console.log('===== Mounting /uploads router =====');
 const uploadsRouter = require('./uploads');
+
 console.log('Uploads router type:', typeof uploadsRouter);
 console.log('Uploads router:', uploadsRouter);
 router.use('/uploads', uploadsRouter /* #swagger.security = [{"BearerAuth": []}] */);

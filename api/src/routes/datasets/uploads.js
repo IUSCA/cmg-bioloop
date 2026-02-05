@@ -395,8 +395,6 @@ router.post(
       const updateData = {
         status: CONSTANTS.UPLOAD_STATUSES.UPLOADED,
         process_id,
-        selection_mode: selection_mode || 'files',
-        directory_name,
         updated_at: new Date(),
       };
 

@@ -132,10 +132,10 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import config from '@/config'
 import { Icon } from '@iconify/vue'
 import * as tus from 'tus-js-client'
-import config from '@/config'
+import { computed, ref } from 'vue'
 
 const props = defineProps({
   entityType: {

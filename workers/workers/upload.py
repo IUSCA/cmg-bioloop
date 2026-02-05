@@ -142,30 +142,3 @@ def _compute_manifest_hash(origin_path):
     return blake3.blake3(manifest_str.encode('utf-8')).hexdigest()
 
 
-def cleanup_upload_metadata(dataset_id, api_module):
-    """
-    Remove manifest data after successful integrated workflow.
-    Saves database space.
-
-    Args:
-        dataset_id (int): Dataset ID
-        api_module: API module with update functions
-    """
-    try:
-        # Get current upload log
-        upload_log = api_module.get_dataset_upload_log(dataset_id)
-        metadata = upload_log.get('metadata') or {}
-
-        # Remove checksum field
-        if 'checksum' in metadata:
-            metadata.pop('checksum')
-
-            api_module.update_dataset_upload_log(
-                dataset_id,
-                {'metadata': metadata}
-            )
-
-            print(f"Cleaned up manifest metadata for dataset {dataset_id}")
-    except Exception as e:
-        print(f"Warning: Failed to cleanup manifest for dataset {dataset_id}: {e}")
-        # Don't fail the workflow for cleanup errors

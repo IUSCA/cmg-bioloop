@@ -22,15 +22,15 @@ Usage:
 
 import logging
 from datetime import datetime
-import fire
 
+import fire
 from celery import Celery
 from sca_rhythm import Workflow
 
-from workers import api
 import workers.config.celeryconfig as celeryconfig
 import workers.workflow_utils as wf_utils
-from workers.constants.upload import UPLOAD_STATUS, MAX_RETRY_COUNT
+from workers import api
+from workers.constants.upload import MAX_RETRY_COUNT, UPLOAD_STATUS
 from workers.constants.workflow import WORKFLOWS
 from workers.upload import verify_upload_integrity
 

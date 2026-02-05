@@ -77,8 +77,6 @@ router.get(
     res.json({
       status: uploadLog.status,
       process_id: uploadLog.process_id,
-      selection_mode: uploadLog.selection_mode,
-      directory_name: uploadLog.directory_name,
       retry_count: uploadLog.retry_count,
       metadata: uploadLog.metadata,
       updated_at: uploadLog.updated_at,

@@ -50,9 +50,7 @@ const upload = new tus.Upload(fileStream, {
     entity_id: String(DATASET_ID),
     filename: 'test-upload.txt',
     filetype: 'text/plain',
-    selection_mode: 'files',
     relative_path: 'test-upload.txt',
-    directory_name: '',
   },
   headers: {
     Authorization: `Bearer ${TOKEN}`,
