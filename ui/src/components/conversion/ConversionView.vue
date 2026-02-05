@@ -54,18 +54,17 @@
                     <tr v-if="logs.length > 0">
                       <td>Logs</td>
                       <td>
-                        <div class="flex items-start gap-2">
+                        <div class="flex items-start gap-2 min-w-0">
                           <div
-                            class="bg-gray-100 dark:bg-gray-800 px-3 py-2 rounded text-sm overflow-x-auto overflow-y-auto max-w-md"
+                            class="bg-gray-100 dark:bg-gray-800 px-3 py-2 rounded text-sm overflow-x-auto overflow-y-auto min-w-0 flex-1"
                             style="min-height: 150px; max-height: 400px;"
                           >
                             <pre class="whitespace-pre">{{ formattedLogs }}</pre>
                           </div>
-                          <div class="flex flex-col gap-5">
+                          <div class="flex flex-col gap-1 flex-shrink-0">
                             <CopyButton
                               :text="formattedLogs"
                               preset="plain"
-                              class="flex-none"
                             />
                             <va-popover message="Expand" placement="top">
                               <va-button
@@ -73,7 +72,6 @@
                                 icon="open_in_full"
                                 size="small"
                                 @click="openLogsModal"
-                                class="flex-none"
                               />
                             </va-popover>
                           </div>
@@ -288,22 +286,25 @@ watch(active_wf, (newVal, _) => {
 
 <style lang="scss" scoped>
 div.va-table-responsive {
-  overflow: auto;
+  overflow: visible;
 
   table.va-table {
-    width: auto;
+    width: 100%;
+    table-layout: fixed;
   }
 
   // first column fixed width to match Conversion Info card
   td:first-child {
-    width: 135px;
-    min-width: 135px;
+    width: 180px;
+    min-width: 180px;
     white-space: nowrap;
+    vertical-align: top;
+    padding-top: 0.75rem;
   }
   
-  // second column should shrink to fit content
+  // second column takes remaining space
   td:last-child {
-    width: 1%;
+    overflow: hidden;
   }
 }
 </style>

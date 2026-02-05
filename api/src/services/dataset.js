@@ -253,8 +253,24 @@ async function get_dataset({
   } : INCLUDE_WORKFLOWS;
   console.log('workflow_include', workflow_include);
 
-  const conversion_includes = {
-    include: conversionService.INCLUDE,
+  // Build conversions include based on whether full conversion details are needed
+  // Always include derived_datasets when conversion feature is enabled (for derived datasets display)
+  const getConversionsInclude = () => {
+    if (!config.enabled_features.conversion) {
+      return false;
+    }
+    // Always include derived_datasets for the derived datasets table
+    // Include full conversion details only when include_conversions is true
+    return {
+      include: {
+        ...(include_conversions ? conversionService.INCLUDE : {}),
+        derived_datasets: {
+          include: {
+            dataset: true, // Get the actual derived dataset
+          },
+        },
+      },
+    };
   };
 
   const dataset = await prisma.dataset.findFirstOrThrow({
@@ -267,7 +283,7 @@ async function get_dataset({
       bundle,
       source_datasets: true,
       derived_datasets: true,
-      conversions: include_conversions ? conversion_includes : false,
+      conversions: getConversionsInclude(),
       projects: includeProjects,
       analysis_type: true,
       ...(include_source_instrument ? {
@@ -282,13 +298,6 @@ async function get_dataset({
           select: {
             genome_type: true,
             genome_value: true,
-          },
-        },
-      } : undefined),
-      ...(config.enabled_features.conversion ? {
-        derived_from_conversions: {
-          include: {
-            dataset: true,
           },
         },
       } : undefined),
@@ -335,20 +344,29 @@ async function get_dataset({
   }
 
   // Combine manually-assigned and conversion-derived datasets with method indicators
-  if (config.enabled_features.conversion && dataset.derived_from_conversions) {
+  // dataset.conversions contains conversions where THIS dataset is the SOURCE (input)
+  // Each conversion's derived_datasets contains the OUTPUT datasets from that conversion
+  if (config.enabled_features.conversion && dataset.conversions) {
     // Add derivation_method to manually-assigned datasets (from dataset_hierarchy table)
     const manualDerived = (dataset.derived_datasets || []).map((dd) => ({
       ...dd,
       derivation_method: 'manual',
     }));
 
-    // Add derivation_method to conversion-derived datasets (from conversion_derived_dataset table)
-    const conversionDerived = (dataset.derived_from_conversions || []).map((cdd) => ({
-      source_id: id,
-      derived_id: cdd.dataset.id,
-      assigned_at: cdd.created_at,
-      derivation_method: 'conversion',
-    }));
+    // Add derivation_method to conversion-derived datasets
+    // Iterate through all conversions where this dataset is the source,
+    // and collect their derived_datasets (outputs)
+    const conversionDerived = [];
+    (dataset.conversions || []).forEach((conversion) => {
+      (conversion.derived_datasets || []).forEach((cdd) => {
+        conversionDerived.push({
+          source_id: id,
+          derived_id: cdd.dataset.id,
+          assigned_at: cdd.created_at,
+          derivation_method: 'conversion',
+        });
+      });
+    });
 
     // Combine both arrays, removing duplicates (prefer conversion method if exists)
     const derivedMap = new Map();
@@ -365,6 +383,11 @@ async function get_dataset({
 
     // Replace derived_datasets with combined array
     dataset.derived_datasets = Array.from(derivedMap.values());
+
+    // Clean up conversions if not requested (only needed for derived_datasets extraction)
+    if (!include_conversions) {
+      delete dataset.conversions;
+    }
   }
 
   return dataset;

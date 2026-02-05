@@ -79,22 +79,36 @@ const props = defineProps({
     type: Boolean,
     default: false,
   },
+  // 'derived' = show child datasets (use derived_id from dataset_hierarchy)
+  // 'source' = show parent datasets (use source_id from dataset_hierarchy)
+  relationship_type: {
+    type: String,
+    default: 'derived',
+    validator: (value) => ['derived', 'source'].includes(value),
+  },
 });
 
 const datasets = ref([]);
 const data_loading = ref(false);
 
-// Extract dataset IDs and create a map of dataset_id -> derivation_method
+// Extract dataset IDs based on relationship type
+// - For derived datasets: extract derived_id (child datasets)
+// - For source datasets: extract source_id (parent datasets)
 const dataset_ids = computed(() => 
-  props.datasets_meta.map((meta) => 
-    meta.derived_id || meta.source_id
-  )
+  props.datasets_meta.map((meta) => {
+    if (props.relationship_type === 'source') {
+      // For source datasets, we want to display the parent (source_id)
+      return meta.source_id;
+    }
+    // For derived datasets, we want to display the child (derived_id)
+    return meta.derived_id;
+  })
 );
 
 const derivation_method_map = computed(() => {
   const map = new Map();
   props.datasets_meta.forEach((meta) => {
-    const id = meta.derived_id || meta.source_id;
+    const id = props.relationship_type === 'source' ? meta.source_id : meta.derived_id;
     map.set(id, meta.derivation_method);
   });
   return map;

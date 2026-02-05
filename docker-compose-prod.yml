@@ -30,6 +30,7 @@ services:
       - ${FILESYSTEM_BASE_DIR_SCRATCH}:${FILESYSTEM_MOUNT_DIR_SCRATCH}
       - ${FILESYSTEM_BASE_DIR_PROJECT}:${FILESYSTEM_MOUNT_DIR_PROJECT}
       # - ${FILESYSTEM_BASE_DIR_PROJECT_1}:${FILESYSTEM_MOUNT_DIR_PROJECT_1}
+      - ${UPLOAD_HOST_DIR}:/opt/sca/data/uploads
     expose:
       - 3030
     # entrypoint: [ "tail", "-f", "/dev/null" ]

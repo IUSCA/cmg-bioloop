@@ -9,6 +9,7 @@
         <va-card-content style="margin-top: -20px">
           <AssocDatasetList
             :datasets_meta="derived_datasets_meta"
+            relationship_type="derived"
             show_derivation_method
           ></AssocDatasetList>
         </va-card-content>
@@ -24,6 +25,7 @@
         <va-card-content style="margin-top: -20px">
           <AssocDatasetList
             :datasets_meta="source_datasets_meta"
+            relationship_type="source"
           ></AssocDatasetList>
         </va-card-content>
       </va-card>
