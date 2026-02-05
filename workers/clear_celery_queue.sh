@@ -35,7 +35,7 @@
 # ===============
 # - All Celery queues (uses Celery's purge command which clears all registered queues)
 # - All pending tasks/messages in those queues
-# - This includes: celery, cmg-bioloop-v2.cmg-test.sca.iu.edu.q, conversion-v2.cmg-test.sca.iu.edu.q, etc.
+# - This includes: celery, fetch.cmg-test.sca.iu.edu.q, archive.cmg-test.sca.iu.edu.q, conversion.cmg-test.sca.iu.edu.q, etc.
 # - Preserves queue structure and worker processes
 #
 # SAFETY NOTES:

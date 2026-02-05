@@ -31,9 +31,17 @@ ONE_HOUR = 60 * 60
 ONE_GIGABYTE = 1024 * 1024 * 1024
 FIVE_MINUTES = 5 * 60
 
+APP_ID = 'cmg-test.sca.iu.edu'
+FETCH_QUEUE = f'fetch.{APP_ID}.q'
+ARCHIVE_QUEUE = f'archive.{APP_ID}.q'
+CONVERSION_QUEUE = f'conversion.{APP_ID}.q'
+
 config = {
-    'app_id': 'cmg-test.sca.iu.edu',
-    'default_queue': 'cmg-bioloop-v2.cmg-test.sca.iu.edu.q',
+    'app_id': APP_ID,
+    'default_queue': FETCH_QUEUE,
+    'fetch_queue': FETCH_QUEUE,
+    'archive_queue': ARCHIVE_QUEUE,
+    'conversion_queue': CONVERSION_QUEUE,
     # cspell: disable-next-line
     'genome_file_types': ['.cbcl', '.bcl', '.bcl.gz', '.bgzf', '.fastq.gz', '.bam', '.bam.bai', '.vcf.gz',
                           '.vcf.gz.tbi', '.vcf'],
@@ -111,7 +119,8 @@ config = {
             'steps': [
                 {
                     'name': 'stage',
-                    'task': 'stage_dataset'
+                    'task': 'stage_dataset',
+                    'queue': FETCH_QUEUE
                 },
                 {
                     'name': 'validate',
@@ -119,7 +128,8 @@ config = {
                 },
                 {
                     'name': 'setup_download',
-                    'task': 'setup_dataset_download'
+                    'task': 'setup_dataset_download',
+                    'queue': FETCH_QUEUE
                 }
             ]
         },
@@ -128,35 +138,43 @@ config = {
             'steps': [
                 {
                     'name': 'begin_migration',
-                    'task': 'begin_migration'
+                    'task': 'begin_migration',
+                    'queue': FETCH_QUEUE
                 },
                 {
                     'name': 'retrieve_archive',
-                    'task': 'retrieve_archive_dataset'
+                    'task': 'retrieve_archive_dataset',
+                    'queue': FETCH_QUEUE
                 },
                 {
                     'name': 'inspect',
-                    'task': 'inspect_dataset'
+                    'task': 'inspect_dataset',
+                    'queue': FETCH_QUEUE
                 },
                 {
                     'name': 'populate_metadata',
-                    'task': 'populate_metadata_dataset'
+                    'task': 'populate_metadata_dataset',
+                    'queue': FETCH_QUEUE
                 },
                 {
                     'name': 'stage',
-                    'task': 'stage_dataset'
+                    'task': 'stage_dataset',
+                    'queue': FETCH_QUEUE
                 },
                 {
                     'name': 'validate',
-                    'task': 'validate_dataset'
+                    'task': 'validate_dataset',
+                    'queue': FETCH_QUEUE
                 },
                 {
                     'name': 'setup_download',
-                    'task': 'setup_dataset_download'
+                    'task': 'setup_dataset_download',
+                    'queue': FETCH_QUEUE
                 },
                 {
                     'name': 'end_migration',
-                    'task': 'end_migration'
+                    'task': 'end_migration',
+                    'queue': FETCH_QUEUE
                 }
             ]
         },
@@ -164,27 +182,33 @@ config = {
             'steps': [
                 {
                     'name': 'await stability',
-                    'task': 'await_stability'
+                    'task': 'await_stability',
+                    'queue': ARCHIVE_QUEUE
                 },
                 {
                     'name': 'inspect',
-                    'task': 'inspect_dataset'
+                    'task': 'inspect_dataset',
+                    'queue': ARCHIVE_QUEUE
                 },
                 {
                     'name': 'archive',
-                    'task': 'archive_dataset'
+                    'task': 'archive_dataset',
+                    'queue': ARCHIVE_QUEUE
                 },
                 {
                     'name': 'stage',
-                    'task': 'stage_dataset'
+                    'task': 'stage_dataset',
+                    'queue': FETCH_QUEUE
                 },
                 {
                     'name': 'validate',
-                    'task': 'validate_dataset'
+                    'task': 'validate_dataset',
+                    'queue': FETCH_QUEUE
                 },
                 {
                     'name': 'setup_download',
-                    'task': 'setup_dataset_download'
+                    'task': 'setup_dataset_download',
+                    'queue': FETCH_QUEUE
                 },
                 # IMPORTANT:
                 # The delete_source step of the Integrated workflow
@@ -200,7 +224,7 @@ config = {
             {
               "name": "convert",
               "task": "convert_dataset",
-              "queue": "conversion-v2.cmg-test.sca.iu.edu.q"
+              "queue": CONVERSION_QUEUE
             },
 
           ]
@@ -211,22 +235,22 @@ config = {
             {
               "name": "convert",
               "task": "convert_genomic",
-              "queue": "conversion-v2.cmg-test.sca.iu.edu.q"
+              "queue": CONVERSION_QUEUE
             },
             {
               "name": "generate qc",
               "task": "generate_qc",
-              "queue": "conversion-v2.cmg-test.sca.iu.edu.q"
+              "queue": CONVERSION_QUEUE
             },
             {
               "name": "copy reports",
               "task": "copy_conversion_reports",
-              "queue": "conversion-v2.cmg-test.sca.iu.edu.q"
+              "queue": CONVERSION_QUEUE
             },
             {
               "name": "derive data products",
               "task": "derive_data_products",
-              "queue": "conversion-v2.cmg-test.sca.iu.edu.q"
+              "queue": CONVERSION_QUEUE
             }
           ]
         },
@@ -235,7 +259,8 @@ config = {
           "steps": [
             {
               "name": "populate file metadata",
-              "task": "populate_file_metadata"
+              "task": "populate_file_metadata",
+              "queue": FETCH_QUEUE
             },
             # {
             #   "name": "archive",
@@ -261,11 +286,13 @@ config = {
           "steps": [
             {
               "name": "hydrate_tracks",
-              "task": "hydrate_session_tracks"
+              "task": "hydrate_session_tracks",
+              "queue": FETCH_QUEUE
             },
             {
               "name": "finish_hydration",
-              "task": "finish_session_hydration"
+              "task": "finish_session_hydration",
+              "queue": FETCH_QUEUE
             }
           ]
         }
