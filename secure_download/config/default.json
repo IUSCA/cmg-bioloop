@@ -2,7 +2,7 @@
   "mode": "default",
   "express": {
     "port": 3060,
-    "host": "localhost"
+    "host": "0.0.0.0"
   },
   "logger": {
     "level": "debug"

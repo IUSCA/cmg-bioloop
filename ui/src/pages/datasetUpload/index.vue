@@ -40,10 +40,70 @@
 
     <!-- table -->
     <va-data-table :items="pastUploads" :columns="columns" :loading="loading">
-      <template #cell(status)="{ value }">
-        <va-chip size="small" :color="getStatusChipColor(value)">
-          {{ value }}
-        </va-chip>
+      <template #cell(status)="{ rowData }">
+        <!-- Upload still in progress -->
+        <div v-if="rowData.status === constants.UPLOAD_STATUSES.UPLOADING" class="flex justify-center">
+          <va-popover message="Upload in progress">
+            <half-circle-spinner
+              class="flex-none"
+              :animation-duration="1000"
+              :size="24"
+              :color="colors.primary"
+            />
+          </va-popover>
+        </div>
+        <!-- Upload complete, waiting for processing -->
+        <div v-else-if="rowData.status === constants.UPLOAD_STATUSES.UPLOADED" class="flex justify-center">
+          <va-popover message="Processing pending">
+            <half-circle-spinner
+              class="flex-none"
+              :animation-duration="1000"
+              :size="24"
+              :color="colors.warning"
+            />
+          </va-popover>
+        </div>
+        <!-- Integrated workflow running -->
+        <div v-else-if="rowData.integrated_status === 'ACTIVE'" class="flex justify-center">
+          <va-popover message="Registration in progress">
+            <half-circle-spinner
+              class="flex-none"
+              :animation-duration="1000"
+              :size="24"
+              :color="colors.warning"
+            />
+          </va-popover>
+        </div>
+        <!-- Integrated workflow succeeded -->
+        <div v-else-if="rowData.integrated_status === 'SUCCESS'" class="flex justify-center">
+          <va-popover message="Registration completed successfully">
+            <va-icon name="check_circle" color="success" />
+          </va-popover>
+        </div>
+        <!-- Integrated workflow failed -->
+        <div v-else-if="rowData.integrated_status === 'FAILURE'" class="flex justify-center">
+          <va-popover message="Registration failed">
+            <va-icon name="warning" color="warning" />
+          </va-popover>
+        </div>
+        <!-- Upload verification failed -->
+        <div v-else-if="rowData.status === constants.UPLOAD_STATUSES.VERIFICATION_FAILED" class="flex justify-center">
+          <va-popover message="Upload verification failed">
+            <va-icon name="error" color="danger" />
+          </va-popover>
+        </div>
+        <!-- Processing failed -->
+        <div v-else-if="rowData.status === constants.UPLOAD_STATUSES.PROCESSING_FAILED" class="flex justify-center">
+          <va-popover message="Processing failed">
+            <va-icon name="error" color="danger" />
+          </va-popover>
+        </div>
+        <!-- Permanently failed -->
+        <div v-else-if="rowData.status === constants.UPLOAD_STATUSES.PERMANENTLY_FAILED" class="flex justify-center">
+          <va-popover message="Processing permanently failed">
+            <va-icon name="error" color="danger" />
+          </va-popover>
+        </div>
       </template>
 
       <template #cell(uploaded_dataset)="{ rowData }">
@@ -118,11 +178,16 @@ import useSearchKeyShortcut from "@/composables/useSearchKeyShortcut";
 import * as datetime from "@/services/datetime";
 import toast from "@/services/toast";
 import datasetService from "@/services/dataset";
+import wfService from "@/services/workflow";
 import { useAuthStore } from "@/stores/auth";
 import { useNavStore } from "@/stores/nav";
+import config from "@/config";
+import { HalfCircleSpinner } from "epic-spinners";
+import { useColors } from "vuestic-ui";
 import _ from "lodash";
 import constants from "@/constants";
 
+const { colors } = useColors();
 const nav = useNavStore();
 const router = useRouter();
 const auth = useAuthStore();
@@ -135,6 +200,7 @@ const PAGE_SIZE_OPTIONS = [10, 20, 50];
 
 const filterInput = ref("");
 const pastUploads = ref([]);
+const _datasets = ref({}); // Mapping of dataset_id to dataset object for polling
 
 const currentPageIndex = ref(1);
 const pageSize = ref(10);
@@ -235,30 +301,6 @@ const columns = [
   },
 ];
 
-const getStatusChipColor = (value) => {
-  let color;
-  switch (value) {
-    case constants.UPLOAD_STATUSES.UPLOADING:
-    case constants.UPLOAD_STATUSES.UPLOADED:
-    case constants.UPLOAD_STATUSES.PROCESSING:
-      color = "primary";
-      break;
-    case constants.UPLOAD_STATUSES.UPLOAD_FAILED:
-    case constants.UPLOAD_STATUSES.CHECKSUM_COMPUTATION_FAILED:
-      color = "warning";
-      break;
-    case constants.UPLOAD_STATUSES.COMPLETE:
-      color = "success";
-      break;
-    case constants.UPLOAD_STATUSES.PROCESSING_FAILED:
-      color = "danger";
-      break;
-    default:
-      console.log("received unexpected value for Upload Status", value);
-  }
-  return color;
-};
-
 const getUploadLogs = async () => {
   loading.value = true;
   return datasetService
@@ -266,6 +308,7 @@ const getUploadLogs = async () => {
     .then((res) => {
       pastUploads.value = res.data.uploads.map((e) => {
         let uploaded_dataset = e.audit_log.dataset;
+        const status = wfService.get_integrated_workflow_status(uploaded_dataset.workflows);
         const genomicDetails = uploaded_dataset.genomic_details?.[0];
         return {
           ...e,
@@ -280,6 +323,7 @@ const getUploadLogs = async () => {
           file_type: uploaded_dataset.analysis_type?.name,
           genome_type: genomicDetails?.genome_type,
           genome_value: genomicDetails?.genome_value,
+          integrated_status: status,
         };
       });
       total_results.value = res.data.metadata.count;
@@ -292,6 +336,78 @@ const getUploadLogs = async () => {
       loading.value = false;
     });
 };
+
+// _datasets is a mapping of dataset_ids to dataset objects. While polling one
+// or more datasets, this object is updated with latest dataset values.
+watch(
+  pastUploads,
+  () => {
+    _datasets.value = pastUploads.value.reduce((acc, obj) => {
+      acc[obj.uploaded_dataset.id] = obj.uploaded_dataset;
+      return acc;
+    }, {});
+  },
+  {
+    immediate: true,
+  }
+);
+
+// Track uploads that need polling (active workflows or pending processing)
+const tracking = computed(() => {
+  return pastUploads.value
+    .filter((upload) => 
+      upload.integrated_status === 'ACTIVE' ||
+      upload.status === constants.UPLOAD_STATUSES.UPLOADED
+    )
+    .map((upload) => upload.uploaded_dataset.id);
+});
+
+// Fetch and update a single dataset's workflow status
+function fetch_and_update_dataset(id) {
+  datasetService
+    .getById({ id, include_projects: false, bundle: true })
+    .then((res) => {
+      _datasets.value[id] = res.data;
+      // Update the corresponding upload in pastUploads
+      const uploadIndex = pastUploads.value.findIndex(
+        (upload) => upload.uploaded_dataset.id === id
+      );
+      if (uploadIndex !== -1) {
+        pastUploads.value[uploadIndex].uploaded_dataset = res.data;
+        pastUploads.value[uploadIndex].integrated_status = wfService.get_integrated_workflow_status(
+          res.data.workflows
+        );
+      }
+    })
+    .catch((err) => {
+      console.error("Unable to fetch dataset", id, err);
+    });
+}
+
+// Poll datasets with pending workflows
+function poll_datasets() {
+  tracking.value.forEach(fetch_and_update_dataset);
+}
+
+// Set up polling interval
+const poll = useIntervalFn(
+  () => {
+    poll_datasets();
+  },
+  config.dataset_polling_interval,
+  {
+    immediate: false,
+  }
+);
+
+// Start/stop polling based on whether there are datasets to track
+watch(tracking, () => {
+  if (tracking.value.length > 0) {
+    poll.resume();
+  } else {
+    poll.pause();
+  }
+});
 
 onMounted(() => {
   getUploadLogs();

@@ -1,14 +1,14 @@
 # Dataset Upload Feature
 
-**Feature Scope:** Browser-based dataset upload with chunked file transfer and OAuth-based access control.
+**Feature Scope:** Browser-based dataset upload with TUS resumable uploads and optional BLAKE3 checksum verification.
 
-**Status:** Core Platform Feature
+**Status:** Core Platform Feature (TUS-based implementation as of 2026-02)
 
 ---
 
 ## Overview
 
-The upload feature allows users to upload datasets directly from their web browser. Files are uploaded in 2MB chunks to handle large files, network interruptions, and provide granular progress tracking.
+The upload feature allows users to upload datasets directly from their web browser using the TUS (resumable upload) protocol. Files are uploaded via TUS with automatic resume capability, and an async polling job triggers the integrated workflow.
 
 ---
 
@@ -16,232 +16,215 @@ The upload feature allows users to upload datasets directly from their web brows
 
 ### Services Involved
 
-1. **UI Client** - Initiates upload, chunks files, sends chunks
-2. **API** - Manages upload metadata, creates dataset records
-3. **secure_download Service** - Receives file chunks, writes to filesystem
-4. **Signet (OAuth)** - Issues upload tokens (client credentials flow)
-5. **Rhythm API** - Orchestrates upload processing workflow
-6. **Workers** - Merges chunks, processes uploaded datasets
+1. **UI Client** - File selection, TUS upload, optional BLAKE3 checksum computation
+2. **API** - TUS server, upload metadata, dataset records, `/complete` endpoint
+3. **Workers** - Polling job verifies uploads and triggers integrated workflow
+4. **Rhythm API** - Orchestrates integrated workflow
 
 ### Database Tables
 
 - `dataset` - Dataset record
-- `dataset_upload_log` - Upload session metadata
-- `file_upload_log` - Per-file upload tracking (chunks, checksums)
+- `dataset_upload_log` - Upload session metadata with fields:
+  - `process_id` - TUS upload ID (formerly `tus_id`)
+  - `status` - UPLOADING, UPLOADED, COMPLETE, VERIFICATION_FAILED, etc.
+  - `metadata` - JSON field for checksums, failure reasons
 - `dataset_audit` - Audit trail for dataset creation
 
 ---
 
-## Upload Flow
+## Upload Flow (TUS-based)
 
-### 1. Pre-Upload Phase
-1. UI evaluates MD5 checksums for files and chunks
-2. UI posts metadata to API:
-   - File names, checksums, relative paths
-   - Optional: source raw data, project, instrument
-3. API creates `dataset`, `dataset_upload_log`, `file_upload_log` records
-4. API generates `origin_path` using `getUploadedDatasetPath()`
-5. UI requests OAuth upload token from Signet via API
+### 1. Dataset Creation
+1. UI calls `POST /datasets/uploads` with dataset name, type
+2. API creates `dataset`, `dataset_audit`, `dataset_upload_log` records
+3. API generates `origin_path`: `/uploads/{type}/{id}/{name}`
+4. Status set to `UPLOADING`
 
-### 2. Upload Phase
-1. UI uploads file chunks sequentially to secure_download `/upload` endpoint
-2. Each chunk includes:
-   - `upload_path` - Dataset's origin path (from API)
-   - `file_upload_log_id` - File identifier
-   - `checksum` - File's overall MD5
-   - `chunk_checksum` - This chunk's MD5
-   - `index` - Chunk position
-3. secure_download verifies OAuth scope and chunk checksum
-4. Chunks written to: `{upload_path}/uploaded_chunks/{file_upload_log_id}/{checksum}-{index}`
+### 2. TUS Upload Phase
+1. For each file, TUS client sends:
+   - `POST /uploads/files` - Creates upload slot, returns upload ID
+   - `PATCH /uploads/files/{id}` - Sends actual file bytes (resumable)
+2. TUS metadata includes: `entity_type`, `entity_id`, `filename`, `relative_path`
+3. Files stored temporarily in TUS upload directory
 
-### 3. Post-Upload Phase
-1. UI initiates `process_dataset_upload` workflow via Rhythm
-2. Worker merges chunks into complete files
-3. Worker validates file checksums
-4. Dataset becomes available for staging/use
+### 3. Completion Phase
+1. UI calls `POST /datasets/uploads/:id/complete` with:
+   - `process_id` - TUS upload ID
+   - `metadata` - Optional BLAKE3 checksum data
+2. API moves file from TUS temp to dataset's `origin_path`
+3. Status set to `UPLOADED`
+4. UI shows success (or retry button on failure)
+
+### 4. Async Processing (Polling Job)
+1. `manage_upload_workflows.py` runs every 30s (via entrypoint.sh in dev, PM2 in prod)
+2. Finds uploads with status `UPLOADED` and `process_id` set
+3. Verifies upload integrity (checksum or file existence)
+4. On success: triggers `integrated` workflow directly, sets status to `COMPLETE`
+5. On failure: sets status to `VERIFICATION_FAILED`
 
 ---
 
-## Path Construction
+## Key Files
 
-### API Side (api/src/services/dataset.js)
+### API
+- `api/src/routes/datasets/uploads.js` - Upload endpoints including `/complete`
+- `api/src/app.js` - TUS server mounting
+- `api/src/constants.js` - `UPLOAD_STATUSES` enum
 
-```javascript
-const getUploadedDatasetPath = ({ datasetId, datasetType }) => path.join(
-  config.upload.path,        // From UPLOAD_DIR env var
-  datasetType.toLowerCase(),  // 'raw_data' or 'data_product'
-  `${datasetId}`,
-  'processed',
-);
-```
+### Workers
+- `workers/workers/scripts/manage_upload_workflows.py` - Polling job
+- `workers/workers/upload.py` - `verify_upload_integrity()` for checksum verification
+- `workers/bin/entrypoint.sh` - Spawns polling job in dev
 
-**Example:** `/N/scratch/cmguser/cmg-bioloop/uploads/data_product/123/processed`
+### UI
+- `ui/src/components/dataset/upload/UploadDatasetStepper.vue` - Upload UI
+- `ui/src/services/upload/checksum.js` - BLAKE3 manifest hash computation (uses `hash-wasm`)
+- `ui/src/views/DatasetUploadsPage.vue` - Upload logs table
 
-### secure_download Side (secure_download/src/routes/upload.js)
+---
 
-```javascript
-const getFileChunksStorageDir = ({ uploadPath, fileUploadLogId }) => path.join(
-  uploadPath,           // Passed from API in request body
-  'uploaded_chunks',
-  fileUploadLogId,
-);
-```
+## Upload Statuses
 
-**Example:** `/N/scratch/cmguser/cmg-bioloop/uploads/data_product/123/processed/uploaded_chunks/456/`
+| Status | Meaning |
+|--------|---------|
+| `UPLOADING` | Upload in progress |
+| `UPLOADED` | TUS upload complete, waiting for async processing |
+| `COMPLETE` | Integrated workflow triggered successfully |
+| `VERIFICATION_FAILED` | Checksum mismatch or file not found |
+| `PROCESSING_FAILED` | Workflow failed |
+| `PERMANENTLY_FAILED` | Max retries exceeded |
+
+---
+
+## Checksum Verification (Optional)
+
+When enabled (`config.upload.verify_checksums`):
+
+1. **UI computes BLAKE3 manifest hash** before upload:
+   - Hash each file
+   - Create manifest: `blake3-manifest-v1\npath\tsize\thash`
+   - Hash the manifest
+2. **Stored in `metadata.checksum`** via `/complete` endpoint
+3. **Worker verifies** by recomputing manifest hash from files at `origin_path`
+
+**Feature Flag:**
+- API: `config.get('upload.verify_checksums')` 
+- Workers: `config['upload']['verify_checksums']` in `workers/config/common.py`
+- UI: `config.enabledFeatures.upload_verify_checksums`
+
+Currently **disabled by default**.
 
 ---
 
 ## Configuration
 
-### API Service (api/.env)
-
+### API (api/.env)
 ```bash
-UPLOAD_DIR=/N/scratch/cmguser/cmg-bioloop/uploads  # Production
-# UPLOAD_DIR=/opt/sca/data  # Docker/local development
+UPLOAD_DIR=/opt/sca/data/uploads  # TUS upload directory
 ```
 
-### secure_download Service
-
-**No specific config needed** - upload path comes from API in request body.
-
-However, the service MUST have the upload directory mounted in its Docker container.
-
----
-
-## Production Deployment
-
-### Service Host (cmg-new-service1.sca.iu.edu)
-
-**API Container:**
-- Repository: `/opt/sca/cmg`
-- Config: `api/.env` sets `UPLOAD_DIR=/N/scratch/cmguser/cmg-bioloop/uploads`
-- The API sends this path to secure_download in the request body
-
-### Worker/Download Hosts (colo, mmge2, etc.)
-
-**secure_download Container:**
-- Deployment: `/opt/sca/docker/scripts/cmg-new-download/docker-compose-prod.yml`
-- Repository: `/opt/sca/cmg-bioloop/secure_download` (mounted as volume)
-- **CRITICAL:** Container MUST have upload directory mounted with write permissions
-
----
-
-## Known Issues & Solutions
-
-### Issue: Upload Permission Denied (2026-01-18)
-
-**Error:**
+### Workers (workers/workers/config/common.py)
+```python
+config = {
+    'upload': {
+        'verify_checksums': False  # Enable BLAKE3 verification
+    }
+}
 ```
-Error: EACCES: permission denied, mkdir '/N'
-```
-
-**Root Cause:**
-The `secure_download` api container tries to create directories under `/N/scratch/cmguser/cmg-bioloop/uploads` but doesn't have that path mounted.
-
-**Current State:**
-In `/opt/sca/docker/scripts/cmg-new-download/docker-compose-prod.yml`:
-- The `api` service has NO `/N/...` mounts
-- Only the `nginx-cmg-bioloop` service has `/N/scratch/cmguser/cmg-bioloop/:ro` (read-only)
-
-**Solution:**
-Add to the `api` service in `/opt/sca/docker/scripts/cmg-new-download/docker-compose-prod.yml`:
-
-```yaml
-api:
-  volumes:
-    - /opt/sca/cmg-bioloop/secure_download/:/opt/sca/app
-    - api_modules:/opt/sca/app/node_modules
-    - /N/scratch/cmguser/cmg-bioloop/uploads:/N/scratch/cmguser/cmg-bioloop/uploads  # ADD THIS
-```
-
-Then restart:
-```bash
-cd /opt/sca/docker/scripts/cmg-new-download
-docker compose -f docker-compose-prod.yml restart
-```
-
-**Note:** Agent does NOT have write access to that compose file. User must make this change.
 
 ---
 
 ## API Endpoints
 
 ### Upload Management
-- `POST /datasets/uploads` - Register new upload, create dataset
-- `PATCH /datasets/uploads/:id` - Update upload status
-- `GET /datasets/uploads/:id` - Get upload details
-- `POST /upload/token` - Request OAuth upload token
+- `POST /datasets/uploads` - Create dataset and upload log
+- `POST /datasets/uploads/:id/complete` - Register TUS completion, move files
+- `PATCH /datasets/uploads/:id/upload-log` - Update upload metadata
+- `GET /datasets/uploads` - List uploads (filters out those without `process_id`)
+- `GET /datasets/uploads/:username` - User's uploads
 
-### secure_download Endpoints
-- `POST /upload` - Accept file chunk (with OAuth token)
-
----
-
-## OAuth Scopes
-
-Upload tokens use file-specific scopes:
-- Pattern: `upload_file:{hyphen-delimited-filename}`
-- Example: `upload_file:my-data-file-txt`
-- Issued by: Signet OAuth server
-- Flow: Client credentials
+### TUS Endpoints (mounted at /uploads/files)
+- `POST /uploads/files` - Create TUS upload
+- `PATCH /uploads/files/:id` - Send file data
+- `HEAD /uploads/files/:id` - Check upload status
 
 ---
 
-## Worker Tasks
+## Polling Job
 
-### process_dataset_upload
-1. Verifies upload directory exists
-2. Creates `{dataset_path}/processed` directory
-3. For each file:
-   - Reads chunks: `{dataset_path}/uploaded_chunks/{file_upload_log_id}/{checksum}-{i}`
-   - Merges chunks sequentially into final file
-   - Validates file checksum
-   - Updates `file_upload_log` status
-4. Updates `dataset_upload_log` status to complete
+**Script:** `workers/workers/scripts/manage_upload_workflows.py`
 
-### cancel_dataset_upload
-1. Marks upload as cancelled in database
-2. Optionally cleans up uploaded chunks
+**Schedule:**
+- Dev: Every 30s via background loop in `entrypoint.sh`
+- Prod: Every 1 min via PM2 cron in `ecosystem.config.js`
+
+**Process:**
+1. Fetch uploads with `UPLOADED` status (older than 30s threshold)
+2. Verify integrity (checksum or file existence)
+3. Start `integrated` workflow directly (no `process_dataset_upload` step)
+4. Update status to `COMPLETE` or `VERIFICATION_FAILED`
 
 ---
 
-## Key Patterns
+## UI Behavior
 
-### Error Handling
-- Chunk checksum mismatches → reject chunk
-- Missing OAuth scope → 403 Forbidden
-- Network interruption → UI retries failed chunks
-- File merge failure → mark upload as failed, notify user
+### Success Flow
+1. TUS upload completes → UI calls `/complete`
+2. `/complete` succeeds → Green success message, button disabled
 
-### Security
-- Each file requires unique OAuth token with file-specific scope
-- Tokens expire after use
-- upload_path validated to prevent directory traversal
-- Checksum validation at chunk and file level
+### Failure Flow
+1. `/complete` fails → Warning message, "Retry Registration" button appears
+2. User clicks Retry → Calls `/complete` again
 
-### Performance
-- 2MB chunk size balances memory usage and network efficiency
-- Sequential chunk upload simplifies merge logic
-- Chunks stored separately allows resumable uploads
+### Upload Logs Table
+- Only shows uploads with `process_id` (hides incomplete/orphaned uploads)
+- Status column shows icons like Import Log table (spinner/check/warning/error)
+- Polls for status updates on uploads with active workflows or pending processing
 
 ---
 
-## Related Documentation
+## Removed Components (2026-02)
 
-- [Detailed Upload Documentation](../../docs/features/dataset_upload.md)
-- [secure_download Architecture](../../docs/features/secure_download.md)
-- [Production Deployment](.ai/PRODUCTION_DEPLOYMENT.md)
+The `process_dataset_upload` workflow was removed. Previously:
+- UI → API → `process_dataset_upload` workflow → `integrated` workflow
+
+Now:
+- UI → API → Polling job → `integrated` workflow directly
+
+Removed from: `workers/tasks/`, `workers/api.py`, `api/constants.js`, `api/routes/`, `ui/services/`
 
 ---
 
 ## Changelog
 
+### 2026-02-05
+- **Upload Log Status Icons:** Replaced status chips with icons matching Import Log table pattern:
+  - Spinner (primary) for uploads in progress
+  - Spinner (warning) for uploads pending processing or active integrated workflow
+  - Green check for successful integrated workflow
+  - Warning/error icons for failures (verification, processing, registration)
+  - Added polling for datasets with active workflows or pending processing
+- **TUS Implementation Complete:** Full TUS-based upload flow working
+- **Removed `process_dataset_upload`:** Polling job triggers `integrated` directly
+- **Polling job in dev:** Added to `entrypoint.sh` (runs every 30s)
+- **BLAKE3 checksums:** Optional verification using `hash-wasm` (UI) and `blake3` (workers)
+- **UI retry logic:** Shows retry button if `/complete` API fails
+- **Upload logs filter:** Hides uploads without `process_id`
+
+### 2026-02-04
+- **Schema changes:** Renamed `tus_id` → `process_id`, added `metadata` JSON field
+- **Added `VERIFICATION_FAILED` status**
+
 ### 2026-01-18
 - **Issue Identified:** secure_download container missing `/N/...` mount in production
-- **Impact:** Upload requests fail with `EACCES: permission denied, mkdir '/N'`
-- **Status:** Documented solution, requires user to update production compose file
 
 ---
 
-**Last Updated:** 2026-01-18
+## Pending Work
+
+1. **Orphan Detection:** TUS uploads that complete but fail to register (no `process_id` in DB) need detection/cleanup mechanism.
+
+---
+
+**Last Updated:** 2026-02-05
 
