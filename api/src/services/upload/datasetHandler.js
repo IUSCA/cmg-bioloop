@@ -112,23 +112,11 @@ async function onUploadFinish(req, res, upload, filePath, fileSize) {
     // Update upload log (this happens per-file, so we track cumulative info)
     const updateData = {
       status: 'UPLOADED',
-      tus_id: upload.id, // Store last TUS ID
+      process_id: upload.id, // Store last TUS/upload ID
       selection_mode: selectionMode,
       directory_name: directoryName,
       updated_at: new Date(),
     };
-    
-    // For single file uploads or first file, store path
-    if (selectionMode !== 'directory' || !uploadLog.file_path) {
-      updateData.file_path = finalPath;
-      updateData.file_size = BigInt(fileSize);
-    } else {
-      // For multi-file/directory uploads, store directory path
-      updateData.file_path = path.dirname(finalPath);
-      // Accumulate file size (if we want to track total)
-      const currentSize = uploadLog.file_size ? BigInt(uploadLog.file_size) : BigInt(0);
-      updateData.file_size = currentSize + BigInt(fileSize);
-    }
     
     await prisma.dataset_upload_log.update({
       where: { id: uploadLog.id },
@@ -166,7 +154,7 @@ async function onUploadFinish(req, res, upload, filePath, fileSize) {
         },
         data: {
           status: 'PROCESSING_FAILED',
-          failure_reason: error.message,
+          metadata: { failure_reason: error.message },
         },
       });
     } catch (updateError) {
@@ -175,46 +163,6 @@ async function onUploadFinish(req, res, upload, filePath, fileSize) {
     
     throw error;
   }
-}
-
-/**
- * Trigger the process_dataset_upload workflow
- */
-async function triggerProcessWorkflow(datasetId) {
-  // Check if workflow already exists
-  const dataset = await prisma.dataset.findUnique({
-    where: { id: datasetId },
-    include: {
-      workflows: true,
-    },
-  });
-  
-  if (!dataset) {
-    throw new Error(`Dataset ${datasetId} not found`);
-  }
-  
-  // Check for existing process_dataset_upload workflow
-  const existingWorkflow = dataset.workflows.find(
-    (wf) => wf.id.includes('process_dataset_upload')
-  );
-  
-  if (existingWorkflow) {
-    logger.info(
-      `Dataset ${datasetId} already has process_dataset_upload workflow: ${existingWorkflow.id}`
-    );
-    return;
-  }
-  
-  // Create and start workflow
-  logger.info(`Creating process_dataset_upload workflow for dataset ${datasetId}`);
-  
-  const workflow = await datasetService.create_workflow(
-    dataset,
-    CONSTANTS.WORKFLOWS.PROCESS_DATASET_UPLOAD,
-    dataset.creator_id
-  );
-  
-  logger.info(`Created workflow ${workflow.id} for dataset ${datasetId}`);
 }
 
 module.exports = {

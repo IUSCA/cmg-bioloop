@@ -328,16 +328,24 @@ def update_upload_retry(upload_id: int, retry_count: int, status: str = None, fa
         if status:
             data['status'] = status
         if failure_reason:
-            data['failure_reason'] = failure_reason
+            data['metadata'] = {'failure_reason': failure_reason}
         r = s.patch(f'uploads/{upload_id}', json=data)
         r.raise_for_status()
         return r.json()
 
 
-def trigger_dataset_upload_workflow(dataset_id: int, workflow_name: str):
-    """Trigger upload workflow (process_dataset_upload)"""
+def get_dataset_upload_log(dataset_id: int) -> dict:
+    """Get upload log for a dataset"""
     with APIServerSession() as s:
-        r = s.post(f'datasets/uploads/{dataset_id}/workflow/{workflow_name}')
+        r = s.get(f'datasets/uploads/{dataset_id}/upload-log')
+        r.raise_for_status()
+        return r.json()
+
+
+def update_dataset_upload_log(dataset_id: int, log_data: dict) -> dict:
+    """Update upload log metadata"""
+    with APIServerSession() as s:
+        r = s.patch(f'datasets/uploads/{dataset_id}/upload-log', json=log_data)
         r.raise_for_status()
         return r.json()
 

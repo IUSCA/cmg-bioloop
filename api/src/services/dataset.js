@@ -352,12 +352,12 @@ async function get_dataset({
 
     // Combine both arrays, removing duplicates (prefer conversion method if exists)
     const derivedMap = new Map();
-    
+
     // First add manual assignments
     manualDerived.forEach((item) => {
       derivedMap.set(item.derived_id, item);
     });
-    
+
     // Then add/override with conversion-derived (conversion takes precedence)
     conversionDerived.forEach((item) => {
       derivedMap.set(item.derived_id, item);
@@ -561,7 +561,7 @@ async function get_dataset_creator({ dataset_id }) {
  * The access rules are as follows:
  * 1. Users with `admin` or `operator` roles are always allowed to initiate any workflows.
  * 2. Users with 'user' role:
- *     - For `integrated` or `process_dataset_upload` workflows:
+ *     - For `integrated` workflows:
  *       - They are allowed to proceed only if they created the dataset.
  *     - For other allowed workflows (like `stage`):
  *       - They are allowed to proceed if they are assigned to a project associated with the dataset.
@@ -966,6 +966,12 @@ async function create(tx, data) {
  */
 const get_dataset_active_workflows = async ({ dataset } = {}) => {
   const datasetWorkflowIds = dataset.workflows.map((wf) => wf.id);
+
+  // If dataset has no workflows, return empty array immediately
+  if (datasetWorkflowIds.length === 0) {
+    return [];
+  }
+
   const workflowQueryResponse = await workflowService.getAll({
     workflow_ids: datasetWorkflowIds,
     app_id: config.get('app_id'),
@@ -1031,13 +1037,12 @@ const dataset_access_check = asyncHandler(async (req, res, next) => {
  * - The second check determines if the requested workflow is in the list of workflows that the user's role is allowed
  * to initiate.
  *    - Role `admin` and `operator` are allowed to initiate any workflow.
- *    - Role `user` is allowed to initiate workflows `integrated`, `stage`, and `process_dataset_upload`
+ *    - Role `user` is allowed to initiate workflows `integrated` and `stage`
  * - The third check determines if the user has the necessary permissions to initiate the requested
  * workflow on the requested dataset.
  *    - Role `admin` and `operator` are allowed to initiate any workflow on any dataset.
  *    - Role `user`:
- *      - is allowed to initiate workflows `integrated` and `process_dataset_upload` if they
- *      created the dataset.
+ *      - is allowed to initiate workflow `integrated` if they created the dataset.
  *      - is allowed to initiate workflow `stage` if they are associated to the dataset via a project that they are a
  *      part of.
  */
@@ -1270,7 +1275,7 @@ const buildDatasetCreateQuery = async (data) => {
         // Create new analysis_type
         const formattedName = file_type.name.toUpperCase().replace(/\s+/g, '_').replace(/[^A-Z0-9_]/g, '');
         const formattedExtension = file_type.extension.trim();
-        
+
         // Find or create analysis_type with case-insensitive search on composite key
         let analysisType = await prisma.analysis_type.findFirst({
           where: {
@@ -1290,7 +1295,7 @@ const buildDatasetCreateQuery = async (data) => {
             ],
           },
         });
-        
+
         if (!analysisType) {
           analysisType = await prisma.analysis_type.create({
             data: {
@@ -1299,7 +1304,7 @@ const buildDatasetCreateQuery = async (data) => {
             },
           });
         }
-        
+
         create_query.analysis_type = {
           connect: { id: analysisType.id },
         };
@@ -1396,65 +1401,6 @@ const buildDatasetCreateQuery = async (data) => {
   return create_query;
 };
 
-/**
- * Initiates a workflow which either processes or cancels a dataset upload.
- *
- * @async
- * @function initiateUploadWorkflow
- * @param {Object} options - The options object.
- * @param {Object} options.dataset - The dataset to initiate the workflow on.
- * @param {string} options.requestedWorkflow - The name of the workflow to initiate.
- * @param {Object} options.user - The user initiating the workflow.
- * @returns {Promise<Object>} An object containing the initiated workflow and any error messages.
- * @property {Object|null} workflowInitiated - The initiated workflow object, or null if not initiated.
- * @property {string|null} workflowInitiationError - Error message if workflow initiation failed, or null if successful.
- *
- * @description
- * This function initiates the 'process_dataset_upload' workflow on a given dataset.
- *
- * `process_dataset_upload` -> This workflow initiates the processing of a dataset upload,
- * which registers the dataset in the system. This workflow is triggered after the entirety of the dataset's contents
- * have been uploaded.
- *
- * This function checks if a workflow is already in progress before initiating a new one.
- * If a workflow is found, the function will not initiate a new workflow and will return an error message instead.
- */
-const initiateUploadWorkflow = async ({ dataset = null, requestedWorkflow = null, user = null } = {}) => {
-  // return {
-  //   workflowInitiated: true,
-  //   workflowInitiationError: null,
-  // };
-
-  logger.info(`Received request to initiate workflow ${requestedWorkflow} on dataset ${dataset.id}`);
-
-  const uploadedDataset = dataset;
-  uploadedDataset.workflows = await get_dataset_active_workflows({ dataset });
-
-  let requestedWorkflowInitiated;
-  let workflowInitiationError;
-
-  logger.info(`Checking if workflow ${requestedWorkflow} is already running on dataset ${dataset.id}`);
-  const foundConflictingUploadWorkflow = uploadedDataset.workflows.find(
-    (wf) => wf.name === requestedWorkflow,
-  );
-  if (!foundConflictingUploadWorkflow) {
-    logger.info(`Conflicting workflow ${conflictingUploadWorkflow} is not running on dataset ${dataset.id}`);
-    logger.info(`Starting workflow ${requestedWorkflow} on dataset ${dataset.id}`);
-    requestedWorkflowInitiated = await create_workflow(
-      uploadedDataset,
-      requestedWorkflow,
-      user.id,
-    );
-  } else {
-    workflowInitiationError = `The workflow ${requestedWorkflow} cannot be started on dataset ${dataset.id} `
-        + `because conflicting workflow ${foundConflictingUploadWorkflow.id}) is `
-        + 'already in progress.';
-    logger.error(workflowInitiationError);
-  }
-
-  return { workflowInitiated: requestedWorkflowInitiated, workflowInitiationError };
-};
-
 const get_download_url = async ({ dataset, file = null } = {}) => {
   if (dataset.metadata.stage_alias) {
     const download_file_path = file
@@ -1498,6 +1444,5 @@ module.exports = {
   buildDatasetCreateQuery,
   buildDatasetsFetchQuery,
   normalize_name,
-  initiateUploadWorkflow,
   get_download_url,
 };

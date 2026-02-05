@@ -354,12 +354,20 @@
             Previous
           </va-button>
           <va-button
+            v-if="tusApiCallFailed"
+            class="flex-none"
+            @click="retryApiCall"
+            color="warning"
+          >
+            Retry Registration
+          </va-button>
+          <va-button
+            v-else
             class="flex-none"
             @click="onNextClick(nextStep)"
             :color="isLastStep ? 'success' : 'primary'"
             :disabled="isNextButtonDisabled"
           >
-            <!--            {{ isLastStep ? (submitAttempted ? "Retry" : "Upload") : "Next" }}-->
             {{ isLastStep ? "Upload" : "Next" }}
           </va-button>
         </div>
@@ -404,6 +412,7 @@ import analysisTypeService from "@/services/analysisType";
 import datasetService from "@/services/dataset";
 import instrumentService from "@/services/instrument";
 import toast from "@/services/toast";
+import { computeManifestHash, isChecksumVerificationEnabled } from "@/services/upload/checksum";
 import { formatBytes } from "@/services/utils";
 import { useAuthStore } from "@/stores/auth";
 import { Icon } from "@iconify/vue";
@@ -570,13 +579,15 @@ const isFileTypeFormInvalid = computed(() => {
 const tusOverallProgress = ref(0);
 const tusFilesUploaded = ref(0);
 const tusTotalFiles = ref(0);
+const tusProcessIds = ref([]); // Track process_ids for all uploaded files
+const tusApiCallFailed = ref(false); // Track if final API call failed
 
 /**
  * Determines if the upload process has been completed.
  *
  * An upload is considered complete if `submissionStatus` has been set to `UPLOADED`. This occurs when:
  * - All files have been uploaded
- * - A network request to initiate the `process_dataset_upload` has been made
+ * - The upload has been registered with the API (process_id recorded)
  */
 const isUploadIncomplete = computed(() => {
   return (
@@ -1263,8 +1274,8 @@ const setPostSubmissionSuccessState = () => {
 };
 
 /**
- * Called when all files have been successfully uploaded, and a network request has been made
- * to initiate the `process_dataset_upload` workflow.
+ * Called when all files have been successfully uploaded, and the upload has been registered
+ * with the API. The integrated workflow will be triggered by the polling job.
  */
 const postSubmit = () => {
   if (uploadCancelled.value) {
@@ -1757,24 +1768,17 @@ const uploadFilesWithTus = async (files, endpoint) => {
           tusFilesUploaded.value = uploadedCount;
           tusOverallProgress.value = Math.round((uploadedBytes / totalBytes) * 100);
           
-          // Call /complete endpoint to finalize this file upload
-          try {
-            const tusId = upload.url.split('/').pop(); // Extract TUS ID from upload URL
-            await datasetService.completeDatasetUpload(
-              datasetUploadLog.value.audit_log.dataset.id,
-              {
-                tus_id: tusId,
-                selection_mode: selectingDirectory.value ? 'directory' : 'files',
-                directory_name: selectingDirectory.value && selectedDirectory.value ? selectedDirectory.value.name : '',
-                relative_path: file.webkitRelativePath || file.name,
-              }
-            );
-            console.log(`Completed upload for ${file.name} (tus_id: ${tusId})`);
-          } catch (error) {
-            // Don't fail the upload - async process will handle it
-            console.error(`Failed to call /complete for ${file.name}:`, error);
+          // Store the process_id for this file - will be sent to API after all uploads complete
+          const processId = upload.url.split('/').pop();
+          if (!tusProcessIds.value) {
+            tusProcessIds.value = [];
           }
+          tusProcessIds.value.push({
+            process_id: processId,
+            relative_path: file.webkitRelativePath || file.name,
+          });
           
+          console.log(`TUS upload complete for ${file.name} (process_id: ${processId})`);
           resolve();
         },
       });
@@ -1793,16 +1797,77 @@ const uploadFilesWithTus = async (files, endpoint) => {
   }
 };
 
-const handleTusComplete = () => {
-  submissionStatus.value = Constants.UPLOAD_STATUSES.UPLOADED;
-  statusChipColor.value = "success";
-  submissionAlert.value = "All files have been uploaded successfully! Processing will begin shortly.";
-  submissionAlertColor.value = "success";
-  isSubmissionAlertVisible.value = true;
-  submissionSuccess.value = true;
-  
-  // Workflow will be triggered by Python monitoring process
-  // No need to manually trigger here
+const handleTusComplete = async () => {
+  // Call API to register all process_ids - this is the critical call
+  // Only show success if this succeeds
+  try {
+    const datasetId = datasetUploadLog.value.audit_log.dataset.id;
+    
+    // Build metadata with checksum if enabled
+    let metadata = {};
+    
+    // Compute manifest hash if feature is enabled
+    if (isChecksumVerificationEnabled()) {
+      try {
+        console.log('Computing manifest hash for upload verification...');
+        const files = filesToUpload.value.map(f => f.file);
+        const manifestHash = await computeManifestHash(files);
+        
+        if (manifestHash) {
+          console.log('Manifest hash computed:', manifestHash.manifest_hash);
+          metadata.checksum = manifestHash;
+        }
+      } catch (error) {
+        console.error('Failed to compute manifest hash:', error);
+        // Don't fail - async process will use fallback verification
+      }
+    }
+    
+    // Call /complete with the last process_id (for single file) or first (for multi)
+    // The worker will handle moving all files based on TUS metadata
+    const lastUpload = tusProcessIds.value[tusProcessIds.value.length - 1];
+    
+    await datasetService.completeDatasetUpload(
+      datasetId,
+      {
+        process_id: lastUpload.process_id,
+        selection_mode: selectingDirectory.value ? 'directory' : 'files',
+        directory_name: selectingDirectory.value && selectedDirectory.value ? selectedDirectory.value.name : '',
+        relative_path: lastUpload.relative_path,
+        metadata: Object.keys(metadata).length > 0 ? metadata : undefined,
+      }
+    );
+    
+    console.log('Upload registration complete');
+    
+    // Success - show green status
+    tusApiCallFailed.value = false;
+    submissionStatus.value = Constants.UPLOAD_STATUSES.UPLOADED;
+    statusChipColor.value = "success";
+    submissionAlert.value = "All files have been uploaded successfully!";
+    submissionAlertColor.value = "success";
+    isSubmissionAlertVisible.value = true;
+    submissionSuccess.value = true;
+    
+  } catch (error) {
+    console.error('Failed to register upload with API:', error);
+    
+    // API call failed - show retry option
+    tusApiCallFailed.value = true;
+    submissionStatus.value = Constants.UPLOAD_STATUSES.UPLOAD_FAILED;
+    statusChipColor.value = "warning";
+    submissionAlert.value = "Files uploaded but registration failed. Please retry.";
+    submissionAlertColor.value = "warning";
+    isSubmissionAlertVisible.value = true;
+    submissionSuccess.value = false;
+  }
+};
+
+// Retry the API call to register the upload
+const retryApiCall = async () => {
+  submissionAlert.value = "Retrying registration...";
+  submissionAlertColor.value = "info";
+  await handleTusComplete();
 };
 
 //

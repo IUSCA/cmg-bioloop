@@ -188,10 +188,6 @@ class DatasetService {
     return api.post(`/datasets/uploads/${dataset_id}/complete`, data);
   }
 
-  processDatasetUpload(dataset_id) {
-    return api.post(`/datasets/uploads/${dataset_id}/workflow/process_dataset_upload`);
-  }
-
   getDatasetUploadLogs({
     forSelf = true,
     status = null,

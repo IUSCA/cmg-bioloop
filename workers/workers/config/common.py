@@ -10,8 +10,9 @@ APP_API_TOKEN = os.environ['APP_API_TOKEN']
 # print(f'APP_API_TOKEN: {APP_API_TOKEN}')
 
 API_BASE_URL = os.environ['API_BASE_URL']
-CMG_API_BASE_URL = os.environ['CMG_API_BASE_URL']
-CMG_API_TOKEN = os.environ['CMG_API_TOKEN']
+# CMG_API_* vars are for a different production app - not used in this codebase
+CMG_API_BASE_URL = os.environ.get('CMG_API_BASE_URL', '')
+CMG_API_TOKEN = os.environ.get('CMG_API_TOKEN', '')
 
 QUEUE_URL = os.environ['QUEUE_URL']
 QUEUE_USER = os.environ['QUEUE_USER']
@@ -193,14 +194,6 @@ config = {
                 # before the legacy CMG application can finish registering the same dataset.
             ]
         },
-        'process_dataset_upload': {
-            'steps': [
-                {
-                    'name': 'Process Dataset Upload',
-                    'task': 'process_dataset_upload'
-                }
-            ]
-        },
         "conversion": {
           "name": "Conversion",
           "steps": [
@@ -342,8 +335,11 @@ config = {
             },
             'slurm_script_dir': '/slurm_scripts',
         },
-      'legacy_migration': {
-        'completed': False,
-      }
     },
+    'legacy_migration': {
+        'completed': False,
+    },
+    'upload': {
+      'verify_checksums': False,
+    }
 }

@@ -24,9 +24,19 @@ import logging
 from datetime import datetime
 import fire
 
+from celery import Celery
+from sca_rhythm import Workflow
+
 from workers import api
+import workers.config.celeryconfig as celeryconfig
+import workers.workflow_utils as wf_utils
 from workers.constants.upload import UPLOAD_STATUS, MAX_RETRY_COUNT
 from workers.constants.workflow import WORKFLOWS
+from workers.upload import verify_upload_integrity
+
+# Initialize Celery app for workflow creation
+celery_app = Celery("tasks")
+celery_app.config_from_object(celeryconfig)
 
 logging.basicConfig(
     level=logging.INFO,
@@ -54,6 +64,7 @@ def manage_upload_workflows(dry_run=True, max_retries=MAX_RETRY_COUNT):
     
     summary = {
         'stalled_retried': 0,
+        'verification_failed': 0,
         'failed_retried': 0,
         'permanently_failed': 0,
         'errors': 0,
@@ -62,7 +73,8 @@ def manage_upload_workflows(dry_run=True, max_retries=MAX_RETRY_COUNT):
     # Process stalled uploads (UPLOADED but no workflow started)
     try:
         stalled_summary = process_stalled_uploads(dry_run)
-        summary['stalled_retried'] = stalled_summary['retried']
+        summary['stalled_retried'] = stalled_summary['verified']
+        summary['verification_failed'] = stalled_summary.get('verification_failed', 0)
         summary['errors'] += stalled_summary['errors']
     except Exception as e:
         logger.error(f"Error processing stalled uploads: {e}", exc_info=True)
@@ -95,7 +107,13 @@ def process_stalled_uploads(dry_run=True):
     Process uploads that are UPLOADED but workflow hasn't started.
     
     These are uploads where files were successfully uploaded via TUS,
-    but the process_dataset_upload workflow was never triggered or failed to start.
+    but the integrated workflow was never triggered.
+    
+    Flow:
+    1. Get stalled uploads (UPLOADED status)
+    2. Verify integrity (checksum match or file existence)
+    3. If verified -> trigger integrated workflow directly, update status to COMPLETE
+    4. If verification fails -> mark as VERIFICATION_FAILED
     
     Args:
         dry_run (bool): If True, simulates without making changes
@@ -105,13 +123,13 @@ def process_stalled_uploads(dry_run=True):
     """
     logger.info("\n--- Processing Stalled Uploads ---")
     
-    summary = {'retried': 0, 'errors': 0}
+    summary = {'verified': 0, 'verification_failed': 0, 'errors': 0}
     
     try:
         response = api.get_stalled_uploads()
         stalled_uploads = response.get('uploads', [])
         
-        logger.info(f"Found {len(stalled_uploads)} stalled uploads (UPLOADED > 5 min)")
+        logger.info(f"Found {len(stalled_uploads)} stalled uploads (UPLOADED status)")
         
         for upload in stalled_uploads:
             dataset_id = upload['dataset_id']
@@ -124,26 +142,70 @@ def process_stalled_uploads(dry_run=True):
             logger.info(f"  Uploaded At: {uploaded_at}")
             
             try:
+                # Get full dataset and upload log for verification
+                dataset = api.get_dataset(dataset_id=dataset_id, workflows=True)
+                upload_log = api.get_dataset_upload_log(dataset_id)
+                
                 if dry_run:
-                    logger.info(f"  [DRY RUN] Would trigger workflow for dataset {dataset_id}")
-                else:
-                    # Trigger process_dataset_upload workflow
-                    logger.info(f"  Triggering {WORKFLOWS['PROCESS_DATASET_UPLOAD']} workflow...")
-                    workflow = api.trigger_dataset_upload_workflow(
+                    logger.info(f"  [DRY RUN] Would verify integrity for dataset {dataset_id}")
+                    continue
+                
+                # Step 1: Verify upload integrity (checksum or file existence)
+                logger.info(f"  Verifying upload integrity...")
+                try:
+                    verify_upload_integrity(dataset, upload_log)
+                    logger.info(f"  Integrity verified")
+                except Exception as verify_error:
+                    # Verification failed - mark dataset and don't trigger workflow
+                    logger.error(f"  Integrity verification failed: {verify_error}")
+                    api.update_dataset_upload_log(
                         dataset_id=dataset_id,
-                        workflow_name=WORKFLOWS['PROCESS_DATASET_UPLOAD']
+                        log_data={
+                            'status': UPLOAD_STATUS['VERIFICATION_FAILED'],
+                            'metadata': {
+                                'failure_reason': str(verify_error)
+                            }
+                        }
                     )
-                    logger.info(f"  ✓ Workflow started: {workflow.get('workflow_id', 'unknown')}")
-                    summary['retried'] += 1
+                    summary['verification_failed'] += 1
+                    continue
+                
+                # Step 2: Check for existing integrated workflows
+                active_integrated_wfs = [wf for wf in dataset.get('workflows', []) 
+                                        if wf['name'] == WORKFLOWS['INTEGRATED']]
+                if active_integrated_wfs:
+                    logger.info(f"  Integrated workflow already exists for dataset {dataset_id}, skipping")
+                    summary['verified'] += 1
+                    continue
+                
+                # Step 3: Create and start integrated workflow directly
+                logger.info(f"  Starting {WORKFLOWS['INTEGRATED']} workflow...")
+                integrated_wf_body = wf_utils.get_wf_body(wf_name=WORKFLOWS['INTEGRATED'])
+                int_wf = Workflow(celery_app=celery_app, **integrated_wf_body)
+                int_wf_id = int_wf.workflow['_id']
+                api.add_workflow_to_dataset(dataset_id=dataset_id, workflow_id=int_wf_id)
+                int_wf.start(dataset_id)
+                logger.info(f"  Workflow started: {int_wf_id}")
+                
+                # Step 3: Update upload status to COMPLETE
+                logger.info(f"  Updating upload status to COMPLETE...")
+                api.update_dataset_upload_log(
+                    dataset_id=dataset_id,
+                    log_data={'status': UPLOAD_STATUS['COMPLETE']}
+                )
+                
+                summary['verified'] += 1
+                
             except Exception as e:
-                logger.error(f"  ✗ Failed to trigger workflow for dataset {dataset_id}: {e}")
+                logger.error(f"  Failed to process dataset {dataset_id}: {e}")
                 summary['errors'] += 1
     
     except Exception as e:
         logger.error(f"Failed to fetch stalled uploads: {e}", exc_info=True)
         summary['errors'] += 1
     
-    logger.info(f"\nStalled uploads processed: {summary['retried']} retried, {summary['errors']} errors")
+    logger.info(f"\nStalled uploads processed: {summary['verified']} verified & triggered, "
+                f"{summary['verification_failed']} verification failed, {summary['errors']} errors")
     return summary
 
 
@@ -194,8 +256,19 @@ def process_failed_uploads(dry_run=True, max_retries=MAX_RETRY_COUNT):
                         logger.info(f"  [DRY RUN] Would retry workflow for dataset {dataset_id}")
                         logger.info(f"  [DRY RUN] Would update retry_count to {new_retry_count}")
                     else:
-                        # Update retry count
-                        logger.info(f"  Updating retry count to {new_retry_count}...")
+                        # Get dataset for workflow check
+                        dataset = api.get_dataset(dataset_id=dataset_id, workflows=True)
+                        
+                        # Check for existing integrated workflows
+                        active_integrated_wfs = [wf for wf in dataset.get('workflows', []) 
+                                                if wf['name'] == WORKFLOWS['INTEGRATED']]
+                        if active_integrated_wfs:
+                            logger.info(f"  Integrated workflow already exists, skipping")
+                            summary['retried'] += 1
+                            continue
+                        
+                        # Update status
+                        logger.info(f"  Updating status...")
                         api.update_dataset_upload(
                             uploaded_dataset_id=dataset_id,
                             log_data={
@@ -203,14 +276,15 @@ def process_failed_uploads(dry_run=True, max_retries=MAX_RETRY_COUNT):
                             }
                         )
                         
-                        # Trigger workflow
-                        logger.info(f"  Triggering {WORKFLOWS['PROCESS_DATASET_UPLOAD']} workflow...")
-                        workflow = api.trigger_dataset_upload_workflow(
-                            dataset_id=dataset_id,
-                            workflow_name=WORKFLOWS['PROCESS_DATASET_UPLOAD']
-                        )
+                        # Trigger integrated workflow directly
+                        logger.info(f"  Starting {WORKFLOWS['INTEGRATED']} workflow...")
+                        integrated_wf_body = wf_utils.get_wf_body(wf_name=WORKFLOWS['INTEGRATED'])
+                        int_wf = Workflow(celery_app=celery_app, **integrated_wf_body)
+                        int_wf_id = int_wf.workflow['_id']
+                        api.add_workflow_to_dataset(dataset_id=dataset_id, workflow_id=int_wf_id)
+                        int_wf.start(dataset_id)
                         
-                        logger.info(f"  ✓ Workflow restarted: {workflow.get('workflow_id', 'unknown')}")
+                        logger.info(f"  Workflow restarted: {int_wf_id}")
                         summary['retried'] += 1
                         
                 except Exception as e:
@@ -230,7 +304,9 @@ def process_failed_uploads(dry_run=True, max_retries=MAX_RETRY_COUNT):
                             uploaded_dataset_id=dataset_id,
                             log_data={
                                 'status': UPLOAD_STATUS['PERMANENTLY_FAILED'],
-                                'failure_reason': f"Failed after {max_retries} retry attempts. Last error: {last_error}",
+                                'metadata': {
+                                    'failure_reason': f"Failed after {max_retries} retry attempts. Last error: {last_error}",
+                                },
                             }
                         )
                         

@@ -10,7 +10,7 @@ const fs = require('fs');
 const path = require('path');
 
 const asyncHandler = require('@/middleware/asyncHandler');
-const { accessControl } = require('@/middleware/auth');
+const { accessControl, authenticate } = require('@/middleware/auth');
 const { validate } = require('@/middleware/validators');
 const datasetService = require('@/services/dataset');
 const CONSTANTS = require('@/constants');
@@ -41,7 +41,11 @@ router.get(
       status, dataset_name, offset, limit,
     } = req.query;
 
-    const where = {};
+    // Only show uploads that have a process_id (TUS upload was registered)
+    // This hides incomplete/orphaned uploads from users
+    const where = {
+      process_id: { not: null },
+    };
     if (status) {
       where.status = status;
     }
@@ -194,6 +198,24 @@ router.post(
         },
       });
 
+      // Set origin_path to the predetermined location where files will be moved to
+      // This is deterministic and doesn't depend on the /complete endpoint
+      // Format: /uploads/{type}/{id}/{name}
+      const uploadBasePath = config.get('upload.path');
+      const datasetOriginPath = path.join(
+        uploadBasePath,
+        type.toLowerCase(),
+        `${createdDataset.id}`,
+        createdDataset.name,
+      );
+      
+      await tx.dataset.update({
+        where: { id: createdDataset.id },
+        data: {
+          origin_path: datasetOriginPath,
+        },
+      });
+
       // Create dataset_upload_log (TUS handles file tracking internally)
       const created_dataset_upload_log = await tx.dataset_upload_log.create({
         data: {
@@ -206,14 +228,6 @@ router.post(
         },
         select: {
           id: true,
-        },
-      });
-
-      // Set origin_path for the dataset
-      await tx.dataset.update({
-        where: { id: createdDataset.id },
-        data: {
-          origin_path: datasetService.getUploadedDatasetPath({ datasetId: createdDataset.id, datasetType: type }),
         },
       });
 
@@ -246,19 +260,22 @@ router.post(
     },
   ),
   [
-    body('tus_id').isString().notEmpty(),
+    body('process_id').isString().notEmpty(),
     body('selection_mode').optional().isString(),
     body('directory_name').optional().isString(),
     body('relative_path').optional().isString(),
+    body('metadata').optional().isObject(),
   ],
   asyncHandler(async (req, res, next) => {
     // #swagger.tags = ['datasets']
     // #swagger.summary = 'Mark TUS upload as complete and prepare for processing'
 
     const datasetId = parseInt(req.params.id, 10);
-    const { tus_id, selection_mode, directory_name, relative_path } = req.body;
+    const {
+      process_id, selection_mode, directory_name, relative_path, metadata,
+    } = req.body;
 
-    logger.info(`Complete upload request for dataset ${datasetId}, tus_id: ${tus_id}`);
+    logger.info(`Complete upload request for dataset ${datasetId}, process_id: ${process_id}`);
 
     try {
       // Find the upload log
@@ -283,10 +300,24 @@ router.post(
         return res.status(404).json({ error: 'Upload log not found' });
       }
 
+      // Idempotency: If already UPLOADED, return success immediately
+      if (uploadLog.status === CONSTANTS.UPLOAD_STATUSES.UPLOADED) {
+        logger.info(`Upload for dataset ${datasetId} already completed`);
+        return res.json({
+          success: true,
+          upload_log: uploadLog,
+        });
+      }
+
+      // Get dataset type for proper path structure
+      const dataset = uploadLog.audit_log.dataset;
+      const datasetType = dataset.type;
+
       // Get TUS upload info to verify completion and get file details
       const uploadPath = config.get('upload.path');
-      const tusFilePath = path.join(uploadPath, tus_id);
-      const tusInfoPath = `${tusFilePath}.info`;
+      const tusFilePath = path.join(uploadPath, process_id);
+      // TUS stores metadata as .json (not .info)
+      const tusInfoPath = `${tusFilePath}.json`;
 
       // Check if TUS files exist
       if (!fs.existsSync(tusFilePath)) {
@@ -297,10 +328,13 @@ router.post(
       // Read TUS metadata
       let tusMetadata = {};
       let fileSize = 0;
-      
+      let originalFilename = 'uploaded_file';
+
       if (fs.existsSync(tusInfoPath)) {
         const infoContent = fs.readFileSync(tusInfoPath, 'utf8');
         tusMetadata = JSON.parse(infoContent);
+        // TUS stores metadata in lowercase 'metadata' field
+        originalFilename = tusMetadata.metadata?.filename || tusMetadata.metadata?.name || originalFilename;
         logger.info(`TUS metadata: ${JSON.stringify(tusMetadata)}`);
       }
 
@@ -308,44 +342,74 @@ router.post(
       const stats = fs.statSync(tusFilePath);
       fileSize = stats.size;
 
-      // Determine final file path
-      let finalPath = tusFilePath;
-      
-      // For directory uploads, preserve directory structure
+      // Use the origin_path that was set at dataset creation
+      // (dataset-specific directory: /uploads/{type}/{id}/)
+      const baseOriginPath = dataset.origin_path;
+
+      // Determine final file path based on upload mode
+      let finalPath;
+
       if (selection_mode === 'directory' && relative_path) {
-        const datasetUploadDir = path.join(
-          uploadPath,
-          `dataset_${datasetId}`,
-          directory_name || 'upload',
-        );
-        
+        // Directory upload: preserve directory structure under dataset's origin_path
+        const datasetUploadDir = path.join(baseOriginPath, directory_name || 'upload');
         finalPath = path.join(datasetUploadDir, relative_path);
-        
-        logger.info(`Preserving directory structure: ${tusFilePath} -> ${finalPath}`);
-        
+
+        logger.info(`Directory upload: ${tusFilePath} -> ${finalPath}`);
+
         // Create parent directory if needed
         const parentDir = path.dirname(finalPath);
         if (!fs.existsSync(parentDir)) {
           fs.mkdirSync(parentDir, { recursive: true });
         }
-        
-        // Move file to preserve structure
-        fs.renameSync(tusFilePath, finalPath);
-        
-        logger.info(`File moved to ${finalPath}`);
+
+        // Move file (idempotent: skip if already exists at destination)
+        if (!fs.existsSync(finalPath)) {
+          fs.renameSync(tusFilePath, finalPath);
+          logger.info(`File moved to ${finalPath}`);
+        } else {
+          logger.info(`File already exists at ${finalPath}, skipping move`);
+        }
+      } else {
+        // Single file upload: move to dataset's origin_path
+        finalPath = path.join(baseOriginPath, originalFilename);
+
+        logger.info(`Single file upload: ${tusFilePath} -> ${finalPath}`);
+
+        // Create dataset directory if needed
+        if (!fs.existsSync(baseOriginPath)) {
+          fs.mkdirSync(baseOriginPath, { recursive: true });
+        }
+
+        // Move file (idempotent: skip if already exists at destination)
+        if (!fs.existsSync(finalPath)) {
+          fs.renameSync(tusFilePath, finalPath);
+          logger.info(`File moved to ${finalPath}`);
+        } else {
+          logger.info(`File already exists at ${finalPath}, skipping move`);
+        }
       }
+
+      logger.info(`File ready at ${finalPath} (using origin_path: ${baseOriginPath})`);
 
       // Update upload log
       const updateData = {
         status: CONSTANTS.UPLOAD_STATUSES.UPLOADED,
-        tus_id,
-        file_path: finalPath,
-        file_size: BigInt(fileSize),
+        process_id,
         selection_mode: selection_mode || 'files',
         directory_name,
         updated_at: new Date(),
       };
 
+      // Add metadata if provided (e.g., checksum from UI)
+      if (metadata) {
+        // Merge with existing metadata
+        updateData.metadata = {
+          ...(uploadLog.metadata || {}),
+          ...metadata,
+        };
+      }
+
+      // Update upload log with file info (origin_path already set at dataset creation)
       const updatedLog = await prisma.dataset_upload_log.update({
         where: { id: uploadLog.id },
         data: updateData,
@@ -360,9 +424,20 @@ router.post(
       });
     } catch (error) {
       logger.error(`Failed to complete upload for dataset ${datasetId}:`, error);
-      
+
       // Try to update status to failed
       try {
+        // Get existing metadata first
+        const existingLog = await prisma.dataset_upload_log.findFirst({
+          where: {
+            audit_log: {
+              dataset_id: datasetId,
+              create_method: CONSTANTS.DATASET_CREATE_METHODS.UPLOAD,
+            },
+          },
+          select: { metadata: true },
+        });
+
         await prisma.dataset_upload_log.updateMany({
           where: {
             audit_log: {
@@ -372,13 +447,16 @@ router.post(
           },
           data: {
             status: CONSTANTS.UPLOAD_STATUSES.PROCESSING_FAILED,
-            failure_reason: error.message,
+            metadata: {
+              ...(existingLog?.metadata || {}),
+              failure_reason: error.message,
+            },
           },
         });
       } catch (updateError) {
         logger.error('Failed to update upload log status:', updateError);
       }
-      
+
       return res.status(500).json({ error: 'Failed to complete upload', details: error.message });
     }
   }),
@@ -454,47 +532,109 @@ router.patch(
   }),
 );
 
-router.post(
-  '/:id/workflow/:wf',
-  // Verify if this user is allowed to initiate the requested workflow on
-  // the requested dataset.
-  datasetService.workflow_access_check,
-  validate([
-    param('id').isInt().toInt(),
-    param('wf').isIn([
-      CONSTANTS.WORKFLOWS.PROCESS_DATASET_UPLOAD,
-    ]),
-  ]),
-  asyncHandler(async (req, res, next) => {
+// Get upload log for a dataset (used by workers)
+router.get(
+  '/:id/upload-log',
+  authenticate,
+  asyncHandler(async (req, res) => {
     // #swagger.tags = ['datasets']
-    // #swagger.summary = Create and start a workflow to process a Dataset's upload, and associate it with the uploaded
-    // Dataset.
+    // #swagger.summary = 'Get upload log for a dataset'
 
-    const wf_name = req.params.wf;
+    const datasetId = parseInt(req.params.id, 10);
 
-    const dataset = await datasetService.get_dataset({
-      id: req.params.id,
-      workflows: true,
+    const uploadLog = await prisma.dataset_upload_log.findFirst({
+      where: {
+        audit_log: {
+          dataset_id: datasetId,
+          create_method: CONSTANTS.DATASET_CREATE_METHODS.UPLOAD,
+        },
+      },
+      include: {
+        audit_log: {
+          include: {
+            dataset: {
+              select: {
+                id: true,
+                name: true,
+                type: true,
+                origin_path: true,
+              },
+            },
+          },
+        },
+      },
     });
 
-    if (!dataset) {
-      return next(createError(404, 'Dataset not found'));
+    if (!uploadLog) {
+      return res.status(404).json({ error: 'Upload log not found' });
     }
 
-    if (wf_name !== CONSTANTS.WORKFLOWS.PROCESS_DATASET_UPLOAD) {
-      return next(createError(400, 'Invalid workflow name'));
+    res.json(uploadLog);
+  }),
+);
+
+// Update upload log metadata (e.g., checksum) - used by UI and workers
+router.patch(
+  '/:id/upload-log',
+  authenticate,
+  asyncHandler(async (req, res) => {
+    // #swagger.tags = ['datasets']
+    // #swagger.summary = 'Update dataset upload log metadata'
+
+    const datasetId = parseInt(req.params.id, 10);
+    const { metadata, status, retry_count } = req.body;
+
+    // Find upload log for this dataset
+    const uploadLog = await prisma.dataset_upload_log.findFirst({
+      where: {
+        audit_log: {
+          dataset_id: datasetId,
+          create_method: CONSTANTS.DATASET_CREATE_METHODS.UPLOAD,
+        },
+      },
+    });
+
+    if (!uploadLog) {
+      return res.status(404).json({ error: 'Upload log not found' });
     }
 
-    datasetService.initiateUploadWorkflow({
-      dataset,
-      requestedWorkflow: wf_name,
-      user: req.user,
-    }).then(({ workflowInitiated, workflowInitiationError }) => {
-      if (workflowInitiated) {
-        return res.json(workflowInitiated);
-      }
-      next(createError.InternalServerError(workflowInitiationError));
-    }).catch(next);
+    // Build update data
+    const updateData = {};
+
+    // Merge metadata (preserve existing fields)
+    if (metadata) {
+      const existingMetadata = uploadLog.metadata || {};
+      updateData.metadata = { ...existingMetadata, ...metadata };
+    }
+
+    // Update status if provided
+    if (status) {
+      updateData.status = status;
+    }
+
+    // Update retry_count if provided
+    if (retry_count !== undefined) {
+      updateData.retry_count = retry_count;
+    }
+
+    const updated = await prisma.dataset_upload_log.update({
+      where: { id: uploadLog.id },
+      data: updateData,
+      include: {
+        audit_log: {
+          include: {
+            dataset: {
+              select: {
+                id: true,
+                name: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    res.json({ success: true, upload_log: updated });
   }),
 );
 

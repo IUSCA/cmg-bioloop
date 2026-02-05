@@ -28,24 +28,31 @@ app.disable('x-powered-by');
 // Mount TUS server BEFORE ALL middleware (including morgan)
 // TUS needs completely raw request/response objects
 const uploadService = require('./services/upload');
+
 const tusServer = uploadService.getServer();
 const logger = require('./services/logger');
 
 logger.info('Mounting TUS server directly in app.js BEFORE all middleware');
 
 // Mount TUS at root level so it can see full paths
-// But only handle /uploads/files requests
+// Handle both /uploads/files and /api/uploads/files requests
+// (TUS returns Location headers with /api prefix for external clients)
 app.use((req, res, next) => {
-  if (req.path.startsWith('/uploads/files')) {
+  // Check for both paths - TUS client may use either depending on context
+  const isTusPath = req.path.startsWith('/uploads/files') || req.path.startsWith('/api/uploads/files');
+  
+  if (isTusPath) {
     logger.info(`TUS middleware: ${req.method} ${req.path}`);
     // Authenticate first
     authenticate(req, res, (err) => {
       if (err) {
         return next(err);
       }
-      // Add /api prefix back for TUS to generate correct Location headers
-      const originalUrl = req.url;
-      req.url = '/api' + req.url;
+      // Normalize URL to have /api prefix for TUS server
+      // TUS server is configured with path: '/api/uploads/files'
+      if (!req.url.startsWith('/api/uploads/files')) {
+        req.url = `/api${req.url}`;
+      }
       // Then hand off to TUS - don't catch errors, let Express handle them
       return tusServer.handle(req, res);
     });

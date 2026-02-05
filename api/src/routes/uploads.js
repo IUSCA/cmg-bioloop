@@ -1,6 +1,6 @@
 /**
  * Generic Upload Routes
- * 
+ *
  * Mounts the TUS upload server and provides supporting endpoints
  * for querying upload status and managing uploads.
  */
@@ -39,15 +39,15 @@ router.get(
   isPermittedTo('read'),
   asyncHandler(async (req, res) => {
     const { entityType, entityId } = req.params;
-    
+
     // For now, only support datasets
     // Future: add other entity types
     if (entityType !== 'dataset') {
       return res.status(400).json({ error: 'Unsupported entity type' });
     }
-    
+
     const datasetId = parseInt(entityId, 10);
-    
+
     // Get upload log
     const uploadLog = await prisma.dataset_upload_log.findFirst({
       where: {
@@ -69,24 +69,22 @@ router.get(
         },
       },
     });
-    
+
     if (!uploadLog) {
       return res.status(404).json({ error: 'Upload not found' });
     }
-    
+
     res.json({
       status: uploadLog.status,
-      tus_id: uploadLog.tus_id,
-      file_path: uploadLog.file_path,
-      file_size: uploadLog.file_size ? String(uploadLog.file_size) : null,
+      process_id: uploadLog.process_id,
       selection_mode: uploadLog.selection_mode,
       directory_name: uploadLog.directory_name,
       retry_count: uploadLog.retry_count,
-      failure_reason: uploadLog.failure_reason,
+      metadata: uploadLog.metadata,
       updated_at: uploadLog.updated_at,
       dataset: uploadLog.audit_log.dataset,
     });
-  })
+  }),
 );
 
 /**
@@ -96,14 +94,14 @@ router.get(
 // Get stalled uploads (UPLOADED but workflow not started)
 router.get(
   '/stalled',
-  isPermittedTo('read'),
+  authenticate, // Service-to-service endpoint - just needs valid token
   asyncHandler(async (req, res) => {
-    const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
-    
+    const stalledThreshold = new Date(Date.now() - 30 * 1000); // 30 second buffer to avoid race conditions
+
     const stalled = await prisma.dataset_upload_log.findMany({
       where: {
         status: 'UPLOADED',
-        updated_at: { lt: fiveMinutesAgo },
+        updated_at: { lt: stalledThreshold },
       },
       include: {
         audit_log: {
@@ -111,7 +109,7 @@ router.get(
         },
       },
     });
-    
+
     res.json({
       uploads: stalled.map((u) => ({
         dataset_id: u.audit_log.dataset.id,
@@ -119,17 +117,17 @@ router.get(
         uploaded_at: u.updated_at,
       })),
     });
-  })
+  }),
 );
 
 // Get failed uploads (with retry count filter)
 router.get(
   '/failed',
-  isPermittedTo('read'),
+  authenticate, // Service-to-service endpoint - just needs valid token
   asyncHandler(async (req, res) => {
     const { max_retry_count = 2, max_age_hours = 72 } = req.query;
     const cutoffDate = new Date(Date.now() - max_age_hours * 60 * 60 * 1000);
-    
+
     const failed = await prisma.dataset_upload_log.findMany({
       where: {
         status: 'PROCESSING_FAILED',
@@ -142,26 +140,26 @@ router.get(
         },
       },
     });
-    
+
     res.json({
       uploads: failed.map((u) => ({
         dataset_id: u.audit_log.dataset.id,
         dataset_name: u.audit_log.dataset.name,
         retry_count: u.retry_count || 0,
-        last_error: u.failure_reason,
+        last_error: u.metadata?.failure_reason || null,
       })),
     });
-  })
+  }),
 );
 
 // Get expired uploads (UPLOADING > X days)
 router.get(
   '/expired',
-  isPermittedTo('read'),
+  authenticate, // Service-to-service endpoint - just needs valid token
   asyncHandler(async (req, res) => {
     const { status = 'UPLOADING', age_days = 7 } = req.query;
     const cutoffDate = new Date(Date.now() - age_days * 24 * 60 * 60 * 1000);
-    
+
     const expired = await prisma.dataset_upload_log.findMany({
       where: {
         status,
@@ -173,7 +171,7 @@ router.get(
         },
       },
     });
-    
+
     res.json({
       uploads: expired.map((u) => ({
         dataset_id: u.audit_log.dataset.id,
@@ -182,36 +180,35 @@ router.get(
         age_days: Math.floor((Date.now() - u.updated_at) / (24 * 60 * 60 * 1000)),
       })),
     });
-  })
+  }),
 );
 
-// Get all TUS IDs (for orphaned file detection)
+// Get all process IDs (for orphaned file detection)
 router.get(
-  '/all-tus-ids',
-  isPermittedTo('read'),
+  '/all-process-ids',
+  authenticate, // Service-to-service endpoint - just needs valid token
   asyncHandler(async (req, res) => {
     const uploads = await prisma.dataset_upload_log.findMany({
-      select: { tus_id: true },
-      where: { tus_id: { not: null } },
+      select: { process_id: true },
+      where: { process_id: { not: null } },
     });
-    
+
     res.json({
-      tus_ids: uploads.map((u) => u.tus_id).filter(Boolean),
+      process_ids: uploads.map((u) => u.process_id).filter(Boolean),
     });
-  })
+  }),
 );
 
-// Get uploads with file paths (for missing file detection)
+// Get uploads by status (for monitoring)
 router.get(
-  '/with-file-paths',
-  isPermittedTo('read'),
+  '/by-status',
+  authenticate, // Service-to-service endpoint - just needs valid token
   asyncHandler(async (req, res) => {
     const { statuses = [] } = req.query;
-    
+
     const uploads = await prisma.dataset_upload_log.findMany({
       where: {
         status: { in: statuses },
-        file_path: { not: null },
       },
       include: {
         audit_log: {
@@ -219,35 +216,46 @@ router.get(
         },
       },
     });
-    
+
     res.json({
       uploads: uploads.map((u) => ({
         dataset_id: u.audit_log.dataset.id,
-        file_path: u.file_path,
+        dataset_name: u.audit_log.dataset.name,
+        origin_path: u.audit_log.dataset.origin_path,
         status: u.status,
       })),
     });
-  })
+  }),
 );
 
-// Update upload retry count and status
+// Update upload retry count, status, and metadata
 router.patch(
   '/:id',
-  isPermittedTo('update'),
+  authenticate, // Service-to-service endpoint - just needs valid token
   asyncHandler(async (req, res) => {
-    const { retry_count, status, failure_reason } = req.body;
-    
+    const { retry_count, status, metadata } = req.body;
+
+    // Get existing metadata to merge
+    const existing = await prisma.dataset_upload_log.findUnique({
+      where: { id: parseInt(req.params.id, 10) },
+      select: { metadata: true },
+    });
+
+    const mergedMetadata = metadata
+      ? { ...(existing?.metadata || {}), ...metadata }
+      : undefined;
+
     const updated = await prisma.dataset_upload_log.update({
       where: { id: parseInt(req.params.id, 10) },
       data: {
         ...(retry_count !== undefined && { retry_count }),
         ...(status && { status }),
-        ...(failure_reason && { failure_reason }),
+        ...(mergedMetadata && { metadata: mergedMetadata }),
       },
     });
-    
+
     res.json(updated);
-  })
+  }),
 );
 
 console.log('===== uploads.js exporting router =====');

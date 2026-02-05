@@ -33,7 +33,7 @@ def delete_dataset(celery_task, dataset_id, **kwargs):
           default_retry_delay=5)
 def download_illumina_dataset(celery_task, dataset_id, **kwargs):
     from workers.tasks.illumina_download import \
-      download_illumina_dataset as task_body
+        download_illumina_dataset as task_body
     return task_body(celery_task, dataset_id, **kwargs)
 
 
@@ -121,16 +121,7 @@ def delete_source(celery_task, dataset_id, **kwargs):
           default_retry_delay=5)
 def delete_dataset(celery_task, dataset_id, **kwargs):
     from workers.tasks.mark_archived_and_delete import \
-      mark_archived_and_delete as task_body
-    return task_body(celery_task, dataset_id, **kwargs)
-
-
-@app.task(base=WorkflowTask, bind=True, name='process_dataset_upload',
-          autoretry_for=(exc.RetryableException,),
-          max_retries=3,
-          default_retry_delay=5)
-def process_dataset_upload(celery_task, dataset_id, **kwargs):
-    from workers.tasks.process_dataset_upload import process as task_body
+        mark_archived_and_delete as task_body
     return task_body(celery_task, dataset_id, **kwargs)
 
 
@@ -141,7 +132,7 @@ def process_dataset_upload(celery_task, dataset_id, **kwargs):
           )
 def populate_file_metadata(celery_task, dataset_id, **kwargs):
     from workers.tasks.populate_file_metadata import \
-      populate_file_metadata as task_body
+        populate_file_metadata as task_body
     try:
       return task_body(celery_task, dataset_id, **kwargs)
     except exc.InspectionFailed:
@@ -166,7 +157,8 @@ def begin_migration(celery_task, dataset_id, **kwargs):
           max_retries=3,
           default_retry_delay=5)
 def retrieve_archive_dataset(celery_task, dataset_id, **kwargs):
-    from workers.tasks.retrieve_archive import retrieve_archive_dataset as task_body
+    from workers.tasks.retrieve_archive import \
+        retrieve_archive_dataset as task_body
     return task_body(celery_task, dataset_id, **kwargs)
 
 
@@ -175,7 +167,8 @@ def retrieve_archive_dataset(celery_task, dataset_id, **kwargs):
           max_retries=3,
           default_retry_delay=5)
 def populate_metadata_dataset(celery_task, dataset_id, **kwargs):
-    from workers.tasks.populate_metadata import populate_metadata_dataset as task_body
+    from workers.tasks.populate_metadata import \
+        populate_metadata_dataset as task_body
     return task_body(celery_task, dataset_id, **kwargs)
 
 
@@ -196,7 +189,8 @@ def end_migration(celery_task, dataset_id, **kwargs):
           default_retry_delay=5
           )
 def hydrate_session_tracks(celery_task, session_id, **kwargs):
-    from workers.tasks.hydrate_tracks import hydrate_session_tracks as task_body
+    from workers.tasks.hydrate_tracks import \
+        hydrate_session_tracks as task_body
     return task_body(celery_task, session_id, **kwargs)
 
 
@@ -206,5 +200,6 @@ def hydrate_session_tracks(celery_task, session_id, **kwargs):
           default_retry_delay=5
           )
 def finish_session_hydration(celery_task, session_id, **kwargs):
-    from workers.tasks.finish_hydration import finish_session_hydration as task_body
+    from workers.tasks.finish_hydration import \
+        finish_session_hydration as task_body
     return task_body(celery_task, session_id, **kwargs)

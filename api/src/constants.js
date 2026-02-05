@@ -48,7 +48,8 @@ const INCLUDE_AUDIT_LOGS = {
         select: {
           id: true,
           status: true,
-          // Note: 'files' field removed - file_upload_log table no longer exists in TUS migration
+          process_id: true, // Generic upload identifier (TUS ID, S3 key, etc.)
+          metadata: true, // Contains checksum info, failure_reason, etc.
         },
       },
     },
@@ -107,6 +108,7 @@ const UPLOAD_STATUSES = {
   UPLOADING: 'UPLOADING',
   UPLOAD_FAILED: 'UPLOAD_FAILED',
   UPLOADED: 'UPLOADED',
+  VERIFICATION_FAILED: 'VERIFICATION_FAILED', // Integrity check failed before workflow
   PROCESSING: 'PROCESSING',
   PROCESSING_FAILED: 'PROCESSING_FAILED',
   COMPLETE: 'COMPLETE',
@@ -121,7 +123,6 @@ const WORKFLOWS = {
   INTEGRATED: 'integrated',
   STAGE: 'stage',
   STAGE_MIGRATED: 'stage_migrated',
-  PROCESS_DATASET_UPLOAD: 'process_dataset_upload',
   HYDRATE_SESSION: 'hydrate_session',
 };
 
