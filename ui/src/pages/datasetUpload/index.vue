@@ -98,10 +98,33 @@
             <va-icon name="error" color="danger" />
           </va-popover>
         </div>
-        <!-- Permanently failed -->
-        <div v-else-if="rowData.status === constants.UPLOAD_STATUSES.PERMANENTLY_FAILED" class="flex justify-center">
-          <va-popover message="Processing permanently failed">
+        <!-- Processing (workflow triggered but not yet detected) -->
+        <div v-else-if="rowData.status === constants.UPLOAD_STATUSES.PROCESSING" class="flex justify-center">
+          <va-popover message="Processing">
+            <half-circle-spinner
+              class="flex-none"
+              :animation-duration="1000"
+              :size="24"
+              :color="colors.warning"
+            />
+          </va-popover>
+        </div>
+        <!-- Complete (upload finished, no integrated workflow found) -->
+        <div v-else-if="rowData.status === constants.UPLOAD_STATUSES.COMPLETE" class="flex justify-center">
+          <va-popover message="Upload complete">
+            <va-icon name="check_circle" color="success" />
+          </va-popover>
+        </div>
+        <!-- Upload failed -->
+        <div v-else-if="rowData.status === constants.UPLOAD_STATUSES.UPLOAD_FAILED" class="flex justify-center">
+          <va-popover message="Upload failed">
             <va-icon name="error" color="danger" />
+          </va-popover>
+        </div>
+        <!-- Fallback: unknown status -->
+        <div v-else class="flex justify-center">
+          <va-popover :message="`Status: ${rowData.status || 'Unknown'}`">
+            <va-icon name="help_outline" color="secondary" />
           </va-popover>
         </div>
       </template>
