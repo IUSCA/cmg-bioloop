@@ -149,7 +149,7 @@ config = {
                 {
                     'name': 'inspect',
                     'task': 'inspect_dataset',
-                    'queue': FETCH_QUEUE
+                    'queue': ARCHIVE_QUEUE
                 },
                 {
                     'name': 'populate_metadata',

@@ -77,3 +77,9 @@ def get_slate_scratch_usage(username):
     command = ['lfs', 'quota', '-u', username, '/N/scratch']
     stdout, stderr = cmd.execute(command)
     return parse_lfs_quota_output(stdout)
+
+
+def get_slate_project_usage(username):
+    command = ['lfs', 'quota', '-u', username, '/N/project']
+    stdout, stderr = cmd.execute(command)
+    return parse_lfs_quota_output(stdout)

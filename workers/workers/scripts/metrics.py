@@ -29,7 +29,6 @@ def main():
     )
 
     scratch_usage = hpfs.get_slate_scratch_usage(username=config['service_user'])
-
     metrics.extend(
         [
             {
@@ -40,6 +39,20 @@ def main():
                 'tags': []
             }
             for d in scratch_usage
+        ]
+    )
+
+    project_usage = hpfs.get_slate_project_usage(username=config['service_user'])
+    metrics.extend(
+        [
+            {
+                'measurement': d['Filesystem'],
+                'subject': hostname,
+                'usage': d['usage'],
+                'limit': d['limit'],
+                'tags': []
+            }
+            for d in project_usage
         ]
     )
 

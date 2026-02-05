@@ -200,7 +200,7 @@
         {
           "name": "inspect",
           "task": "inspect_dataset",
-          "queue": "fetch.cmg-test.sca.iu.edu.q"
+          "queue": "archive.cmg-test.sca.iu.edu.q"
         },
         {
           "name": "populate_metadata",
