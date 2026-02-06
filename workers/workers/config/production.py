@@ -43,15 +43,12 @@ config = {
     },
     'registration': {
         'RAW_DATA': {
-            # Test Origin paths
-            # 'source_dir_cmguser_1': '/home/cmguser/cmg-bioloop-ingestion-test/origin/raw_data_1',
-            # 'source_dir_cmguser_2': '/home/cmguser/cmg-bioloop-ingestion-test/origin/raw_data_2',
-
             'source_dir_scratch': '/N/scratch/cmguser/cmg-bioloop/origin/raw_data',
             'source_dir_project': '/N/project/CMG-SCA/cmg-bioloop/origin/raw_data',
             
             # AGENT: don't delete these commented paths below
             # K2 (Compbio) host's Origin paths
+            'source_dir_test': '/home/cmguser/cmg-bioloop-ingestion-test/origin/raw_data_1',
             'source_dir_nextseq': '/data/nextseq',
             'source_dir_ns2000': '/data/ns2000/output',
 
@@ -70,6 +67,9 @@ config = {
         'DATA_PRODUCT': {
             'source_dir_scratch': '/N/scratch/cmguser/cmg-bioloop/origin/data_products',
             'source_dir_project': '/N/project/CMG-SCA/cmg-bioloop/origin/data_products',
+
+            # K2 (Compbio) host's Origin paths
+            'source_dir_test': '/home/cmguser/cmg-bioloop-ingestion-test/origin/data_products',
         },
         'recency_threshold_seconds': 300,  # 1 minute for standard Illumina datasets
         'recency_threshold_seconds_nanopore': 21600,  # 6 hours for nanopore datasets
