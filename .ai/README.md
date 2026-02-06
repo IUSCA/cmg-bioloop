@@ -26,7 +26,8 @@ This directory contains **authoritative documentation** that persists across Cur
 │       ├── datasets.md            # raw_data, data_product
 │       ├── workflows.md           # integrated workflows
 │       ├── users-projects.md      # user management, projects
-│       └── imports-downloads.md   # file upload/download
+│       ├── uploads.md             # TUS browser uploads
+│       └── imports-downloads.md   # external imports, downloads
 │
 └── customizations/                # CMG-specific (this fork only)
     ├── README.md
@@ -135,7 +136,8 @@ Common platform mistakes:
 1. **datasets.md** - Raw data vs data products, staging, archival
 2. **workflows.md** - Python workflow framework, "integrated" workflows
 3. **users-projects.md** - User management, roles, project ACLs
-4. **imports-downloads.md** - File upload and secure download
+4. **uploads.md** - TUS browser uploads, resumable, BLAKE3 checksums
+5. **imports-downloads.md** - External imports (SDA), secure downloads
 
 ---
 

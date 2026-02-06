@@ -12,6 +12,5 @@
   },
   "scope_prefix": "download_file:",
   "genome_browser_scope_prefix": "genome_browser_file:",
-  "upload_scope": "upload_file",
   "data_root": "/opt/sca/data"
 }
