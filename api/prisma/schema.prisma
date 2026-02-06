@@ -646,6 +646,7 @@ enum storage_type {
 enum access_type {
   BROWSER
   SLATE_SCRATCH
+  SLATE_PROJECT
 }
 
 enum NOTIFICATION_STATUS {

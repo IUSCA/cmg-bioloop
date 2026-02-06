@@ -1,7 +1,5 @@
 # TUS Upload Architecture
 
-**Audience:** Technical leadership, architects  
-**Purpose:** High-level overview of the new TUS-based upload system
 
 ---
 

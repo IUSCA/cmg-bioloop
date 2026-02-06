@@ -31,6 +31,13 @@
     </div>
     <div class="flex flex-row gap-20 flex-wrap">
       <div class="flex-1">
+        <MetricCountByTimeChart
+          :measurement="config.metric_measurements.SLATE_PROJECT"
+        ></MetricCountByTimeChart>
+      </div>
+    </div>
+    <div class="flex flex-row gap-20 flex-wrap">
+      <div class="flex-1">
         <UserBandwidthConsumptionChart
           class="w-full"
         ></UserBandwidthConsumptionChart>

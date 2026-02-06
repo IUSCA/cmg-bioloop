@@ -71,6 +71,7 @@ const props = defineProps({
       [
         config.metric_measurements.SDA,
         config.metric_measurements.SLATE_SCRATCH,
+        config.metric_measurements.SLATE_PROJECT,
       ].includes(val),
   },
 });
@@ -183,6 +184,10 @@ const currentUsage = computed(() => {
       metricTitle = "Current Slate-Scratch Space Usage";
       metricCount = `${formatBytes(_being_used.value)} / ${formatBytes(_limit.value)}`;
       break;
+    case config.metric_measurements.SLATE_PROJECT:
+      metricTitle = "Current Slate-Project Space Usage";
+      metricCount = `${formatBytes(_being_used.value)} / ${formatBytes(_limit.value)}`;
+      break;
     default:
       console.log("Provided measurement value did not match expected values");
   }
@@ -198,6 +203,8 @@ const chartTitleCallBack = () => {
       return "SDA Space Utilization";
     case config.metric_measurements.SLATE_SCRATCH:
       return "Slate-Scratch Space Utilization";
+    case config.metric_measurements.SLATE_PROJECT:
+      return "Slate-Project Space Utilization";
     default:
       console.log("Provided measurement value did not match expected values");
   }
@@ -218,6 +225,8 @@ const getDatasetLabel = () => {
       return "SDA Usage";
     case config.metric_measurements.SLATE_SCRATCH:
       return "Slate-Scratch Usage";
+    case config.metric_measurements.SLATE_PROJECT:
+      return "Slate-Project Usage";
     default:
       return "Unknown Measurement";
   }

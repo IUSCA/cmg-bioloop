@@ -49,6 +49,7 @@ const exports = {
     SDA: 'sda',
     SLATE_SCRATCH: '/N/scratch',
     SLATE_SCRATCH_FILES: '/N/scratch files',
+    SLATE_PROJECT: '/N/project',
   },
   auth_enabled: {
     google: true,

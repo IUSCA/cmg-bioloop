@@ -126,6 +126,7 @@ const lineChartOption = computed(() => {
         "Total Number of Data Accesses",
         "Number of Browser Data Accesses",
         "Number of Slate-Scratch Data Accesses",
+        "Number of Slate-Project Data Accesses",
       ],
       left: "center",
       top: "10%", // Move the legend down to make space for the pie chart
@@ -134,6 +135,7 @@ const lineChartOption = computed(() => {
         "Total Number of Data Accesses": false, // Initially hide the total count
         "Number of Browser Data Accesses": true, // Initially show browser access
         "Number of Slate-Scratch Data Accesses": true, // Initially show slate scratch access
+        "Number of Slate-Project Data Accesses": true, // Initially show slate project access
       },
     },
     xAxis: {
@@ -178,6 +180,12 @@ const lineChartOption = computed(() => {
         name: "Number of Slate-Scratch Data Accesses",
         type: "line",
         data: chartData.value.slateScratchCounts || [],
+        smooth: true,
+      },
+      {
+        name: "Number of Slate-Project Data Accesses",
+        type: "line",
+        data: chartData.value.slateProjectCounts || [],
         smooth: true,
       },
     ],
@@ -241,6 +249,14 @@ const configureChartData = (data) => {
     return record ? record.count : 0;
   });
 
+  const slateProjectData = dates.map((date) => {
+    const record = data.find(
+      (item) =>
+        formatDate(item.date) === date && item.access_type === "SLATE_PROJECT",
+    );
+    return record ? record.count : 0;
+  });
+
   const totalBrowserCount = data
     .filter((item) => item.access_type === "BROWSER")
     .reduce((sum, item) => sum + item.count, 0);
@@ -249,10 +265,14 @@ const configureChartData = (data) => {
     .filter((item) => item.access_type === "SLATE_SCRATCH")
     .reduce((sum, item) => sum + item.count, 0);
 
+  const totalSlateProjectCount = data
+    .filter((item) => item.access_type === "SLATE_PROJECT")
+    .reduce((sum, item) => sum + item.count, 0);
+
   // Check if the data is empty
   if (
     data.length === 0 ||
-    (totalBrowserCount === 0 && totalSlateScratchCount === 0)
+    (totalBrowserCount === 0 && totalSlateScratchCount === 0 && totalSlateProjectCount === 0)
   ) {
     isNoData.value = true; // No data available
   } else {
@@ -264,13 +284,16 @@ const configureChartData = (data) => {
     totalCounts: dates.map(
       (date) =>
         browserData[dates.indexOf(date)] +
-        slateScratchData[dates.indexOf(date)],
+        slateScratchData[dates.indexOf(date)] +
+        slateProjectData[dates.indexOf(date)],
     ),
     browserCounts: browserData,
     slateScratchCounts: slateScratchData,
+    slateProjectCounts: slateProjectData,
     pieData: [
       { value: totalBrowserCount, name: "BROWSER" },
       { value: totalSlateScratchCount, name: "SLATE_SCRATCH" },
+      { value: totalSlateProjectCount, name: "SLATE_PROJECT" },
     ],
   };
   isLoading.value = false; // Data has been loaded, stop loading state
@@ -283,7 +306,10 @@ const totalAccessCount = computed(() => {
   const slateScratchCount =
     chartData.value.pieData?.find((item) => item.name === "SLATE_SCRATCH")
       ?.value || 0;
-  return browserCount + slateScratchCount;
+  const slateProjectCount =
+    chartData.value.pieData?.find((item) => item.name === "SLATE_PROJECT")
+      ?.value || 0;
+  return browserCount + slateScratchCount + slateProjectCount;
 });
 
 const retrieveAndConfigureChartData = (startDate, endDate) => {
