@@ -5,7 +5,7 @@ module.exports = {
     {
       name: "celery_worker",
       script: "python",
-      args: "-m celery -A workers.celery_app worker --loglevel INFO -O fair --pidfile celery_worker.pid --hostname 'cmg-test-celery-v2-w1@%h' --autoscale=8,2 --queues 'cmg-bioloop-v2.cmg-test.sca.iu.edu.q'",
+      args: "-m celery -A workers.celery_app worker --loglevel INFO -O fair --pidfile celery_worker.pid --hostname 'cmg-bioloop-fetch-w1@%h' --autoscale=8,2 --queues 'cmg-bioloop-fetch.cmg-test.sca.iu.edu.q'",
       watch: false,
       interpreter: "",
       log_date_format: "YYYY-MM-DD HH:mm Z",
@@ -18,7 +18,7 @@ module.exports = {
     {
       name: "conversions_worker",
       script: "python",
-      args: "-m celery -A workers.conversions_app worker --loglevel INFO -O fair --pidfile conversions_worker.pid --hostname 'cmg-test-celery-v2-w1@%h' --autoscale=8,2 --queues 'conversion-v2.cmg-test.sca.iu.edu.q' --statedb=conversions_worker_state.db",
+      args: "-m celery -A workers.conversions_app worker --loglevel INFO -O fair --pidfile conversions_worker.pid --hostname 'cmg-bioloop-conversion-w1@%h' --autoscale=8,2 --queues 'cmg-bioloop-conversion.cmg-test.sca.iu.edu.q' --statedb=conversions_worker_state.db",
       watch: false,
       interpreter: "",
       log_date_format: "YYYY-MM-DD HH:mm Z",

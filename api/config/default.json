@@ -1,7 +1,10 @@
 {
   "mode": "default",
   "app_id": "cmg-test.sca.iu.edu",
-  "default_queue": "cmg-bioloop-v2.cmg-test.sca.iu.edu.q",
+  "default_queue": "cmg-bioloop-fetch.cmg-test.sca.iu.edu.q",
+  "fetch_queue": "cmg-bioloop-fetch.cmg-test.sca.iu.edu.q",
+  "archive_queue": "cmg-bioloop-archive.cmg-test.sca.iu.edu.q",
+  "conversion_queue": "cmg-bioloop-conversion.cmg-test.sca.iu.edu.q",
   "express": {
     "port": 3030,
     "host": "localhost"
@@ -128,31 +131,72 @@
   },
   "workflow_registry": {
     "integrated": {
-      "description": "An end-to-end workflow to inspect, archive, state and validate a dataset",
+      "description": "End-to-end workflow for datasets on fetch node (uploads, imports, conversions)",
       "steps": [
         {
           "name": "await stability",
-          "task": "await_stability"
+          "task": "await_stability",
+          "queue": "cmg-bioloop-fetch.cmg-test.sca.iu.edu.q"
         },
         {
           "name": "inspect",
-          "task": "inspect_dataset"
+          "task": "inspect_dataset",
+          "queue": "cmg-bioloop-fetch.cmg-test.sca.iu.edu.q"
         },
         {
           "name": "archive",
-          "task": "archive_dataset"
+          "task": "archive_dataset",
+          "queue": "cmg-bioloop-fetch.cmg-test.sca.iu.edu.q"
         },
         {
           "name": "stage",
-          "task": "stage_dataset"
+          "task": "stage_dataset",
+          "queue": "cmg-bioloop-fetch.cmg-test.sca.iu.edu.q"
         },
         {
           "name": "validate",
-          "task": "validate_dataset"
+          "task": "validate_dataset",
+          "queue": "cmg-bioloop-fetch.cmg-test.sca.iu.edu.q"
         },
         {
           "name": "setup_download",
-          "task": "setup_dataset_download"
+          "task": "setup_dataset_download",
+          "queue": "cmg-bioloop-fetch.cmg-test.sca.iu.edu.q"
+        }
+      ]
+    },
+    "intake_integrated": {
+      "description": "End-to-end workflow for datasets on archive node (watch.py instrument ingestion)",
+      "steps": [
+        {
+          "name": "await stability",
+          "task": "await_stability",
+          "queue": "cmg-bioloop-archive.cmg-test.sca.iu.edu.q"
+        },
+        {
+          "name": "inspect",
+          "task": "inspect_dataset",
+          "queue": "cmg-bioloop-archive.cmg-test.sca.iu.edu.q"
+        },
+        {
+          "name": "archive",
+          "task": "archive_dataset",
+          "queue": "cmg-bioloop-archive.cmg-test.sca.iu.edu.q"
+        },
+        {
+          "name": "stage",
+          "task": "stage_dataset",
+          "queue": "cmg-bioloop-fetch.cmg-test.sca.iu.edu.q"
+        },
+        {
+          "name": "validate",
+          "task": "validate_dataset",
+          "queue": "cmg-bioloop-fetch.cmg-test.sca.iu.edu.q"
+        },
+        {
+          "name": "setup_download",
+          "task": "setup_dataset_download",
+          "queue": "cmg-bioloop-fetch.cmg-test.sca.iu.edu.q"
         }
       ]
     },
@@ -231,7 +275,7 @@
         {
           "name": "convert",
           "task": "convert_dataset",
-          "queue": "conversion-v2.cmg-test.sca.iu.edu.q"
+          "queue": "cmg-bioloop-conversion.cmg-test.sca.iu.edu.q"
         }
       ]
     },
@@ -241,22 +285,22 @@
         {
           "name": "convert",
           "task": "convert_genomic",
-          "queue": "conversion-v2.cmg-test.sca.iu.edu.q"
+          "queue": "cmg-bioloop-conversion.cmg-test.sca.iu.edu.q"
         },
         {
           "name": "generate qc",
           "task": "generate_qc",
-          "queue": "conversion-v2.cmg-test.sca.iu.edu.q"
+          "queue": "cmg-bioloop-conversion.cmg-test.sca.iu.edu.q"
         },
         {
           "name": "copy reports",
           "task": "copy_conversion_reports",
-          "queue": "conversion-v2.cmg-test.sca.iu.edu.q"
+          "queue": "cmg-bioloop-conversion.cmg-test.sca.iu.edu.q"
         },
         {
           "name": "derive data products",
           "task": "derive_data_products",
-          "queue": "conversion-v2.cmg-test.sca.iu.edu.q"
+          "queue": "cmg-bioloop-conversion.cmg-test.sca.iu.edu.q"
         }
       ]
     },

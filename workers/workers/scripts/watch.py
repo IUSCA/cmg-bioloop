@@ -181,41 +181,119 @@ class RegisterDataProduct(Register):
 
 
 if __name__ == "__main__":
+    # 1. Create dataset-observers for Slate-scratch
     obs1 = Observer(
-        name='raw_data_obs',
+        name='raw_data_obs---slate_scratch',
         dir_path=config['registration']['RAW_DATA']['source_dir_scratch'],
         callback=Register('RAW_DATA').register,
         interval=config['registration']['poll_interval_seconds'],
         full_scan_every_n_scans=config['registration']['full_scan_every_n_scans']
     )
-
-    # obs2 = Observer(
-    #     name='raw_data_obs_1',
-    #     dir_path=config['registration']['RAW_DATA']['source_dir_project'],
-    #     callback=Register('RAW_DATA').register,
-    #     interval=config['registration']['poll_interval_seconds'],
-    #     full_scan_every_n_scans=config['registration']['full_scan_every_n_scans']
-    # )
-
-    obs3 = Observer(
-        name='data_products_obs',
+    obs2 = Observer(
+        name='data_products_obs---slate_scratch',
         dir_path=config['registration']['DATA_PRODUCT']['source_dir_scratch'],
         callback=Register('DATA_PRODUCT').register,
         interval=config['registration']['poll_interval_seconds'],
         full_scan_every_n_scans=config['registration']['full_scan_every_n_scans']
     )
-    # obs3 = Observer(
-    #     name='data_products_obs',
-    #     dir_path=config['registration']['DATA_PRODUCT']['source_dir'],
-    #     callback=Register('DATA_PRODUCT').register,
-    #     # callback=RegisterDataProduct().register,
-    #     interval=config['registration']['poll_interval_seconds'],
-    #     full_scan_every_n_scans=config['registration']['full_scan_every_n_scans']
-    # )
 
+    # 2. Create dataset-observers for Slate-project
+    obs3 = Observer(
+        name='raw_data_obs---slate_project',
+        dir_path=config['registration']['RAW_DATA']['source_dir_project'],
+        callback=Register('RAW_DATA').register,
+        interval=config['registration']['poll_interval_seconds'],
+        full_scan_every_n_scans=config['registration']['full_scan_every_n_scans']
+    )
+    obs4 = Observer(
+        name='data_products_obs---slate_project',
+        dir_path=config['registration']['DATA_PRODUCT']['source_dir_project'],
+        callback=Register('DATA_PRODUCT').register,
+        interval=config['registration']['poll_interval_seconds'],
+        full_scan_every_n_scans=config['registration']['full_scan_every_n_scans']
+    )
+
+    # 3. Create dataset-observers for Knight (k*) nodes:
+    # These are archive-only nodes - use intake_integrated workflow
+    # 3.1 Create dataset-observers for k2 (Compbio) host
+    obs5 = Observer(
+        name='raw_data_obs---k2',
+        dir_path=config['registration']['RAW_DATA']['source_dir_nextseq'],
+        callback=Register('RAW_DATA', default_wf_name='intake_integrated').register,
+        interval=config['registration']['poll_interval_seconds'],
+        full_scan_every_n_scans=config['registration']['full_scan_every_n_scans']
+    )
+    obs6 = Observer(
+        name='raw_data_obs---k2',
+        dir_path=config['registration']['RAW_DATA']['source_dir_ns2000'],
+        callback=Register('RAW_DATA', default_wf_name='intake_integrated').register,
+        interval=config['registration']['poll_interval_seconds'],
+        full_scan_every_n_scans=config['registration']['full_scan_every_n_scans']
+    )
+    # 3.2 Create dataset-observers for k3 (Compbio) host
+    obs7 = Observer(
+        name='raw_data_obs---k3',
+        dir_path=config['registration']['RAW_DATA']['source_dir_miseq'],
+        callback=Register('RAW_DATA', default_wf_name='intake_integrated').register,
+        interval=config['registration']['poll_interval_seconds'],
+        full_scan_every_n_scans=config['registration']['full_scan_every_n_scans']
+    )
+    obs8 = Observer(
+        name='raw_data_obs---k3',
+        dir_path=config['registration']['RAW_DATA']['source_dir_novaseq2'],
+        callback=Register('RAW_DATA', default_wf_name='intake_integrated').register,
+        interval=config['registration']['poll_interval_seconds'],
+        full_scan_every_n_scans=config['registration']['full_scan_every_n_scans']
+    )
+    obs9 = Observer(
+        name='raw_data_obs---k3',
+        dir_path=config['registration']['RAW_DATA']['source_dir_ns6000'],
+        callback=Register('RAW_DATA', default_wf_name='intake_integrated').register,
+        interval=config['registration']['poll_interval_seconds'],
+        full_scan_every_n_scans=config['registration']['full_scan_every_n_scans']
+    )
+    # 3.3 Create dataset-observers for k4 (Compbio) host
+    obs10 = Observer(
+        name='raw_data_obs---k4',
+        dir_path=config['registration']['RAW_DATA']['source_dir_novaseqx1'],
+        callback=Register('RAW_DATA', default_wf_name='intake_integrated').register,
+        interval=config['registration']['poll_interval_seconds'],
+        full_scan_every_n_scans=config['registration']['full_scan_every_n_scans']
+    )
+
+    # 4. Create dataset-observers for Nanopore host
+    # These are archive-only nodes - use intake_integrated workflow
+    obs11 = Observer(
+        name='raw_data_obs---nanopore_1',
+        dir_path=config['registration']['RAW_DATA']['source_dir_nanopore_1'],
+        callback=Register('RAW_DATA', default_wf_name='intake_integrated').register,
+        interval=config['registration']['poll_interval_seconds'],
+        full_scan_every_n_scans=config['registration']['full_scan_every_n_scans']
+    )
+    obs12 = Observer(
+        name='raw_data_obs---nanopore_2',
+        dir_path=config['registration']['RAW_DATA']['source_dir_nanopore_2'],
+        callback=Register('RAW_DATA', default_wf_name='intake_integrated').register,
+        interval=config['registration']['poll_interval_seconds'],
+        full_scan_every_n_scans=config['registration']['full_scan_every_n_scans']
+    )
+
+    # Register all dataset-observers to the poller
     poller = Poller()
     poller.register(obs1)
+    poller.register(obs2)
     poller.register(obs3)
+    poller.register(obs4)
+    poller.register(obs5)
+    poller.register(obs6)
+    poller.register(obs7)
+    poller.register(obs8)
+    poller.register(obs9)
+    poller.register(obs10)
+    poller.register(obs11)
+    poller.register(obs12)
+
+    # Start the poller
     poller.poll()
 
     # try:

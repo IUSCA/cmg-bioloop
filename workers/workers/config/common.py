@@ -27,13 +27,22 @@ MONGO_PASSWORD = os.environ['MONGO_PASS']
 
 ALIAS_SALT = os.environ['ALIAS_SALT']
 
+APP_ID = 'cmg-test.sca.iu.edu'
+# Queue names use cmg-bioloop- prefix to avoid conflicts with other apps on same host
+FETCH_QUEUE = f'cmg-bioloop-fetch.{APP_ID}.q'
+ARCHIVE_QUEUE = f'cmg-bioloop-archive.{APP_ID}.q'
+CONVERSION_QUEUE = f'cmg-bioloop-conversion.{APP_ID}.q'
+
 ONE_HOUR = 60 * 60
 ONE_GIGABYTE = 1024 * 1024 * 1024
 FIVE_MINUTES = 5 * 60
 
 config = {
-    'app_id': 'cmg-test.sca.iu.edu',
-    'default_queue': 'cmg-bioloop-v2.cmg-test.sca.iu.edu.q',
+    'app_id': APP_ID,
+    'default_queue': FETCH_QUEUE,
+    'fetch_queue': FETCH_QUEUE,
+    'archive_queue': ARCHIVE_QUEUE,
+    'conversion_queue': CONVERSION_QUEUE,
     # cspell: disable-next-line
     'genome_file_types': ['.cbcl', '.bcl', '.bcl.gz', '.bgzf', '.fastq.gz', '.bam', '.bam.bai', '.vcf.gz',
                           '.vcf.gz.tbi', '.vcf'],
@@ -160,38 +169,80 @@ config = {
                 }
             ]
         },
+        # IMPORTANT:
+        # The delete_source step of the 'Integrated' or the 'Intake Integrated' workflows
+        # should NOT be enabled if the legacy CMG application is also registering
+        # new Datasets from the same source directory. The delete_source step
+        # being run in such situations could possibly delete the source directory
+        # before the legacy CMG application can finish registering the same dataset.
         'integrated': {
+            'description': 'End-to-end workflow for datasets on fetch node (uploads, imports, conversions)',
             'steps': [
                 {
                     'name': 'await stability',
-                    'task': 'await_stability'
+                    'task': 'await_stability',
+                    'queue': FETCH_QUEUE
                 },
                 {
                     'name': 'inspect',
-                    'task': 'inspect_dataset'
+                    'task': 'inspect_dataset',
+                    'queue': FETCH_QUEUE
                 },
                 {
                     'name': 'archive',
-                    'task': 'archive_dataset'
+                    'task': 'archive_dataset',
+                    'queue': FETCH_QUEUE
                 },
                 {
                     'name': 'stage',
-                    'task': 'stage_dataset'
+                    'task': 'stage_dataset',
+                    'queue': FETCH_QUEUE
                 },
                 {
                     'name': 'validate',
-                    'task': 'validate_dataset'
+                    'task': 'validate_dataset',
+                    'queue': FETCH_QUEUE
                 },
                 {
                     'name': 'setup_download',
-                    'task': 'setup_dataset_download'
+                    'task': 'setup_dataset_download',
+                    'queue': FETCH_QUEUE
                 },
-                # IMPORTANT:
-                # The delete_source step of the Integrated workflow
-                # should NOT be enabled if the legacy CMG application is also registering
-                # new Datasets from the same source directory. The delete_source step
-                # being run in such situations could possibly delete the source directory
-                # before the legacy CMG application can finish registering the same dataset.
+            ]
+        },
+        'intake_integrated': {
+            'description': 'End-to-end workflow for datasets on archive node (watch.py instrument ingestion)',
+            'steps': [
+                {
+                    'name': 'await stability',
+                    'task': 'await_stability',
+                    'queue': ARCHIVE_QUEUE
+                },
+                {
+                    'name': 'inspect',
+                    'task': 'inspect_dataset',
+                    'queue': ARCHIVE_QUEUE
+                },
+                {
+                    'name': 'archive',
+                    'task': 'archive_dataset',
+                    'queue': ARCHIVE_QUEUE
+                },
+                {
+                    'name': 'stage',
+                    'task': 'stage_dataset',
+                    'queue': FETCH_QUEUE
+                },
+                {
+                    'name': 'validate',
+                    'task': 'validate_dataset',
+                    'queue': FETCH_QUEUE
+                },
+                {
+                    'name': 'setup_download',
+                    'task': 'setup_dataset_download',
+                    'queue': FETCH_QUEUE
+                },
             ]
         },
         "conversion": {
@@ -200,7 +251,7 @@ config = {
             {
               "name": "convert",
               "task": "convert_dataset",
-              "queue": "conversion-v2.cmg-test.sca.iu.edu.q"
+              "queue": CONVERSION_QUEUE
             },
 
           ]
@@ -211,22 +262,22 @@ config = {
             {
               "name": "convert",
               "task": "convert_genomic",
-              "queue": "conversion-v2.cmg-test.sca.iu.edu.q"
+              "queue": CONVERSION_QUEUE
             },
             {
               "name": "generate qc",
               "task": "generate_qc",
-              "queue": "conversion-v2.cmg-test.sca.iu.edu.q"
+              "queue": CONVERSION_QUEUE
             },
             {
               "name": "copy reports",
               "task": "copy_conversion_reports",
-              "queue": "conversion-v2.cmg-test.sca.iu.edu.q"
+              "queue": CONVERSION_QUEUE
             },
             {
               "name": "derive data products",
               "task": "derive_data_products",
-              "queue": "conversion-v2.cmg-test.sca.iu.edu.q"
+              "queue": CONVERSION_QUEUE
             }
           ]
         },
@@ -290,7 +341,7 @@ config = {
     },
     'workflow': {
         'purge': {
-            'types': ['integrated', 'stage', 'delete', 'conversion', 'file_info_population'],
+            'types': ['integrated', 'intake_integrated', 'stage', 'delete', 'conversion', 'file_info_population'],
             'age_threshold_seconds': 86400,
             'max_purge_count': 10
         }

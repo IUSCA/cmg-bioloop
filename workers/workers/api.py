@@ -261,14 +261,6 @@ def add_workflow_to_dataset(dataset_id, workflow_id):
         r.raise_for_status()
 
 
-def add_workflow_to_dataset(dataset_id, workflow_id):
-    with APIServerSession() as s:
-        r = s.post(f'datasets/{dataset_id}/workflows', json={
-            'workflow_id': workflow_id
-        })
-        r.raise_for_status()
-
-
 def register_process(worker_process: dict):
     with APIServerSession(enable_retry=False) as s:
         r = s.post(f'workflows/processes', json=worker_process)

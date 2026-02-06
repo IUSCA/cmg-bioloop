@@ -4,7 +4,10 @@ YEAR = datetime.datetime.now().year
 
 config = {
     'app_id': 'cmg-test.sca.iu.edu',
-    'default_queue': 'cmg-bioloop-v2.cmg-test.sca.iu.edu.q',
+    'default_queue': 'cmg-bioloop-fetch.cmg-test.sca.iu.edu.q',
+    'fetch_queue': 'cmg-bioloop-fetch.cmg-test.sca.iu.edu.q',
+    'archive_queue': 'cmg-bioloop-archive.cmg-test.sca.iu.edu.q',
+    'conversion_queue': 'cmg-bioloop-conversion.cmg-test.sca.iu.edu.q',
     'api': {
         'base_url': 'https://cmg-test.sca.iu.edu/api/',  # trailing slash is required
     },
@@ -40,15 +43,13 @@ config = {
     },
     'registration': {
         'RAW_DATA': {
-            # Slate-scratch Origin paths
             'source_dir_scratch': '/N/scratch/cmguser/cmg-bioloop/origin/raw_data',
-            # Slate-project Origin paths
             'source_dir_project': '/N/project/CMG-SCA/cmg-bioloop/origin/raw_data',
             
             # Test Origin paths
             # 'source_dir_cmguser_1': '/home/cmguser/cmg-bioloop-ingestion-test/origin/raw_data_1',
             # 'source_dir_cmguser_2': '/home/cmguser/cmg-bioloop-ingestion-test/origin/raw_data_2',
-            
+
             # AGENT: don't delete these commented paths below
             # K2 (Compbio) host's Origin paths
             # 'source_dir_nextseq': '/data/nextseq',
@@ -68,6 +69,7 @@ config = {
         },
         'DATA_PRODUCT': {
             'source_dir_scratch': '/N/scratch/cmguser/cmg-bioloop/origin/data_products',
+            'source_dir_project': '/N/project/CMG-SCA/cmg-bioloop/origin/data_products',
         },
         'recency_threshold_seconds': 300,  # 1 minute for standard Illumina datasets
         'recency_threshold_seconds_nanopore': 21600,  # 6 hours for nanopore datasets
