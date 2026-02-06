@@ -43,29 +43,29 @@ config = {
     },
     'registration': {
         'RAW_DATA': {
-            'source_dir_scratch': '/N/scratch/cmguser/cmg-bioloop/origin/raw_data',
-            'source_dir_project': '/N/project/CMG-SCA/cmg-bioloop/origin/raw_data',
-            
             # Test Origin paths
             # 'source_dir_cmguser_1': '/home/cmguser/cmg-bioloop-ingestion-test/origin/raw_data_1',
             # 'source_dir_cmguser_2': '/home/cmguser/cmg-bioloop-ingestion-test/origin/raw_data_2',
 
+            'source_dir_scratch': '/N/scratch/cmguser/cmg-bioloop/origin/raw_data',
+            'source_dir_project': '/N/project/CMG-SCA/cmg-bioloop/origin/raw_data',
+            
             # AGENT: don't delete these commented paths below
             # K2 (Compbio) host's Origin paths
-            # 'source_dir_nextseq': '/data/nextseq',
-            # 'source_dir_ns2000': '/data/ns2000/output',
+            'source_dir_nextseq': '/data/nextseq',
+            'source_dir_ns2000': '/data/ns2000/output',
 
             # K3 (Compbio) host's Origin paths
-            # 'source_dir_miseq': '/data/miseq',
-            # 'source_dir_novaseq2': '/data/novaseq2',
-            # 'source_dir_ns6000': '/data/ns6000',
+            'source_dir_miseq': '/data/miseq',
+            'source_dir_novaseq2': '/data/novaseq2',
+            'source_dir_ns6000': '/data/ns6000',
 
             # K4 (Compbio) host's Origin paths
-            # 'source_dir_novaseqx1': '/zpool/novaseqx/novaseqx1',
+            'source_dir_novaseqx1': '/zpool/novaseqx/novaseqx1',
             
             # Nanopore Origin paths
-            # 'source_dir_nanopore_1': '/data/p2solo',
-            # 'source_dir_nanopore_2': '/zpool/p24',
+            'source_dir_nanopore_1': '/data/p2solo',
+            'source_dir_nanopore_2': '/zpool/p24',
         },
         'DATA_PRODUCT': {
             'source_dir_scratch': '/N/scratch/cmguser/cmg-bioloop/origin/data_products',

@@ -1,4 +1,6 @@
 // https://pm2.keymetrics.io/docs/usage/application-declaration/
+// Fetch node ecosystem config - runs all workers
+// Used on nodes with access to staged data and mounted filesystems
 module.exports = {
   // replace script [python] with path of poetry's python executable
   apps: [
