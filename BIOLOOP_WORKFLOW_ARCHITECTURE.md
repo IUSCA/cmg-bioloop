@@ -270,24 +270,6 @@ Bioloop defines workflows in config files (`api/config/default.json`, `workers/w
 
 **Use Case:** User deletes a dataset
 
-### 6. **process_dataset_upload** Workflow
-
-**Purpose:** Handle user-uploaded datasets
-
-**Steps:**
-1. `process_dataset_upload` - Validate and ingest uploaded data
-
-**Use Case:** User uploads dataset via web interface
-
-### 7. **cancel_dataset_upload** Workflow
-
-**Purpose:** Cancel an in-progress upload
-
-**Steps:**
-1. `cancel_dataset_upload` - Clean up partial upload
-
-**Use Case:** User cancels upload or upload fails
-
 ---
 
 ## Workflow Lifecycle

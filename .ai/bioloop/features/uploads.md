@@ -304,6 +304,17 @@ The previous chunk-based upload system used secure_download service. Key changes
 - **BLAKE3 checksums:** Optional verification using `hash-wasm` (UI) and `blake3` (workers)
 - **UI retry logic:** Shows retry button if `/complete` API fails
 - **Upload logs filter:** Hides uploads without `process_id`
+- **Code cleanup:** Removed dead TUS hook methods from `api/src/services/upload.js`
+- **Code cleanup:** Removed legacy chunk upload route from `secure_download/src/routes/upload.js`
+- **Code cleanup:** Removed ~300 lines of dead chunk-based upload code from `UploadDatasetStepper.vue`
+- **Code cleanup:** Removed dead `ui/src/services/upload/index.js` and `uploadApi.js`
+- **Code cleanup:** Removed `spark-md5` npm dependency (replaced by BLAKE3)
+- **Code cleanup:** Removed `upload_scope` from `secure_download/config/default.json`
+- **Docs cleanup:** Deleted obsolete `docs/features/dataset_upload.md` and upload diagrams
+- **Docs cleanup:** Deleted migration tracking files (`TUS_*.md`, `UPLOAD_CHECKSUM_*.md`)
+- **Docs cleanup:** Fixed `.ai/bioloop/features/imports-downloads.md` (removed incorrect upload references)
+- **Docs cleanup:** Removed `process_dataset_upload` and `cancel_dataset_upload` from `BIOLOOP_WORKFLOW_ARCHITECTURE.md`
+- **Architecture doc:** Created `docs/features/tus-upload-architecture.md` for tech lead overview
 
 ### 2026-02-04
 - **Schema changes:** Renamed `tus_id` → `process_id`, added `metadata` JSON field

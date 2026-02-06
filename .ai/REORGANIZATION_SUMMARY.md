@@ -129,7 +129,8 @@ Which feature are you working on? (or type "general" if not feature-specific)
 - `bioloop/features/datasets.md` - NEW: raw_data, data_product, staging
 - `bioloop/features/workflows.md` - NEW: Python workflow framework
 - `bioloop/features/users-projects.md` - NEW: User management, roles, projects
-- `bioloop/features/imports-downloads.md` - NEW: File upload/download
+- `bioloop/features/uploads.md` - NEW: TUS browser uploads, resumable
+- `bioloop/features/imports-downloads.md` - NEW: External imports, secure downloads
 
 ### CMG Customization Files (Created/Moved)
 - `customizations/api_conventions.md` - NEW: File exposure, cookies, range requests

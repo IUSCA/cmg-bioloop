@@ -29,11 +29,16 @@ This directory contains the **base platform documentation** that applies to:
 - Role-based access control
 - Project organization and ACLs
 
-### 4. Imports & Downloads
+### 4. Uploads
+**File:** `features/uploads.md`
+- Browser-based dataset uploads (TUS protocol)
+- Resumable upload support
+- BLAKE3 checksum verification
+
+### 5. Imports & Downloads
 **File:** `features/imports-downloads.md`
-- File upload (Import feature)
+- Dataset imports from external sources (SDA, etc.)
 - Secure download mechanisms
-- File validation and processing
 
 ---
 
