@@ -203,3 +203,19 @@ def finish_session_hydration(celery_task, session_id, **kwargs):
     from workers.tasks.finish_hydration import \
         finish_session_hydration as task_body
     return task_body(celery_task, session_id, **kwargs)
+
+
+# Standalone task (not WorkflowTask) for async upload verification
+@app.task(
+    bind=True,
+    name='verify_upload_integrity',
+    autoretry_for=(Exception,),
+    max_retries=3,
+    default_retry_delay=60,
+    time_limit=86400,  # 24 hours hard limit
+    soft_time_limit=43200,  # 12 hours soft limit - task continues if not caught
+)
+def verify_upload_integrity(self, dataset_id):
+    from workers.tasks.verify_upload import \
+        verify_upload_integrity as task_body
+    return task_body(self, dataset_id)

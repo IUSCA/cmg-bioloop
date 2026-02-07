@@ -42,6 +42,26 @@ This directory contains the **base platform documentation** that applies to:
 
 ---
 
+## E2E Testing
+
+### e2e_testing_conventions.md
+Playwright e2e testing patterns:
+- Test directory structure
+- Authentication setup (mock tickets, storage state)
+- API helpers for state management
+- Common testing patterns (modals, pagination, roles)
+- Running tests (Docker, VS Code plugin)
+
+### e2e_testing_pitfalls.md
+Common e2e testing mistakes:
+- Authentication anti-patterns
+- Brittle selectors
+- State setup through UI vs API
+- Timing and synchronization issues
+- Test organization problems
+
+---
+
 ## Platform Conventions
 
 ### architecture.md

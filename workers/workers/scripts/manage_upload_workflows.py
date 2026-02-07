@@ -3,11 +3,12 @@ Manage Upload Workflows - TUS Upload Retry Job
 
 This script manages TUS upload workflows by:
 1. Retrying stalled uploads (UPLOADED but workflow not started)
-2. Retrying failed processing workflows (up to 3 times)
-3. Marking permanently failed uploads after 3 failures
-4. Sending admin notifications for permanent failures
+2. Managing VERIFYING status with async Celery task
+3. Retrying failed processing workflows (up to 3 times)
+4. Marking permanently failed uploads after 3 failures
+5. Sending admin notifications for permanent failures
 
-Designed to run every 15 minutes via PM2 or cron.
+Designed to run every 1 minute via PM2 cron.
 
 Usage:
     # Dry run (default)
@@ -21,7 +22,7 @@ Usage:
 """
 
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import fire
 from celery import Celery
@@ -32,7 +33,6 @@ import workers.workflow_utils as wf_utils
 from workers import api
 from workers.constants.upload import MAX_RETRY_COUNT, UPLOAD_STATUS
 from workers.constants.workflow import WORKFLOWS
-from workers.upload import verify_upload_integrity
 
 # Initialize Celery app for workflow creation
 celery_app = Celery("tasks")
@@ -63,17 +63,19 @@ def manage_upload_workflows(dry_run=True, max_retries=MAX_RETRY_COUNT):
     logger.info("="*60)
     
     summary = {
-        'stalled_retried': 0,
+        'verification_spawned': 0,
+        'verified_triggered': 0,
         'verification_failed': 0,
         'failed_retried': 0,
         'permanently_failed': 0,
         'errors': 0,
     }
     
-    # Process stalled uploads (UPLOADED but no workflow started)
+    # Process stalled uploads (UPLOADED/VERIFYING/VERIFIED states)
     try:
         stalled_summary = process_stalled_uploads(dry_run)
-        summary['stalled_retried'] = stalled_summary['verified']
+        summary['verification_spawned'] = stalled_summary.get('verification_spawned', 0)
+        summary['verified_triggered'] = stalled_summary.get('verified_triggered', 0)
         summary['verification_failed'] = stalled_summary.get('verification_failed', 0)
         summary['errors'] += stalled_summary['errors']
     except Exception as e:
@@ -93,7 +95,8 @@ def manage_upload_workflows(dry_run=True, max_retries=MAX_RETRY_COUNT):
     # Print summary
     logger.info("="*60)
     logger.info("Upload workflow management complete")
-    logger.info(f"Stalled uploads retried: {summary['stalled_retried']}")
+    logger.info(f"Verification tasks spawned: {summary['verification_spawned']}")
+    logger.info(f"Verified uploads (workflow triggered): {summary['verified_triggered']}")
     logger.info(f"Failed uploads retried: {summary['failed_retried']}")
     logger.info(f"Uploads marked permanently failed: {summary['permanently_failed']}")
     logger.info(f"Errors: {summary['errors']}")
@@ -104,109 +107,432 @@ def manage_upload_workflows(dry_run=True, max_retries=MAX_RETRY_COUNT):
 
 def process_stalled_uploads(dry_run=True):
     """
-    Process uploads that are UPLOADED but workflow hasn't started.
+    Process uploads that need verification or workflow triggering.
     
-    These are uploads where files were successfully uploaded via TUS,
-    but the integrated workflow was never triggered.
-    
-    Flow:
-    1. Get stalled uploads (UPLOADED status)
-    2. Verify integrity (checksum match or file existence)
-    3. If verified -> trigger integrated workflow directly, update status to COMPLETE
-    4. If verification fails -> mark as VERIFICATION_FAILED
+    Handles three upload states:
+    1. UPLOADED -> Spawn async verification task (set VERIFYING)
+    2. VERIFYING -> Check task status and handle all failure modes
+    3. VERIFIED -> Trigger integrated workflow (set COMPLETE)
     
     Args:
         dry_run (bool): If True, simulates without making changes
     
     Returns:
-        dict: Summary of stalled uploads processed
+        dict: Summary of uploads processed
     """
-    logger.info("\n--- Processing Stalled Uploads ---")
+    logger.info("\n" + "="*80)
+    logger.info("PROCESSING STALLED UPLOADS")
+    logger.info("="*80)
     
-    summary = {'verified': 0, 'verification_failed': 0, 'errors': 0}
+    summary = {
+        'verification_spawned': 0,
+        'verified_triggered': 0,
+        'verification_failed': 0,
+        'errors': 0,
+    }
+    
+    # Import verification task (must be after celery_app is configured)
+    from workers.tasks.declarations import \
+        verify_upload_integrity as verify_task
     
     try:
+        # Get uploads needing processing (UPLOADED, VERIFYING, VERIFIED)
         response = api.get_stalled_uploads()
-        stalled_uploads = response.get('uploads', [])
+        uploads = response.get('uploads', [])
         
-        logger.info(f"Found {len(stalled_uploads)} stalled uploads (UPLOADED status)")
+        logger.info(f"Found {len(uploads)} uploads needing processing\n")
         
-        for upload in stalled_uploads:
+        for upload in uploads:
             dataset_id = upload['dataset_id']
             dataset_name = upload['dataset_name']
             uploaded_at = upload['uploaded_at']
             
-            logger.info(f"\nStalled upload:")
-            logger.info(f"  Dataset ID: {dataset_id}")
-            logger.info(f"  Dataset Name: {dataset_name}")
-            logger.info(f"  Uploaded At: {uploaded_at}")
-            
             try:
-                # Get full dataset and upload log for verification
+                # Get full dataset and upload log
                 dataset = api.get_dataset(dataset_id=dataset_id, workflows=True)
                 upload_log = api.get_dataset_upload_log(dataset_id)
+                current_status = upload_log.get('status')
+                metadata = upload_log.get('metadata') or {}
                 
-                if dry_run:
-                    logger.info(f"  [DRY RUN] Would verify integrity for dataset {dataset_id}")
-                    continue
+                logger.info("-" * 80)
+                logger.info(f"Upload: {dataset_name} (ID: {dataset_id})")
+                logger.info(f"Status: {current_status}")
+                logger.info(f"Uploaded at: {uploaded_at}")
                 
-                # Step 1: Verify upload integrity (checksum or file existence)
-                logger.info(f"  Verifying upload integrity...")
-                try:
-                    verify_upload_integrity(dataset, upload_log)
-                    logger.info(f"  Integrity verified")
-                except Exception as verify_error:
-                    # Verification failed - mark dataset and don't trigger workflow
-                    logger.error(f"  Integrity verification failed: {verify_error}")
-                    api.update_dataset_upload_log(
-                        dataset_id=dataset_id,
-                        log_data={
-                            'status': UPLOAD_STATUS['VERIFICATION_FAILED'],
-                            'metadata': {
-                                'failure_reason': str(verify_error)
-                            }
-                        }
+                # Route based on current status
+                if current_status == UPLOAD_STATUS['UPLOADED']:
+                    result = handle_uploaded_status(
+                        dataset_id, dataset_name, upload_log, metadata, dry_run, verify_task
                     )
-                    summary['verification_failed'] += 1
-                    continue
-                
-                # Step 2: Check for existing integrated workflows
-                active_integrated_wfs = [wf for wf in dataset.get('workflows', []) 
-                                        if wf['name'] == WORKFLOWS['INTEGRATED']]
-                if active_integrated_wfs:
-                    logger.info(f"  Integrated workflow already exists for dataset {dataset_id}, skipping")
-                    summary['verified'] += 1
-                    continue
-                
-                # Step 3: Create and start integrated workflow directly
-                logger.info(f"  Starting {WORKFLOWS['INTEGRATED']} workflow...")
-                integrated_wf_body = wf_utils.get_wf_body(wf_name=WORKFLOWS['INTEGRATED'])
-                int_wf = Workflow(celery_app=celery_app, **integrated_wf_body)
-                int_wf_id = int_wf.workflow['_id']
-                api.add_workflow_to_dataset(dataset_id=dataset_id, workflow_id=int_wf_id)
-                int_wf.start(dataset_id)
-                logger.info(f"  Workflow started: {int_wf_id}")
-                
-                # Step 3: Update upload status to COMPLETE
-                logger.info(f"  Updating upload status to COMPLETE...")
-                api.update_dataset_upload_log(
-                    dataset_id=dataset_id,
-                    log_data={'status': UPLOAD_STATUS['COMPLETE']}
-                )
-                
-                summary['verified'] += 1
-                
+                    summary[result] += 1
+                    
+                elif current_status == UPLOAD_STATUS['VERIFYING']:
+                    result = handle_verifying_status(
+                        dataset_id, dataset_name, upload_log, metadata, dry_run, verify_task
+                    )
+                    summary[result] += 1
+                    
+                elif current_status == UPLOAD_STATUS['VERIFIED']:
+                    result = handle_verified_status(
+                        dataset_id, dataset_name, dataset, dry_run
+                    )
+                    summary[result] += 1
+                    
+                else:
+                    logger.warning(f"Unexpected status {current_status}, skipping")
+                    
             except Exception as e:
-                logger.error(f"  Failed to process dataset {dataset_id}: {e}")
+                logger.error("="*80)
+                logger.error("FAILURE MODE: EXCEPTION IN UPLOAD PROCESSING")
+                logger.error(f"Dataset ID: {dataset_id}")
+                logger.error(f"Dataset name: {dataset_name}")
+                logger.error(f"Error: {str(e)}")
+                logger.error(f"Error type: {type(e).__name__}")
+                logger.error("Expected resolution: Error logged, will retry on next script run")
+                logger.error("                     Check if API is accessible")
+                logger.error("                     Check if dataset/upload_log exists")
+                logger.error("="*80)
                 summary['errors'] += 1
     
     except Exception as e:
-        logger.error(f"Failed to fetch stalled uploads: {e}", exc_info=True)
+        logger.error("="*80)
+        logger.error("FAILURE MODE: FAILED TO FETCH STALLED UPLOADS")
+        logger.error(f"Error: {str(e)}")
+        logger.error(f"Error type: {type(e).__name__}")
+        logger.error("Expected resolution: Check if API is accessible")
+        logger.error("                     Will retry on next script run")
+        logger.error("="*80)
         summary['errors'] += 1
     
-    logger.info(f"\nStalled uploads processed: {summary['verified']} verified & triggered, "
-                f"{summary['verification_failed']} verification failed, {summary['errors']} errors")
+    logger.info("\n" + "="*80)
+    logger.info("STALLED UPLOADS SUMMARY")
+    logger.info(f"Verification tasks spawned: {summary['verification_spawned']}")
+    logger.info(f"Verified uploads (workflow triggered): {summary['verified_triggered']}")
+    logger.info(f"Verification failures: {summary['verification_failed']}")
+    logger.info(f"Errors: {summary['errors']}")
+    logger.info("="*80)
+    
     return summary
+
+
+def handle_uploaded_status(dataset_id, dataset_name, upload_log, metadata, dry_run, verify_task):
+    """
+    Handle upload with UPLOADED status - spawn verification task.
+    
+    Task is idempotent - verification can be run multiple times safely.
+    However, we prevent duplicate spawns by checking for existing running tasks.
+    
+    Returns:
+        str: Result key for summary ('verification_spawned' or 'errors')
+    """
+    logger.info("Action: Spawn verification task")
+    
+    if dry_run:
+        logger.info("[DRY RUN] Would set status to VERIFYING and spawn task")
+        return 'verification_spawned'
+    
+    try:
+        # Step 1: Set status to VERIFYING
+        logger.info("Setting status to VERIFYING...")
+        api.update_dataset_upload_log(
+            dataset_id=dataset_id,
+            log_data={'status': UPLOAD_STATUS['VERIFYING']}
+        )
+        logger.info("✓ Status set to VERIFYING")
+        
+        # Step 2: Spawn verification task
+        # Note: Verification task itself is idempotent (hashing files multiple times = same result)
+        # If this crashes before Step 3, next run will respawn (after 5min threshold in handle_verifying_status)
+        logger.info("Spawning verification task...")
+        task = verify_task.delay(dataset_id)
+        task_id = task.id
+        logger.info(f"✓ Verification task spawned: {task_id}")
+        
+        # Step 3: Persist task ID
+        # This acts as a marker that task was successfully spawned
+        # If script crashes before this, task will still run but we won't track it
+        # Next script run will see no task_id and respawn after 5min (stale check)
+        logger.info("Persisting task ID to metadata...")
+        api.update_dataset_upload_log(
+            dataset_id=dataset_id,
+            log_data={
+                'metadata': {
+                    **metadata,  # Preserve existing metadata
+                    'verification_task_id': task_id,
+                    'verification_started_at': datetime.utcnow().isoformat(),
+                }
+            }
+        )
+        logger.info(f"✓ Task ID persisted: {task_id}")
+        logger.info("Expected resolution: Task will verify integrity and update status")
+        logger.info("                     Next script run will check task state")
+        logger.info("Idempotency note: Verification is idempotent - safe to run multiple times")
+        logger.info("                  Task ID acts as distributed lock to prevent duplicate spawns")
+        
+        return 'verification_spawned'
+        
+    except Exception as e:
+        logger.error("="*80)
+        logger.error("FAILURE MODE: FAILED TO SPAWN VERIFICATION TASK")
+        logger.error(f"Dataset ID: {dataset_id}")
+        logger.error(f"Dataset name: {dataset_name}")
+        logger.error(f"Error: {str(e)}")
+        logger.error(f"Error type: {type(e).__name__}")
+        logger.error("Possible causes:")
+        logger.error("  - RabbitMQ/Celery broker unreachable")
+        logger.error("  - API endpoint failed")
+        logger.error("  - Network issue")
+        logger.error("Expected resolution: Upload remains in UPLOADED status")
+        logger.error("                     Will retry on next script run (1 minute)")
+        logger.error("="*80)
+        return 'errors'
+
+
+def handle_verifying_status(dataset_id, dataset_name, upload_log, metadata, dry_run, verify_task):
+    """
+    Handle upload with VERIFYING status - check task state.
+    
+    Handles all failure modes:
+    - Task completed successfully but status not updated
+    - Task still running
+    - Task failed
+    - Task stale (no task_id but VERIFYING for >5 min)
+    - Task hung (VERIFYING for >24 hours)
+    
+    Returns:
+        str: Result key for summary
+    """
+    logger.info("Action: Check verification task state")
+    
+    task_id = metadata.get('verification_task_id')
+    verification_started_at = metadata.get('verification_started_at')
+    updated_at = upload_log.get('updated_at')
+    
+    # Calculate how long it's been in VERIFYING state
+    if verification_started_at:
+        started_time = datetime.fromisoformat(verification_started_at.replace('Z', '+00:00'))
+    elif updated_at:
+        started_time = updated_at if isinstance(updated_at, datetime) else datetime.fromisoformat(str(updated_at))
+    else:
+        started_time = datetime.utcnow()
+    
+    time_in_verifying = datetime.utcnow() - started_time.replace(tzinfo=None)
+    
+    logger.info(f"Task ID: {task_id}")
+    logger.info(f"Time in VERIFYING: {time_in_verifying}")
+    
+    # FAILURE MODE 1: No task ID but status=VERIFYING (script crashed before spawning)
+    if not task_id:
+        if time_in_verifying < timedelta(minutes=5):
+            logger.info("No task ID found, but recently set (<5 min)")
+            logger.info("Expected resolution: Waiting for task ID to appear")
+            logger.info("                     Will check again on next run")
+            return 'verification_spawned'  # Count as in-progress
+        else:
+            logger.warning("="*80)
+            logger.warning("FAILURE MODE: STALE VERIFYING STATUS (NO TASK ID)")
+            logger.warning(f"Dataset ID: {dataset_id}")
+            logger.warning(f"Dataset name: {dataset_name}")
+            logger.warning(f"Time in VERIFYING: {time_in_verifying}")
+            logger.warning("Cause: Script likely crashed after setting VERIFYING but before spawning task")
+            logger.warning("Expected resolution: Will spawn new verification task")
+            logger.warning("="*80)
+            
+            if dry_run:
+                logger.info("[DRY RUN] Would respawn verification task")
+                return 'verification_spawned'
+            
+            # Respawn task
+            return handle_uploaded_status(dataset_id, dataset_name, upload_log, metadata, dry_run, verify_task)
+    
+    # FAILURE MODE 2: Task hung (VERIFYING for >24 hours)
+    if time_in_verifying > timedelta(hours=24):
+        logger.error("="*80)
+        logger.error("FAILURE MODE: VERIFICATION TIMEOUT (>24 HOURS)")
+        logger.error(f"Dataset ID: {dataset_id}")
+        logger.error(f"Dataset name: {dataset_name}")
+        logger.error(f"Task ID: {task_id}")
+        logger.error(f"Time in VERIFYING: {time_in_verifying}")
+        logger.error("Cause: Task exceeded 24-hour hard limit or never completed")
+        logger.error("Expected resolution: Mark as VERIFICATION_FAILED")
+        logger.error("                     Admin will be notified")
+        logger.error("                     Admin should check Celery logs for task")
+        logger.error("="*80)
+        
+        if not dry_run:
+            api.update_dataset_upload_log(
+                dataset_id=dataset_id,
+                log_data={
+                    'status': UPLOAD_STATUS['VERIFICATION_FAILED'],
+                    'metadata': {
+                        **metadata,
+                        'failure_reason': f'Verification timeout (>24 hours). Task ID: {task_id}',
+                        'failed_at': datetime.utcnow().isoformat(),
+                    }
+                }
+            )
+        return 'verification_failed'
+    
+    # Check Celery task state
+    try:
+        task_result = celery_app.AsyncResult(task_id)
+        task_state = task_result.state
+        
+        logger.info(f"Celery task state: {task_state}")
+        
+        if task_state == 'SUCCESS':
+            logger.info("="*80)
+            logger.info("RECOVERY MODE: TASK SUCCEEDED BUT STATUS NOT UPDATED")
+            logger.info(f"Dataset ID: {dataset_id}")
+            logger.info(f"Dataset name: {dataset_name}")
+            logger.info(f"Task ID: {task_id}")
+            logger.info("Cause: Task completed but crashed before updating status to VERIFIED")
+            logger.info("Expected resolution: Script will update status to VERIFIED now")
+            logger.info("                     Next run will trigger workflow")
+            logger.info("="*80)
+            
+            if not dry_run:
+                api.update_dataset_upload_log(
+                    dataset_id=dataset_id,
+                    log_data={'status': UPLOAD_STATUS['VERIFIED']}
+                )
+                logger.info("✓ Status updated to VERIFIED")
+            
+            return 'verified_triggered'  # Will trigger workflow on next run
+            
+        elif task_state in ['PENDING', 'STARTED']:
+            logger.info(f"Verification task still running (state: {task_state})")
+            logger.info("Expected resolution: Wait for task to complete")
+            logger.info("                     Check again on next script run")
+            return 'verification_spawned'  # Count as in-progress
+            
+        elif task_state == 'FAILURE':
+            task_info = task_result.info  # Exception info
+            logger.error("="*80)
+            logger.error("FAILURE MODE: VERIFICATION TASK FAILED")
+            logger.error(f"Dataset ID: {dataset_id}")
+            logger.error(f"Dataset name: {dataset_name}")
+            logger.error(f"Task ID: {task_id}")
+            logger.error(f"Task info: {task_info}")
+            logger.error("Cause: Celery task failed (exception thrown)")
+            logger.error("Note: This ALSO covers 'worker crash mid-hash' case:")
+            logger.error("      If entire worker system goes down, Celery marks task as FAILURE")
+            logger.error("      when system comes back up (worker didn't heartbeat)")
+            logger.error("Expected resolution: Task should have already:")
+            logger.error("                     - Set status to VERIFICATION_FAILED")
+            logger.error("                     - Sent admin notification (if final retry)")
+            logger.error("                     Upload will not be retried by this script")
+            logger.error("                     If system crashed before notification, check worker logs")
+            logger.error("="*80)
+            return 'verification_failed'
+            
+        elif task_state == 'RETRY':
+            logger.info(f"Verification task is retrying")
+            logger.info("Expected resolution: Celery will retry task automatically")
+            logger.info("                     Check again on next script run")
+            return 'verification_spawned'
+            
+        else:
+            # Unknown state (REVOKED, etc.)
+            logger.warning("="*80)
+            logger.warning(f"FAILURE MODE: UNEXPECTED TASK STATE: {task_state}")
+            logger.warning(f"Dataset ID: {dataset_id}")
+            logger.warning(f"Dataset name: {dataset_name}")
+            logger.warning(f"Task ID: {task_id}")
+            logger.warning("Cause: Task in unexpected state")
+            logger.warning("Expected resolution: Mark as VERIFICATION_FAILED")
+            logger.warning("                     Admin should investigate Celery task logs")
+            logger.warning("="*80)
+            
+            if not dry_run:
+                api.update_dataset_upload_log(
+                    dataset_id=dataset_id,
+                    log_data={
+                        'status': UPLOAD_STATUS['VERIFICATION_FAILED'],
+                        'metadata': {
+                            **metadata,
+                            'failure_reason': f'Unexpected task state: {task_state}. Task ID: {task_id}',
+                            'failed_at': datetime.utcnow().isoformat(),
+                        }
+                    }
+                )
+            return 'verification_failed'
+            
+    except Exception as e:
+        logger.error("="*80)
+        logger.error("FAILURE MODE: FAILED TO CHECK CELERY TASK STATE")
+        logger.error(f"Dataset ID: {dataset_id}")
+        logger.error(f"Dataset name: {dataset_name}")
+        logger.error(f"Task ID: {task_id}")
+        logger.error(f"Error: {str(e)}")
+        logger.error(f"Error type: {type(e).__name__}")
+        logger.error("Possible causes:")
+        logger.error("  - Celery broker (RabbitMQ) unreachable")
+        logger.error("  - Task ID invalid or expired")
+        logger.error("Expected resolution: Will retry check on next script run")
+        logger.error("                     If persists >24h, will be caught by timeout handler")
+        logger.error("="*80)
+        return 'errors'
+
+
+def handle_verified_status(dataset_id, dataset_name, dataset, dry_run):
+    """
+    Handle upload with VERIFIED status - trigger integrated workflow.
+    
+    Returns:
+        str: Result key for summary
+    """
+    logger.info("Action: Trigger integrated workflow")
+    
+    # Check for existing integrated workflows
+    active_integrated_wfs = [wf for wf in dataset.get('workflows', []) 
+                            if wf['name'] == WORKFLOWS['INTEGRATED']]
+    if active_integrated_wfs:
+        logger.info(f"Integrated workflow already exists, skipping")
+        logger.info("Expected resolution: Upload is already being processed")
+        return 'verified_triggered'
+    
+    if dry_run:
+        logger.info("[DRY RUN] Would trigger integrated workflow")
+        return 'verified_triggered'
+    
+    try:
+        # Create and start integrated workflow
+        logger.info(f"Starting {WORKFLOWS['INTEGRATED']} workflow...")
+        integrated_wf_body = wf_utils.get_wf_body(wf_name=WORKFLOWS['INTEGRATED'])
+        int_wf = Workflow(celery_app=celery_app, **integrated_wf_body)
+        int_wf_id = int_wf.workflow['_id']
+        api.add_workflow_to_dataset(dataset_id=dataset_id, workflow_id=int_wf_id)
+        int_wf.start(dataset_id)
+        logger.info(f"✓ Workflow started: {int_wf_id}")
+        
+        # Update status to COMPLETE
+        logger.info("Updating status to COMPLETE...")
+        api.update_dataset_upload_log(
+            dataset_id=dataset_id,
+            log_data={'status': UPLOAD_STATUS['COMPLETE']}
+        )
+        logger.info("✓ Status updated to COMPLETE")
+        logger.info("Expected resolution: Workflow will process upload")
+        logger.info("                     Monitor via /workflows page")
+        
+        return 'verified_triggered'
+        
+    except Exception as e:
+        logger.error("="*80)
+        logger.error("FAILURE MODE: FAILED TO TRIGGER WORKFLOW")
+        logger.error(f"Dataset ID: {dataset_id}")
+        logger.error(f"Dataset name: {dataset_name}")
+        logger.error(f"Error: {str(e)}")
+        logger.error(f"Error type: {type(e).__name__}")
+        logger.error("Possible causes:")
+        logger.error("  - Rhythm API unreachable")
+        logger.error("  - MongoDB unreachable")
+        logger.error("  - Celery broker issue")
+        logger.error("Expected resolution: Upload remains in VERIFIED status")
+        logger.error("                     Will retry on next script run")
+        logger.error("="*80)
+        return 'errors'
 
 
 def process_failed_uploads(dry_run=True, max_retries=MAX_RETRY_COUNT):

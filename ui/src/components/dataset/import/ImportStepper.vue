@@ -225,6 +225,7 @@
           class="flex-grow"
           :text-by="'text'"
           :value-by="'value'"
+          clearable
         />
         <div class="flex items-end ml-2">
           <va-popover message="Create new File Type">
@@ -250,6 +251,7 @@
           class="flex-grow mr-2"
           :text-by="'text'"
           :track-by="'value'"
+          clearable
         />
         <div class="flex items-center ml-2">
           <va-popover>
@@ -268,6 +270,7 @@
           label="Genome Assembly"
           placeholder="Select genome assembly"
           class="flex-grow mr-2"
+          clearable
         />
         <div class="flex items-center ml-2">
           <va-popover>

@@ -89,7 +89,7 @@ router.get(
  * Helper endpoints for retry jobs
  */
 
-// Get stalled uploads (UPLOADED but workflow not started)
+// Get stalled uploads (UPLOADED, VERIFYING, or VERIFIED - need processing)
 router.get(
   '/stalled',
   authenticate, // Service-to-service endpoint - just needs valid token
@@ -98,7 +98,13 @@ router.get(
 
     const stalled = await prisma.dataset_upload_log.findMany({
       where: {
-        status: 'UPLOADED',
+        status: {
+          in: [
+            constants.UPLOAD_STATUSES.UPLOADED,
+            constants.UPLOAD_STATUSES.VERIFYING,
+            constants.UPLOAD_STATUSES.VERIFIED,
+          ],
+        },
         updated_at: { lt: stalledThreshold },
       },
       include: {

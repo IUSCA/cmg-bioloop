@@ -77,7 +77,21 @@ def verify_upload_integrity(dataset, upload_log=None):
 
 def _verify_files_exist(origin_path):
     """
-    Basic verification: Check that files exist at origin_path.
+    Fallback verification when checksum is disabled.
+    Simply checks that files exist at origin_path.
+
+    Note: This is lightweight (no file content reading) but sufficient because:
+    1. Files are moved to origin_path only after successful upload completion
+    2. Upload service (TUS) handles protocol-level integrity (offset tracking, resume)
+    3. If upload was incomplete, files wouldn't be at origin_path
+    
+    Why not check TUS metadata or file sizes?
+    - TUS metadata (.json files) only exist in temp upload directory
+    - After /complete endpoint moves files, TUS metadata is no longer accessible
+    - We don't store expected file sizes/names in database (upload handles that)
+    - File existence at final destination path implies successful upload + move
+    
+    This is fast (just directory traversal, no file I/O) and works for large datasets.
 
     Args:
         origin_path (str): Path to uploaded files
@@ -93,7 +107,7 @@ def _verify_files_exist(origin_path):
     if not origin.exists():
         raise Exception(f"Origin path does not exist: {origin_path}")
 
-    # Count files
+    # Count files (directory traversal only, no file content reading)
     files = list(origin.rglob('*'))
     file_count = sum(1 for f in files if f.is_file())
 
@@ -108,6 +122,8 @@ def _compute_manifest_hash(origin_path):
     """
     Compute BLAKE3 manifest hash from directory.
     Matches client-side algorithm exactly.
+    
+    Uses streaming hash with 16MB chunks optimized for Lustre filesystem performance.
 
     Args:
         origin_path (Path): Path to uploaded files
@@ -117,6 +133,9 @@ def _compute_manifest_hash(origin_path):
     """
     import blake3
 
+    # 16MB chunks - optimal for Lustre HPFS (>4MB minimum, 10-32MB ideal)
+    CHUNK_SIZE = 16 * 1024 * 1024
+
     files = sorted([f for f in origin_path.rglob('*') if f.is_file()])
 
     if not files:
@@ -125,9 +144,12 @@ def _compute_manifest_hash(origin_path):
     manifest_lines = ['blake3-manifest-v1']
 
     for file_path in files:
-        # Hash file content
+        # Stream hash file content in chunks to avoid loading entire file into memory
+        hasher = blake3.blake3()
         with open(file_path, 'rb') as f:
-            file_hash = blake3.blake3(f.read()).hexdigest()
+            while chunk := f.read(CHUNK_SIZE):
+                hasher.update(chunk)
+        file_hash = hasher.hexdigest()
 
         # Relative path from origin_path
         rel_path = file_path.relative_to(origin_path)

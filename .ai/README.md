@@ -1,228 +1,176 @@
-# .ai/ Directory
+# AI Documentation Directory
 
-**Purpose:** Repo-resident AI knowledge base for cross-workspace and cross-machine continuity.
-
-This directory contains **authoritative documentation** that persists across Cursor sessions and machines. It serves as the **single source of truth** for AI agents working on this project.
+This directory contains documentation specifically designed for AI agents working on the Bioloop/CMG-Bioloop codebase.
 
 ---
 
-## Directory Structure
+## Purpose
 
-```
-.ai/
-├── README.md                      # This file
-├── AI_PROTOCOL.md                 # How AI agents should work with this repo
-├── PRODUCTION_ENVIRONMENT.md      # ⚠️ Production warnings & restrictions
-│
-├── bioloop/                       # Platform core (shared across all Bioloop instances)
-│   ├── README.md
-│   ├── architecture.md
-│   ├── api_conventions.md
-│   ├── ui_conventions.md
-│   ├── worker_conventions.md
-│   ├── database_patterns.md
-│   ├── pitfalls.md
-│   └── features/
-│       ├── datasets.md            # raw_data, data_product
-│       ├── workflows.md           # integrated workflows
-│       ├── users-projects.md      # user management, projects
-│       ├── uploads.md             # TUS browser uploads
-│       └── imports-downloads.md   # external imports, downloads
-│
-└── customizations/                # CMG-specific (this fork only)
-    ├── README.md
-    ├── api_conventions.md         # CMG-specific API additions
-    ├── ui_conventions.md          # CMG-specific UI patterns
-    ├── pitfalls.md                # CMG-specific pitfalls
-    ├── genome_browser_notes.md    # Browser implementation
-    └── features/
-        ├── sessions-tracks.md     # Genome browser sessions & tracks
-        ├── conversions.md         # Genomic conversion pipelines
-        └── cmg-database-migration.md  # CMG → Bioloop migration
-```
+These documents serve as the **single source of truth** for:
+- Architectural patterns and conventions
+- Feature specifications and behavior
+- Common pitfalls and anti-patterns
+- Development workflows
+
+**Priority Order:**
+1. `.ai/customizations/` (highest - CMG-specific)
+2. `.ai/bioloop/` (platform core)
+3. Repository code
+4. Chat history (lowest)
 
 ---
 
-## Organization Principle
+## Structure
 
-### Platform Core (`/bioloop/`)
-Documentation for features and patterns **shared across all Bioloop platform instances**:
-- Original Bioloop platform
-- CMG-Bioloop (this repo)
-- Any other Bioloop forks
+### Root Level
 
-### Customizations (`/customizations/`)
-Documentation for features **specific to the CMG-Bioloop fork** that are not present in the base platform.
+- **`PRODUCTION_ENVIRONMENT.md`** - Critical production warnings and restrictions
+- **`AI_PROTOCOL.md`** - How AI agents should work with this repository
+- **`README.md`** - This file
 
----
+### `/bioloop/` - Platform Core
 
-## Priority Order of Truth
+**Overview:**
+- `README.md` - Platform features and conventions overview
+- `architecture.md` - Microservice architecture, workflows, database
 
-When conflicts exist, resolve them in this order:
+**Conventions:**
+- `api_conventions.md` - API development patterns
+- `ui_conventions.md` - UI/Vue development patterns
+- `worker_conventions.md` - Worker/Celery patterns
+- `database_patterns.md` - Prisma and database patterns
+- `e2e_testing_conventions.md` - Playwright e2e testing patterns
+- `pitfalls.md` - Common platform mistakes
+- `e2e_testing_pitfalls.md` - Common testing mistakes
 
-1. `.ai/customizations/features/<feature>.md` (highest - CMG-specific)
-2. `.ai/customizations/*.md` (CMG conventions)
-3. `.ai/bioloop/features/<feature>.md` (platform features)
-4. `.ai/bioloop/*.md` (platform conventions)
-5. Repository code
-6. Chat history (lowest)
+**Features:**
+- `features/datasets.md` - Dataset management
+- `features/workflows.md` - Workflow execution
+- `features/users-projects.md` - Users and projects
+- `features/uploads.md` - File uploads (TUS)
+- `features/imports-downloads.md` - Imports and downloads
 
-**Customizations can override or extend platform defaults.**
+### `/customizations/` - CMG-Specific
 
----
+**Overview:**
+- `README.md` - CMG customizations overview
 
-## Core Files
+**Conventions:**
+- `api_conventions.md` - CMG API patterns
+- `ui_conventions.md` - CMG UI patterns
+- `genome_browser_notes.md` - Genome browser implementation
+- `pitfalls.md` - CMG-specific mistakes
 
-### PRODUCTION_ENVIRONMENT.md
-**⚠️ CRITICAL - Read first.** Production warnings and restrictions:
-- Forbidden paths and operations (NEVER touch `/N/...`)
-- Access restrictions (allowed paths, hosts, commands)
-- Docker and database operation policies
-- Logging and monitoring conventions
-
-### AI_PROTOCOL.md
-**Read this second.** Defines how AI agents should:
-- Work with feature changelogs
-- Handle pre-work and post-work requirements
-- Resolve conflicts between chat and documentation
-- Use Git for synchronization
-
----
-
-## Platform Core Documentation (`/bioloop/`)
-
-### architecture.md
-System architecture overview:
-- Service components (UI, API, Workers)
-- Database architecture
-- Cross-service communication
-- Environment-specific behavior
-
-### api_conventions.md
-API development patterns:
-- Import organization
-- Prisma usage
-- Transactions
-- Route handlers
-- Error handling
-
-### ui_conventions.md
-UI development patterns:
-- Vuestic component usage
-- Constants patterns
-- Form validation
-- Modal patterns
-
-### worker_conventions.md
-Worker development patterns:
-- Configuration
-- Task definitions
-- Logging
-
-### database_patterns.md
-Database and Prisma patterns:
-- Schema conventions
-- Cascade deletes
-- JSON fields
-- Shared includes
-
-### pitfalls.md
-Common platform mistakes:
-- Database anti-patterns
-- Authentication errors
-- UI component mistakes
-
-### Platform Features (`/bioloop/features/`)
-1. **datasets.md** - Raw data vs data products, staging, archival
-2. **workflows.md** - Python workflow framework, "integrated" workflows
-3. **users-projects.md** - User management, roles, project ACLs
-4. **uploads.md** - TUS browser uploads, resumable, BLAKE3 checksums
-5. **imports-downloads.md** - External imports (SDA), secure downloads
+**Features:**
+- `features/sessions-tracks.md` - Genome browser sessions and tracks
+- `features/conversions.md` - Genomic conversions
+- `features/cmg-database-migration.md` - MongoDB to PostgreSQL migration
 
 ---
 
-## CMG Customizations (`/customizations/`)
+## Lazy Loading Protocol
 
-### api_conventions.md
-CMG-specific API additions:
-- File exposure routing for genome browsers
-- Cookie-based file authentication
-- Range request support
-- Compression handling
+To optimize token usage, AI agents should:
 
-### ui_conventions.md
-CMG-specific UI patterns:
-- React-in-Vue integration (WashU browser)
-- Genome-specific components
-- Browser selection patterns
+1. **Always load** (on session start):
+   - `PRODUCTION_ENVIRONMENT.md`
+   - `AI_PROTOCOL.md`
+   - `bioloop/README.md`
+   - `bioloop/architecture.md`
+   - `customizations/README.md`
 
-### genome_browser_notes.md
-Genome browser implementation:
-- IGV integration
-- WashU integration
-- File serving patterns
-- Generic vs browser-specific naming
+2. **Load on-demand** (when working on specific features):
+   - Feature documentation from `features/`
+   - Relevant conventions based on work type
+   - Pitfalls documentation
 
-### pitfalls.md
-CMG-specific mistakes:
-- Genome browser file serving errors
-- React unmounting issues
-- Compression problems
-
-### CMG Features (`/customizations/features/`)
-1. **sessions-tracks.md** - Genome browser sessions and tracks
-2. **conversions.md** - Genomic conversion pipelines
-3. **cmg-database-migration.md** - MongoDB → PostgreSQL migration
+This approach:
+- Reduces initial context from ~70k to ~20k tokens
+- Leaves more room for code and conversation
+- Provides complete documentation when needed
 
 ---
 
-## How AI Agents Should Use This Directory
+## Feature-Scoped Work Model
 
-### Pre-Work (MANDATORY)
-Before answering any development prompt:
-1. Read platform core docs (bioloop/)
-2. Read customization docs (customizations/)
-3. Identify the active feature
-4. Read feature changelog
-5. Assume changelogs override chat memory
+Development is organized **by feature**:
+- Each feature has a dedicated changelog in `features/<feature>.md`
+- Changelogs are the authoritative source of truth
+- Chat history is exploratory context, not authority
+
+**Protocol:**
+1. Identify active feature
+2. Read feature changelog
+3. Work according to documented decisions
+4. Update changelog when decisions are made
+
+See `AI_PROTOCOL.md` for details.
+
+---
+
+## Documentation Maintenance
+
+### When to Update
+
+**REQUIRED:**
+- Update feature changelogs when design decisions are made
+- Update conventions when patterns change
+- Update architecture docs when structure changes
+
+**ALLOWED:**
+- Update existing user-facing documentation
+- Update existing technical documentation when code changes
+
+**FORBIDDEN (unless explicitly requested):**
+- Creating refactor summary files
+- Creating "what changed" files
+- Creating migration guide files (separate from feature changelogs)
+
+### Documentation Style
+
+- Use markdown format
+- Include clear section headers
+- Provide code examples
+- Use emojis for visual clarity (documentation only, never in code)
+- Include "Last Updated" date at bottom
+
+---
+
+## Quick Reference
+
+### Starting New Work
+
+1. Read core files (if new session)
+2. Identify feature: Ask user or infer from context
+3. Read `.ai/features/<feature>.md`
+4. Ask what type of work (API/UI/Worker/Database/E2E/General)
+5. Load relevant conventions
+6. Begin work
 
 ### During Work
+
 - Treat changelogs as current mental model
-- Don't re-decide documented items
+- Don't re-decide documented decisions
 - Keep reasoning consistent with constraints
-- Apply platform conventions + customizations
+- Ask for clarification on conflicts
 
-### Post-Work (MANDATORY)
-If any design decision, constraint, or clarification occurs:
-1. Append factual entry to feature changelog
-2. Use decision-style language (not discussion)
-3. Don't summarize chat—summarize outcome
+### After Work
 
-See `AI_PROTOCOL.md` for full details.
-
----
-
-## Override Pattern
-
-Files in `/customizations/` can override or extend `/bioloop/` conventions:
-
-**Example:**
-- `/bioloop/api_conventions.md` - Base API patterns (all Bioloop platforms)
-- `/customizations/api_conventions.md` - CMG-specific additions (file exposure, cookies, range requests)
-
-When conflicts exist, **customizations take precedence**.
+Update changelog if:
+- Design decision made
+- Behavior clarified
+- Constraints introduced/removed
+- Architecture changed
+- Assumption confirmed/rejected
 
 ---
 
-## Maintenance
+## Related Files
 
-- Keep changelogs factual and concise
-- Update after every significant decision
-- Use Git to sync changes across machines
-- Never contradict documented decisions unless explicitly instructed
-- Platform core docs should be applicable to all Bioloop forks
-- Customization docs should be CMG-specific only
+- **`.cursorrules`** - Cursor IDE rules (references this directory)
+- **`tests/README.md`** - Comprehensive testing setup guide
+- **`docs/`** - User-facing documentation
 
 ---
 
-**Last Updated:** 2026-01-16
+**Last Updated:** 2026-02-06

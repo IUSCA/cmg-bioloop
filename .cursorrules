@@ -76,6 +76,10 @@ Load conventions based on the type of work:
 - Read `.ai/customizations/genome_browser_notes.md`
 - Read `.ai/customizations/ui_conventions.md`
 
+**For E2E Testing work:**
+- Read `.ai/bioloop/e2e_testing_conventions.md`
+- Read `.ai/bioloop/e2e_testing_pitfalls.md`
+
 **For General work:**
 - Load conventions as needed when editing specific file types
 

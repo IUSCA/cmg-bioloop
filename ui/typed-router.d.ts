@@ -53,6 +53,7 @@ declare module 'vue-router/auto-routes' {
     '/stats': RouteRecordInfo<'/stats', '/stats', Record<never, never>, Record<never, never>>,
     '/tracks/': RouteRecordInfo<'/tracks/', '/tracks', Record<never, never>, Record<never, never>>,
     '/tracks/[id]': RouteRecordInfo<'/tracks/[id]', '/tracks/:id', { id: ParamValue<true> }, { id: ParamValue<false> }>,
+    '/uploads/[id]': RouteRecordInfo<'/uploads/[id]', '/uploads/:id', { id: ParamValue<true> }, { id: ParamValue<false> }>,
     '/users': RouteRecordInfo<'/users', '/users', Record<never, never>, Record<never, never>>,
     '/workflows/': RouteRecordInfo<'/workflows/', '/workflows', Record<never, never>, Record<never, never>>,
   }

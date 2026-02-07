@@ -295,7 +295,84 @@ The previous chunk-based upload system used secure_download service. Key changes
 
 ## Changelog
 
-### 2026-02-05
+### 2026-02-05 - Async Upload Verification Implementation
+
+**Major Feature:** Implemented asynchronous upload integrity verification to prevent blocking PM2 cron script.
+
+**Problem:**
+- `manage_upload_workflows.py` script runs every 1 minute via PM2 `cron_restart`
+- PM2 `cron_restart` kills and restarts processes, interrupting long-running BLAKE3 verification
+- BLAKE3 checksum verification of large files (200GB+) can take hours
+- Blocking verification in script prevented timely workflow triggering for other uploads
+
+**Solution:**
+- Offloaded verification to standalone Celery task with robust failure handling
+- Script now spawns async task and tracks state via `VERIFYING` status
+- Implemented comprehensive failure recovery for all edge cases
+
+**Implementation Details:**
+
+**New Upload States:**
+- `VERIFYING`: Integrity verification in progress (async Celery task)
+- `VERIFIED`: Integrity verified, ready to trigger workflow
+- `PERMANENTLY_FAILED`: Max retries exceeded
+
+**Celery Task (`verify_upload_integrity`):**
+- Standalone task (not WorkflowTask) - fire-and-forget with status tracking
+- Streaming BLAKE3 hash with 16MB chunks (Lustre-optimized)
+- 24-hour timeout (soft: 23h 55m, hard: 24h)
+- Auto-retry (max 3 attempts, 60s delay)
+- Worker process integration for log tracking
+- Detailed failure logging with resolution guidance
+
+**Script Flow (`manage_upload_workflows.py`):**
+1. `UPLOADED` → Set `VERIFYING` → Spawn task → Persist task ID
+2. `VERIFYING` → Check task state → Handle all failure modes
+3. `VERIFIED` → Trigger integrated workflow → Set `COMPLETE`
+
+**Failure Modes Handled:**
+1. Script crashes after `VERIFYING` but before spawning task → Respawn after 5min
+2. Task spawned but crashes before persisting task ID → Respawn after 5min
+3. Task throws catchable exception → Auto-retry (3x), then `VERIFICATION_FAILED`
+4. Worker crashes mid-hash (uncatchable) → Celery marks as `FAILURE`
+5. Task succeeds but crashes before status update → Script detects and updates
+6. Task hung (>24h) → Script marks as `VERIFICATION_FAILED`
+7. Stale `VERIFYING` (no task ID, >5min) → Respawn task
+8. RabbitMQ/Celery unavailable → Script retries on next run
+9. Admin notification sent for permanent failures
+
+**UI Changes:**
+- Added manifest hash progress indicator during client-side computation
+- Created `/uploads/:id` admin page with:
+  - Upload overview (dataset link, status, type)
+  - Status icon and chip display
+  - Worker process logs with 10-second auto-refresh
+  - Only accessible by admins
+
+**Files Modified:**
+- `api/src/constants.js`: Added `VERIFYING`, `VERIFIED`, `PERMANENTLY_FAILED`
+- `workers/workers/constants/upload.py`: Added new statuses
+- `ui/src/constants.js`: Added new statuses
+- `workers/workers/upload.py`: Streaming BLAKE3 hash (16MB chunks)
+- `workers/workers/tasks/declarations.py`: New `verify_upload_integrity` task
+- `workers/workers/tasks/verify_upload.py`: Task implementation with logging
+- `workers/workers/scripts/manage_upload_workflows.py`: Rewritten with async flow
+- `api/src/routes/uploads.js`: Updated `/stalled` to include `VERIFYING`/`VERIFIED`
+- `ui/src/components/dataset/upload/UploadDatasetStepper.vue`: Progress callback
+- `ui/src/pages/uploads/[id].vue`: New admin upload details page
+
+**Performance:**
+- Script runs in <1 second (non-blocking)
+- Verification runs in background (up to 24 hours for very large files)
+- 16MB chunks optimal for Lustre filesystem (avoids MDS bottleneck)
+
+**Design Principles:**
+- Uploads decoupled from Datasets (generic entity handlers)
+- Verification is idempotent and resumable
+- Task ID acts as distributed lock to prevent duplicate verification
+- Comprehensive logging for debugging and admin troubleshooting
+
+### 2026-02-05 - Code and Documentation Cleanup
 - **Configuration Simplified:** Now uses single `UPLOAD_HOST_DIR` env var (removed `UPLOAD_DIR`, `UPLOAD_MOUNT_DIR`)
 - **Upload Log Status Icons:** Replaced status chips with icons matching Import Log table pattern
 - **TUS Implementation Complete:** Full TUS-based upload flow working

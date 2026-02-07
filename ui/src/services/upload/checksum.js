@@ -63,7 +63,7 @@ async function _hashFile(file, blake3) {
  * @param {Function} [progressCallback] - Optional callback for progress updates (0-100)
  * @returns {Promise<Object|null>} Manifest hash object or null if feature disabled/no files
  */
-export async function computeManifestHash(files, progressCallback = null) {
+export async function _computeManifestHash(files, progressCallback = null) {
   // Check feature flag
   if (!config.enabledFeatures.upload_verify_checksums) {
     return null; // Feature disabled
@@ -128,11 +128,11 @@ export async function computeManifestHash(files, progressCallback = null) {
  * Check if checksum verification is enabled
  * @returns {boolean} True if feature is enabled
  */
-export function isChecksumVerificationEnabled() {
+export function _isChecksumVerificationEnabled() {
   return Boolean(config.enabledFeatures.upload_verify_checksums);
 }
 
 export default {
-  computeManifestHash,
-  isChecksumVerificationEnabled,
+  _computeManifestHash,
+  _isChecksumVerificationEnabled,
 };

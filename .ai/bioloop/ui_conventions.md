@@ -93,6 +93,72 @@ const fetchItems = async (inputValue) => {
 
 ---
 
+## Breadcrumb Navigation Pattern
+
+**ALWAYS use `nav.setNavItems()` for breadcrumbs, NOT `<va-breadcrumbs>` component directly:**
+
+```vue
+<script setup>
+import { useNavStore } from '@/stores/nav';
+import { onMounted } from 'vue';
+
+const nav = useNavStore();
+
+onMounted(async () => {
+  // Fetch data first (if needed)
+  await fetchData();
+  
+  // Then set breadcrumbs dynamically
+  nav.setNavItems([
+    {
+      label: 'Parent Page',
+      to: '/parent',
+    },
+    {
+      label: 'Current Page Name',
+      // No 'to' property for current page (not clickable)
+    },
+  ]);
+});
+</script>
+```
+
+**Pattern Details:**
+- Import `useNavStore` from `@/stores/nav`
+- Call `nav.setNavItems()` in `onMounted()` hook
+- First item should link to parent page (with `to` property)
+- Last item is current page (without `to` property, not clickable)
+- By default, "Home" icon is prepended automatically (`withHome: true`)
+- To exclude Home: `nav.setNavItems(items, false)`
+
+**Examples:**
+
+```vue
+// Detail page with parent list
+nav.setNavItems([
+  { label: 'Datasets', to: '/datasets' },
+  { label: dataset.value.name },
+]);
+
+// Nested detail page
+nav.setNavItems([
+  { label: 'Sessions', to: '/sessions' },
+  { label: session.value.name, to: `/sessions/${session.value.id}` },
+  { label: 'Tracks' },
+]);
+
+// No home icon (dashboard page)
+nav.setNavItems([], false);
+```
+
+**Why this pattern?**
+- Centralized breadcrumb state in nav store
+- Consistent appearance across app
+- Dynamic breadcrumbs based on fetched data
+- Easy to update from any component
+
+---
+
 ## Pagination Pattern
 
 **ALWAYS use the custom `Pagination` component for tables with pagination:**

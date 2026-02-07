@@ -214,6 +214,7 @@
             label="File Type (Optional)"
             placeholder="Select file type"
             class="flex-grow"
+            clearable
           />
           <div class="flex items-end ml-2">
             <va-popover message="Create new File Type">
@@ -239,6 +240,7 @@
             label="Genome Type (Optional)"
             placeholder="Select genome type"
             class="flex-grow mr-2"
+            clearable
           />
           <div class="flex items-center ml-2">
             <va-popover>
@@ -257,6 +259,7 @@
             label="Genome Assembly (Optional)"
             placeholder="Select genome assembly"
             class="flex-grow mr-2"
+            clearable
           />
           <div class="flex items-center ml-2">
             <va-popover>
@@ -324,12 +327,20 @@
                   </div>
                 </div>
                 
+                <!-- Checksum computation progress (shown when computing) -->
+                <div v-if="isComputingChecksum" class="mt-4 pt-4 border-t border-gray-300">
+                  <div class="text-sm font-semibold mb-2">
+                    Computing checksums: {{ checksumProgress }}%
+                  </div>
+                  <va-progress-bar :model-value="checksumProgress" color="info" />
+                </div>
+                
                 <!-- Overall upload progress (only shown during upload) -->
                 <div v-if="submitAttempted && submissionStatus === Constants.UPLOAD_STATUSES.UPLOADING" class="mt-4 pt-4 border-t border-gray-300">
                   <div class="text-sm font-semibold mb-2">
-                    Upload Progress: {{ tusFilesUploaded }} / {{ tusTotalFiles }} files ({{ tusOverallProgress }}%)
+                    Upload Progress: {{ filesUploaded }} / {{ totalFiles }} files ({{ uploadProgress }}%)
                   </div>
-                  <va-progress-bar :model-value="tusOverallProgress" />
+                  <va-progress-bar :model-value="uploadProgress" />
                 </div>
               </va-card-content>
             </va-card>
@@ -354,12 +365,12 @@
             Previous
           </va-button>
           <va-button
-            v-if="tusApiCallFailed"
+            v-if="uploadRegistrationFailed"
             class="flex-none"
             @click="retryApiCall"
             color="warning"
           >
-            Retry Registration
+            Retry
           </va-button>
           <va-button
             v-else
@@ -412,7 +423,7 @@ import analysisTypeService from "@/services/analysisType";
 import datasetService from "@/services/dataset";
 import instrumentService from "@/services/instrument";
 import toast from "@/services/toast";
-import { computeManifestHash, isChecksumVerificationEnabled } from "@/services/upload/checksum";
+import { _getUploadServiceURL } from "@/services/upload";
 import { formatBytes } from "@/services/utils";
 import { useAuthStore } from "@/stores/auth";
 import { Icon } from "@iconify/vue";
@@ -561,12 +572,12 @@ const isFileTypeFormInvalid = computed(() => {
          checkDuplicateFileType(newFileTypeName.value, newFileTypeExtension.value);
 });
 
-// TUS-related state
-const tusOverallProgress = ref(0);
-const tusFilesUploaded = ref(0);
-const tusTotalFiles = ref(0);
-const tusProcessIds = ref([]); // Track process_ids for all uploaded files
-const tusApiCallFailed = ref(false); // Track if final API call failed
+// Upload progress state
+const uploadProgress = ref(0);
+const filesUploaded = ref(0);
+const totalFiles = ref(0);
+const uploadProcessIds = ref([]); // Track process_ids for all uploaded files
+const uploadRegistrationFailed = ref(false); // Track if final API call failed
 
 /**
  * Determines if the upload process has been completed.
@@ -650,7 +661,7 @@ const uploadFormData = computed(() => {
     file_type: selectedFileType.value || null,
     genome_type: selectedGenomeType.value?.value || selectedGenomeType.value || null,
     genome_value: selectedGenomeValue.value || null,
-    // Note: files_metadata removed - TUS tracks files internally, not in database
+    // Note: files_metadata removed - upload service tracks files internally, not in database
   };
 });
 
@@ -910,20 +921,19 @@ const onSubmit = async () => {
         submissionSuccess.value = true;
         submissionStatus.value = Constants.UPLOAD_STATUSES.UPLOADING;
 
-        // Use TUS for upload instead of old chunk system
+        // Use resumable upload protocol instead of old chunk system
         // Get the actual File objects to upload
         const filesToUploadList = filesToUpload.value.map(f => f.file);
         
-        tusTotalFiles.value = filesToUploadList.length;
-        tusFilesUploaded.value = 0;
-        tusOverallProgress.value = 0;
+        totalFiles.value = filesToUploadList.length;
+        filesUploaded.value = 0;
+        uploadProgress.value = 0;
 
-        // TUS endpoint - absolute URL so relative Location headers resolve correctly
-        const tusEndpoint = `${window.location.origin}${config.apiBasePath}/uploads/files`;
-        const uploaded = await uploadFilesWithTus(filesToUploadList, tusEndpoint);
+        const uploadServiceURL = _getUploadServiceURL(window.location.origin);
+        const uploaded = await uploadFiles(filesToUploadList, uploadServiceURL);
         
         if (uploaded) {
-          handleTusComplete();
+          handleUploadComplete();
           resolve();
         } else {
           submissionStatus.value = Constants.UPLOAD_STATUSES.UPLOAD_FAILED;
@@ -969,7 +979,7 @@ const postSubmit = () => {
 const handleSubmit = () => {
   onSubmit() // resolves once all files have been uploaded (TUS handles workflow triggering internally)
     .then(() => {
-      // TUS upload complete - handleTusComplete() already triggered the workflow
+      // Upload complete - handleUploadComplete() already triggered the workflow
       // Nothing more to do here
     })
     .catch(() => {
@@ -1404,7 +1414,7 @@ const uploadFilesWithTus = async (files, endpoint) => {
     throw new Error('Authentication token not found');
   }
 
-  console.log('Starting TUS upload with token:', userToken ? `Token exists (length: ${userToken.length})` : 'No token');
+  console.log('Starting upload with token:', userToken ? `Token exists (length: ${userToken.length})` : 'No token');
 
   let uploadedCount = 0;
   let totalBytes = 0;
@@ -1439,25 +1449,25 @@ const uploadFilesWithTus = async (files, endpoint) => {
         onProgress: (bytesUploaded, bytesTotal) => {
           // Update overall progress
           const totalUploadedSoFar = uploadedBytes + bytesUploaded;
-          tusOverallProgress.value = Math.round((totalUploadedSoFar / totalBytes) * 100);
+          uploadProgress.value = Math.round((totalUploadedSoFar / totalBytes) * 100);
         },
         onSuccess: async () => {
           uploadedCount++;
           uploadedBytes += file.size;
-          tusFilesUploaded.value = uploadedCount;
-          tusOverallProgress.value = Math.round((uploadedBytes / totalBytes) * 100);
+          filesUploaded.value = uploadedCount;
+          uploadProgress.value = Math.round((uploadedBytes / totalBytes) * 100);
           
           // Store the process_id for this file - will be sent to API after all uploads complete
           const processId = upload.url.split('/').pop();
-          if (!tusProcessIds.value) {
-            tusProcessIds.value = [];
+          if (!uploadProcessIds.value) {
+            uploadProcessIds.value = [];
           }
-          tusProcessIds.value.push({
+          uploadProcessIds.value.push({
             process_id: processId,
             relative_path: file.webkitRelativePath || file.name,
           });
           
-          console.log(`TUS upload complete for ${file.name} (process_id: ${processId})`);
+          console.log(`Upload complete for ${file.name} (process_id: ${processId})`);
           resolve();
         },
       });
@@ -1476,7 +1486,7 @@ const uploadFilesWithTus = async (files, endpoint) => {
   }
 };
 
-const handleTusComplete = async () => {
+const handleUploadComplete = async () => {
   // Call API to register all process_ids - this is the critical call
   // Only show success if this succeeds
   try {
@@ -1486,11 +1496,16 @@ const handleTusComplete = async () => {
     let metadata = {};
     
     // Compute manifest hash if feature is enabled
-    if (isChecksumVerificationEnabled()) {
+    if (_isChecksumVerificationEnabled()) {
       try {
         console.log('Computing manifest hash for upload verification...');
+        isComputingChecksum.value = true;
+        checksumProgress.value = 0;
+        
         const files = filesToUpload.value.map(f => f.file);
-        const manifestHash = await computeManifestHash(files);
+        const manifestHash = await _computeManifestHash(files, (progress) => {
+          checksumProgress.value = progress;
+        });
         
         if (manifestHash) {
           console.log('Manifest hash computed:', manifestHash.manifest_hash);
@@ -1499,12 +1514,15 @@ const handleTusComplete = async () => {
       } catch (error) {
         console.error('Failed to compute manifest hash:', error);
         // Don't fail - async process will use fallback verification
+      } finally {
+        isComputingChecksum.value = false;
+        checksumProgress.value = 0;
       }
     }
     
     // Call /complete with the last process_id (for single file) or first (for multi)
-    // The worker will handle moving all files based on TUS metadata
-    const lastUpload = tusProcessIds.value[tusProcessIds.value.length - 1];
+    // The worker will handle moving all files based on upload metadata
+    const lastUpload = uploadProcessIds.value[uploadProcessIds.value.length - 1];
     
     await datasetService.completeDatasetUpload(
       datasetId,
@@ -1520,7 +1538,7 @@ const handleTusComplete = async () => {
     console.log('Upload registration complete');
     
     // Success - show green status
-    tusApiCallFailed.value = false;
+    uploadRegistrationFailed.value = false;
     submissionStatus.value = Constants.UPLOAD_STATUSES.UPLOADED;
     statusChipColor.value = "success";
     submissionAlert.value = "All files have been uploaded successfully!";
@@ -1532,7 +1550,7 @@ const handleTusComplete = async () => {
     console.error('Failed to register upload with API:', error);
     
     // API call failed - show retry option
-    tusApiCallFailed.value = true;
+    uploadRegistrationFailed.value = true;
     submissionStatus.value = Constants.UPLOAD_STATUSES.UPLOAD_FAILED;
     statusChipColor.value = "warning";
     submissionAlert.value = "Files uploaded but registration failed. Please retry.";
@@ -1544,9 +1562,9 @@ const handleTusComplete = async () => {
 
 // Retry the API call to register the upload
 const retryApiCall = async () => {
-  submissionAlert.value = "Retrying registration...";
+  submissionAlert.value = "Retrying ...";
   submissionAlertColor.value = "info";
-  await handleTusComplete();
+  await handleUploadComplete();
 };
 
 //

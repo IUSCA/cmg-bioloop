@@ -118,8 +118,6 @@ model dataset_upload_log {
   audit_log_id Int           @unique
 }
 
-// file_upload_log table removed - TUS handles chunk tracking internally
-
 model dataset_import_log {
   id           Int           @id @default(autoincrement())
   created_at   DateTime      @default(now()) @db.Timestamp(6)
@@ -659,7 +657,7 @@ enum upload_status {
   UPLOADING
   UPLOAD_FAILED
   UPLOADED
-  VERIFICATION_FAILED // Integrity check failed before workflow
+  VERIFICATION_FAILED // Integrity check failed before registering the uploaded dataset into the system
   PROCESSING
   PROCESSING_FAILED
   COMPLETE
