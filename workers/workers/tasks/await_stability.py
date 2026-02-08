@@ -8,6 +8,7 @@ from celery import Celery
 from celery.utils.log import get_task_logger
 
 import workers.api as api
+import workers.cmg_api as cmg_api
 import workers.config.celeryconfig as celeryconfig
 from workers.config import config
 from workers.dataset import is_nanopore_dataset
@@ -176,6 +177,31 @@ def await_stability(celery_task, dataset_id, wait_seconds: int = None, recency_t
                 break
 
         time.sleep(_wait_seconds)
+
+    # Check if dataset already exists in CMG and persist CMG ID
+    # This allows the archive step to coordinate with CMG's archival process
+    logger.info(f'{dataset_name} - checking if dataset exists in CMG by origin_path')
+    try:
+        if dataset_type == 'RAW_DATA':
+            cmg_entity = cmg_api.get_dataset_by_origin_path(origin_path_str)
+        elif dataset_type == 'DATA_PRODUCT':
+            cmg_entity = cmg_api.get_dataproduct_by_origin_path(origin_path_str)
+        else:
+            logger.info(f'{dataset_name} - unknown dataset type {dataset_type}, skipping CMG check')
+            cmg_entity = None
+        
+        if cmg_entity:
+            cmg_id = cmg_entity.get('_id')
+            if cmg_id:
+                logger.info(f'{dataset_name} - found in CMG with ID: {cmg_id}, persisting to database')
+                api.update_dataset(dataset_id=dataset_id, update_data={'cmg_id': str(cmg_id)})
+            else:
+                logger.warning(f'{dataset_name} - found in CMG but no _id field present')
+        else:
+            logger.info(f'{dataset_name} - not found in CMG, will proceed with standard archival')
+    except Exception as e:
+        # Don't fail the workflow if CMG check fails - just log and continue
+        logger.warning(f'{dataset_name} - error checking CMG, will proceed with standard archival: {e}')
 
     api.add_state_to_dataset(dataset_id=dataset_id, state='READY')
     return dataset_id,

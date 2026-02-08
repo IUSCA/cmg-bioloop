@@ -1,6 +1,7 @@
 import json
 import os
 import shutil
+import time
 from pathlib import Path
 
 from celery import Celery
@@ -8,6 +9,7 @@ from celery.utils.log import get_task_logger
 from sca_rhythm import WorkflowTask
 
 import workers.api as api
+import workers.cmg_api as cmg_api
 import workers.cmd as cmd
 import workers.config.celeryconfig as celeryconfig
 import workers.utils as utils
@@ -47,6 +49,80 @@ def make_tarfile(celery_task: WorkflowTask, tar_path: Path, source_dir: str, sou
     return tar_path
 
 
+def wait_for_cmg_archival(dataset_name: str, cmg_id: str, dataset_type: str, 
+                          celery_task: WorkflowTask = None,
+                          poll_interval_seconds: int = 300,
+                          timeout_seconds: int = 86400) -> None:
+    """
+    Wait for CMG to complete archival by polling CMG database state.
+    
+    For RAW_DATA: polls until dataset.archived === true
+    For DATA_PRODUCT: polls until dataproduct.paths.archive is set
+    
+    Args:
+        dataset_name: Dataset name for logging
+        cmg_id: CMG dataset/dataproduct ID (_id from MongoDB)
+        dataset_type: Either 'RAW_DATA' or 'DATA_PRODUCT'
+        celery_task: Celery task for progress tracking (optional)
+        poll_interval_seconds: How often to check CMG (default: 300 seconds / 5 minutes)
+        timeout_seconds: Maximum time to wait (default: 86400 seconds / 24 hours)
+    
+    Raises:
+        TimeoutError: If CMG archival doesn't complete within timeout_seconds
+    """
+    logger.info(f'{dataset_name} - waiting for CMG to complete archival')
+    logger.info(f'{dataset_name} - CMG ID: {cmg_id}, Type: {dataset_type}')
+    logger.info(f'{dataset_name} - poll interval: {poll_interval_seconds}s, timeout: {timeout_seconds}s')
+    
+    start_time = time.time()
+    poll_count = 0
+    
+    while True:
+        elapsed_time = time.time() - start_time
+        poll_count += 1
+        
+        # Check timeout
+        if elapsed_time > timeout_seconds:
+            error_msg = (
+                f'{dataset_name} - timeout waiting for CMG archival completion '
+                f'(elapsed: {int(elapsed_time)}s / timeout: {timeout_seconds}s, polls: {poll_count})'
+            )
+            logger.error(error_msg)
+            raise TimeoutError(error_msg)
+        
+        # Check if CMG has completed archival
+        try:
+            is_archived = cmg_api.is_dataset_archived_in_cmg(cmg_id, dataset_type)
+            
+            if is_archived:
+                logger.info(
+                    f'{dataset_name} - CMG archival completed '
+                    f'(elapsed: {int(elapsed_time)}s, polls: {poll_count})'
+                )
+                return
+            else:
+                logger.info(
+                    f'{dataset_name} - CMG archival not yet complete '
+                    f'(elapsed: {int(elapsed_time)}s / timeout: {timeout_seconds}s, poll #{poll_count})'
+                )
+        except Exception as e:
+            logger.warning(
+                f'{dataset_name} - error checking CMG archival status (poll #{poll_count}): {e}'
+            )
+        
+        # Update progress if celery_task provided
+        if celery_task:
+            time_remaining_sec = max(0, timeout_seconds - elapsed_time)
+            progress_obj = {
+                'name': f'Waiting for CMG archival (poll #{poll_count})',
+                'time_remaining_sec': time_remaining_sec,
+            }
+            celery_task.update_progress(progress_obj)
+        
+        # Wait before next poll
+        time.sleep(poll_interval_seconds)
+
+
 def archive(celery_task: WorkflowTask, dataset: dict, delete_local_file: bool = False):
     # Check if this is a legacy dataset and if legacy migration is still in progress
     is_legacy = is_legacy_dataset(dataset)
@@ -56,8 +132,38 @@ def archive(celery_task: WorkflowTask, dataset: dict, delete_local_file: bool = 
     app_env = os.environ.get('APP_ENV', None)
     use_sda = (app_env == 'production')
     
+    # Check if dataset has a CMG ID (was registered in CMG concurrently)
+    cmg_id = dataset.get('cmg_id')
+    dataset_type = dataset['type']
+    dataset_name = dataset['name']
+    
+    # If dataset has CMG ID and we're in production, wait for CMG to complete archival
+    if cmg_id and use_sda:
+        logger.info(f'{dataset_name} - detected CMG ID: {cmg_id}')
+        logger.info(f'{dataset_name} - waiting for CMG to complete archival to avoid concurrent SDA uploads')
+        
+        # Wait for CMG archival to complete
+        wait_for_cmg_archival(
+            dataset_name=dataset_name,
+            cmg_id=cmg_id,
+            dataset_type=dataset_type,
+            celery_task=celery_task
+        )
+        
+        # Get the SDA path where CMG uploaded the archive
+        sda_dir = wf_utils.get_archive_dir(dataset_type, legacy_dataset=is_legacy)
+        bundle_name = f"{dataset_name}.tar"
+        sda_bundle_path = f'{sda_dir}/{bundle_name}'
+        
+        logger.info(f'{dataset_name} - CMG archival completed, using CMG archive path: {sda_bundle_path}')
+        
+        # CMG created the bundle, we don't have bundle_attrs
+        # The bundle info should already exist in CMG's database
+        bundle_attrs = None
+        archive_path = sda_bundle_path
+        
     # Special handling for legacy datasets during ongoing migration
-    if is_legacy and legacy_migration_incomplete and use_sda:
+    elif is_legacy and legacy_migration_incomplete and use_sda:
         logger.info(f'Legacy dataset detected during ongoing migration: {dataset["name"]}')
         logger.info(f'Skipping bundle creation and SDA upload - CMG app handles archival')
         

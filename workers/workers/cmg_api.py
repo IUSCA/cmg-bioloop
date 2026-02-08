@@ -103,6 +103,81 @@ def get_session(session_id: str, use_auth: bool = False):
         return r.json()
 
 
+def get_dataset_by_origin_path(origin_path: str, use_auth: bool = True):
+    """
+    Get a CMG dataset by origin path.
+    
+    Args:
+        origin_path: The origin path to search for
+        use_auth: Whether to include authentication (default: True for legacy-migration endpoint)
+    
+    Returns:
+        dict | None: Dataset data from the API, or None if not found
+    """
+    with CMGAPISession(use_auth=use_auth) as s:
+        r = s.get('api/legacy-migration/datasets/', params={'origin_path': origin_path})
+        if r.status_code == 404:
+            return None
+        r.raise_for_status()
+        return r.json()
+
+
+def get_dataproduct_by_origin_path(origin_path: str, use_auth: bool = True):
+    """
+    Get a CMG dataproduct by origin path.
+    
+    Args:
+        origin_path: The origin path to search for
+        use_auth: Whether to include authentication (default: True for legacy-migration endpoint)
+    
+    Returns:
+        dict | None: Dataproduct data from the API, or None if not found
+    """
+    with CMGAPISession(use_auth=use_auth) as s:
+        r = s.get('api/legacy-migration/dataproducts/', params={'origin_path': origin_path})
+        if r.status_code == 404:
+            return None
+        r.raise_for_status()
+        return r.json()
+
+
+def is_dataset_archived_in_cmg(cmg_id: str, dataset_type: str, use_auth: bool = True):
+    """
+    Check if a dataset/dataproduct is archived in CMG by checking database conditions.
+    
+    For RAW_DATA (dataset collection): checks dataset.archived === true
+    For DATA_PRODUCT (dataproduct collection): checks dataproduct.paths.archive exists and is not empty
+    
+    Args:
+        cmg_id: The CMG dataset/dataproduct ID (_id from MongoDB)
+        dataset_type: Either 'RAW_DATA' or 'DATA_PRODUCT'
+        use_auth: Whether to include authentication (default: True)
+    
+    Returns:
+        bool: True if archived in CMG, False otherwise
+    """
+    with CMGAPISession(use_auth=use_auth) as s:
+        if dataset_type == 'RAW_DATA':
+            # Check dataset collection
+            r = s.get(f'api/legacy-migration/datasets/{cmg_id}')
+            if r.status_code == 404:
+                return False
+            r.raise_for_status()
+            dataset = r.json()
+            return dataset.get('archived', False) is True
+        elif dataset_type == 'DATA_PRODUCT':
+            # Check dataproduct collection
+            r = s.get(f'api/legacy-migration/dataproducts/{cmg_id}')
+            if r.status_code == 404:
+                return False
+            r.raise_for_status()
+            dataproduct = r.json()
+            archive_path = dataproduct.get('paths', {}).get('archive', '')
+            return bool(archive_path and archive_path != '')
+        else:
+            raise ValueError(f'Unknown dataset_type: {dataset_type}. Expected RAW_DATA or DATA_PRODUCT')
+
+
 if __name__ == '__main__':
     pass
 

@@ -372,6 +372,103 @@ The previous chunk-based upload system used secure_download service. Key changes
 - Task ID acts as distributed lock to prevent duplicate verification
 - Comprehensive logging for debugging and admin troubleshooting
 
+### 2026-02-05 - Upload Verification Integration Tests
+
+**Comprehensive pytest-based integration tests for async upload verification system.**
+
+**Test Coverage:**
+- ✅ 2 Happy path tests (checksum enabled/disabled)
+- ❌ 8 Failure mode tests (crashes, retries, timeouts, infrastructure)
+- 🔄 2 Edge case tests (multiple files, concurrent uploads)
+- ⚠️ 1 Special timeout test (5min limit, comment out after validation)
+
+**Test Structure:**
+```
+tests/upload_verification/
+├── conftest.py                          # Fixtures (api_client, test_files, datasets)
+├── test_utils.py                        # Helpers (manifest hash, status polling)
+├── test_happy_path.py                   # Happy paths
+├── test_failure_status_transitions.py   # Script crashes, stale states
+├── test_failure_task_execution.py       # Task failures, retries
+├── test_failure_timeouts.py             # Hung tasks, RabbitMQ issues
+├── test_timeout_limits.py               # Soft timeout (5min test, skip by default)
+├── test_edge_cases.py                   # Multiple files, concurrent uploads
+├── run_tests.sh                         # Helper script
+└── README.md                            # Comprehensive guide
+```
+
+**Test Environment:**
+- Runs against Docker services (API, Postgres, RabbitMQ, Celery)
+- Uses `APP_API_TOKEN` for API authentication (no mocks)
+- Test data in `/opt/sca/data/test_uploads` (auto-cleanup)
+- Logs persisted to `workers/test_logs/` (gitignored, docker-mounted)
+
+**Key Features:**
+- One test function per failure scenario (isolation)
+- Detailed logging with timestamps and context
+- Automatic cleanup (datasets, files, logs)
+- Pytest markers: `@pytest.mark.integration`, `@pytest.mark.slow`, `@pytest.mark.requires_celery`
+- Helper script: `run_tests.sh --all` or `run_tests.sh --slow`
+
+**Running Tests:**
+```bash
+# From workers directory
+poetry install                           # Install pytest dependencies
+poetry run pytest tests/upload_verification/ -v
+
+# Or use helper script
+./tests/upload_verification/run_tests.sh --all
+```
+
+**Test Scenarios Covered:**
+1. ✅ Happy path: UPLOADED → VERIFYING → VERIFIED → COMPLETE (checksum enabled)
+2. ✅ Happy path: File existence fallback (checksum disabled)
+3. ❌ Script crash after VERIFYING before spawning task
+4. ❌ Task spawned but ID not persisted
+5. ❌ Stale VERIFYING (no task_id, >5min)
+6. ❌ Checksum mismatch → 3 retries → VERIFICATION_FAILED (~5min)
+7. ❌ Worker crash → Celery FAILURE state
+8. ❌ Task SUCCESS but status not updated
+9. ❌ Task hung >24h timeout (simulated)
+10. ❌ RabbitMQ unavailable (error handling validation)
+11. ⚠️ Soft timeout with 5min limit (requires manual timeout config changes)
+12. 🎯 Multiple files manifest (10 files)
+13. 🎯 Concurrent uploads (3 simultaneous)
+
+**Files Added:**
+- `workers/tests/conftest.py`: Session-scoped fixtures
+- `workers/tests/upload_verification/*.py`: 6 test modules
+- `workers/tests/upload_verification/README.md`: 400+ line test guide
+- `workers/tests/upload_verification/run_tests.sh`: Helper script
+- `workers/pytest.ini`: Pytest configuration
+
+**Files Modified:**
+- `workers/pyproject.toml`: Added pytest dependencies
+- `.gitignore`: Added `workers/test_logs/`, `workers/tests/fixtures/temp_uploads/`
+- `docker-compose.yml`: Added comment about test_logs mount (already included via workers/ mount)
+
+**Dependencies Added:**
+- `pytest ^8.0.0`
+- `pytest-asyncio ^0.23.0`
+- `pytest-timeout ^2.2.0`
+- `blake3 ^0.4.1` (for test manifest computation)
+
+**Design Principles:**
+- Tests are modular, decoupled, and reusable
+- Each test file focuses on one failure category
+- Extensive logging for debugging (persisted to gitignored dir)
+- Auto-cleanup prevents test pollution
+- Tests simulate real-world failure modes
+
+**Documentation:**
+- `workers/tests/upload_verification/README.md`: Complete guide with:
+  - Prerequisites and setup
+  - Running tests (various modes)
+  - Test descriptions and scenarios
+  - Troubleshooting section
+  - CI/CD integration examples
+  - Maintenance guidelines
+
 ### 2026-02-05 - Code and Documentation Cleanup
 - **Configuration Simplified:** Now uses single `UPLOAD_HOST_DIR` env var (removed `UPLOAD_DIR`, `UPLOAD_MOUNT_DIR`)
 - **Upload Log Status Icons:** Replaced status chips with icons matching Import Log table pattern

@@ -18,7 +18,7 @@ from celery.exceptions import SoftTimeLimitExceeded
 
 from workers import api
 from workers.constants.upload import UPLOAD_STATUS
-from workers.upload import verify_upload_integrity
+from workers.upload import verify_upload_integrity as verify_integrity_impl
 
 logger = logging.getLogger(__name__)
 
@@ -110,7 +110,7 @@ def verify_upload_integrity(celery_task, dataset_id):
         logger.info("Starting integrity verification...")
         logger.info("This may take a while for large datasets (up to 24 hours for very large files)")
         
-        verify_upload_integrity(dataset, upload_log)
+        verify_integrity_impl(dataset, upload_log)
         
         logger.info("✓ Integrity verification PASSED")
         logger.info(f"Updating status to {UPLOAD_STATUS['VERIFIED']}...")

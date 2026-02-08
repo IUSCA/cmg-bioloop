@@ -108,7 +108,7 @@ if [ "$WORKER_TYPE" = "celery_worker" ]; then
   POLLING_PID=$!
   echo "Upload polling job started with PID: $POLLING_PID"
   
-  # In Docker/single-node mode, listen to both fetch and archive queues
+  # In Docker/single-node mode, listen to fetch, archive, and cmg-bioloop-prefixed queues
   exec python -m celery \
     -A workers.celery_app worker \
     --loglevel INFO \
@@ -117,7 +117,7 @@ if [ "$WORKER_TYPE" = "celery_worker" ]; then
     --pidfile celery_worker.pid \
     --hostname 'cmg-test-celery-w1@%h' \
     --autoscale 8,3 \
-    --queues 'fetch.cmg-test.sca.iu.edu.q,archive.cmg-test.sca.iu.edu.q'
+    --queues 'fetch.cmg-test.sca.iu.edu.q,archive.cmg-test.sca.iu.edu.q,cmg-bioloop-fetch.cmg-test.sca.iu.edu.q,cmg-bioloop-archive.cmg-test.sca.iu.edu.q'
       # --detach
 elif [ "$WORKER_TYPE" = "conversion_worker" ]; then
   echo "Starting Conversion Worker"

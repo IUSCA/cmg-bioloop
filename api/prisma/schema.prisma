@@ -657,6 +657,8 @@ enum upload_status {
   UPLOADING
   UPLOAD_FAILED
   UPLOADED
+  VERIFYING // Integrity verification in progress (async Celery task)
+  VERIFIED // Integrity verified, ready to trigger workflow
   VERIFICATION_FAILED // Integrity check failed before registering the uploaded dataset into the system
   PROCESSING
   PROCESSING_FAILED

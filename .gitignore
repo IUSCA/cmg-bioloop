@@ -51,6 +51,8 @@ workers/venv/
 workers/venv/*
 workers/.env
 workers/core*
+workers/test_logs/
+workers/tests/fixtures/temp_uploads/
 
 data_sync/core*
 

@@ -11,6 +11,7 @@ const { accessControl, authenticate } = require('@/middleware/auth');
 const prisma = require('@/db');
 const uploadService = require('@/services/upload');
 const logger = require('@/services/logger');
+const constants = require('@/constants');
 
 console.log('===== uploads.js module loading =====');
 
