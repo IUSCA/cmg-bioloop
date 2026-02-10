@@ -64,28 +64,47 @@ app.use((req, res, next) => {
       
       logger.info(`[TUS] Authentication successful for user: ${req.user?.username || 'unknown'}`);
       
-      // TEST ONLY: Simulate mid-upload failure for PATCH requests
-      // Usage: Add header 'X-Simulate-Failure: mid-upload' to trigger failure
-      // This uses a simple approach: just fail immediately without consuming the stream
-      const shouldSimulateFailure = req.headers['x-simulate-failure'] === 'mid-upload' && req.method === 'PATCH';
-      if (shouldSimulateFailure) {
-        logger.warn(`[TUS] SIMULATING MID-UPLOAD FAILURE for ${req.path}`, {
-          uploadId: uploadId !== 'files' ? uploadId : 'NEW',
-          method: req.method,
-          contentLength: req.headers['content-length'],
-        });
+      // TEST ONLY: Mark upload for failure simulation at FileStore level
+      // Usage: Add header 'X-Simulate-Failure: mid-upload' to trigger failure after writing ~1MB
+      // Configurable: fail N times before allowing success (tests TUS retry exhaustion)
+      // CRITICAL: Only count PATCH requests with Content-Length (actual data uploads, not HEAD/OPTIONS)
+      const hasUploadData = req.headers['content-length'] && parseInt(req.headers['content-length'], 10) > 0;
+      const shouldSimulateFailure = req.headers['x-simulate-failure'] === 'mid-upload' && req.method === 'PATCH' && hasUploadData;
+      if (shouldSimulateFailure && uploadId !== 'files') {
+        // Initialize tracking maps
+        if (!global.tusFailureSimulation) {
+          global.tusFailureSimulation = new Map();
+        }
+        if (!global.tusFailureSimulationCount) {
+          global.tusFailureSimulationCount = new Map();
+        }
         
-        // Immediately return 500 error without processing the upload
-        logger.error(`[TUS] SIMULATED FAILURE: Returning 500 error immediately`, {
-          uploadId: uploadId !== 'files' ? uploadId : 'NEW',
-        });
+        // Configuration: How many times should this upload fail?
+        // 1 = fail once, then succeed (tests resume)
+        // 5 = fail 5 times, then succeed (tests retry exhaustion, user sees "Retry" button)
+        // 999 = fail forever (tests complete failure scenario)
+        const MAX_FAILURES = parseInt(req.headers['x-simulate-failure-count'] || '1', 10);
         
-        res.writeHead(500, {
-          'Content-Type': 'text/plain',
-          'Connection': 'close'
-        });
-        res.end('Simulated upload failure (test mode)');
-        return; // CRITICAL: Return here to prevent passing to TUS server
+        const currentFailCount = global.tusFailureSimulationCount.get(uploadId) || 0;
+        
+        if (currentFailCount < MAX_FAILURES) {
+          logger.warn(`[TUS] Marking upload ${uploadId} for mid-upload failure simulation (attempt ${currentFailCount + 1}/${MAX_FAILURES})`, {
+            uploadId,
+            method: req.method,
+            contentLength: req.headers['content-length'],
+            failuresRemaining: MAX_FAILURES - currentFailCount,
+          });
+          
+          global.tusFailureSimulation.set(uploadId, true);
+          global.tusFailureSimulationCount.set(uploadId, currentFailCount + 1);
+        } else {
+          logger.info(`[TUS] Upload ${uploadId} has exhausted failure quota (${currentFailCount} failures), allowing retry to proceed`, {
+            uploadId,
+            maxFailures: MAX_FAILURES,
+          });
+        }
+        
+        // Continue to TUS server - the FileStore will trigger the failure after writing data
       }
       
       // Normalize URL to have /api prefix for TUS server

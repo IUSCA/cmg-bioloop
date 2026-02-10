@@ -1665,9 +1665,12 @@ const uploadFilesWithTus = async (files, endpoint) => {
 
   // TEST ONLY: Check if we should simulate mid-upload failure
   // Set localStorage.setItem('SIMULATE_UPLOAD_FAILURE', 'mid-upload') to enable
+  // Set localStorage.setItem('SIMULATE_UPLOAD_FAILURE_COUNT', '5') to fail 5 times
   const simulateFailure = localStorage.getItem('SIMULATE_UPLOAD_FAILURE');
+  const simulateFailureCount = localStorage.getItem('SIMULATE_UPLOAD_FAILURE_COUNT');
   if (simulateFailure) {
     console.warn(`🧪 [TEST MODE] Upload failure simulation ENABLED: ${simulateFailure}`);
+    console.warn(`   Failure count: ${simulateFailureCount || '1'} (1=fail once then succeed, 5=exhaust retries)`);
     console.warn(`   To disable: localStorage.removeItem('SIMULATE_UPLOAD_FAILURE')`);
   }
 
@@ -1681,7 +1684,29 @@ const uploadFilesWithTus = async (files, endpoint) => {
         simulate_failure: simulateFailure || 'none',
       });
       
-      const upload = new tus.Upload(file, {
+      // TEST ONLY: Check for failure count configuration
+      // Set localStorage.setItem('SIMULATE_UPLOAD_FAILURE_COUNT', '5') to fail 5 times (exhausts retries)
+      const simulateFailureCount = localStorage.getItem('SIMULATE_UPLOAD_FAILURE_COUNT');
+      
+      // Overall timeout for this upload (30 seconds)
+      // If TUS retries don't complete within this time, give up and show "Upload Failed"
+      const UPLOAD_TIMEOUT_MS = 30000; // 30 seconds
+      let timeoutId = null;
+      let upload = null;
+      
+      // Start timeout timer - will abort upload if it exceeds 30 seconds
+      timeoutId = setTimeout(() => {
+        console.error(`[TUS-CLIENT] ⏱️  Upload TIMEOUT after ${UPLOAD_TIMEOUT_MS / 1000}s for ${file.name}`);
+        console.error(`[TUS-CLIENT] Aborting upload due to timeout...`);
+        
+        if (upload) {
+          upload.abort(true); // true = shouldTerminate (delete partial upload on server)
+        }
+        
+        reject(new Error(`Upload timeout after ${UPLOAD_TIMEOUT_MS / 1000} seconds - retries exhausted or server not responding`));
+      }, UPLOAD_TIMEOUT_MS);
+      
+      upload = new tus.Upload(file, {
         endpoint,
         retryDelays: [0, 3000, 5000, 10000, 20000],
         metadata: {
@@ -1695,9 +1720,17 @@ const uploadFilesWithTus = async (files, endpoint) => {
         },
         headers: {
           Authorization: `Bearer ${userToken}`,
-          ...(simulateFailure ? { 'X-Simulate-Failure': simulateFailure } : {}),
+          ...(simulateFailure ? { 
+            'X-Simulate-Failure': simulateFailure,
+            ...(simulateFailureCount ? { 'X-Simulate-Failure-Count': simulateFailureCount } : {})
+          } : {}),
         },
         onError: (error) => {
+          // Clear timeout on error
+          if (timeoutId) {
+            clearTimeout(timeoutId);
+          }
+          
           console.error(`[TUS-CLIENT] Upload FAILED for ${file.name}:`, {
             error_message: error.message,
             error_type: error.constructor.name,
@@ -1731,6 +1764,11 @@ const uploadFilesWithTus = async (files, endpoint) => {
           }
         },
         onSuccess: async () => {
+          // Clear timeout on success
+          if (timeoutId) {
+            clearTimeout(timeoutId);
+          }
+          
           uploadedCount++;
           uploadedBytes += file.size;
           filesUploaded.value = uploadedCount;
