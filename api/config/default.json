@@ -144,6 +144,11 @@
           "queue": "cmg-bioloop-fetch.cmg-test.sca.iu.edu.q"
         },
         {
+          "name": "run qc",
+          "task": "generate_qc",
+          "queue": "cmg-bioloop-fetch.cmg-test.sca.iu.edu.q"
+        },
+        {
           "name": "archive",
           "task": "archive_dataset",
           "queue": "cmg-bioloop-fetch.cmg-test.sca.iu.edu.q"
@@ -285,11 +290,6 @@
         {
           "name": "convert",
           "task": "convert_genomic",
-          "queue": "cmg-bioloop-conversion.cmg-test.sca.iu.edu.q"
-        },
-        {
-          "name": "generate qc",
-          "task": "generate_qc",
           "queue": "cmg-bioloop-conversion.cmg-test.sca.iu.edu.q"
         },
         {

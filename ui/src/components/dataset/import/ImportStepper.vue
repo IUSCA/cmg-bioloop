@@ -25,6 +25,32 @@
     </template>
 
     <template #step-content-0>
+      <div class="flex w-full pb-6">
+        <va-select
+          v-model="selectedFileType"
+          :options="fileTypeOptions"
+          label="File Type"
+          placeholder="Select file type"
+          class="flex-grow"
+          :text-by="'text'"
+          :value-by="'value'"
+          clearable
+        />
+        <div class="flex items-end ml-2">
+          <va-popover message="Create new File Type">
+            <va-button
+              icon="add"
+              class="px-3"
+              color="primary"
+              border-color="primary"
+              preset="secondary"
+              outline
+              @click="openCreateFileTypeModal"
+            />
+          </va-popover>
+        </div>
+      </div>
+
       <div class="flex">
         <va-select
           class="mr-2"
@@ -212,36 +238,50 @@
           </div>
         </div>
       </div>
+
+      <div v-if="shouldShowSourceDataProductField" class="flex w-full pb-6">
+        <div class="w-60 flex flex-shrink-0 mr-4">
+          <div class="flex items-center">
+            <va-checkbox
+              v-model="isAssignedSourceDataProduct"
+              @update:modelValue="resetSourceDataProductSearch"
+              :disabled="submitAttempted"
+              color="primary"
+              label="Assign source Data Product"
+              class="flex-grow"
+            />
+          </div>
+        </div>
+
+        <div class="flex-grow flex items-center">
+          <DatasetSelectAutoComplete
+            v-model:selected="selectedSourceDataProduct"
+            v-model:search-term="sourceDataProductSearchText"
+            :disabled="submitAttempted || !isAssignedSourceDataProduct"
+            :dataset-type="config.dataset.types.DATA_PRODUCT.key"
+            placeholder="Search Data Product"
+            @clear="resetSourceDataProductSearch"
+            @open="onSourceDataProductSearchOpen"
+            @close="onSourceDataProductSearchClose"
+            class="flex-grow"
+            :label="'Source Data Product'"
+          >
+          </DatasetSelectAutoComplete>
+          <va-popover>
+            <template #body>
+              <div class="w-96">
+                Associating a Data Product with a source Data Product establishes a clear lineage
+                between derived datasets. This helps track data provenance and processing history.
+              </div>
+            </template>
+            <Icon icon="mdi:information" class="ml-2 text-xl text-gray-500" />
+          </va-popover>
+        </div>
+      </div>
     </template>
 
     <template #step-content-2>
       <!-- Genomic Details Step -->
-      <div class="flex w-full pb-6">
-        <va-select
-          v-model="selectedFileType"
-          :options="fileTypeOptions"
-          label="File Type"
-          placeholder="Select file type"
-          class="flex-grow"
-          :text-by="'text'"
-          :value-by="'value'"
-          clearable
-        />
-        <div class="flex items-end ml-2">
-          <va-popover message="Create new File Type">
-            <va-button
-              icon="add"
-              class="px-3"
-              color="primary"
-              border-color="primary"
-              preset="secondary"
-              outline
-              @click="openCreateFileTypeModal"
-            />
-          </va-popover>
-        </div>
-      </div>
-
       <div class="flex w-full pb-6">
         <va-select
           v-model="selectedGenomeType"
@@ -303,6 +343,7 @@
         :genome-value="selectedGenomeValue"
         :project="projectSelected"
         :source-raw-data="selectedRawData"
+        :source-data-product="selectedSourceDataProduct"
         :source-instrument="selectedSourceInstrument"
         :import-space="searchSpace.label"
         :created-dataset-error="formErrors[STEP_KEYS.IMPORT]"
@@ -441,6 +482,10 @@ const datasetTypeOptions = ref(datasetTypes);
 const willImportRawData = ref(false);
 const isAssignedProject = ref(true);
 const isAssignedSourceRawData = ref(true);
+const isAssignedSourceDataProduct = ref(false);
+const selectedSourceDataProduct = ref(null);
+const sourceDataProductSearchText = ref('');
+const isSourceDataProductSearchOpen = ref(false);
 const submissionSuccess = ref(false);
 const fileListSearchText = ref('');
 const fileList = ref([]);
@@ -566,6 +611,17 @@ const genomeTypeOptions = computed(() => {
   }));
 });
 
+const shouldShowSourceDataProductField = computed(() => {
+  // Show field only if:
+  // 1. Dataset type is DATA_PRODUCT
+  const isDataProduct = selectedDatasetType.value?.value === config.dataset.types.DATA_PRODUCT.key;
+  
+  // 2. File type is FASTQ
+  const isFastq = selectedFileType.value?.name?.toUpperCase() === 'FASTQ';
+  
+  return isDataProduct && isFastq;
+});
+
 const availableGenomeValues = computed(() => {
   if (!selectedGenomeType.value) {
     return [];
@@ -641,6 +697,25 @@ const onRawDataSearchClose = () => {
   }
 };
 
+const clearSelectedSourceDataProduct = () => {
+  selectedSourceDataProduct.value = null;
+  sourceDataProductSearchText.value = '';
+};
+
+const resetSourceDataProductSearch = (val) => {
+  clearSelectedSourceDataProduct();
+};
+
+const onSourceDataProductSearchOpen = () => {
+  selectedSourceDataProduct.value = null;
+};
+
+const onSourceDataProductSearchClose = () => {
+  if (!selectedSourceDataProduct.value) {
+    sourceDataProductSearchText.value = '';
+  }
+};
+
 const onProjectSearchOpen = () => {
   projectSelected.value = null;
 };
@@ -696,9 +771,12 @@ const setFormErrors = async () => {
     if (
       (isAssignedSourceRawData.value && !selectedRawData.value) ||
       (isAssignedProject.value && !projectSelected.value) ||
-      (isAssignedSourceInstrument.value && !selectedSourceInstrument.value)
+      (isAssignedSourceInstrument.value && !selectedSourceInstrument.value) ||
+      (isAssignedSourceDataProduct.value && !selectedSourceDataProduct.value)
     ) {
       formErrors.value[STEP_KEYS.GENERAL_INFO] = true;
+    } else {
+      formErrors.value[STEP_KEYS.GENERAL_INFO] = null;
     }
   }
 
@@ -783,11 +861,14 @@ const resetSearch = () => {
 };
 
 const searchFiles = async () => {
+  const extension = selectedFileType.value?.extension || null;
+  
   fileSystemService
     .getPathFiles({
       path: _searchText.value,
       dirs_only: true,
       search_space: searchSpace.value.key,
+      extension: extension,
     })
     .then((response) => {
       setRetrievedFiles(response.data);
@@ -819,6 +900,7 @@ const preImport = () => {
       project_id: projectSelected.value?.id,
       src_instrument_id: selectedSourceInstrument.value?.id,
       src_dataset_id: selectedRawData.value?.id,
+      source_data_product_id: selectedSourceDataProduct.value?.id,
       create_method: Constants.DATASET_CREATE_METHODS.IMPORT,
       // Genomic details
       file_type: selectedFileType.value || null,
@@ -906,6 +988,8 @@ watch(
     isAssignedSourceRawData,
     selectedSourceInstrument,
     isAssignedSourceInstrument,
+    selectedSourceDataProduct,
+    isAssignedSourceDataProduct,
     selectedFile,
     fileListSearchText,
     isFileSearchAutocompleteOpen,
@@ -943,6 +1027,9 @@ watch(selectedDatasetType, (newVal) => {
     isAssignedSourceRawData.value = false;
     clearSelectedRawData();
     willImportRawData.value = true;
+    // Hide and clear source data product if switching to raw data
+    isAssignedSourceDataProduct.value = false;
+    clearSelectedSourceDataProduct();
   } else {
     willImportRawData.value = false;
   }
@@ -951,6 +1038,20 @@ watch(selectedDatasetType, (newVal) => {
 // Clear genome value when genome type changes
 watch(selectedGenomeType, () => {
   selectedGenomeValue.value = null;
+});
+
+// Trigger search when file type changes (if autocomplete is open)
+watch(selectedFileType, (newVal) => {
+  if (isFileSearchAutocompleteOpen.value && fileListSearchText.value) {
+    searchingFiles.value = true;
+    searchFiles();
+  }
+  
+  // Hide and clear source data product if file type is not FASTQ
+  if (newVal?.name?.toUpperCase() !== 'FASTQ') {
+    isAssignedSourceDataProduct.value = false;
+    clearSelectedSourceDataProduct();
+  }
 });
 
 // Set loading to true when FileListAutoComplete is either opened or typed into.
@@ -1033,7 +1134,7 @@ const handleCancelFileType = () => {
 };
 
 watchDebounced(
-  [isFileSearchAutocompleteOpen, fileListSearchText],
+  [isFileSearchAutocompleteOpen, fileListSearchText, selectedFileType],
   () => {
     if (isFileSearchAutocompleteOpen.value) {
       searchFiles();

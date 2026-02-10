@@ -19,6 +19,42 @@ const isPermittedTo = accessControl('fs');
 
 const router = express.Router();
 
+/**
+ * Check if a directory contains files with the specified extension
+ * @param {string} dirPath - Path to the directory to check
+ * @param {string} extension - File extension to look for (e.g., '.fastq.gz')
+ * @returns {Promise<boolean>} - True if directory contains files with the extension
+ */
+function directoryContainsExtension(dirPath, extension) {
+  return new Promise((resolve) => {
+    if (!extension) {
+      resolve(true);
+      return;
+    }
+
+    fs.readdir(dirPath, { withFileTypes: true }, (err, files) => {
+      if (err) {
+        logger.warn('[FS] Error reading directory for extension check', {
+          dirPath,
+          extension,
+          error: err.message,
+        });
+        resolve(false);
+        return;
+      }
+
+      const hasMatchingFiles = files.some((file) => {
+        if (file.isDirectory()) {
+          return false;
+        }
+        return file.name.endsWith(extension);
+      });
+
+      resolve(hasMatchingFiles);
+    });
+  });
+}
+
 function getBaseDirKey(req) {
   return Object.keys(config.filesystem.base_dir).filter((key) => key === req.query.search_space)[0];
 }
@@ -102,24 +138,28 @@ router.get(
   isPermittedTo('read'),
   query('dirs_only').default(false),
   query('search_space').optional().trim().isLength({ min: 1 }),
+  query('extension').optional().trim(),
   asyncHandler(async (req, res, next) => {
-    const { dirs_only, path: query_path } = req.query;
+    const { dirs_only, path: query_path, extension } = req.query;
 
     logger.info('[FS] Request received', {
       query_path,
       dirs_only,
       search_space: req.query.search_space,
+      extension,
       user: req.user?.username,
     });
 
     // TEMPORARY: Hardcoded response for testing
-    logger.info('[FS] Returning hardcoded response');
-    res.json([{
-      "name": "bigWig_h3k4me3_hg19---imported",
-      "isDir": true,
-      "path": "/N/scratch/cmguser/cmg-bioloop/imports/bigWig_h3k4me3_hg19---imported"
-    }]);
-    return;
+    if (config.get('mode') === 'docker') {
+      logger.info('[FS] Returning hardcoded response');
+      res.json([{
+        name: 'bigWig_h3k4me3_hg19---imported',
+        isDir: true,
+        path: '/N/scratch/cmguser/cmg-bioloop/imports/bigWig_h3k4me3_hg19---imported',
+      }]);
+      return;
+    }
 
     if (!query_path) {
       logger.info('[FS] No query_path provided, returning empty array');
@@ -150,7 +190,7 @@ router.get(
       query_path,
     });
 
-    const hasTrailingSlash = req.hasTrailingSlash;
+    const { hasTrailingSlash } = req;
 
     fs.access(mounted_search_dir, constants.F_OK, (err) => {
       if (err) {
@@ -162,10 +202,10 @@ router.get(
 
         const parent_query_path = path.dirname(query_path);
         const search_term = path.basename(query_path);
-        
+
         const parent_mounted_dir = path.join(
           mount_dir,
-          parent_query_path.slice(parent_query_path.indexOf(base_dir) + base_dir.length)
+          parent_query_path.slice(parent_query_path.indexOf(base_dir) + base_dir.length),
         );
 
         logger.info('[FS] Attempting case-insensitive substring match', {
@@ -203,7 +243,7 @@ router.get(
               return;
             }
 
-            const matchingFiles = files
+            let matchingFiles = files
               .filter((f) => {
                 const nameMatches = f.name.toLowerCase().includes(search_term.toLowerCase());
                 const isDirCheck = dirs_only ? f.isDirectory() : true;
@@ -215,13 +255,41 @@ router.get(
                 path: path.join(parent_query_path, f.name),
               }));
 
-            logger.info('[FS] Substring match results', {
-              search_term,
-              total_matches: matchingFiles.length,
-              matches: matchingFiles,
-            });
+            // Filter by extension if provided
+            if (extension && dirs_only) {
+              const extensionFilterPromises = matchingFiles.map(async (file) => {
+                if (!file.isDir) {
+                  return file;
+                }
+                const mountedPath = path.join(
+                  mount_dir,
+                  file.path.slice(file.path.indexOf(base_dir) + base_dir.length),
+                );
+                const hasExtension = await directoryContainsExtension(mountedPath, extension);
+                return hasExtension ? file : null;
+              });
 
-            res.json(matchingFiles);
+              Promise.all(extensionFilterPromises).then((filtered) => {
+                matchingFiles = _.compact(filtered);
+
+                logger.info('[FS] Substring match results (after extension filter)', {
+                  search_term,
+                  extension,
+                  total_matches: matchingFiles.length,
+                  matches: matchingFiles,
+                });
+
+                res.json(matchingFiles);
+              });
+            } else {
+              logger.info('[FS] Substring match results', {
+                search_term,
+                total_matches: matchingFiles.length,
+                matches: matchingFiles,
+              });
+
+              res.json(matchingFiles);
+            }
           });
         });
         return;
@@ -235,11 +303,24 @@ router.get(
         const parent_query_path = path.dirname(query_path);
         const dir_name = path.basename(query_path);
 
-        res.json([{
+        const dirResult = {
           name: dir_name,
           isDir: true,
           path: query_path,
-        }]);
+        };
+
+        // Filter by extension if provided
+        if (extension && dirs_only) {
+          directoryContainsExtension(mounted_search_dir, extension).then((hasExtension) => {
+            if (hasExtension) {
+              res.json([dirResult]);
+            } else {
+              res.json([]);
+            }
+          });
+        } else {
+          res.json([dirResult]);
+        }
         return;
       }
 
@@ -287,14 +368,40 @@ router.get(
         });
         filesData = _.compact(filesData);
 
-        logger.info('[FS] Response prepared', {
-          dirs_only,
-          total_before_filter: files ? files.length : 0,
-          total_after_filter: filesData.length,
-          result: filesData,
-        });
+        // Filter by extension if provided
+        if (extension && dirs_only) {
+          const extensionFilterPromises = filesData.map(async (file) => {
+            if (!file.isDir) {
+              return file;
+            }
+            const mountedPath = path.join(mounted_search_dir, file.name);
+            const hasExtension = await directoryContainsExtension(mountedPath, extension);
+            return hasExtension ? file : null;
+          });
 
-        res.json(filesData);
+          Promise.all(extensionFilterPromises).then((filtered) => {
+            filesData = _.compact(filtered);
+
+            logger.info('[FS] Response prepared (after extension filter)', {
+              dirs_only,
+              extension,
+              total_before_filter: files ? files.length : 0,
+              total_after_filter: filesData.length,
+              result: filesData,
+            });
+
+            res.json(filesData);
+          });
+        } else {
+          logger.info('[FS] Response prepared', {
+            dirs_only,
+            total_before_filter: files ? files.length : 0,
+            total_after_filter: filesData.length,
+            result: filesData,
+          });
+
+          res.json(filesData);
+        }
       });
     });
   }),

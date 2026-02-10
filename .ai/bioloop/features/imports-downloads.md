@@ -29,6 +29,32 @@ The Import feature ingests datasets from external sources (like SDA/tape archive
 - Network file systems
 - External URLs
 
+### UI Import Stepper
+
+The import UI (`ImportStepper.vue`) has a 4-step process:
+
+1. **Select Directory** - Choose dataset path and file type
+2. **General Info** - Dataset type, project, source data, source data product
+3. **Genomic Details** - Genome type, assembly, notes
+4. **Import** - Review and initiate import
+
+**File Type Filtering (Added 2026-02-09):**
+- File Type field is now in Step 1 (Select Directory), above the Dataset Path field
+- When a file type is selected, the directory list is filtered to show only directories containing files with that extension
+- API endpoint `/fs` now accepts `extension` parameter for server-side filtering
+- Filtering improves UX by showing only relevant directories for the selected data type
+
+**Source Data Product Field (Added 2026-02-09):**
+- New "Assign source Data Product" field in Step 2 (General Info), after Source Instrument field
+- Only shown when Dataset Type is DATA_PRODUCT AND File Type (analysis_type) is FASTQ
+- Establishes parent-child lineage in `dataset_hierarchy` table (selected source is parent, imported dataset is child)
+- Automatically hidden and cleared if Dataset Type or File Type changes to non-qualifying values
+- Allows tracking data provenance for derived FASTQ datasets
+- Multiple source relationships supported (can assign both Raw Data source and Data Product source)
+- Uses `analysis_type` relation from database to check if file type is FASTQ
+- **Access Control:** Dropdown filters Data Products to show only those the user has access to (uses `/:username/all` endpoint for non-operators)
+- **Validation:** Next button is disabled if "Assign source Data Product" checkbox is checked but no data product is selected
+
 ---
 
 ## Downloads
@@ -78,4 +104,41 @@ Secure download mechanism that enforces access control and provides audit loggin
 
 ---
 
-**Last Updated:** 2026-02-05
+## Changelog
+
+### 2026-02-09 - Import UI File Type Filtering
+
+**Feature:** Enhanced import UX with file type-based directory filtering.
+
+**Changes:**
+- **UI (ImportStepper.vue):**
+  - Moved File Type field from Step 3 (Genomic Details) to Step 1 (Select Directory)
+  - Positioned File Type field above Dataset Path field for better workflow
+  - File Type field is clearable to allow unfiltered directory browsing
+  - Directory search automatically refreshes when file type changes
+  
+- **API (fs.js):**
+  - Added `extension` query parameter to `/fs` endpoint
+  - Implemented `directoryContainsExtension()` helper function
+  - Server-side filtering: only returns directories containing files with selected extension
+  - Applied filtering in all three return paths:
+    - Substring matches (search results)
+    - Exact path matches (direct navigation)
+    - Directory contents (trailing slash navigation)
+  
+- **Service (fs.js):**
+  - Updated `getPathFiles()` to accept and pass `extension` parameter
+
+**Rationale:**
+- Users importing specific data types (e.g., FASTQ, BAM) should only see directories containing that file type
+- Moving file type to first step allows early filtering, improving search experience
+- Server-side filtering prevents showing irrelevant directories, reducing clutter
+
+**Files Modified:**
+- `ui/src/components/dataset/import/ImportStepper.vue`
+- `ui/src/services/fs.js`
+- `api/src/routes/fs.js`
+
+---
+
+**Last Updated:** 2026-02-09

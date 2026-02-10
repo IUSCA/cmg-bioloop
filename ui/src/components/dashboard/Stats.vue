@@ -62,7 +62,7 @@
               width="64px"
               height="32px"
             />
-            <p class="va-text-center">Data Files</p>
+            <p class="va-text-center">{{ dataFilesLabel }}</p>
           </div>
 
           <div class="flex flex-col items-center justify-end">
@@ -88,6 +88,7 @@
 </template>
 
 <script setup>
+import { computed } from "vue";
 import { formatBytes } from "@/services/utils";
 import { useAuthStore } from "@/stores/auth";
 import { useColors } from "vuestic-ui";
@@ -100,6 +101,16 @@ const auth = useAuthStore();
 const props = defineProps({
   data: Object,
   title: String,
+});
+
+// Conditional label for data files based on dataset type
+const dataFilesLabel = computed(() => {
+  if (props.title?.toUpperCase().includes("RAW DATA")) {
+    return "Genomic Files";
+  } else if (props.title?.toUpperCase().includes("DATA PRODUCT")) {
+    return "Total Files";
+  }
+  return "Data Files"; // Fallback
 });
 </script>
 

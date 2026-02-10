@@ -31,6 +31,34 @@
 
       <template #step-content-0>
         <div class="flex flex-col">
+          <div class="flex w-full pb-6">
+            <va-select
+              v-model="selectedFileType"
+              :options="fileTypeOptions"
+              label="File Type"
+              placeholder="Select file type"
+              class="flex-grow"
+              :text-by="'text'"
+              :value-by="'value'"
+              clearable
+            />
+            <div class="flex items-end ml-2">
+              <va-popover message="Create new File Type">
+                <va-button
+                  icon="add"
+                  class="px-3"
+                  color="primary"
+                  border-color="primary"
+                  preset="secondary"
+                  outline
+                  @click="openCreateFileTypeModal"
+                />
+              </va-popover>
+            </div>
+          </div>
+
+          <va-divider class="mb-6" />
+          
           <SelectFileButtons
             :disabled="submitAttempted || loading || validatingForm"
             @files-added="onFilesAdded"
@@ -202,35 +230,49 @@
             </div>
           </div>
         </div>
-      </template>
 
-      <template #step-content-2>
-        <div class="flex w-full pb-6">
-          <va-select
-            v-model="selectedFileType"
-            :options="fileTypeOptions"
-            :text-by="'text'"
-            :value-by="'value'"
-            label="File Type (Optional)"
-            placeholder="Select file type"
-            class="flex-grow"
-            clearable
-          />
-          <div class="flex items-end ml-2">
-            <va-popover message="Create new File Type">
-              <va-button
-                icon="add"
-                class="px-3"
+        <div v-if="shouldShowSourceDataProductField" class="flex w-full pb-6">
+          <div class="w-60 flex flex-shrink-0 mr-4">
+            <div class="flex items-center">
+              <va-checkbox
+                v-model="isAssignedSourceDataProduct"
+                @update:modelValue="resetSourceDataProductSearch"
+                :disabled="submitAttempted"
                 color="primary"
-                border-color="primary"
-                preset="secondary"
-                outline
-                @click="openCreateFileTypeModal"
+                label="Assign source Data Product"
+                class="flex-grow"
               />
+            </div>
+          </div>
+
+          <div class="flex-grow flex items-center">
+            <DatasetSelectAutoComplete
+              v-model:selected="selectedSourceDataProduct"
+              v-model:search-term="sourceDataProductSearchText"
+              :disabled="submitAttempted || !isAssignedSourceDataProduct"
+              :dataset-type="config.dataset.types.DATA_PRODUCT.key"
+              placeholder="Search Data Product"
+              @clear="resetSourceDataProductSearch"
+              @open="onSourceDataProductSearchOpen"
+              @close="onSourceDataProductSearchClose"
+              class="flex-grow"
+              :label="'Source Data Product'"
+            >
+            </DatasetSelectAutoComplete>
+            <va-popover>
+              <template #body>
+                <div class="w-96">
+                  Associating a Data Product with a source Data Product establishes a clear lineage
+                  between derived datasets. This helps track data provenance and processing history.
+                </div>
+              </template>
+              <Icon icon="mdi:information" class="ml-2 text-xl text-gray-500" />
             </va-popover>
           </div>
         </div>
+      </template>
 
+      <template #step-content-2>
         <div class="flex w-full pb-6">
           <va-select
             v-model="selectedGenomeType"
@@ -300,6 +342,7 @@
                   :project="projectSelected"
                   :source-instrument="selectedSourceInstrument"
                   :source-raw-data="selectedRawData"
+                  :source-data-product="selectedSourceDataProduct"
                   :submission-status="submissionStatus"
                   :submission-alert="submissionAlert"
                   :status-chip-color="statusChipColor"
@@ -315,8 +358,30 @@
           <!-- RIGHT CARD: File List and Upload Progress -->
           <div class="flex-1">
             <va-card>
-              <va-card-title>Files to Upload</va-card-title>
+              <va-card-title>{{ isUploadComplete ? 'Files Uploaded' : 'Files to Upload' }}</va-card-title>
               <va-card-content>
+                <!-- Upload progress (always shown, above file list) -->
+                <div class="mb-4 pb-4 border-b border-gray-300">
+                  <!-- Checksum computation progress -->
+                  <div v-if="isComputingChecksum" class="mb-3">
+                    <div class="text-sm font-semibold mb-2">
+                      Computing checksum: {{ checksumProgress }}%
+                    </div>
+                    <va-progress-bar :model-value="checksumProgress" color="info" />
+                  </div>
+                  
+                  <!-- Overall upload progress -->
+                  <div>
+                    <div class="text-sm font-semibold mb-2">
+                      Upload Progress: {{ submitAttempted ? `${filesUploaded} / ${totalFiles} files (${uploadProgress}%)` : 'Not started' }}
+                    </div>
+                    <va-progress-bar 
+                      :model-value="submitAttempted ? uploadProgress : 0" 
+                      :color="submitAttempted ? 'primary' : 'secondary'"
+                    />
+                  </div>
+                </div>
+                
                 <!-- File list -->
                 <div class="file-list" style="max-height: 400px; overflow-y: auto">
                   <div v-for="file in displayedFilesToUpload" :key="file.name" class="mb-2 pb-2 border-b border-gray-200 last:border-b-0">
@@ -325,22 +390,6 @@
                       <span class="text-sm text-gray-500 whitespace-nowrap">{{ file.formattedSize }}</span>
                     </div>
                   </div>
-                </div>
-                
-                <!-- Checksum computation progress (shown when computing) -->
-                <div v-if="isComputingChecksum" class="mt-4 pt-4 border-t border-gray-300">
-                  <div class="text-sm font-semibold mb-2">
-                    Computing checksums: {{ checksumProgress }}%
-                  </div>
-                  <va-progress-bar :model-value="checksumProgress" color="info" />
-                </div>
-                
-                <!-- Overall upload progress (only shown during upload) -->
-                <div v-if="submitAttempted && submissionStatus === Constants.UPLOAD_STATUSES.UPLOADING" class="mt-4 pt-4 border-t border-gray-300">
-                  <div class="text-sm font-semibold mb-2">
-                    Upload Progress: {{ filesUploaded }} / {{ totalFiles }} files ({{ uploadProgress }}%)
-                  </div>
-                  <va-progress-bar :model-value="uploadProgress" />
                 </div>
               </va-card-content>
             </va-card>
@@ -430,6 +479,10 @@ import { Icon } from "@iconify/vue";
 import _ from "lodash";
 import * as tus from "tus-js-client";
 import { VaDivider, VaPopover } from "vuestic-ui";
+import {
+  _computeManifestHash,
+  _isChecksumVerificationEnabled,
+} from "@/services/upload/checksum";
 
 const auth = useAuthStore();
 
@@ -499,6 +552,9 @@ const projectSearchText = ref("");
 const isAssignedProject = ref(true);
 const submissionSuccess = ref(false);
 const datasetTypeOptions = ref(datasetTypes);
+const isAssignedSourceDataProduct = ref(false);
+const selectedSourceDataProduct = ref(null);
+const sourceDataProductSearchText = ref('');
 const selectedDatasetType = ref(
   datasetTypes.find((e) => e.value === config.dataset.types.DATA_PRODUCT.key),
 );
@@ -578,6 +634,43 @@ const filesUploaded = ref(0);
 const totalFiles = ref(0);
 const uploadProcessIds = ref([]); // Track process_ids for all uploaded files
 const uploadRegistrationFailed = ref(false); // Track if final API call failed
+const isComputingChecksum = ref(false); // Track checksum computation state
+const checksumProgress = ref(0); // Track checksum computation progress (0-100)
+const computedChecksum = ref(null); // Store computed checksum before upload
+
+/**
+ * Format duration in milliseconds to human-readable string
+ * @param {number} ms - Duration in milliseconds
+ * @returns {string} Formatted duration (e.g., "1.5s", "2.3m", "1.2h")
+ */
+const formatDuration = (ms) => {
+  const seconds = ms / 1000;
+  if (seconds < 60) {
+    return `${seconds.toFixed(1)}s`;
+  } else if (seconds < 3600) {
+    const minutes = seconds / 60;
+    return `${minutes.toFixed(1)}m`;
+  } else {
+    const hours = seconds / 3600;
+    return `${hours.toFixed(1)}h`;
+  }
+};
+
+/**
+ * Computed: Determine if upload completed successfully
+ * Used to show success indicators and change UI text from "Files to Upload" to "Files Uploaded"
+ * 
+ * Success condition: When files are uploaded AND registered with API successfully
+ * This is indicated by:
+ * - statusChipColor is "success" (set in handleUploadComplete after successful API registration)
+ * - OR submissionAlertColor is "success" with alert visible
+ */
+const isUploadComplete = computed(() => {
+  return (
+    statusChipColor.value === "success" ||
+    (submissionAlertColor.value === "success" && isSubmissionAlertVisible.value)
+  );
+});
 
 /**
  * Determines if the upload process has been completed.
@@ -653,6 +746,9 @@ const uploadFormData = computed(() => {
     ...(selectedRawData.value && {
       src_dataset_id: selectedRawData.value.id,
     }),
+    ...(selectedSourceDataProduct.value && {
+      source_data_product_id: selectedSourceDataProduct.value.id,
+    }),
     project_id: projectSelected.value ? projectSelected.value.id : null,
     src_instrument_id: selectedSourceInstrument.value
       ? selectedSourceInstrument.value.id
@@ -681,6 +777,17 @@ const genomeTypeOptions = computed(() => {
     text: value.label,
     value: key,
   }));
+});
+
+const shouldShowSourceDataProductField = computed(() => {
+  // Show field only if:
+  // 1. Dataset type is DATA_PRODUCT
+  const isDataProduct = selectedDatasetType.value?.value === config.dataset.types.DATA_PRODUCT.key;
+  
+  // 2. File type is FASTQ
+  const isFastq = selectedFileType.value?.name?.toUpperCase() === 'FASTQ';
+  
+  return isDataProduct && isFastq;
 });
 
 const availableGenomeValues = computed(() => {
@@ -741,6 +848,25 @@ const onRawDataSearchOpen = () => {
 const onRawDataSearchClose = () => {
   if (!selectedRawData.value) {
     datasetSearchText.value = "";
+  }
+};
+
+const clearSelectedSourceDataProduct = () => {
+  selectedSourceDataProduct.value = null;
+  sourceDataProductSearchText.value = '';
+};
+
+const resetSourceDataProductSearch = (val) => {
+  clearSelectedSourceDataProduct();
+};
+
+const onSourceDataProductSearchOpen = () => {
+  selectedSourceDataProduct.value = null;
+};
+
+const onSourceDataProductSearchClose = () => {
+  if (!selectedSourceDataProduct.value) {
+    sourceDataProductSearchText.value = '';
   }
 };
 
@@ -880,10 +1006,13 @@ const setFormErrors = async () => {
     if (
       (isAssignedSourceRawData.value && !selectedRawData.value) ||
       (isAssignedProject.value && !projectSelected.value) ||
-      (isAssignedSourceInstrument.value && !selectedSourceInstrument.value)
+      (isAssignedSourceInstrument.value && !selectedSourceInstrument.value) ||
+      (isAssignedSourceDataProduct.value && !selectedSourceDataProduct.value)
     ) {
       formErrors.value[STEP_KEYS.GENERAL_INFO] = true;
       return;
+    } else {
+      formErrors.value[STEP_KEYS.GENERAL_INFO] = null;
     }
   }
 
@@ -919,6 +1048,75 @@ const onSubmit = async () => {
     preUpload()
       .then(async () => {
         submissionSuccess.value = true;
+        
+        // COMPUTE CHECKSUMS FIRST (before upload starts)
+        // Skip if already computed (e.g., on retry after upload failure)
+        console.log('=== CHECKSUM VERIFICATION CHECK (BEFORE UPLOAD) ===');
+        console.log('Feature enabled?', _isChecksumVerificationEnabled());
+        console.log('Files to hash:', filesToUpload.value.length);
+        console.log('Already computed?', computedChecksum.value ? 'YES' : 'NO');
+        
+        let checksumStartTime = null;
+        let checksumEndTime = null;
+        
+        if (_isChecksumVerificationEnabled() && !computedChecksum.value) {
+          try {
+            console.log('✓ STARTING checksum computation BEFORE upload...');
+            console.log('  Setting isComputingChecksum = true');
+            isComputingChecksum.value = true;
+            checksumProgress.value = 0;
+            
+            checksumStartTime = performance.now();
+            
+            const files = filesToUpload.value.map(f => f.file);
+            console.log('  Files mapped:', files.map(f => `${f.name} (${f.size} bytes)`));
+            
+            console.log('  Calling _computeManifestHash...');
+            computedChecksum.value = await _computeManifestHash(files, (progress) => {
+              console.log(`  Checksum progress: ${progress}%`);
+              checksumProgress.value = progress;
+            });
+            
+            checksumEndTime = performance.now();
+            
+            if (computedChecksum.value) {
+              console.log('✓ CHECKSUM COMPUTED (BEFORE UPLOAD):', {
+                manifest_hash: computedChecksum.value.manifest_hash,
+                file_count: computedChecksum.value.file_count,
+                total_size: computedChecksum.value.total_size,
+                mode: computedChecksum.value.mode
+              });
+            } else {
+              console.warn('⚠ Manifest hash computation returned null (checksum disabled or error)');
+            }
+          } catch (error) {
+            console.error('✗ FAILED to compute manifest hash:', error);
+            console.error('  Error stack:', error.stack);
+            // Don't fail upload - allow it to proceed without checksum
+          } finally {
+            console.log('  Setting isComputingChecksum = false');
+            isComputingChecksum.value = false;
+            checksumProgress.value = 0;
+            
+            if (checksumStartTime && checksumEndTime) {
+              const duration = checksumEndTime - checksumStartTime;
+              console.log(`⏱️  CHECKSUM COMPUTATION TIME: ${formatDuration(duration)}`);
+            }
+            
+            console.log('=== CHECKSUM COMPUTATION COMPLETE (BEFORE UPLOAD) ===');
+          }
+        } else if (computedChecksum.value) {
+          console.log('✓ Using previously computed checksum (skipping re-computation on retry)');
+          console.log('  Cached checksum:', {
+            manifest_hash: computedChecksum.value.manifest_hash,
+            file_count: computedChecksum.value.file_count,
+            total_size: computedChecksum.value.total_size
+          });
+        } else {
+          console.log('✗ Checksum verification disabled - skipping computation');
+        }
+        
+        // NOW START UPLOAD
         submissionStatus.value = Constants.UPLOAD_STATUSES.UPLOADING;
 
         // Use resumable upload protocol instead of old chunk system
@@ -929,10 +1127,19 @@ const onSubmit = async () => {
         filesUploaded.value = 0;
         uploadProgress.value = 0;
 
+        console.log('=== STARTING FILE UPLOAD ===');
+        const uploadStartTime = performance.now();
+        
         const uploadServiceURL = _getUploadServiceURL(window.location.origin);
-        const uploaded = await uploadFiles(filesToUploadList, uploadServiceURL);
+        const uploaded = await uploadFilesWithTus(filesToUploadList, uploadServiceURL);
+        
+        const uploadEndTime = performance.now();
         
         if (uploaded) {
+          const uploadDuration = uploadEndTime - uploadStartTime;
+          console.log(`⏱️  FILE UPLOAD TIME: ${formatDuration(uploadDuration)}`);
+          console.log('=== FILE UPLOAD COMPLETE ===');
+          
           handleUploadComplete();
           resolve();
         } else {
@@ -1013,7 +1220,8 @@ const preUpload = async () => {
   // TUS doesn't need pre-calculated checksums - it handles that internally
   // Just create or update the upload log
 
-  const logData = datasetUploadLog.value?.id
+  const isUpdate = !!datasetUploadLog.value?.id;
+  const logData = isUpdate
     ? {
         status: Constants.UPLOAD_STATUSES.UPLOADING,
       }
@@ -1021,11 +1229,30 @@ const preUpload = async () => {
         ...uploadFormData.value,
       };
 
+  console.log('[PRE-UPLOAD] Starting pre-upload registration', {
+    is_update: isUpdate,
+    existing_log_id: datasetUploadLog.value?.id,
+    log_data: logData,
+  });
+
   try {
     const res = await createOrUpdateUploadLog(logData);
     datasetUploadLog.value = res.data;
+    
+    console.log('[PRE-UPLOAD] SUCCESS: Upload log created/updated', {
+      upload_log_id: datasetUploadLog.value.id,
+      dataset_id: datasetUploadLog.value.audit_log?.dataset?.id,
+      dataset_name: datasetUploadLog.value.audit_log?.dataset?.name,
+      status: datasetUploadLog.value.status,
+    });
   } catch (err) {
-    console.error(err);
+    console.error('[PRE-UPLOAD] FAILED: Error creating/updating upload log', {
+      error_message: err.message,
+      error_response: err.response?.data,
+      error_status: err.response?.status,
+      error_stack: err.stack,
+      log_data: logData,
+    });
     throw new Error("Error logging dataset upload");
   }
 };
@@ -1033,28 +1260,26 @@ const preUpload = async () => {
 // Log (or update) upload status
 const createOrUpdateUploadLog = (data) => {
   if (!uploadCancelled.value) {
-    return !datasetUploadLog.value
+    const isCreate = !datasetUploadLog.value;
+    console.log(`[CREATE-OR-UPDATE-LOG] ${isCreate ? 'Creating' : 'Updating'} upload log`, {
+      is_create: isCreate,
+      dataset_id: datasetUploadLog.value?.audit_log?.dataset?.id,
+      data,
+    });
+    
+    return isCreate
       ? datasetService.logDatasetUpload(data)
       : datasetService.updateDatasetUploadLog(
           datasetUploadLog.value?.audit_log?.dataset.id,
           data,
         );
   } else {
+    console.log('[CREATE-OR-UPDATE-LOG] Upload cancelled, rejecting');
     return Promise.reject();
   }
 };
 
-const uploadFiles = async (files) => {
-  let uploaded = false;
-  for (let f = 0; f < files.length; f++) {
-    let fileDetails = files[f];
-    uploaded = await uploadFile(fileDetails);
-    if (!uploaded) {
-      break;
-    }
-  }
-  return uploaded;
-};
+// Removed: Old uploadFiles function - replaced by uploadFilesWithTus (TUS protocol implementation)
 
 const setFiles = (files) => {
   _.range(0, files.length).forEach((i) => {
@@ -1100,8 +1325,19 @@ watch(selectedDatasetType, (newVal) => {
     isAssignedSourceRawData.value = false;
     clearSelectedRawData();
     willUploadRawData.value = true;
+    // Hide and clear source data product if switching to raw data
+    isAssignedSourceDataProduct.value = false;
+    clearSelectedSourceDataProduct();
   } else {
     willUploadRawData.value = false;
+  }
+});
+
+// Hide and clear source data product if file type is not FASTQ
+watch(selectedFileType, (newVal) => {
+  if (newVal?.name?.toUpperCase() !== 'FASTQ') {
+    isAssignedSourceDataProduct.value = false;
+    clearSelectedSourceDataProduct();
   }
 });
 
@@ -1134,6 +1370,8 @@ watch(
     isAssignedSourceRawData,
     selectedSourceInstrument,
     isAssignedSourceInstrument,
+    selectedSourceDataProduct,
+    isAssignedSourceDataProduct,
     selectingFiles,
     selectingDirectory,
     filesToUpload,
@@ -1425,8 +1663,24 @@ const uploadFilesWithTus = async (files, endpoint) => {
     totalBytes += file.size;
   });
 
+  // TEST ONLY: Check if we should simulate mid-upload failure
+  // Set localStorage.setItem('SIMULATE_UPLOAD_FAILURE', 'mid-upload') to enable
+  const simulateFailure = localStorage.getItem('SIMULATE_UPLOAD_FAILURE');
+  if (simulateFailure) {
+    console.warn(`🧪 [TEST MODE] Upload failure simulation ENABLED: ${simulateFailure}`);
+    console.warn(`   To disable: localStorage.removeItem('SIMULATE_UPLOAD_FAILURE')`);
+  }
+
   const uploadPromises = files.map((file, index) => {
     return new Promise((resolve, reject) => {
+      console.log(`[TUS-CLIENT] Starting upload for file ${index + 1}/${files.length}:`, {
+        name: file.name,
+        size: file.size,
+        type: file.type,
+        dataset_id: datasetUploadLog.value.audit_log.dataset.id,
+        simulate_failure: simulateFailure || 'none',
+      });
+      
       const upload = new tus.Upload(file, {
         endpoint,
         retryDelays: [0, 3000, 5000, 10000, 20000],
@@ -1441,15 +1695,40 @@ const uploadFilesWithTus = async (files, endpoint) => {
         },
         headers: {
           Authorization: `Bearer ${userToken}`,
+          ...(simulateFailure ? { 'X-Simulate-Failure': simulateFailure } : {}),
         },
         onError: (error) => {
-          console.error(`Failed to upload ${file.name}:`, error);
+          console.error(`[TUS-CLIENT] Upload FAILED for ${file.name}:`, {
+            error_message: error.message,
+            error_type: error.constructor.name,
+            error_stack: error.stack,
+            file_name: file.name,
+            file_size: file.size,
+            dataset_id: datasetUploadLog.value.audit_log.dataset.id,
+            upload_url: upload.url,
+            // Check if it's an HTTP error
+            originalRequest: error.originalRequest ? {
+              method: error.originalRequest.getMethod(),
+              url: error.originalRequest.getURL(),
+              status: error.originalResponse?.getStatus(),
+              statusText: error.originalResponse?.getBody(),
+            } : null,
+          });
           reject(error);
         },
         onProgress: (bytesUploaded, bytesTotal) => {
           // Update overall progress
           const totalUploadedSoFar = uploadedBytes + bytesUploaded;
           uploadProgress.value = Math.round((totalUploadedSoFar / totalBytes) * 100);
+          
+          // Log progress every 10% for large files
+          const fileProgress = (bytesUploaded / bytesTotal) * 100;
+          if (fileProgress % 10 < 1) {
+            console.log(`[TUS-CLIENT] Upload progress for ${file.name}: ${fileProgress.toFixed(1)}%`, {
+              bytes_uploaded: bytesUploaded,
+              bytes_total: bytesTotal,
+            });
+          }
         },
         onSuccess: async () => {
           uploadedCount++;
@@ -1467,21 +1746,33 @@ const uploadFilesWithTus = async (files, endpoint) => {
             relative_path: file.webkitRelativePath || file.name,
           });
           
-          console.log(`Upload complete for ${file.name} (process_id: ${processId})`);
+          console.log(`[TUS-CLIENT] Upload SUCCESS for ${file.name}`, {
+            process_id: processId,
+            file_size: file.size,
+            upload_url: upload.url,
+          });
           resolve();
         },
       });
 
       // Start the upload
+      console.log(`[TUS-CLIENT] Initiating upload.start() for ${file.name}`);
       upload.start();
     });
   });
 
   try {
+    console.log(`[TUS-CLIENT] Waiting for all ${uploadPromises.length} upload(s) to complete...`);
     await Promise.all(uploadPromises);
+    console.log(`[TUS-CLIENT] All uploads completed successfully`);
     return true;
   } catch (error) {
-    console.error('Upload failed:', error);
+    console.error('[TUS-CLIENT] One or more uploads failed:', {
+      error_message: error.message,
+      error_type: error.constructor.name,
+      total_files: files.length,
+      uploaded_count: uploadedCount,
+    });
     return false;
   }
 };
@@ -1492,50 +1783,50 @@ const handleUploadComplete = async () => {
   try {
     const datasetId = datasetUploadLog.value.audit_log.dataset.id;
     
-    // Build metadata with checksum if enabled
+    console.log('[UPLOAD-COMPLETE] Starting upload completion API call', {
+      dataset_id: datasetId,
+      process_ids_count: uploadProcessIds.value?.length || 0,
+    });
+    
+    // Build metadata with checksum (use pre-computed checksum from before upload)
     let metadata = {};
     
-    // Compute manifest hash if feature is enabled
-    if (_isChecksumVerificationEnabled()) {
-      try {
-        console.log('Computing manifest hash for upload verification...');
-        isComputingChecksum.value = true;
-        checksumProgress.value = 0;
-        
-        const files = filesToUpload.value.map(f => f.file);
-        const manifestHash = await _computeManifestHash(files, (progress) => {
-          checksumProgress.value = progress;
-        });
-        
-        if (manifestHash) {
-          console.log('Manifest hash computed:', manifestHash.manifest_hash);
-          metadata.checksum = manifestHash;
-        }
-      } catch (error) {
-        console.error('Failed to compute manifest hash:', error);
-        // Don't fail - async process will use fallback verification
-      } finally {
-        isComputingChecksum.value = false;
-        checksumProgress.value = 0;
-      }
+    console.log('=== USING PRE-COMPUTED CHECKSUM (from before upload) ===');
+    if (computedChecksum.value) {
+      console.log('✓ Checksum available:', {
+        manifest_hash: computedChecksum.value.manifest_hash,
+        file_count: computedChecksum.value.file_count,
+        total_size: computedChecksum.value.total_size,
+        mode: computedChecksum.value.mode
+      });
+      metadata.checksum = computedChecksum.value;
+    } else {
+      console.log('⚠ No pre-computed checksum available (checksum disabled or computation failed)');
     }
     
     // Call /complete with the last process_id (for single file) or first (for multi)
     // The worker will handle moving all files based on upload metadata
     const lastUpload = uploadProcessIds.value[uploadProcessIds.value.length - 1];
     
-    await datasetService.completeDatasetUpload(
-      datasetId,
-      {
-        process_id: lastUpload.process_id,
-        selection_mode: selectingDirectory.value ? 'directory' : 'files',
-        directory_name: selectingDirectory.value && selectedDirectory.value ? selectedDirectory.value.name : '',
-        relative_path: lastUpload.relative_path,
-        metadata: Object.keys(metadata).length > 0 ? metadata : undefined,
-      }
-    );
+    const completePayload = {
+      process_id: lastUpload.process_id,
+      selection_mode: selectingDirectory.value ? 'directory' : 'files',
+      directory_name: selectingDirectory.value && selectedDirectory.value ? selectedDirectory.value.name : '',
+      relative_path: lastUpload.relative_path,
+      metadata: Object.keys(metadata).length > 0 ? metadata : undefined,
+    };
     
-    console.log('Upload registration complete');
+    console.log('[UPLOAD-COMPLETE] Calling /complete endpoint', {
+      dataset_id: datasetId,
+      payload: completePayload,
+    });
+    
+    const response = await datasetService.completeDatasetUpload(datasetId, completePayload);
+    
+    console.log('[UPLOAD-COMPLETE] API call SUCCESS', {
+      dataset_id: datasetId,
+      response,
+    });
     
     // Success - show green status
     uploadRegistrationFailed.value = false;
@@ -1547,7 +1838,13 @@ const handleUploadComplete = async () => {
     submissionSuccess.value = true;
     
   } catch (error) {
-    console.error('Failed to register upload with API:', error);
+    console.error('[UPLOAD-COMPLETE] API call FAILED:', {
+      error_message: error.message,
+      error_response: error.response?.data,
+      error_status: error.response?.status,
+      error_stack: error.stack,
+      dataset_id: datasetUploadLog.value?.audit_log?.dataset?.id,
+    });
     
     // API call failed - show retry option
     uploadRegistrationFailed.value = true;

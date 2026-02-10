@@ -66,6 +66,18 @@
               </td>
             </tr>
 
+            <tr v-if="props.sourceDataProduct">
+              <td>Source Data Product</td>
+              <td class="metadata">
+                <router-link
+                  :to="`/datasets/${props.sourceDataProduct?.id}`"
+                  target="_blank"
+                >
+                  {{ props.sourceDataProduct?.name }}
+                </router-link>
+              </td>
+            </tr>
+
             <tr>
               <td>Project</td>
               <td class="metadata">
@@ -144,6 +156,9 @@ const props = defineProps({
     type: Object,
   },
   sourceRawData: {
+    type: Object,
+  },
+  sourceDataProduct: {
     type: Object,
   },
   project: {

@@ -614,6 +614,7 @@ router.post(
     body('project_id').optional(),
     body('src_instrument_id').optional(),
     body('src_dataset_id').optional(),
+    body('source_data_product_id').optional(),
     body('create_method').optional(),
     body('workflow_id').optional(),
     body('state').optional(),
@@ -635,7 +636,7 @@ router.post(
       /* eslint-enable */
 
     const {
-      import_space, create_method, project_id, src_instrument_id, src_dataset_id,
+      import_space, create_method, project_id, src_instrument_id, src_dataset_id, source_data_product_id,
       name, type, origin_path, du_size, size, bundle_size, workflow_id, state, metadata,
       file_type, genome_type, genome_value, import_notes,
     } = req.body;
@@ -670,6 +671,7 @@ router.post(
       user_id: req.user.id,
       src_instrument_id,
       src_dataset_id,
+      source_data_product_id,
       state,
       create_method,
       metadata,

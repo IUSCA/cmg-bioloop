@@ -1273,7 +1273,7 @@ const buildDatasetCreateQuery = async (data) => {
   /* eslint-disable no-unused-vars */
   const {
     name, type, du_size, size, origin_path, bundle_size, metadata, workflow_id,
-    project_id, user_id, src_instrument_id, src_dataset_id, state, create_method,
+    project_id, user_id, src_instrument_id, src_dataset_id, source_data_product_id, state, create_method,
     file_type, genome_type, genome_value, import_notes,
   } = data;
   /* eslint-disable no-unused-vars */
@@ -1371,11 +1371,17 @@ const buildDatasetCreateQuery = async (data) => {
     };
   }
 
+  // Create source dataset relationships (can have multiple sources)
+  const sourceRelationships = [];
   if (src_dataset_id) {
+    sourceRelationships.push({ source_id: src_dataset_id });
+  }
+  if (source_data_product_id) {
+    sourceRelationships.push({ source_id: source_data_product_id });
+  }
+  if (sourceRelationships.length > 0) {
     create_query.source_datasets = {
-      create: [{
-        source_id: src_dataset_id,
-      }],
+      create: sourceRelationships,
     };
   }
 

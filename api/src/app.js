@@ -42,17 +42,82 @@ app.use((req, res, next) => {
   const isTusPath = req.path.startsWith('/uploads/files') || req.path.startsWith('/api/uploads/files');
 
   if (isTusPath) {
-    logger.info(`TUS middleware: ${req.method} ${req.path}`);
+    const uploadId = req.path.split('/').pop();
+    logger.info(`[TUS] ${req.method} ${req.path}`, {
+      uploadId: uploadId !== 'files' ? uploadId : 'NEW',
+      contentLength: req.headers['content-length'],
+      contentType: req.headers['content-type'],
+      uploadOffset: req.headers['upload-offset'],
+      uploadLength: req.headers['upload-length'],
+      tusResumable: req.headers['tus-resumable'],
+    });
+    
     // Authenticate first
     authenticate(req, res, (err) => {
       if (err) {
+        logger.error(`[TUS] Authentication failed for ${req.method} ${req.path}:`, {
+          error: err.message,
+          uploadId: uploadId !== 'files' ? uploadId : 'NEW',
+        });
         return next(err);
       }
+      
+      logger.info(`[TUS] Authentication successful for user: ${req.user?.username || 'unknown'}`);
+      
+      // TEST ONLY: Simulate mid-upload failure for PATCH requests
+      // Usage: Add header 'X-Simulate-Failure: mid-upload' to trigger failure
+      // This uses a simple approach: just fail immediately without consuming the stream
+      const shouldSimulateFailure = req.headers['x-simulate-failure'] === 'mid-upload' && req.method === 'PATCH';
+      if (shouldSimulateFailure) {
+        logger.warn(`[TUS] SIMULATING MID-UPLOAD FAILURE for ${req.path}`, {
+          uploadId: uploadId !== 'files' ? uploadId : 'NEW',
+          method: req.method,
+          contentLength: req.headers['content-length'],
+        });
+        
+        // Immediately return 500 error without processing the upload
+        logger.error(`[TUS] SIMULATED FAILURE: Returning 500 error immediately`, {
+          uploadId: uploadId !== 'files' ? uploadId : 'NEW',
+        });
+        
+        res.writeHead(500, {
+          'Content-Type': 'text/plain',
+          'Connection': 'close'
+        });
+        res.end('Simulated upload failure (test mode)');
+        return; // CRITICAL: Return here to prevent passing to TUS server
+      }
+      
       // Normalize URL to have /api prefix for TUS server
       // TUS server is configured with path: '/api/uploads/files'
       if (!req.url.startsWith('/api/uploads/files')) {
         req.url = `/api${req.url}`;
       }
+      
+      // Intercept response to log completion/errors
+      const originalEnd = res.end;
+      const originalWriteHead = res.writeHead;
+      let statusCode = 200;
+      
+      res.writeHead = function(...args) {
+        statusCode = args[0];
+        return originalWriteHead.apply(this, args);
+      };
+      
+      res.end = function(...args) {
+        const isSuccess = statusCode >= 200 && statusCode < 300;
+        const logLevel = isSuccess ? 'info' : 'error';
+        
+        logger[logLevel](`[TUS] ${req.method} ${req.path} completed`, {
+          statusCode,
+          uploadId: uploadId !== 'files' ? uploadId : 'NEW',
+          user: req.user?.username,
+          success: isSuccess,
+        });
+        
+        return originalEnd.apply(this, args);
+      };
+      
       // Then hand off to TUS - don't catch errors, let Express handle them
       return tusServer.handle(req, res);
     });

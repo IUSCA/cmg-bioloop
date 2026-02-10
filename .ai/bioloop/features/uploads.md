@@ -250,6 +250,33 @@ UPLOAD_HOST_DIR=/N/scratch/cmguser/cmg-bioloop/uploads
 
 ---
 
+## UI Upload Stepper
+
+The upload UI (`UploadDatasetStepper.vue`) has a 4-step process:
+
+1. **Select Files** - Choose files/directory and file type
+2. **General Info** - Dataset type, project, source data, source data product
+3. **Genomic Details** - Genome type, assembly
+4. **Upload** - Review and initiate upload
+
+**File Type Field Location (Updated 2026-02-09):**
+- File Type field moved from Step 3 (Genomic Details) to Step 1 (Select Files)
+- Positioned above the file selector/file selection table for better UX
+- Matches Import stepper layout consistency
+
+**Source Data Product Field (Added 2026-02-09):**
+- New "Assign source Data Product" field in Step 2 (General Info), after Source Instrument
+- Only shown when Dataset Type is DATA_PRODUCT AND File Type (analysis_type) is FASTQ
+- Establishes parent-child lineage in `dataset_hierarchy` table (selected source is parent, uploaded dataset is child)
+- Automatically hidden and cleared if Dataset Type or File Type changes to non-qualifying values
+- Allows tracking data provenance for derived FASTQ datasets
+- Multiple source relationships supported (can assign both Raw Data source and Data Product source)
+- Uses `analysis_type` relation from database to check if file type is FASTQ
+- **Access Control:** Dropdown filters Data Products to show only those the user has access to (uses `/:username/all` endpoint for non-operators)
+- **Validation:** Next button is disabled if "Assign source Data Product" checkbox is checked but no data product is selected
+
+---
+
 ## UI Behavior
 
 ### Success Flow
@@ -509,6 +536,4 @@ poetry run pytest tests/upload_verification/ -v
 
 1. **Orphan Detection:** TUS uploads that complete but fail to register (no `process_id` in DB) need detection/cleanup mechanism.
 
----
-
-**Last Updated:** 2026-02-05
+---**Last Updated:** 2026-02-05

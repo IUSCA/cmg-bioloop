@@ -189,6 +189,11 @@ config = {
                     'queue': FETCH_QUEUE
                 },
                 {
+                    'name': 'run qc',
+                    'task': 'generate_qc',
+                    'queue': FETCH_QUEUE
+                },
+                {
                     'name': 'archive',
                     'task': 'archive_dataset',
                     'queue': FETCH_QUEUE
@@ -262,11 +267,6 @@ config = {
             {
               "name": "convert",
               "task": "convert_genomic",
-              "queue": CONVERSION_QUEUE
-            },
-            {
-              "name": "generate qc",
-              "task": "generate_qc",
               "queue": CONVERSION_QUEUE
             },
             {
@@ -391,6 +391,6 @@ config = {
         'completed': False,
     },
     'upload': {
-      'verify_checksums': False,
+      'verify_checksums': True,  # Enable BLAKE3 manifest-based checksum verification
     }
 }

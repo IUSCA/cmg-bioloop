@@ -113,13 +113,30 @@ def get_dataset_by_origin_path(origin_path: str, use_auth: bool = True):
     
     Returns:
         dict | None: Dataset data from the API, or None if not found
+        
+    Example successful response:
+        {
+            "success": true,
+            "found": true,
+            "normalized_path": "/opt/sca/cmg/data/source/dataset_name",
+            "dataset": {
+                "_id": "69848419e62d88fe0f0b3766",
+                "name": "dataset_name",
+                "archived": false,
+                "taken": null,
+                ...
+            }
+        }
     """
     with CMGAPISession(use_auth=use_auth) as s:
-        r = s.get('api/legacy-migration/datasets/', params={'origin_path': origin_path})
-        if r.status_code == 404:
-            return None
+        r = s.get('api/legacy-migration/datasets', params={'origin_path': origin_path})
         r.raise_for_status()
-        return r.json()
+        response = r.json()
+        
+        # Check if request was successful and dataset was found
+        if response.get('success') and response.get('found'):
+            return response.get('dataset')
+        return None
 
 
 def get_dataproduct_by_origin_path(origin_path: str, use_auth: bool = True):
@@ -132,16 +149,36 @@ def get_dataproduct_by_origin_path(origin_path: str, use_auth: bool = True):
     
     Returns:
         dict | None: Dataproduct data from the API, or None if not found
+        
+    Example successful response:
+        {
+            "success": true,
+            "found": true,
+            "normalized_path": "/opt/sca/cmg/data/uploads/user_upload_123",
+            "dataproduct": {
+                "_id": "507f191e810c19729de860eb",
+                "name": "user_upload_123",
+                "origin_path": "/opt/sca/cmg/data/uploads/user_upload_123",
+                "paths": {
+                    "archive": "archive/products/user_upload_123.tar",
+                    "staged": ""
+                },
+                ...
+            }
+        }
     """
     with CMGAPISession(use_auth=use_auth) as s:
-        r = s.get('api/legacy-migration/dataproducts/', params={'origin_path': origin_path})
-        if r.status_code == 404:
-            return None
+        r = s.get('api/legacy-migration/dataproducts', params={'origin_path': origin_path})
         r.raise_for_status()
-        return r.json()
+        response = r.json()
+        
+        # Check if request was successful and dataproduct was found
+        if response.get('success') and response.get('found'):
+            return response.get('dataproduct')
+        return None
 
 
-def is_dataset_archived_in_cmg(cmg_id: str, dataset_type: str, use_auth: bool = True):
+def is_dataset_archived_in_cmg(origin_path: str, dataset_type: str, use_auth: bool = True):
     """
     Check if a dataset/dataproduct is archived in CMG by checking database conditions.
     
@@ -149,33 +186,35 @@ def is_dataset_archived_in_cmg(cmg_id: str, dataset_type: str, use_auth: bool = 
     For DATA_PRODUCT (dataproduct collection): checks dataproduct.paths.archive exists and is not empty
     
     Args:
-        cmg_id: The CMG dataset/dataproduct ID (_id from MongoDB)
+        origin_path: The origin path of the dataset (used to query CMG)
         dataset_type: Either 'RAW_DATA' or 'DATA_PRODUCT'
         use_auth: Whether to include authentication (default: True)
     
     Returns:
         bool: True if archived in CMG, False otherwise
+        
+    Example flow:
+        1. Query CMG by origin_path
+        2. If found, check archived status
+        3. Return True if archived, False otherwise
     """
-    with CMGAPISession(use_auth=use_auth) as s:
-        if dataset_type == 'RAW_DATA':
-            # Check dataset collection
-            r = s.get(f'api/legacy-migration/datasets/{cmg_id}')
-            if r.status_code == 404:
-                return False
-            r.raise_for_status()
-            dataset = r.json()
+    if dataset_type == 'RAW_DATA':
+        # Check dataset collection
+        dataset = get_dataset_by_origin_path(origin_path, use_auth=use_auth)
+        if dataset:
             return dataset.get('archived', False) is True
-        elif dataset_type == 'DATA_PRODUCT':
-            # Check dataproduct collection
-            r = s.get(f'api/legacy-migration/dataproducts/{cmg_id}')
-            if r.status_code == 404:
-                return False
-            r.raise_for_status()
-            dataproduct = r.json()
+        return False
+        
+    elif dataset_type == 'DATA_PRODUCT':
+        # Check dataproduct collection
+        dataproduct = get_dataproduct_by_origin_path(origin_path, use_auth=use_auth)
+        if dataproduct:
             archive_path = dataproduct.get('paths', {}).get('archive', '')
             return bool(archive_path and archive_path != '')
-        else:
-            raise ValueError(f'Unknown dataset_type: {dataset_type}. Expected RAW_DATA or DATA_PRODUCT')
+        return False
+        
+    else:
+        raise ValueError(f'Unknown dataset_type: {dataset_type}. Expected RAW_DATA or DATA_PRODUCT')
 
 
 if __name__ == '__main__':

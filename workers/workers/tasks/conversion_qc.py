@@ -40,68 +40,77 @@ def generate_qc(celery_task, dataset_id_conversion_id, **kwargs):
         print(f"  {item}")
     print("--------------------------------")
 
+    # Filter sample directories: directories with underscore, excluding Reports/Stats
+    # Fixed: Changed "not d.is_dir()" to "d.is_dir()" to filter FOR directories
     qc_source_dirs: list[Path] = [d for d in conversion_output_dir.iterdir() if
-                     not d.is_dir() and
+                     d.is_dir() and
                      '_' in d.name and
                      d.name not in {'Reports', 'Stats'}]
     
-    print(f"qc_source_dir: {qc_source_dirs}")
-    print("contents of qc_source_dir:")
-    print("--------------------------------")
-    print("contents of qc_source_dirs:")
-    for item in qc_source_dirs:
-        print(f"  {item}")
+    print(f"qc_source_dirs (filtered sample directories): {qc_source_dirs}")
     print("--------------------------------")
 
-    qc_output_dir: Path = get_genomic_qc_output_dir(conversion)
-    print(f"qc_target_dir: {qc_output_dir}")
-    qc_output_dir.mkdir(parents=True, exist_ok=True)
+    # Base QC output directory
+    qc_base_dir: Path = get_genomic_qc_output_dir(conversion)
+    print(f"qc_base_dir: {qc_base_dir}")
+    qc_base_dir.mkdir(parents=True, exist_ok=True)
 
-    print("--------------------------------")
-    print("contents of qc_target_dir:")
-    for item in qc_output_dir.iterdir():
-        print(f"  {item}")
-    print("--------------------------------")
+    # Run QC on EACH sample directory separately (matches CMG behavior)
+    # Each sample gets its own MultiQC report
+    report_ids = []
+    successful_reports = []
+    
+    for sample_dir in qc_source_dirs:
+        print(f"Running QC for sample: {sample_dir.name}")
+        
+        # Create per-sample QC output directory
+        sample_qc_dir = qc_base_dir / sample_dir.name
+        sample_qc_dir.mkdir(parents=True, exist_ok=True)
+        
+        try:
+            # Run FastQC + MultiQC for this sample only
+            report_id = create_report(
+                celery_task=celery_task,
+                dataset_dir=sample_dir,  # Per-sample directory
+                dataset_qc_dir=sample_qc_dir,
+                report_id=None  # Each sample gets new report
+            )
+            
+            report_filename = sample_qc_dir / 'multiqc_report.html'
+            
+            if report_filename.exists():
+                print(f"QC report created for {sample_dir.name}: {report_filename}")
+                report_ids.append(report_id)
+                successful_reports.append(str(report_filename))
+            else:
+                print(f"Warning: QC report not found for {sample_dir.name}")
                 
-    report_id = create_report(
-        celery_task=celery_task,
-        dataset_dir=conversion_output_dir,
-        dataset_qc_dir=qc_output_dir,
-        report_id=(dataset.get('metadata', {}) or {}).get('report_id', None)
-    )
+        except Exception as e:
+            print(f"Error running QC for {sample_dir.name}: {e}")
+            # Continue with other samples even if one fails
 
     print("--------------------------------")
-    print("contents of qc_source_dir:")
-    for item in qc_source_dirs:
-        print(f"  {item}")
+    print(f"QC completed for {len(successful_reports)} of {len(qc_source_dirs)} samples")
     print("--------------------------------")
 
-    print("--------------------------------")
-    print("contents of qc_target_dir:")
-    for item in qc_output_dir.iterdir():
-        print(f"  {item}")
-    print("--------------------------------")
-
-    report_filename = qc_output_dir / 'multiqc_report.html'
-
-    # if the report is created successfully
-    if report_filename.exists():
-        print("--------------------------------")
-        print("report_filename exists")
-        print("--------------------------------")
+    # Update dataset with QC state if any reports were created
+    if successful_reports:
+        # Store first report ID (or could store all IDs as array)
         update_data = {
             'metadata': {
-                'report_id': report_id
+                'report_id': report_ids[0] if report_ids else None,
+                'qc_reports': successful_reports  # Store all report paths
             }
         }
         api.update_dataset(dataset_id=conversion['dataset_id'], update_data=update_data)
-        api.upload_report(dataset_id=conversion['dataset_id'], report_filename=report_filename)
+        
+        # Upload the first report (or could upload all)
+        first_report = Path(successful_reports[0])
+        api.upload_report(dataset_id=conversion['dataset_id'], report_filename=first_report)
         api.add_state_to_dataset(dataset_id=conversion['dataset_id'], state='QC')
     else:
         print("--------------------------------")
-        print("report_filename does not exist")
-        print("--------------------------------")
-        print(f"QC report not found for directory {qc_source_dirs}")
+        print("No QC reports were created successfully")
         print("--------------------------------")
 
     return {'dataset_id': dataset['id'], 'conversion_id': conversion['id']},

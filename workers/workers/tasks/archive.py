@@ -49,7 +49,7 @@ def make_tarfile(celery_task: WorkflowTask, tar_path: Path, source_dir: str, sou
     return tar_path
 
 
-def wait_for_cmg_archival(dataset_name: str, cmg_id: str, dataset_type: str, 
+def wait_for_cmg_archival(dataset_name: str, origin_path: str, dataset_type: str, 
                           celery_task: WorkflowTask = None,
                           poll_interval_seconds: int = 300,
                           timeout_seconds: int = 86400) -> None:
@@ -61,7 +61,7 @@ def wait_for_cmg_archival(dataset_name: str, cmg_id: str, dataset_type: str,
     
     Args:
         dataset_name: Dataset name for logging
-        cmg_id: CMG dataset/dataproduct ID (_id from MongoDB)
+        origin_path: Origin path of the dataset (used to query CMG)
         dataset_type: Either 'RAW_DATA' or 'DATA_PRODUCT'
         celery_task: Celery task for progress tracking (optional)
         poll_interval_seconds: How often to check CMG (default: 300 seconds / 5 minutes)
@@ -71,7 +71,7 @@ def wait_for_cmg_archival(dataset_name: str, cmg_id: str, dataset_type: str,
         TimeoutError: If CMG archival doesn't complete within timeout_seconds
     """
     logger.info(f'{dataset_name} - waiting for CMG to complete archival')
-    logger.info(f'{dataset_name} - CMG ID: {cmg_id}, Type: {dataset_type}')
+    logger.info(f'{dataset_name} - origin_path: {origin_path}, type: {dataset_type}')
     logger.info(f'{dataset_name} - poll interval: {poll_interval_seconds}s, timeout: {timeout_seconds}s')
     
     start_time = time.time()
@@ -92,7 +92,7 @@ def wait_for_cmg_archival(dataset_name: str, cmg_id: str, dataset_type: str,
         
         # Check if CMG has completed archival
         try:
-            is_archived = cmg_api.is_dataset_archived_in_cmg(cmg_id, dataset_type)
+            is_archived = cmg_api.is_dataset_archived_in_cmg(origin_path, dataset_type)
             
             if is_archived:
                 logger.info(
@@ -124,6 +124,38 @@ def wait_for_cmg_archival(dataset_name: str, cmg_id: str, dataset_type: str,
 
 
 def archive(celery_task: WorkflowTask, dataset: dict, delete_local_file: bool = False):
+    """
+    Archive a dataset by creating a tar bundle and uploading to SDA.
+    
+    Handles three scenarios:
+    1. Concurrent CMG/Bioloop registration (cmg_id exists):
+       - Verifies dataset exists in CMG API (STRICT: fails if not found when legacy_migration enabled)
+       - Waits for CMG to complete archival
+       - Retrieves bundle metadata (hash, size) from SDA/HSI
+       - STRICT: Fails if archive cannot be found or hash cannot be retrieved from HSI
+       - Saves bundle metadata to database (md5 from HSI)
+    
+    2. Legacy dataset during migration (is_legacy and migration incomplete):
+       - Placeholder: waits for CMG upload (not yet implemented)
+    
+    3. Standard flow (new Bioloop registration):
+       - Creates tar bundle locally
+       - Computes hash locally
+       - Uploads to SDA
+       - Saves bundle metadata to database
+    
+    Args:
+        celery_task: Celery task for progress tracking
+        dataset: Dataset dict with metadata
+        delete_local_file: Whether to delete local bundle after archival
+    
+    Returns:
+        tuple: (archive_path, bundle_attrs) where bundle_attrs may be None
+    
+    Raises:
+        Exception: If legacy_migration enabled and CMG validation fails
+        Exception: If SDA archive cannot be verified or hash cannot be retrieved
+    """
     # Check if this is a legacy dataset and if legacy migration is still in progress
     is_legacy = is_legacy_dataset(dataset)
     legacy_migration_incomplete = not config.get('legacy_migration', {}).get('completed', True)
@@ -136,16 +168,49 @@ def archive(celery_task: WorkflowTask, dataset: dict, delete_local_file: bool = 
     cmg_id = dataset.get('cmg_id')
     dataset_type = dataset['type']
     dataset_name = dataset['name']
+    origin_path = dataset.get('origin_path')
     
     # If dataset has CMG ID and we're in production, wait for CMG to complete archival
     if cmg_id and use_sda:
         logger.info(f'{dataset_name} - detected CMG ID: {cmg_id}')
+        
+        # STRICT VALIDATION: If legacy_migration is enabled, we MUST be able to verify CMG's archival
+        if legacy_migration_incomplete:
+            logger.info(f'{dataset_name} - legacy_migration is enabled, strict validation required')
+            
+            # Verify we can find the dataset in CMG
+            try:
+                if dataset_type == 'RAW_DATA':
+                    cmg_entity = cmg_api.get_dataset_by_origin_path(origin_path)
+                elif dataset_type == 'DATA_PRODUCT':
+                    cmg_entity = cmg_api.get_dataproduct_by_origin_path(origin_path)
+                else:
+                    cmg_entity = None
+                
+                if not cmg_entity:
+                    error_msg = (
+                        f'{dataset_name} - FATAL: dataset has cmg_id but cannot be found in CMG API. '
+                        f'This indicates a data consistency issue. '
+                        f'CMG ID: {cmg_id}, origin_path: {origin_path}, type: {dataset_type}'
+                    )
+                    logger.error(error_msg)
+                    raise Exception(error_msg)
+                
+                logger.info(f'{dataset_name} - verified dataset exists in CMG')
+            except Exception as e:
+                error_msg = (
+                    f'{dataset_name} - FATAL: failed to verify dataset in CMG API: {e}. '
+                    f'Cannot proceed with archival when legacy_migration is enabled.'
+                )
+                logger.error(error_msg)
+                raise Exception(error_msg)
+        
         logger.info(f'{dataset_name} - waiting for CMG to complete archival to avoid concurrent SDA uploads')
         
         # Wait for CMG archival to complete
         wait_for_cmg_archival(
             dataset_name=dataset_name,
-            cmg_id=cmg_id,
+            origin_path=origin_path,
             dataset_type=dataset_type,
             celery_task=celery_task
         )
@@ -155,11 +220,58 @@ def archive(celery_task: WorkflowTask, dataset: dict, delete_local_file: bool = 
         bundle_name = f"{dataset_name}.tar"
         sda_bundle_path = f'{sda_dir}/{bundle_name}'
         
-        logger.info(f'{dataset_name} - CMG archival completed, using CMG archive path: {sda_bundle_path}')
+        logger.info(f'{dataset_name} - CMG archival completed, verifying archive in SDA')
         
-        # CMG created the bundle, we don't have bundle_attrs
-        # The bundle info should already exist in CMG's database
-        bundle_attrs = None
+        # STRICT VALIDATION: Verify the archive exists in SDA and get its hash
+        try:
+            from workers import sda
+            
+            # Check if file exists in SDA
+            if not sda.exists(sda_bundle_path):
+                error_msg = (
+                    f'{dataset_name} - FATAL: archive path does not exist in SDA: {sda_bundle_path}. '
+                    f'CMG reported archival complete but file not found.'
+                )
+                logger.error(error_msg)
+                raise Exception(error_msg)
+            
+            logger.info(f'{dataset_name} - archive exists in SDA, retrieving hash')
+            
+            # Get hash from SDA
+            bundle_checksum = sda.get_hash(sda_bundle_path, missing_ok=False)
+            if not bundle_checksum:
+                error_msg = (
+                    f'{dataset_name} - FATAL: cannot retrieve hash from SDA for: {sda_bundle_path}. '
+                    f'File exists but hash is not available.'
+                )
+                logger.error(error_msg)
+                raise Exception(error_msg)
+            
+            logger.info(f'{dataset_name} - retrieved hash from SDA: {bundle_checksum}')
+            
+            # Get file size from SDA
+            bundle_size = sda.get_size(sda_bundle_path)
+            logger.info(f'{dataset_name} - retrieved size from SDA: {bundle_size} bytes')
+            
+            # Create bundle attributes from SDA metadata
+            # These will be saved to the bundle table in the database
+            bundle_attrs = {
+                'name': bundle_name,
+                'size': bundle_size,
+                'md5': bundle_checksum,  # Hash retrieved from HSI/SDA
+            }
+            
+            logger.info(f'{dataset_name} - successfully verified CMG archive with bundle metadata from SDA')
+            logger.info(f'{dataset_name} - bundle will be saved: size={bundle_size}, md5={bundle_checksum}')
+            
+        except Exception as e:
+            error_msg = (
+                f'{dataset_name} - FATAL: failed to retrieve bundle metadata from SDA: {e}. '
+                f'Archive path: {sda_bundle_path}'
+            )
+            logger.error(error_msg)
+            raise Exception(error_msg)
+        
         archive_path = sda_bundle_path
         
     # Special handling for legacy datasets during ongoing migration

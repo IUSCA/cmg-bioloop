@@ -55,22 +55,32 @@ def verify_upload_integrity(dataset, upload_log=None):
         raise Exception(f"Origin path does not exist: {origin_path}")
 
     print(f"Verifying manifest hash for dataset {dataset_id}...")
+    print(f"  Dataset: {dataset.get('name', 'N/A')}")
+    print(f"  Origin path: {origin_path}")
+    
+    stored_hash = manifest_data.get('manifest_hash')
+    print(f"  Stored hash (from browser/DB): {stored_hash}")
 
     try:
+        print(f"  Computing hash from uploaded files...")
         computed_hash = _compute_manifest_hash(origin)
+        print(f"  Computed hash (from worker): {computed_hash}")
     except ImportError:
         print(f"BLAKE3 not available, falling back to file existence check for dataset {dataset_id}")
         return _verify_files_exist(origin_path)
 
-    stored_hash = manifest_data.get('manifest_hash')
-
     # Verify match
+    print(f"  Comparing hashes...")
     if computed_hash != stored_hash:
+        print(f"  ✗ HASH MISMATCH!")
+        print(f"    Expected (from browser): {stored_hash}")
+        print(f"    Computed (on worker):    {computed_hash}")
         raise Exception(
             f"Manifest hash mismatch for dataset {dataset_id}: "
             f"expected {stored_hash}, got {computed_hash}"
         )
 
+    print(f"  ✓ HASH MATCH! Checksums are identical.")
     print(f"Manifest hash verified for dataset {dataset_id}")
     return True
 
@@ -141,15 +151,19 @@ def _compute_manifest_hash(origin_path):
     if not files:
         raise Exception(f"No files found at {origin_path}")
 
+    print(f"    Found {len(files)} file(s) to hash")
     manifest_lines = ['blake3-manifest-v1']
 
-    for file_path in files:
+    for idx, file_path in enumerate(files, 1):
+        print(f"    Hashing file {idx}/{len(files)}: {file_path.name} ({file_path.stat().st_size} bytes)")
+        
         # Stream hash file content in chunks to avoid loading entire file into memory
         hasher = blake3.blake3()
         with open(file_path, 'rb') as f:
             while chunk := f.read(CHUNK_SIZE):
                 hasher.update(chunk)
         file_hash = hasher.hexdigest()
+        print(f"      File hash: {file_hash}")
 
         # Relative path from origin_path
         rel_path = file_path.relative_to(origin_path)
@@ -160,7 +174,10 @@ def _compute_manifest_hash(origin_path):
         )
 
     # Hash the manifest
+    print(f"    Hashing manifest itself (manifest has {len(manifest_lines)} lines)...")
     manifest_str = '\n'.join(manifest_lines)
-    return blake3.blake3(manifest_str.encode('utf-8')).hexdigest()
+    manifest_hash = blake3.blake3(manifest_str.encode('utf-8')).hexdigest()
+    print(f"    Manifest hash: {manifest_hash}")
+    return manifest_hash
 
 

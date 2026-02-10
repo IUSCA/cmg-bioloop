@@ -61,7 +61,7 @@ def create_report(celery_task: WorkflowTask, dataset_dir: Path, dataset_qc_dir: 
     return report_id
 
 
-def generate_qc(celery_task, dataset_id, **kwargs):
+def _generate_qc(celery_task, dataset_id, **kwargs):
     dataset = api.get_dataset(dataset_id=dataset_id)
     dataset_type = dataset['type']
     dataset_qc_dir = Path(config['paths'][dataset_type]['qc']) / dataset['name'] / 'qc'
@@ -93,3 +93,39 @@ def generate_qc(celery_task, dataset_id, **kwargs):
         # nonRetryable exception
 
     return dataset_id,
+
+
+def generate_qc(celery_task, dataset_id, **kwargs):
+    """
+    Conditional QC wrapper - only runs QC for eligible datasets.
+    
+    Matches CMG behavior: QC runs for DATA_PRODUCT datasets with analysis_type 'FASTQ'.
+    
+    This is the unified QC step used in the integrated workflow for all dataproducts
+    (imports, conversions, etc.). Simpler architecture than CMG's separate workers.
+    """
+    dataset = api.get_dataset(dataset_id=dataset_id)
+    dataset_type = dataset.get('type', '')
+    
+    # Check dataset type - only DATA_PRODUCT needs QC
+    if dataset_type != 'DATA_PRODUCT':
+        print(f"Dataset {dataset_id} type '{dataset_type}' does not need QC (not a DATA_PRODUCT), skipping...")
+        return dataset_id,
+    
+    # Check analysis_type - only FASTQ needs QC (matches CMG: if file_type == 'fastq')
+    # analysis_type is a relation: { id, name, extension }
+    analysis_type = dataset.get('analysis_type')
+    if not analysis_type:
+        print(f"Dataset {dataset_id} has no analysis_type, skipping QC...")
+        return dataset_id,
+    
+    analysis_type_name = analysis_type.get('name', '').upper()
+    
+    # Check if analysis type is FASTQ (case-insensitive)
+    if analysis_type_name != 'FASTQ':
+        print(f"Dataset {dataset_id} analysis_type '{analysis_type_name}' does not need QC (not FASTQ), skipping...")
+        return dataset_id,
+    
+    # Run QC for DATA_PRODUCT with analysis_type 'FASTQ'
+    print(f"Running QC for DATA_PRODUCT dataset {dataset_id} (analysis_type: {analysis_type_name})")
+    return _generate_qc(celery_task, dataset_id, **kwargs)
