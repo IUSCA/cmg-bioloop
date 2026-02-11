@@ -4,126 +4,95 @@
       <div v-if="upload">
         <!-- Upload Overview Card -->
         <va-card class="mb-4">
-          <!-- <va-card-title>Upload Overview</va-card-title> -->
-          <span class="flex-auto text-lg"> Upload Overview </span>
-                
+          <va-card-title>
+            <div class="flex flex-nowrap items-center w-full">
+                <span class="flex-auto text-lg"> Upload Overview </span>
+              </div>
+            </va-card-title>
           <va-card-content>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <!-- Entity Name -->
-              <div>
-                <div class="mb-1">Entity</div>
-                <router-link
-                  v-if="upload.dataset"
-                  :to="`/datasets/${upload.dataset.id}`"
-                  class="va-link"
-                >
-                  {{ upload.dataset.name }}
-                </router-link>
-              </div>
-
-              <!-- Entity Type -->
-              <div>
-                <div class="mb-1">Entity Type</div>
-                <va-chip size="small" outline>Dataset</va-chip>
-              </div>
-
-              <!-- Status -->
-              <div>
-                <div class="mb-1">Status</div>
-                <va-chip
-                  :color="getStatusColor(upload.status)"
-                  size="small"
-                >
-                  {{ upload.status }}
-                </va-chip>
-              </div>
-
-              <!-- Updated At -->
-              <div>
-                <div class="mb-1">Last Updated</div>
-                <div>
-                  {{ formatDate(upload.updated_at) }}
-                </div>
-              </div>
-
-              <!-- Process ID (TUS Upload ID) -->
-              <div v-if="upload.process_id">
-                <div class="mb-1">Process ID</div>
-                <code class="text-sm">{{ upload.process_id }}</code>
-              </div>
-
-              <!-- Verification Task ID -->
-              <div v-if="upload.metadata?.verification_task_id">
-                <div class="mb-1">Verification Task ID</div>
-                <code class="text-sm">{{ upload.metadata.verification_task_id }}</code>
-              </div>
-
-              <!-- Worker Process ID -->
-              <div v-if="upload.metadata?.worker_process_id">
-                <div class="mb-1">Worker Process ID</div>
-                <code class="text-sm">{{ upload.metadata.worker_process_id }}</code>
-              </div>
-
-              <!-- Retry Count -->
-              <div v-if="upload.retry_count > 0">
-                <div class="mb-1">Retry Count</div>
-                <div>{{ upload.retry_count }}</div>
-              </div>
-
-              <!-- Checksum Info -->
-              <div v-if="upload.metadata?.checksum" class="col-span-2">
-                <div class="mb-1">Checksum Information</div>
-                <div class="grid grid-cols-2 gap-2 text-sm">
-                  <div>Algorithm: <code>{{ upload.metadata.checksum.algorithm }}</code></div>
-                  <div>File Count: {{ upload.metadata.checksum.file_count }}</div>
-                  <div class="col-span-2">
-                    Manifest Hash: <code class="text-xs">{{ upload.metadata.checksum.manifest_hash }}</code>
-                  </div>
-                </div>
-              </div>
-
-              <!-- Failure Reason -->
-              <div v-if="upload.metadata?.failure_reason" class="col-span-2">
-                <div class="mb-1">Failure Reason</div>
-                <va-alert color="danger" class="mb-0">
-                  {{ upload.metadata.failure_reason }}
-                </va-alert>
-              </div>
+            <div class="va-table-responsive">
+              <table class="va-table">
+                <tbody>
+                  <tr>
+                    <td>Uploaded</td>
+                    <td>
+                      <router-link
+                        :to="getUploadedEntityURL(upload)"
+                        class="va-link"
+                      >
+                          {{ getUploadedEntityDisplayName(upload) }}
+                      </router-link>
+                    </td>
+                  </tr>
+                  <!-- <tr>
+                    <td>Entity Type</td>
+                    <td>
+                      <va-chip size="small" outline>Dataset</va-chip>
+                    </td>
+                  </tr> -->
+                  <tr>
+                    <td>Status</td>
+                    <td>
+                      <va-chip
+                        :color="getStatusColor(upload.status)"
+                        size="small"
+                      >
+                        {{ upload.status }}
+                      </va-chip>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td>Last Updated</td>
+                    <td>{{ formatDate(upload.updated_at) }}</td>
+                  </tr>
+                  <tr v-if="upload.process_id">
+                    <td>Process ID</td>
+                    <td><code class="text-sm">{{ upload.process_id }}</code></td>
+                  </tr>
+                  <tr v-if="upload.metadata?.verification_task_id">
+                    <td>Verification Task ID</td>
+                    <td><code class="text-sm">{{ upload.metadata.verification_task_id }}</code></td>
+                  </tr>
+                  <tr v-if="upload.metadata?.worker_process_id">
+                    <td>Worker Process ID</td>
+                    <td><code class="text-sm">{{ upload.metadata.worker_process_id }}</code></td>
+                  </tr>
+                  <tr v-if="upload.retry_count > 0">
+                    <td>Retry Count</td>
+                    <td>{{ upload.retry_count }}</td>
+                  </tr>
+                  <tr v-if="upload.metadata?.checksum">
+                    <td>Checksum Algorithm</td>
+                    <td><code>{{ upload.metadata.checksum.algorithm }}</code></td>
+                  </tr>
+                  <tr v-if="upload.metadata?.checksum">
+                    <td>File Count</td>
+                    <td>{{ upload.metadata.checksum.file_count }}</td>
+                  </tr>
+                  <tr v-if="upload.metadata?.checksum">
+                    <td>Manifest Hash</td>
+                    <td><code class="text-xs">{{ upload.metadata.checksum.manifest_hash }}</code></td>
+                  </tr>
+                  <tr v-if="upload.metadata?.failure_reason">
+                    <td>Failure Reason</td>
+                    <td>
+                      <va-alert color="danger" class="mb-0">
+                        {{ upload.metadata.failure_reason }}
+                      </va-alert>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
             </div>
           </va-card-content>
         </va-card>
 
-        <!-- Verification Logs Card -->
+        <!-- Verification Task Logs Card -->
         <va-card v-if="upload.metadata?.worker_process_id">
           <va-card-title>
-            <div class="flex items-center justify-between w-full">
-              <span>Verification Logs</span>
-              <div class="flex items-center gap-2">
-                <va-chip
-                  v-if="autoRefresh"
-                  color="info"
-                  size="small"
-                >
-                  Auto-refresh: {{ refreshCountdown }}s
-                </va-chip>
-                <va-button
-                  size="small"
-                  @click="toggleAutoRefresh"
-                >
-                  <Icon
-                    :icon="autoRefresh ? 'mdi:pause' : 'mdi:play'"
-                  />
-                  {{ autoRefresh ? 'Pause' : 'Resume' }}
-                </va-button>
-                <va-button
-                  size="small"
-                  @click="fetchLogs"
-                  :disabled="loadingLogs"
-                >
-                  <Icon icon="mdi:refresh" />
-                  Refresh
-                </va-button>
-              </div>
+
+            <div class="flex flex-nowrap items-center w-full">
+              <span class="flex-auto text-lg"> Verification Task Logs </span>
             </div>
           </va-card-title>
           <va-card-content>
@@ -180,10 +149,7 @@ const loading = ref(true);
 const loadingLogs = ref(false);
 const upload = ref(null);
 const logs = ref([]);
-const autoRefresh = ref(true);
-const refreshCountdown = ref(10);
 let refreshInterval = null;
-let countdownInterval = null;
 
 // Fetch upload details
 const fetchUpload = async () => {
@@ -268,43 +234,36 @@ const formatLogTime = (date) => {
   return d.toLocaleTimeString();
 };
 
-// Auto-refresh
-const toggleAutoRefresh = () => {
-  autoRefresh.value = !autoRefresh.value;
-  if (autoRefresh.value) {
-    startAutoRefresh();
-  } else {
-    stopAutoRefresh();
+const getUploadedEntityURL = (upload) => {
+  if (upload.dataset) {
+    return `/datasets/${upload.dataset.id}`;
   }
+
+  return '';
 };
 
+const getUploadedEntityDisplayName = (upload) => {
+  if (upload.dataset) {
+    return upload.dataset.name;
+  } 
+
+  return ''
+};
+
+
+
+// Auto-refresh (background only, no UI controls)
 const startAutoRefresh = () => {
-  fetchUpload();
-  fetchLogs();
-  
-  refreshCountdown.value = 10;
-  
   refreshInterval = setInterval(() => {
     fetchUpload();
     fetchLogs();
-    refreshCountdown.value = 10;
   }, 10000);
-
-  countdownInterval = setInterval(() => {
-    if (refreshCountdown.value > 0) {
-      refreshCountdown.value--;
-    }
-  }, 1000);
 };
 
 const stopAutoRefresh = () => {
   if (refreshInterval) {
     clearInterval(refreshInterval);
     refreshInterval = null;
-  }
-  if (countdownInterval) {
-    clearInterval(countdownInterval);
-    countdownInterval = null;
   }
 };
 
@@ -326,8 +285,6 @@ onMounted(async () => {
   
   if (upload.value?.metadata?.worker_process_id) {
     await fetchLogs();
-  }
-  if (autoRefresh.value) {
     startAutoRefresh();
   }
 });
