@@ -130,37 +130,36 @@ async function syncImportLogs(prisma, cmgDb, cmgUserId) {
             continue;
           }
           
-          // Find or create 'created' audit log for this DATAPRODUCT
-          // In Bioloop, the import log links to the audit log of the dataset (dataproduct) that was created
+          // Ensure dataset has create_method set to IMPORT
+          // This will be transferred from audit log during migration, but for new syncs we set it directly
+          if (!bioloopDataset.create_method) {
+            await prisma.dataset.update({
+              where: { id: bioloopDataset.id },
+              data: { create_method: 'IMPORT' },
+            });
+          }
+          
+          // Create or find 'create' audit log for this dataset (for user tracking)
           let auditLog = await prisma.dataset_audit.findFirst({
             where: {
-              action: 'created',
+              action: 'create',
               dataset_id: bioloopDataset.id,
             },
           });
           
           if (!auditLog) {
-            // Create a 'created' audit log entry if it doesn't exist
+            // Create a 'create' audit log entry if it doesn't exist
             auditLog = await prisma.dataset_audit.create({
               data: {
-                action: 'created',
-                create_method: 'IMPORT',
+                action: 'create',
                 timestamp: cmgUpload.createdAt || new Date(),
                 dataset_id: bioloopDataset.id,
                 user_id: userId,
               },
             });
-          } else {
-            // Update existing audit log to mark it as an IMPORT
-            if (!auditLog.create_method) {
-              auditLog = await prisma.dataset_audit.update({
-                where: { id: auditLog.id },
-                data: { create_method: 'IMPORT' },
-              });
-            }
           }
           
-          // Create the import log entry
+          // Create the import log entry linked directly to dataset
           // Build upload_data object, filtering out undefined values (Prisma doesn't allow explicit undefined)
           const uploadData = {};
           if (cmgUpload.createdAt !== undefined) uploadData.createdAt = cmgUpload.createdAt;
@@ -185,7 +184,7 @@ async function syncImportLogs(prisma, cmgDb, cmgUserId) {
                 genome_type: cmgUpload.genomeType || null,
                 genome_value: cmgUpload.genomeValue || null,
               },
-              audit_log_id: auditLog.id,
+              dataset_id: bioloopDataset.id,
             },
           });
           

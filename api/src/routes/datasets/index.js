@@ -276,12 +276,10 @@ router.get(
 
       const whereClause = {};
       if (dataset_name) {
-        whereClause.audit_log = {
-          dataset: {
-            name: {
-              contains: dataset_name,
-              mode: 'insensitive',
-            },
+        whereClause.dataset = {
+          name: {
+            contains: dataset_name,
+            mode: 'insensitive',
           },
         };
       }
@@ -297,35 +295,38 @@ router.get(
         prisma.dataset_import_log.findMany({
           ...filter_query,
           include: {
-            audit_log: {
+            dataset: {
               include: {
-                user: {
-                  select: {
-                    id: true,
-                    username: true,
-                    name: true,
-                    email: true,
+                source_datasets: {
+                  include: {
+                    source_dataset: true,
                   },
                 },
-                dataset: {
+                workflows: {
+                  select: {
+                    id: true,
+                  },
+                },
+                genomic_details: {
+                  select: {
+                    genome_type: true,
+                    genome_value: true,
+                  },
+                },
+                analysis_type: true,
+                audit_logs: {
                   include: {
-                    source_datasets: {
-                      include: {
-                        source_dataset: true,
-                      },
-                    },
-                    workflows: {
+                    user: {
                       select: {
                         id: true,
+                        username: true,
+                        name: true,
+                        email: true,
                       },
                     },
-                    genomic_details: {
-                      select: {
-                        genome_type: true,
-                        genome_value: true,
-                      },
-                    },
-                    analysis_type: true,
+                  },
+                  where: {
+                    action: 'create',
                   },
                 },
               },
@@ -338,7 +339,7 @@ router.get(
       // Enrich workflow data from Rhythm
       const enrichedImportLogs = await Promise.all(
         importLogs.map(async (log) => {
-          const dataset = log.audit_log.dataset;
+          const { dataset } = log;
           if (dataset.workflows && dataset.workflows.length > 0) {
             try {
               const workflow_ids = dataset.workflows.map((x) => x.id);
@@ -352,7 +353,7 @@ router.get(
             }
           }
           return log;
-        })
+        }),
       );
 
       res.json({
@@ -390,18 +391,21 @@ router.get(
       };
 
       const whereClause = {
-        audit_log: {
-          user: {
-            username: req.params.username,
-          },
+        dataset: {
           ...(dataset_name && {
-            dataset: {
-              name: {
-                contains: dataset_name,
-                mode: 'insensitive',
-              },
+            name: {
+              contains: dataset_name,
+              mode: 'insensitive',
             },
           }),
+          audit_logs: {
+            some: {
+              action: 'create',
+              user: {
+                username: req.params.username,
+              },
+            },
+          },
         },
       };
 
@@ -416,35 +420,38 @@ router.get(
         prisma.dataset_import_log.findMany({
           ...filter_query,
           include: {
-            audit_log: {
+            dataset: {
               include: {
-                user: {
-                  select: {
-                    id: true,
-                    username: true,
-                    name: true,
-                    email: true,
+                source_datasets: {
+                  include: {
+                    source_dataset: true,
                   },
                 },
-                dataset: {
+                workflows: {
+                  select: {
+                    id: true,
+                  },
+                },
+                genomic_details: {
+                  select: {
+                    genome_type: true,
+                    genome_value: true,
+                  },
+                },
+                analysis_type: true,
+                audit_logs: {
                   include: {
-                    source_datasets: {
-                      include: {
-                        source_dataset: true,
-                      },
-                    },
-                    workflows: {
+                    user: {
                       select: {
                         id: true,
+                        username: true,
+                        name: true,
+                        email: true,
                       },
                     },
-                    genomic_details: {
-                      select: {
-                        genome_type: true,
-                        genome_value: true,
-                      },
-                    },
-                    analysis_type: true,
+                  },
+                  where: {
+                    action: 'create',
                   },
                 },
               },
@@ -457,7 +464,7 @@ router.get(
       // Enrich workflow data from Rhythm
       const enrichedImportLogs = await Promise.all(
         importLogs.map(async (log) => {
-          const dataset = log.audit_log.dataset;
+          const { dataset } = log;
           if (dataset.workflows && dataset.workflows.length > 0) {
             try {
               const workflow_ids = dataset.workflows.map((x) => x.id);
@@ -471,7 +478,7 @@ router.get(
             }
           }
           return log;
-        })
+        }),
       );
 
       res.json({
@@ -784,7 +791,7 @@ router.post(
       /* eslint-enable */
 
     const data = await Promise.all(
-      req.body.datasets.map((d) => datasetService.buildDatasetCreateQuery(d))
+      req.body.datasets.map((d) => datasetService.buildDatasetCreateQuery(d)),
     );
 
     const results = await Promise.allSettled(data.map((d) => datasetService.create(prisma, d)));
@@ -867,7 +874,7 @@ router.patch(
       } else if (analysis_type.name && analysis_type.extension) {
         const formattedName = formatAnalysisType(analysis_type.name);
         const formattedExtension = analysis_type.extension.trim();
-        
+
         // Find or create analysis_type with case-insensitive search on composite key
         let foundAnalysisType = await prisma.analysis_type.findFirst({
           where: {
@@ -887,7 +894,7 @@ router.patch(
             ],
           },
         });
-        
+
         if (!foundAnalysisType) {
           foundAnalysisType = await prisma.analysis_type.create({
             data: {
@@ -896,7 +903,7 @@ router.patch(
             },
           });
         }
-        
+
         data.analysis_type = {
           connect: { id: foundAnalysisType.id },
         };
@@ -1054,16 +1061,16 @@ router.post(
       // Check if this is a legacy dataset that needs hydration
       const legacyMigrationService = require('@/services/legacyMigration');
       let actualWorkflow = wf_name;
-      
+
       if (dataset.cmg_id) {
         // This is a legacy CMG dataset
         const migrationStatus = await legacyMigrationService.getDatasetMigrationStatus(dataset.id);
-        
+
         // If migration is already in progress, return error
         if (migrationStatus.is_migration_initiated && !migrationStatus.is_migrated) {
           return next(createError(409, 'Dataset is already being staged'));
         }
-        
+
         // If not yet hydrated, use stage_migrated workflow
         if (!migrationStatus.is_hydrated) {
           actualWorkflow = CONSTANTS.WORKFLOWS.STAGE_MIGRATED;
@@ -1072,7 +1079,7 @@ router.post(
           logger.info(`Legacy dataset ${dataset.id} already hydrated, using standard stage workflow`);
         }
       }
-      
+
       try {
         await prisma.stage_request_log.create({
           data: {
@@ -1085,12 +1092,12 @@ router.post(
         return next(createError(500, 'Error creating stage request log'));
         // console.log()
       }
-      
+
       logger.info(`Starting workflow ${actualWorkflow} on dataset ${dataset.id}`);
       const wf = await datasetService.create_workflow(dataset, actualWorkflow, req.user.id);
       return res.json(wf);
     }
-    
+
     logger.info(`Starting workflow ${wf_name} on dataset ${dataset.id}`);
     const wf = await datasetService.create_workflow(dataset, wf_name, req.user.id);
     return res.json(wf);

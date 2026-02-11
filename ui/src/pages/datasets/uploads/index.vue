@@ -42,7 +42,7 @@
     <va-data-table :items="pastUploads" :columns="columns" :loading="loading">
       <template #cell(link)="{ rowData }">
         <router-link
-          :to="`/uploads/${rowData.id}`"
+          :to="`/datasets/uploads/${rowData.id}`"
           class="va-link"
         >
           <Icon icon="mdi:open-in-new" />
@@ -70,6 +70,23 @@
               :size="24"
               :color="colors.warning"
             />
+          </va-popover>
+        </div>
+        <!-- Upload verification in progress -->
+        <div v-else-if="rowData.status === constants.UPLOAD_STATUSES.VERIFYING" class="flex justify-center">
+          <va-popover message="Verifying upload">
+            <half-circle-spinner
+              class="flex-none"
+              :animation-duration="1000"
+              :size="24"
+              :color="colors.info"
+            />
+          </va-popover>
+        </div>
+        <!-- Upload verified successfully -->
+        <div v-else-if="rowData.status === constants.UPLOAD_STATUSES.VERIFIED" class="flex justify-center">
+          <va-popover message="Upload verified">
+            <va-icon name="check_circle_outline" color="success" />
           </va-popover>
         </div>
         <!-- Integrated workflow running -->
@@ -358,13 +375,15 @@ const getUploadLogs = async () => {
     .getDatasetUploadLogs(filter_query.value)
     .then((res) => {
       pastUploads.value = res.data.uploads.map((e) => {
-        let uploaded_dataset = e.audit_log.dataset;
+        let uploaded_dataset = e.dataset;
         const status = wfService.get_integrated_workflow_status(uploaded_dataset.workflows);
         const genomicDetails = uploaded_dataset.genomic_details?.[0];
+        // Get user from create audit log (filtered by action='create', only one exists)
+        const createAuditLog = uploaded_dataset.audit_logs?.[0];
         return {
           ...e,
-          initiated_at: e.audit_log.timestamp,
-          user: e.audit_log.user,
+          initiated_at: uploaded_dataset.created_at,
+          user: createAuditLog?.user,
           uploaded_dataset,
           source_dataset:
             uploaded_dataset.source_datasets.length > 0

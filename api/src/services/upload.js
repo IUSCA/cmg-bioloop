@@ -1,7 +1,7 @@
 /**
- * Generic TUS Upload Service
+ * TUS Upload Service
  *
- * Provides entity-agnostic file upload functionality using TUS protocol.
+ * Provides dataset file upload functionality using TUS protocol.
  *
  * Features:
  * - Resumable uploads (up to 100GB per file)

@@ -346,7 +346,7 @@ The previous chunk-based upload system used secure_download service. Key changes
 
 **UI Changes:**
 - Dynamic table column widths based on admin status
-- Breadcrumb navigation: Home → Uploads → Entity Name
+- Breadcrumb navigation: Home → Uploads → Dataset Name
 - Standard app UI/UX (no error alerts, silent failure handling)
 
 **Files Modified:**
@@ -461,7 +461,7 @@ invalid input value for enum upload_status: "VERIFYING"
 - 16MB chunks optimal for Lustre filesystem (avoids MDS bottleneck)
 
 **Design Principles:**
-- Uploads decoupled from Datasets (generic entity handlers)
+- Uploads are dataset-specific (all routes under `/datasets/uploads`)
 - Verification is idempotent and resumable
 - Task ID acts as distributed lock to prevent duplicate verification
 - Comprehensive logging for debugging and admin troubleshooting
@@ -603,6 +603,53 @@ poetry run pytest tests/upload_verification/ -v
 
 1. **Orphan Detection:** TUS uploads that complete but fail to register (no `process_id` in DB) need detection/cleanup mechanism.
 
+### 2026-02-11 - Schema Refactor: Direct Dataset Linking
+
+**Major Schema Change:** Simplified upload log schema by removing audit_log intermediary.
+
+**Schema Changes:**
+- `dataset_upload_log.audit_log_id` removed, replaced with `dataset_id`
+- `dataset.create_method` added (moved from `dataset_audit.create_method`)
+- Upload logs now link directly to datasets via `dataset_id` foreign key
+- Audit logs remain independent for compliance tracking
+
+**Route Consolidation:**
+- All upload routes moved from `/api/uploads/*` to `/api/datasets/uploads/*`
+- Routes consolidated:
+  - `GET /:id/logs` - Get upload log by ID (was `/api/uploads/:id`)
+  - `GET /:id/status` - Get dataset upload status
+  - `GET /stalled` - Get stalled uploads (was `/api/uploads/stalled`)
+  - `GET /failed` - Get failed uploads (was `/api/uploads/failed`)
+  - `PATCH /:id/logs` - Update upload log (was `/api/uploads/:id`)
+- TUS upload endpoint `/api/uploads/files` unchanged
+
+**Query Simplification:**
+- Old: `where: { audit_log: { dataset_id, create_method: 'UPLOAD' } }`
+- New: `where: { dataset_id }`
+- User tracking via `dataset.audit_logs` with `action: 'create'`
+
+**Benefits:**
+- Fewer table joins (better performance)
+- Clearer data model
+- Simpler queries
+- Better REST organization
+
+**Migration:**
+- Created `20260211_refactor_upload_import_logs_remove_audit_relation`
+- Automatically transfers all data
+- Idempotent and safe
+
+**Impact:**
+- All API, worker, and UI code updated
+- No functionality changes from user perspective
+- All historical data preserved
+
+**Files Modified:**
+- API: routes, services, constants (7 files)
+- Workers: api.py (1 file)
+- UI: services, pages, components (4 files)
+- data_sync: bigbang script (1 file)
+
 ---
 
-**Last Updated:** 2026-02-10 21:45 UTC
+**Last Updated:** 2026-02-11 21:15 UTC

@@ -17,10 +17,10 @@
                     <td>Uploaded</td>
                     <td>
                       <router-link
-                        :to="getUploadedEntityURL(upload)"
+                        :to="getDatasetURL(upload)"
                         class="va-link"
                       >
-                          {{ getUploadedEntityDisplayName(upload) }}
+                          {{ getDatasetDisplayName(upload) }}
                       </router-link>
                     </td>
                   </tr>
@@ -234,7 +234,7 @@ const formatLogTime = (date) => {
   return d.toLocaleTimeString();
 };
 
-const getUploadedEntityURL = (upload) => {
+const getDatasetURL = (upload) => {
   if (upload.dataset) {
     return `/datasets/${upload.dataset.id}`;
   }
@@ -242,7 +242,7 @@ const getUploadedEntityURL = (upload) => {
   return '';
 };
 
-const getUploadedEntityDisplayName = (upload) => {
+const getDatasetDisplayName = (upload) => {
   if (upload.dataset) {
     return upload.dataset.name;
   } 

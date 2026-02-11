@@ -552,13 +552,7 @@ async function get_dataset_creator({ dataset_id }) {
   const dataset_creation_log = await prisma.dataset_audit.findFirst({
     where: {
       dataset_id,
-      create_method: {
-        in: [
-          CONSTANTS.DATASET_CREATE_METHODS.UPLOAD,
-          CONSTANTS.DATASET_CREATE_METHODS.IMPORT,
-          CONSTANTS.DATASET_CREATE_METHODS.SCAN,
-        ],
-      },
+      action: 'create',
     },
     include: {
       user: {
@@ -567,6 +561,9 @@ async function get_dataset_creator({ dataset_id }) {
           username: true,
         },
       },
+    },
+    orderBy: {
+      timestamp: 'asc', // Get the first creation audit log
     },
   });
   if (!dataset_creation_log) {
@@ -1280,11 +1277,16 @@ const buildDatasetCreateQuery = async (data) => {
 
   // gather non-null data to create a new dataset
   const create_query = _.flow([
-    _.pick(['name', 'type', 'origin_path', 'du_size', 'size', 'bundle_size', 'metadata']),
+    _.pick(['name', 'type', 'origin_path', 'du_size', 'size', 'bundle_size', 'metadata', 'create_method']),
     _.omitBy(_.isNil),
   ])(data);
 
   create_query.name = normalize_name(create_query.name); // normalize name
+
+  // Set create_method on the dataset
+  if (create_method) {
+    create_query.create_method = create_method;
+  }
 
   // Handle analysis_type relation (connect existing or create new)
   if (file_type) {
@@ -1404,29 +1406,27 @@ const buildDatasetCreateQuery = async (data) => {
     ],
   };
 
-  // audit log entry
   const audit_log = {
     action: 'create',
-    create_method: create_method || CONSTANTS.DATASET_CREATE_METHODS.SCAN,
     user_id: user_id ?? Prisma.skip,
   };
 
-  // if this is an import, create import_log nested within audit_logs
+  create_query.audit_logs = {
+    create: [audit_log],
+  };
+
+  // if this is an import, create import_log
   if (create_method === CONSTANTS.DATASET_CREATE_METHODS.IMPORT) {
-    audit_log.import = {
-      create: _.omitBy(_.isNil)({
+    create_query.import_logs = {
+      create: [{
         source_run: src_dataset_id ? String(src_dataset_id) : null,
         metadata: {
           import_space: data.import_space || null,
           notes: import_notes || null,
         },
-      }),
+      }],
     };
   }
-
-  create_query.audit_logs = {
-    create: [audit_log],
-  };
 
   return create_query;
 };

@@ -244,13 +244,15 @@ const getImportLogs = async () => {
     .getDatasetImportLogs(filter_query.value)
     .then((res) => {
       pastImports.value = res.data.imports.map((e) => {
-        let imported_dataset = e.audit_log.dataset;
+        let imported_dataset = e.dataset;
         const status = wfService.get_integrated_workflow_status(imported_dataset.workflows);
         const genomicDetails = imported_dataset.genomic_details;
+        // Get user from create audit log (filtered by action='create', only one exists)
+        const createAuditLog = imported_dataset.audit_logs?.[0];
         return {
           ...e,
-          initiated_at: e.audit_log.timestamp,
-          user: e.audit_log.user,
+          initiated_at: e.created_at,
+          user: createAuditLog?.user,
           imported_dataset,
           source_dataset:
             imported_dataset.source_datasets.length > 0

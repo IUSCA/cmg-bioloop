@@ -139,6 +139,37 @@ Secure download mechanism that enforces access control and provides audit loggin
 - `ui/src/services/fs.js`
 - `api/src/routes/fs.js`
 
+### 2026-02-11 - Schema Refactor: Direct Dataset Linking
+
+**Schema Change:** Import logs now link directly to datasets (matching upload logs refactor).
+
+**Changes:**
+- `dataset_import_log.audit_log_id` removed, replaced with `dataset_id`
+- Import logs now link directly to datasets via `dataset_id` foreign key
+- Audit logs remain independent for user tracking
+
+**Query Changes:**
+- Old: `where: { audit_log: { dataset_id, create_method: 'IMPORT' } }`
+- New: `where: { dataset_id }`
+- User filtering via `dataset.audit_logs.some({ action: 'create', user: { username } })`
+
+**CMG Sync Updated:**
+- Bigbang script sets `create_method` on dataset
+- Import logs created with `dataset_id` instead of `audit_log_id`
+- Audit logs created independently for user tracking
+
+**Benefits:**
+- Consistent with upload logs schema
+- Simpler queries and better performance
+- Clearer separation of concerns
+
+**Files Modified:**
+- API: routes/datasets/index.js (import log queries)
+- data_sync: sync_import_logs.js (bigbang script)
+- UI: pages/datasets/imports/index.vue
+
+**Migration:** Same migration as uploads (`20260211_refactor_upload_import_logs_remove_audit_relation`)
+
 ---
 
-**Last Updated:** 2026-02-09
+**Last Updated:** 2026-02-11 21:15 UTC

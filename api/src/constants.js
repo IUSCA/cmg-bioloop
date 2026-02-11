@@ -44,14 +44,6 @@ const INCLUDE_AUDIT_LOGS = {
           },
         },
       },
-      upload: {
-        select: {
-          id: true,
-          status: true,
-          process_id: true, // Generic upload identifier (TUS ID, S3 key, etc.)
-          metadata: true, // Contains checksum info, failure_reason, etc.
-        },
-      },
     },
     orderBy: {
       timestamp: 'desc',
@@ -60,40 +52,37 @@ const INCLUDE_AUDIT_LOGS = {
 };
 
 const INCLUDE_DATASET_UPLOAD_LOG_RELATIONS = {
-  audit_log: {
+  dataset: {
     select: {
       id: true,
-      user: true,
-      timestamp: true,
-      upload: {
+      name: true,
+      type: true,
+      metadata: true,
+      origin_path: true,
+      create_method: true,
+      created_at: true,
+      source_datasets: {
         select: {
-          status: true,
+          source_dataset: true,
         },
       },
-      dataset: {
+      genomic_details: {
         select: {
-          id: true,
-          name: true,
-          type: true,
-          metadata: true,
-          origin_path: true,
-          source_datasets: {
-            select: {
-              source_dataset: true,
-            },
-          },
-          genomic_details: {
-            select: {
-              genome_type: true,
-              genome_value: true,
-            },
-          },
-          analysis_type: true,
+          genome_type: true,
+          genome_value: true,
+        },
+      },
+      analysis_type: true,
+      audit_logs: {
+        include: {
+          user: true,
+        },
+        where: {
+          action: 'create',
         },
       },
     },
   },
-  // Note: 'files' relation removed - file_upload_log table no longer exists in TUS migration
 };
 
 const DATASET_CREATE_METHODS = {

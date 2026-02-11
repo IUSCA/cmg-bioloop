@@ -118,8 +118,8 @@ echo "Generating APP_API_TOKEN"
 echo "overwriting workers/.env file"
 > workers/.env
 echo "Removed all content from workers/.env"
-echo "APP_API_TOKEN=$(node src/scripts/issue_token.js svc_tasks)"
-echo "APP_API_TOKEN=$(node src/scripts/issue_token.js svc_tasks)" > workers/.env
+echo "APP_API_TOKEN=$(node src/scripts/issue_token.js cmguser)"
+echo "APP_API_TOKEN=$(node src/scripts/issue_token.js cmguser)" > workers/.env
 # fi
 
 # Dynamically load environment variables from .env file

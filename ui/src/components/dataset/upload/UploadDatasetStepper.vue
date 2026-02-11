@@ -329,7 +329,7 @@
                 <UploadedDatasetDetails
                   v-if="selectingFiles || selectingDirectory"
                   v-model:populated-dataset-name="populatedDatasetName"
-                  :dataset="datasetUploadLog?.audit_log.dataset"
+                  :dataset="datasetUploadLog?.dataset"
                   :selected-dataset-type="selectedDatasetType.value"
                   :file-type="selectedFileType"
                   :genome-type="selectedGenomeType?.value || selectedGenomeType"
@@ -1640,7 +1640,7 @@ onBeforeUnmount(() => {
 // TUS upload logic
 const uploadFilesWithTus = async (files, endpoint) => {
   // Safety check: ensure upload log exists
-  if (!datasetUploadLog.value || !datasetUploadLog.value.audit_log || !datasetUploadLog.value.audit_log.dataset) {
+  if (!datasetUploadLog.value || !datasetUploadLog.value.dataset) {
     console.error('Dataset upload log not initialized');
     throw new Error('Dataset upload log not initialized');
   }
@@ -1680,7 +1680,7 @@ const uploadFilesWithTus = async (files, endpoint) => {
         name: file.name,
         size: file.size,
         type: file.type,
-        dataset_id: datasetUploadLog.value.audit_log.dataset.id,
+        dataset_id: datasetUploadLog.value.dataset.id,
         simulate_failure: simulateFailure || 'none',
       });
       
@@ -1713,8 +1713,7 @@ const uploadFilesWithTus = async (files, endpoint) => {
         // This ensures we can test scenarios where retries exceed 30s timeout
         retryDelays: [0, 1000, 2000, 3000, 5000, 8000, 13000, 21000, 34000, 55000, 89000, 144000, 233000, 377000],
         metadata: {
-          entity_type: 'dataset',
-          entity_id: String(datasetUploadLog.value.audit_log.dataset.id),
+          dataset_id: String(datasetUploadLog.value.dataset.id),
           filename: file.name,
           filetype: file.type || 'application/octet-stream',
           selection_mode: selectingDirectory.value ? 'directory' : 'files',
@@ -1740,7 +1739,7 @@ const uploadFilesWithTus = async (files, endpoint) => {
             error_stack: error.stack,
             file_name: file.name,
             file_size: file.size,
-            dataset_id: datasetUploadLog.value.audit_log.dataset.id,
+            dataset_id: datasetUploadLog.value.dataset.id,
             upload_url: upload.url,
             // Check if it's an HTTP error
             originalRequest: error.originalRequest ? {
@@ -1822,7 +1821,7 @@ const handleUploadComplete = async () => {
   // Call API to register all process_ids - this is the critical call
   // Only show success if this succeeds
   try {
-    const datasetId = datasetUploadLog.value.audit_log.dataset.id;
+    const datasetId = datasetUploadLog.value.dataset.id;
     
     console.log('[UPLOAD-COMPLETE] Starting upload completion API call', {
       dataset_id: datasetId,

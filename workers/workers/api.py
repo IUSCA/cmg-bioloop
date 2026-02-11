@@ -305,7 +305,7 @@ def update_dataset_upload(uploaded_dataset_id: int, log_data: dict):
 def get_stalled_uploads():
     """Get uploads that are UPLOADED but workflow hasn't started (>5 min)"""
     with APIServerSession() as s:
-        r = s.get('uploads/stalled')
+        r = s.get('datasets/uploads/stalled')
         r.raise_for_status()
         return r.json()
 
@@ -313,7 +313,7 @@ def get_stalled_uploads():
 def get_failed_uploads(max_retry_count=2, max_age_hours=72):
     """Get PROCESSING_FAILED uploads eligible for retry"""
     with APIServerSession() as s:
-        r = s.get('uploads/failed', params={
+        r = s.get('datasets/uploads/failed', params={
             'max_retry_count': max_retry_count,
             'max_age_hours': max_age_hours,
         })
@@ -329,7 +329,7 @@ def update_upload_retry(upload_id: int, retry_count: int, status: str = None, fa
             data['status'] = status
         if failure_reason:
             data['metadata'] = {'failure_reason': failure_reason}
-        r = s.patch(f'uploads/{upload_id}', json=data)
+        r = s.patch(f'datasets/uploads/{upload_id}/logs', json=data)
         r.raise_for_status()
         return r.json()
 

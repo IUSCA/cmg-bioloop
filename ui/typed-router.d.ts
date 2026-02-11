@@ -39,6 +39,7 @@ declare module 'vue-router/auto-routes' {
     '/datasets/imports/': RouteRecordInfo<'/datasets/imports/', '/datasets/imports', Record<never, never>, Record<never, never>>,
     '/datasets/imports/new': RouteRecordInfo<'/datasets/imports/new', '/datasets/imports/new', Record<never, never>, Record<never, never>>,
     '/datasets/uploads/': RouteRecordInfo<'/datasets/uploads/', '/datasets/uploads', Record<never, never>, Record<never, never>>,
+    '/datasets/uploads/[id]': RouteRecordInfo<'/datasets/uploads/[id]', '/datasets/uploads/:id', { id: ParamValue<true> }, { id: ParamValue<false> }>,
     '/datasets/uploads/new': RouteRecordInfo<'/datasets/uploads/new', '/datasets/uploads/new', Record<never, never>, Record<never, never>>,
     '/profile': RouteRecordInfo<'/profile', '/profile', Record<never, never>, Record<never, never>>,
     '/projects/': RouteRecordInfo<'/projects/', '/projects', Record<never, never>, Record<never, never>>,
@@ -53,8 +54,6 @@ declare module 'vue-router/auto-routes' {
     '/stats': RouteRecordInfo<'/stats', '/stats', Record<never, never>, Record<never, never>>,
     '/tracks/': RouteRecordInfo<'/tracks/', '/tracks', Record<never, never>, Record<never, never>>,
     '/tracks/[id]': RouteRecordInfo<'/tracks/[id]', '/tracks/:id', { id: ParamValue<true> }, { id: ParamValue<false> }>,
-    '/uploads/': RouteRecordInfo<'/uploads/', '/uploads', Record<never, never>, Record<never, never>>,
-    '/uploads/[id]': RouteRecordInfo<'/uploads/[id]', '/uploads/:id', { id: ParamValue<true> }, { id: ParamValue<false> }>,
     '/users': RouteRecordInfo<'/users', '/users', Record<never, never>, Record<never, never>>,
     '/workflows/': RouteRecordInfo<'/workflows/', '/workflows', Record<never, never>, Record<never, never>>,
   }

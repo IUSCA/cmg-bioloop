@@ -7,11 +7,11 @@ const { fileExposureRouter } = require('./sessions');
 
 const router = express.Router();
 
-// Debug middleware to log all requests
-router.use((req, res, next) => {
-  console.log(`[Router] ${req.method} ${req.url} (originalUrl: ${req.originalUrl})`);
-  next();
-});
+// // Debug middleware to log all requests
+// router.use((req, res, next) => {
+//   console.log(`[Router] ${req.method} ${req.url} (originalUrl: ${req.originalUrl})`);
+//   next();
+// });
 
 router.get('/health', (req, res) => {
   res.send('OK');
@@ -47,14 +47,6 @@ router.use('/notifications', require('./notifications') /* #swagger.security = [
 router.use('/tracks', require('./tracks') /* #swagger.security = [{"BearerAuth": []}] */);
 router.use('/sessions', require('./sessions') /* #swagger.security = [{"BearerAuth": []}] */);
 router.use('/instruments', require('./instruments') /* #swagger.security = [{"BearerAuth": []}] */);
-
-console.log('===== Mounting /uploads router =====');
-const uploadsRouter = require('./uploads');
-
-console.log('Uploads router type:', typeof uploadsRouter);
-console.log('Uploads router:', uploadsRouter);
-router.use('/uploads', uploadsRouter /* #swagger.security = [{"BearerAuth": []}] */);
-console.log('===== /uploads router mounted =====');
 router.use('/conversions', require('./conversions') /* #swagger.security = [{"BearerAuth": []}] */);
 router.use('/process_requests', require('./process_requests') /* #swagger.security = [{"BearerAuth": []}] */);
 router.use('/legacy', require('./legacy') /* #swagger.security = [{"BearerAuth": []}] */);

@@ -10,7 +10,7 @@ const fs = require('fs');
 const path = require('path');
 
 const asyncHandler = require('@/middleware/asyncHandler');
-const { accessControl, authenticate } = require('@/middleware/auth');
+const { accessControl } = require('@/middleware/auth');
 const { validate } = require('@/middleware/validators');
 const datasetService = require('@/services/dataset');
 const CONSTANTS = require('@/constants');
@@ -19,7 +19,173 @@ const prisma = require('@/db');
 
 const isPermittedTo = accessControl('datasets');
 
+console.log('============ LOADING datasets/uploads.js module ============');
+
 const router = express.Router();
+
+// ============================================================================
+// LITERAL ROUTES (must come before parametrized routes like /:username)
+// ============================================================================
+
+// Get stalled uploads (UPLOADED, VERIFYING, or VERIFIED - need processing)
+// Used by Workers
+router.get(
+  '/stalled',
+  isPermittedTo('read'),
+  asyncHandler(async (req, res) => {
+    // #swagger.tags = ['datasets']
+    // #swagger.summary = 'Get stalled uploads needing processing'
+
+    const stalledThreshold = new Date(Date.now() - 30 * 1000); // 30 second buffer to avoid race conditions
+
+    const stalled = await prisma.dataset_upload_log.findMany({
+      where: {
+        status: {
+          in: [
+            CONSTANTS.UPLOAD_STATUSES.UPLOADED,
+            CONSTANTS.UPLOAD_STATUSES.VERIFYING,
+            CONSTANTS.UPLOAD_STATUSES.VERIFIED,
+          ],
+        },
+        updated_at: { lt: stalledThreshold },
+      },
+      include: {
+        dataset: true,
+      },
+    });
+
+    res.json({
+      metadata: { count: stalled.length },
+      uploads: stalled.map((u) => ({
+        dataset_id: u.dataset.id,
+        dataset_name: u.dataset.name,
+        uploaded_at: u.updated_at,
+      })),
+    });
+  }),
+);
+
+// Get failed uploads (with retry count filter)
+// Used by Workers
+router.get(
+  '/failed',
+  isPermittedTo('read'),
+  asyncHandler(async (req, res) => {
+    // #swagger.tags = ['datasets']
+    // #swagger.summary = 'Get failed uploads eligible for retry'
+
+    const { max_retry_count = 2, max_age_hours = 72 } = req.query;
+    const cutoffDate = new Date(Date.now() - max_age_hours * 60 * 60 * 1000);
+
+    const failed = await prisma.dataset_upload_log.findMany({
+      where: {
+        status: 'PROCESSING_FAILED',
+        retry_count: { lte: parseInt(max_retry_count, 10) },
+        updated_at: { gte: cutoffDate },
+      },
+      include: {
+        dataset: true,
+      },
+    });
+
+    res.json({
+      uploads: failed.map((u) => ({
+        dataset_id: u.dataset.id,
+        dataset_name: u.dataset.name,
+        retry_count: u.retry_count || 0,
+        last_error: u.metadata?.failure_reason || null,
+      })),
+    });
+  }),
+);
+
+// Get expired uploads (UPLOADING > X days)
+// Used by Workers
+router.get(
+  '/expired',
+  isPermittedTo('read'),
+  asyncHandler(async (req, res) => {
+    // #swagger.tags = ['datasets']
+    // #swagger.summary = 'Get expired uploads'
+
+    const { status = 'UPLOADING', age_days = 7 } = req.query;
+    const cutoffDate = new Date(Date.now() - age_days * 24 * 60 * 60 * 1000);
+
+    const expired = await prisma.dataset_upload_log.findMany({
+      where: {
+        status,
+        updated_at: { lt: cutoffDate },
+      },
+      include: {
+        dataset: true,
+      },
+    });
+
+    res.json({
+      uploads: expired.map((u) => ({
+        dataset_id: u.dataset.id,
+        dataset_name: u.dataset.name,
+        status: u.status,
+        age_days: Math.floor((Date.now() - u.updated_at) / (24 * 60 * 60 * 1000)),
+      })),
+    });
+  }),
+);
+
+// Get all process IDs (for orphaned file detection)
+// Used by Workers
+router.get(
+  '/all-process-ids',
+  isPermittedTo('read'),
+  asyncHandler(async (req, res) => {
+    // #swagger.tags = ['datasets']
+    // #swagger.summary = 'Get all upload process IDs'
+
+    const uploads = await prisma.dataset_upload_log.findMany({
+      select: { process_id: true },
+      where: { process_id: { not: null } },
+    });
+
+    res.json({
+      process_ids: uploads.map((u) => u.process_id).filter(Boolean),
+    });
+  }),
+);
+
+// Get uploads by status (for monitoring)
+// Used by Workers
+router.get(
+  '/by-status',
+  isPermittedTo('read'),
+  asyncHandler(async (req, res) => {
+    // #swagger.tags = ['datasets']
+    // #swagger.summary = 'Get uploads by status'
+
+    const { statuses = [] } = req.query;
+
+    const uploads = await prisma.dataset_upload_log.findMany({
+      where: {
+        status: { in: statuses },
+      },
+      include: {
+        dataset: true,
+      },
+    });
+
+    res.json({
+      uploads: uploads.map((u) => ({
+        dataset_id: u.dataset.id,
+        dataset_name: u.dataset.name,
+        origin_path: u.dataset.origin_path,
+        status: u.status,
+      })),
+    });
+  }),
+);
+
+// ============================================================================
+// PARAMETRIZED ROUTES (must come after literal routes)
+// ============================================================================
 
 // Used by:
 //  - UI
@@ -50,12 +216,10 @@ router.get(
       where.status = status;
     }
     if (dataset_name) {
-      where.audit_log = {
-        dataset: {
-          name: {
-            contains: dataset_name,
-            mode: 'insensitive',
-          },
+      where.dataset = {
+        name: {
+          contains: dataset_name,
+          mode: 'insensitive',
         },
       };
     }
@@ -65,9 +229,7 @@ router.get(
       take: limit ?? Prisma.skip,
       where,
       orderBy: {
-        audit_log: {
-          timestamp: 'desc',
-        },
+        updated_at: 'desc',
       },
     };
 
@@ -107,18 +269,23 @@ router.get(
       where.status = status;
     }
     if (dataset_name) {
-      where.audit_log = {
-        dataset: {
-          name: {
-            contains: dataset_name,
-            mode: 'insensitive',
-          },
+      where.dataset = {
+        name: {
+          contains: dataset_name,
+          mode: 'insensitive',
         },
       };
     }
-    where.audit_log = {
-      user: {
-        username: req.params.username,
+    // Filter by user via dataset's audit logs
+    where.dataset = {
+      ...where.dataset,
+      audit_logs: {
+        some: {
+          action: 'create',
+          user: {
+            username: req.params.username,
+          },
+        },
       },
     };
 
@@ -127,9 +294,7 @@ router.get(
       take: limit ?? Prisma.skip,
       where,
       orderBy: {
-        audit_log: {
-          timestamp: 'desc',
-        },
+        updated_at: 'desc',
       },
     };
 
@@ -207,24 +372,6 @@ router.post(
           dataset_type: createdDataset.type,
         });
 
-        // Find the audit_log that was created by datasetService.create()
-        const audit_log = await tx.dataset_audit.findUniqueOrThrow({
-          where: {
-            dataset_id_create_method: {
-              dataset_id: createdDataset.id,
-              create_method: CONSTANTS.DATASET_CREATE_METHODS.UPLOAD,
-            },
-          },
-          select: {
-            id: true,
-          },
-        });
-
-        logger.info(`[UPLOAD-CREATE] Audit log found`, {
-          audit_log_id: audit_log.id,
-          dataset_id: createdDataset.id,
-        });
-
         // Set origin_path to the predetermined location where files will be moved to
         // This is deterministic and doesn't depend on the /complete endpoint
         // Format: /uploads/{type}/{id}/{name}
@@ -248,13 +395,13 @@ router.post(
           origin_path: datasetOriginPath,
         });
 
-        // Create dataset_upload_log (TUS handles file tracking internally)
+        // Create dataset_upload_log linked directly to dataset
         const created_dataset_upload_log = await tx.dataset_upload_log.create({
           data: {
             status: CONSTANTS.UPLOAD_STATUSES.UPLOADING,
-            audit_log: {
+            dataset: {
               connect: {
-                id: audit_log.id,
+                id: createdDataset.id,
               },
             },
           },
@@ -284,8 +431,8 @@ router.post(
 
       logger.info(`[UPLOAD-CREATE] SUCCESS: Dataset upload registered`, {
         upload_log_id: dataset_upload_log.id,
-        dataset_id: dataset_upload_log.audit_log.dataset.id,
-        dataset_name: dataset_upload_log.audit_log.dataset.name,
+        dataset_id: dataset_upload_log.dataset.id,
+        dataset_name: dataset_upload_log.dataset.name,
         user: req.user?.username,
       });
 
@@ -349,17 +496,10 @@ router.post(
       // Find the upload log
       const uploadLog = await prisma.dataset_upload_log.findFirst({
         where: {
-          audit_log: {
-            dataset_id: datasetId,
-            create_method: CONSTANTS.DATASET_CREATE_METHODS.UPLOAD,
-          },
+          dataset_id: datasetId,
         },
         include: {
-          audit_log: {
-            include: {
-              dataset: true,
-            },
-          },
+          dataset: true,
         },
       });
 
@@ -376,7 +516,7 @@ router.post(
         upload_log_id: uploadLog.id,
         dataset_id: datasetId,
         current_status: uploadLog.status,
-        dataset_name: uploadLog.audit_log.dataset.name,
+        dataset_name: uploadLog.dataset.name,
       });
 
       // Idempotency: If already UPLOADED, return success immediately
@@ -393,7 +533,7 @@ router.post(
       }
 
       // Get dataset type for proper path structure
-      const dataset = uploadLog.audit_log.dataset;
+      const dataset = uploadLog.dataset;
       const datasetType = dataset.type;
 
       // Get TUS upload info to verify completion and get file details
@@ -587,7 +727,7 @@ router.post(
       logger.info(`[UPLOAD-COMPLETE] SUCCESS: Upload completed`, {
         dataset_id: datasetId,
         upload_log_id: updatedLog.id,
-        dataset_name: updatedLog.audit_log.dataset.name,
+        dataset_name: updatedLog.dataset.name,
         status: updatedLog.status,
         process_id: updatedLog.process_id,
         user: req.user?.username,
@@ -615,20 +755,14 @@ router.post(
         // Get existing metadata first
         const existingLog = await prisma.dataset_upload_log.findFirst({
           where: {
-            audit_log: {
-              dataset_id: datasetId,
-              create_method: CONSTANTS.DATASET_CREATE_METHODS.UPLOAD,
-            },
+            dataset_id: datasetId,
           },
           select: { metadata: true },
         });
 
         await prisma.dataset_upload_log.updateMany({
           where: {
-            audit_log: {
-              dataset_id: datasetId,
-              create_method: CONSTANTS.DATASET_CREATE_METHODS.UPLOAD,
-            },
+            dataset_id: datasetId,
           },
           data: {
             status: CONSTANTS.UPLOAD_STATUSES.PROCESSING_FAILED,
@@ -692,17 +826,8 @@ router.patch(
     });
 
     const dataset_upload_log = await prisma.$transaction(async (tx) => {
-      const dataset_upload_audit_log = await tx.dataset_audit.findUniqueOrThrow({
-        where: {
-          dataset_id_create_method: {
-            dataset_id: req.params.id,
-            create_method: CONSTANTS.DATASET_CREATE_METHODS.UPLOAD,
-          },
-        },
-      });
-
-      let ds_upload_log = await tx.dataset_upload_log.findUniqueOrThrow({
-        where: { audit_log_id: dataset_upload_audit_log.id },
+      let ds_upload_log = await tx.dataset_upload_log.findFirstOrThrow({
+        where: { dataset_id: req.params.id },
       });
 
       if (Object.entries(dataset_upload_log_update_query).length > 0) {
@@ -727,7 +852,7 @@ router.patch(
 // Get upload log for a dataset (used by workers)
 router.get(
   '/:id/upload-log',
-  authenticate,
+  isPermittedTo('read'),
   asyncHandler(async (req, res) => {
     // #swagger.tags = ['datasets']
     // #swagger.summary = 'Get upload log for a dataset'
@@ -736,22 +861,15 @@ router.get(
 
     const uploadLog = await prisma.dataset_upload_log.findFirst({
       where: {
-        audit_log: {
-          dataset_id: datasetId,
-          create_method: CONSTANTS.DATASET_CREATE_METHODS.UPLOAD,
-        },
+        dataset_id: datasetId,
       },
       include: {
-        audit_log: {
-          include: {
-            dataset: {
-              select: {
-                id: true,
-                name: true,
-                type: true,
-                origin_path: true,
-              },
-            },
+        dataset: {
+          select: {
+            id: true,
+            name: true,
+            type: true,
+            origin_path: true,
           },
         },
       },
@@ -768,7 +886,7 @@ router.get(
 // Update upload log metadata (e.g., checksum) - used by UI and workers
 router.patch(
   '/:id/upload-log',
-  authenticate,
+  isPermittedTo('update'),
   asyncHandler(async (req, res) => {
     // #swagger.tags = ['datasets']
     // #swagger.summary = 'Update dataset upload log metadata'
@@ -787,10 +905,7 @@ router.patch(
     // Find upload log for this dataset
     const uploadLog = await prisma.dataset_upload_log.findFirst({
       where: {
-        audit_log: {
-          dataset_id: datasetId,
-          create_method: CONSTANTS.DATASET_CREATE_METHODS.UPLOAD,
-        },
+        dataset_id: datasetId,
       },
     });
 
@@ -848,14 +963,10 @@ router.patch(
       where: { id: uploadLog.id },
       data: updateData,
       include: {
-        audit_log: {
-          include: {
-            dataset: {
-              select: {
-                id: true,
-                name: true,
-              },
-            },
+        dataset: {
+          select: {
+            id: true,
+            name: true,
           },
         },
       },
@@ -864,13 +975,100 @@ router.patch(
     logger.info(`[UPLOAD-LOG-UPDATE] SUCCESS: Upload log updated`, {
       upload_log_id: updated.id,
       dataset_id: datasetId,
-      dataset_name: updated.audit_log.dataset.name,
+      dataset_name: updated.dataset.name,
       new_status: updated.status,
       new_retry_count: updated.retry_count,
       user: req.user?.username,
     });
 
     res.json({ success: true, upload_log: updated });
+  }),
+);
+
+/**
+ * Get upload details by upload log ID
+ * GET /api/datasets/uploads/:id/logs
+ */
+router.get(
+  '/:id/logs',
+  isPermittedTo('read'),
+  asyncHandler(async (req, res) => {
+    // #swagger.tags = ['datasets']
+    // #swagger.summary = 'Get upload details by upload log ID'
+
+    const uploadLogId = parseInt(req.params.id, 10);
+
+    // Get upload log
+    const uploadLog = await prisma.dataset_upload_log.findUnique({
+      where: { id: uploadLogId },
+      include: {
+        dataset: {
+          select: {
+            id: true,
+            name: true,
+            type: true,
+          },
+        },
+      },
+    });
+
+    if (!uploadLog) {
+      return res.status(404).json({ error: 'Upload not found' });
+    }
+
+    res.json({
+      id: uploadLog.id,
+      status: uploadLog.status,
+      process_id: uploadLog.process_id,
+      retry_count: uploadLog.retry_count,
+      metadata: uploadLog.metadata,
+      updated_at: uploadLog.updated_at,
+      dataset: uploadLog.dataset,
+    });
+  }),
+);
+
+/**
+ * Get upload status for a dataset
+ * GET /api/datasets/uploads/:datasetId/status
+ */
+router.get(
+  '/:datasetId/status',
+  isPermittedTo('read'),
+  asyncHandler(async (req, res) => {
+    // #swagger.tags = ['datasets']
+    // #swagger.summary = 'Get upload status for a dataset'
+
+    const datasetId = parseInt(req.params.datasetId, 10);
+
+    // Get upload log
+    const uploadLog = await prisma.dataset_upload_log.findFirst({
+      where: {
+        dataset_id: datasetId,
+      },
+      include: {
+        dataset: {
+          select: {
+            id: true,
+            name: true,
+            type: true,
+          },
+        },
+      },
+    });
+
+    if (!uploadLog) {
+      return res.status(404).json({ error: 'Upload not found' });
+    }
+
+    res.json({
+      status: uploadLog.status,
+      process_id: uploadLog.process_id,
+      retry_count: uploadLog.retry_count,
+      metadata: uploadLog.metadata,
+      updated_at: uploadLog.updated_at,
+      dataset: uploadLog.dataset,
+    });
   }),
 );
 
