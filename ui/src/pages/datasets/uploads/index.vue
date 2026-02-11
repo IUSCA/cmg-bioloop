@@ -31,7 +31,7 @@
           icon="add"
           class="px-1"
           color="success"
-          @click="router.push('/datasetUpload/new')"
+          @click="router.push('/datasets/uploads/new')"
         >
           Upload Dataset
         </va-button>
@@ -40,6 +40,15 @@
 
     <!-- table -->
     <va-data-table :items="pastUploads" :columns="columns" :loading="loading">
+      <template #cell(link)="{ rowData }">
+        <router-link
+          :to="`/uploads/${rowData.id}`"
+          class="va-link"
+        >
+          <Icon icon="mdi:open-in-new" />
+        </router-link>
+      </template>
+
       <template #cell(status)="{ rowData }">
         <!-- Upload still in progress -->
         <div v-if="rowData.status === constants.UPLOAD_STATUSES.UPLOADING" class="flex justify-center">
@@ -209,6 +218,7 @@ import { HalfCircleSpinner } from "epic-spinners";
 import { useColors } from "vuestic-ui";
 import _ from "lodash";
 import constants from "@/constants";
+import { Icon } from '@iconify/vue';
 
 const { colors } = useColors();
 const nav = useNavStore();
@@ -252,77 +262,95 @@ const filter_query = computed(() => {
   };
 });
 
-const columns = [
-  {
-    key: "status",
-    label: "Status",
-    width: "8%",
-    thAlign: "center",
-    tdAlign: "center",
-  },
-  {
-    key: "uploaded_dataset",
-    label: "Uploaded Dataset",
-    thAlign: "center",
-    tdAlign: "center",
-    tdStyle:
-      "white-space: pre-wrap; word-wrap: break-word; word-break: break-word;",
-    thStyle:
-      "white-space: pre-wrap; word-wrap: break-word; word-break: break-word;",
-  },
-  {
-    key: "uploaded_dataset_type",
-    label: "Dataset Type",
-    width: "12%",
-    thAlign: "center",
-    tdAlign: "center",
-  },
-  {
-    key: "file_type",
-    label: "File Type",
-    width: "10%",
-    thAlign: "center",
-    tdAlign: "center",
-  },
-  {
-    key: "genome",
-    label: "Genome",
-    width: "15%",
-    thAlign: "center",
-    tdAlign: "center",
-  },
-  {
-    key: "source_dataset",
-    label: "Source Raw Data",
-    width: "15%",
-    thAlign: "center",
-    tdAlign: "center",
-    tdStyle:
-      "white-space: pre-wrap; word-wrap: break-word; word-break: break-word;",
-    thStyle:
-      "white-space: pre-wrap; word-wrap: break-word; word-break: break-word;",
-  },
-  {
-    key: "user",
-    label: "Uploaded By",
-    width: "15%",
-    thAlign: "center",
-    tdAlign: "center",
-    tdStyle:
-      "white-space: pre-wrap; word-wrap: break-word; word-break: break-word;",
-    thStyle:
-      "white-space: pre-wrap; word-wrap: break-word; word-break: break-word;",
-  },
-  {
-    key: "initiated_at",
-    label: "Uploaded On",
-    width: "10%",
-    thAlign: "right",
-    tdAlign: "right",
-    thStyle:
-      "white-space: pre-wrap; word-wrap: break-word; word-break: break-word;",
-  },
-];
+const columns = computed(() => {
+  const baseColumns = [
+    {
+      key: "status",
+      label: "Status",
+      width: auth.canAdmin ? "6%" : "8%",
+      thAlign: "center",
+      tdAlign: "center",
+    },
+    {
+      key: "uploaded_dataset",
+      label: "Uploaded Dataset",
+      thAlign: "center",
+      tdAlign: "center",
+      tdStyle:
+        "white-space: pre-wrap; word-wrap: break-word; word-break: break-word;",
+      thStyle:
+        "white-space: pre-wrap; word-wrap: break-word; word-break: break-word;",
+    },
+    {
+      key: "uploaded_dataset_type",
+      label: "Dataset Type",
+      width: auth.canAdmin ? "10%" : "12%",
+      thAlign: "center",
+      tdAlign: "center",
+    },
+    {
+      key: "file_type",
+      label: "File Type",
+      width: auth.canAdmin ? "8%" : "10%",
+      thAlign: "center",
+      tdAlign: "center",
+    },
+    {
+      key: "genome",
+      label: "Genome",
+      width: auth.canAdmin ? "12%" : "15%",
+      thAlign: "center",
+      tdAlign: "center",
+    },
+    {
+      key: "source_dataset",
+      label: "Source Raw Data",
+      width: auth.canAdmin ? "12%" : "15%",
+      thAlign: "center",
+      tdAlign: "center",
+      tdStyle:
+        "white-space: pre-wrap; word-wrap: break-word; word-break: break-word;",
+      thStyle:
+        "white-space: pre-wrap; word-wrap: break-word; word-break: break-word;",
+    },
+    {
+      key: "user",
+      label: "Uploaded By",
+      width: auth.canAdmin ? "12%" : "15%",
+      thAlign: "center",
+      tdAlign: "center",
+      tdStyle:
+        "white-space: pre-wrap; word-wrap: break-word; word-break: break-word;",
+      thStyle:
+        "white-space: pre-wrap; word-wrap: break-word; word-break: break-word;",
+    },
+    {
+      key: "initiated_at",
+      label: "Uploaded On",
+      width: auth.canAdmin ? "8%" : "10%",
+      thAlign: "right",
+      tdAlign: "right",
+      thStyle:
+        "white-space: pre-wrap; word-wrap: break-word; word-break: break-word;",
+    },
+  ];
+
+  // Add link column at the start for admins
+  if (auth.canAdmin) {
+    return [
+      {
+        key: "link",
+        label: "Upload Details",
+        width: "8%",
+        thAlign: "center",
+        tdAlign: "center",
+      },
+      ...baseColumns,
+    ];
+  }
+
+  return baseColumns;
+});
 
 const getUploadLogs = async () => {
   loading.value = true;

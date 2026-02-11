@@ -131,11 +131,7 @@ export default defineConfig(({ command, mode }) => {
             });
           },
         },
-        '/upload': {
-          target: env.VITE_UPLOAD_API_URL,
-          changeOrigin: true,
-          secure: false,
-        },
+        // Legacy '/upload' proxy removed - TUS now uses '/api/uploads/files'
       },
     },
     // to disable minification - https://vitejs.dev/config/build-options.html#build-minify

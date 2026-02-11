@@ -47,19 +47,128 @@ class TestableFileStore extends FileStore {
         offset,
       });
       
-      // SIMPLEST APPROACH: Just reject immediately with error
-      // TUS will see this as a failure and client will retry
-      // Don't worry about partial data for now - focus on seeing the timeout/retry UI
-      logger.error(`[TUS-FILESTORE] SIMULATED FAILURE (immediate rejection)`, {
-        uploadId: id,
-        offset,
+      // Solution from ChatGPT: Use a cutoff Transform that passes bytes until threshold,
+      // then self-destructs AFTER passing the final chunk downstream
+      const fs = require('fs');
+      const path = require('path');
+      const { pipeline, Transform } = require('stream');
+      
+      const failureThreshold = 1024 * 1024; // 1MB
+      const filePath = path.join(this.directory, id);
+      
+      // Create write stream (same as parent FileStore)
+      const writeable = fs.createWriteStream(filePath, {
+        flags: offset > 0 ? 'r+' : 'w',
+        start: offset,
       });
       
-      const error = new Error('Simulated upload failure (test mode)');
-      error.status_code = 500;
-      error.body = 'Simulated mid-upload network failure';
+      let bytesWritten = 0;
+      let cutoffTriggered = false;
       
-      return Promise.reject(error);
+      const cutoffTransform = new Transform({
+        transform(chunk, encoding, callback) {
+          logger.info(`[TUS-FILESTORE] Transform processing chunk`, {
+            uploadId: id,
+            chunkSize: chunk.length,
+            bytesWritten,
+            cutoffTriggered,
+          });
+          
+          if (cutoffTriggered) {
+            // Already triggered, stop forwarding
+            logger.warn(`[TUS-FILESTORE] Cutoff already triggered, rejecting chunk`, {
+              uploadId: id,
+            });
+            return callback(new Error('Simulated upload failure (test mode)'));
+          }
+          
+          const remaining = failureThreshold - bytesWritten;
+          
+          if (remaining <= 0) {
+            cutoffTriggered = true;
+            return callback(new Error('Simulated upload failure (test mode)'));
+          }
+          
+          if (chunk.length <= remaining) {
+            bytesWritten += chunk.length;
+            
+            // If we exactly hit threshold, schedule failure AFTER passing this chunk
+            if (bytesWritten === failureThreshold) {
+              cutoffTriggered = true;
+              logger.info(`[TUS-FILESTORE] Threshold reached exactly, will fail after this chunk`, {
+                uploadId: id,
+                bytesWritten,
+                threshold: failureThreshold,
+              });
+              setImmediate(() => {
+                cutoffTransform.destroy(new Error('Simulated upload failure (test mode)'));
+              });
+            }
+            
+            return callback(null, chunk);
+          }
+          
+          // Chunk would overshoot: forward only what we need, then fail next tick
+          const partial = chunk.subarray(0, remaining);
+          bytesWritten += partial.length;
+          cutoffTriggered = true;
+          
+          logger.info(`[TUS-FILESTORE] Partial chunk written to reach threshold, will fail next tick`, {
+            uploadId: id,
+            bytesWritten,
+            threshold: failureThreshold,
+            chunkSize: chunk.length,
+            partialSize: partial.length,
+          });
+          
+          setImmediate(() => {
+            cutoffTransform.destroy(new Error('Simulated upload failure (test mode)'));
+          });
+          
+          return callback(null, partial);
+        }
+      });
+      
+      logger.info(`[TUS-FILESTORE] Starting pipeline`, {
+        uploadId: id,
+        offset,
+        filePath,
+        threshold: failureThreshold,
+      });
+      
+      return new Promise((resolve, reject) => {
+        pipeline(stream, cutoffTransform, writeable, (err) => {
+          logger.info(`[TUS-FILESTORE] Pipeline completed`, {
+            uploadId: id,
+            hasError: !!err,
+            errorMessage: err?.message,
+            bytesWritten,
+          });
+          
+          if (!err) {
+            // No error, write succeeded (shouldn't happen with simulation)
+            logger.warn(`[TUS-FILESTORE] Simulation completed without error (unexpected)`, {
+              uploadId: id,
+              bytesWritten,
+            });
+            return resolve(offset + bytesWritten);
+          }
+          
+          // Expected path: error occurred after writing threshold bytes
+          logger.error(`[TUS-FILESTORE] SIMULATED FAILURE after writing ${bytesWritten} bytes`, {
+            uploadId: id,
+            bytesWritten,
+            threshold: failureThreshold,
+            error: err.message,
+          });
+          
+          // Return TUS-compatible error
+          const error = new Error('Simulated upload failure (test mode)');
+          error.status_code = 500;
+          error.body = 'Simulated mid-upload network failure';
+          reject(error);
+        });
+      });
     }
     
     // Normal operation - pass through to parent

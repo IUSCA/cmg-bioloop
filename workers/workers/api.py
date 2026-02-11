@@ -274,6 +274,14 @@ def post_worker_logs(process_id: str, logs: list[dict]):
         r.raise_for_status()
 
 
+def get_worker_processes(filters: dict = None):
+    """Get worker processes with optional filters (e.g., {'task_id': 'xxx'})"""
+    with APIServerSession() as s:
+        r = s.get('workflows/processes', params=filters or {})
+        r.raise_for_status()
+        return r.json()
+
+
 def get_all_workflows():
     with APIServerSession() as s:
         r = s.get('workflows/current')

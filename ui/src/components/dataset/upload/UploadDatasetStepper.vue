@@ -1708,7 +1708,10 @@ const uploadFilesWithTus = async (files, endpoint) => {
       
       upload = new tus.Upload(file, {
         endpoint,
-        retryDelays: [0, 3000, 5000, 10000, 20000],
+        // Increased retries for testing: allows up to 15 attempts total (1 initial + 14 retries)
+        // Delays: 0s, 1s, 2s, 3s, 5s, 8s, 13s, 21s, 34s, 55s (Fibonacci-like progression)
+        // This ensures we can test scenarios where retries exceed 30s timeout
+        retryDelays: [0, 1000, 2000, 3000, 5000, 8000, 13000, 21000, 34000, 55000, 89000, 144000, 233000, 377000],
         metadata: {
           entity_type: 'dataset',
           entity_id: String(datasetUploadLog.value.audit_log.dataset.id),

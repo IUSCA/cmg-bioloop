@@ -34,16 +34,21 @@ This guide explains how to test various upload failure scenarios.
 
 1. **In browser console**, run:
    ```javascript
-   // Test automatic retry success (default)
-   localStorage.setItem('SIMULATE_UPLOAD_FAILURE', 'mid-upload')
-   // Uploads will fail ONCE, then succeed on retry within 30s timeout
-   
-   // OR: Test retry exhaustion (to see failure UI)
+   // Test automatic retry success (quick test)
    localStorage.setItem('SIMULATE_UPLOAD_FAILURE', 'mid-upload')
    localStorage.setItem('SIMULATE_UPLOAD_FAILURE_COUNT', '2')
-   // Uploads will fail 2 TIMES
-   // If retries exceed 30 seconds, client will timeout
+   // Uploads will fail 2 times, then succeed on 3rd try (~3s total)
+   
+   // OR: Test 30-second timeout with failure UI (recommended)
+   localStorage.setItem('SIMULATE_UPLOAD_FAILURE', 'mid-upload')
+   localStorage.setItem('SIMULATE_UPLOAD_FAILURE_COUNT', '6')
+   // Uploads will fail 6 times (cumulative delays: 0+1+2+3+5+8 = 19s)
+   // Each failure writes ~1MB, retries from offset
+   // After 6th failure, TUS continues retrying but 30s timeout triggers
    // User will see "Upload Failed" with "Retry" button
+   
+   // TUS Configuration: Up to 15 attempts (1 initial + 14 retries)
+   // Retry delays: 0s, 1s, 2s, 3s, 5s, 8s, 13s, 21s, 34s, 55s...
    ```
 
 2. **Trigger**: The failure will occur automatically during the next PATCH request after ~1MB of data has been **written to disk**.

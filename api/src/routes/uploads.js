@@ -17,6 +17,7 @@ console.log('===== uploads.js module loading =====');
 
 const router = express.Router();
 const isPermittedTo = accessControl('uploads');
+const datasetsPermission = accessControl('datasets');
 
 // Test endpoint to verify routing
 router.get('/test', (req, res) => {
@@ -30,6 +31,50 @@ console.log('Registered GET /test route');
 // TUS server is now mounted directly in app.js BEFORE this router
 // This avoids issues with Express middleware modifying req/res objects
 logger.info('TUS server is mounted in app.js at /uploads/files');
+
+/**
+ * Get upload details by upload log ID
+ * GET /api/uploads/:id
+ */
+router.get(
+  '/:id(\\d+)',
+  datasetsPermission('read'),
+  asyncHandler(async (req, res) => {
+    const uploadLogId = parseInt(req.params.id, 10);
+
+    // Get upload log
+    const uploadLog = await prisma.dataset_upload_log.findUnique({
+      where: { id: uploadLogId },
+      include: {
+        audit_log: {
+          include: {
+            dataset: {
+              select: {
+                id: true,
+                name: true,
+                type: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!uploadLog) {
+      return res.status(404).json({ error: 'Upload not found' });
+    }
+
+    res.json({
+      id: uploadLog.id,
+      status: uploadLog.status,
+      process_id: uploadLog.process_id,
+      retry_count: uploadLog.retry_count,
+      metadata: uploadLog.metadata,
+      updated_at: uploadLog.updated_at,
+      dataset: uploadLog.audit_log.dataset,
+    });
+  }),
+);
 
 /**
  * Get upload status for an entity

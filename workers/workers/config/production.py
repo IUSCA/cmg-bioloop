@@ -61,6 +61,9 @@ config = {
             'source_dir_novaseqx1': '/zpool/novaseqx/novaseqx1',
             
             # Nanopore Origin paths
+            # NOTE: Bioloop workers use the below dict's keys to detect whether or not a Dataset should be
+            # considered a 'nanopore' dataset. If these keys are changed, the behavior of method
+            # ``is_nanopore_dataset()`` in ``dataset.py`` will need to be updated accordingly.
             'source_dir_nanopore_1': '/data/p2solo',
             'source_dir_nanopore_2': '/zpool/p24',
         },

@@ -9,8 +9,8 @@ from celery.utils.log import get_task_logger
 from sca_rhythm import WorkflowTask
 
 import workers.api as api
-import workers.cmg_api as cmg_api
 import workers.cmd as cmd
+import workers.cmg_api as cmg_api
 import workers.config.celeryconfig as celeryconfig
 import workers.utils as utils
 import workers.workflow_utils as wf_utils
@@ -225,7 +225,7 @@ def archive(celery_task: WorkflowTask, dataset: dict, delete_local_file: bool = 
         # STRICT VALIDATION: Verify the archive exists in SDA and get its hash
         try:
             from workers import sda
-            
+
             # Check if file exists in SDA
             if not sda.exists(sda_bundle_path):
                 error_msg = (

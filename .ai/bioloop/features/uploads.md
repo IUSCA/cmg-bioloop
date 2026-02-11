@@ -322,6 +322,73 @@ The previous chunk-based upload system used secure_download service. Key changes
 
 ## Changelog
 
+### 2026-02-10 - Upload Details Page and Log Tracking Fix
+
+**Added Upload Details Page:**
+- Created `/uploads/[id].vue` page for viewing individual upload details
+- Shows comprehensive upload metadata (status, checksums, process IDs, failure reasons)
+- Displays real-time verification logs from worker processes
+- Auto-refreshes logs every 10 seconds with countdown indicator
+- Manual refresh and pause controls
+- Loosely coupled with datasets (can be extended for other entity types)
+- Added "Upload Details" link column to Dataset Uploads table (admin only)
+
+**Fixed Worker Process Registration:**
+- Fixed `verify_upload.py` to send correct fields to `/workflows/processes` API
+- Now properly creates worker_process record with: `pid`, `task_id`, `step`, `hostname`, `workflow_id`
+- Stores `worker_process_id` in upload metadata for log tracking
+- Previous uploads (before this fix) won't have logs available
+
+**API Changes:**
+- Added `GET /api/uploads/:id` endpoint for fetching upload details by upload log ID
+- Uses `datasets` permission (not `uploads`) to align with existing upload routes
+- Added `getUploadLogById(uploadLogId)` to `ui/src/services/dataset.js`
+
+**UI Changes:**
+- Dynamic table column widths based on admin status
+- Breadcrumb navigation: Home → Uploads → Entity Name
+- Standard app UI/UX (no error alerts, silent failure handling)
+
+**Files Modified:**
+- `workers/workers/tasks/verify_upload.py`: Fixed worker_process registration
+- `api/src/routes/uploads.js`: Added GET /:id endpoint
+- `ui/src/pages/uploads/[id].vue`: Created upload details page
+- `ui/src/pages/datasets/uploads/index.vue`: Added link column for admins
+- `ui/src/services/dataset.js`: Added getUploadLogById method
+
+### 2026-02-10 - Database Migration for VERIFYING/VERIFIED Statuses
+
+**Issue:** Async upload verification polling script was failing with database error:
+```
+invalid input value for enum upload_status: "VERIFYING"
+```
+
+**Root Cause:**
+- Prisma schema was updated with new statuses (`VERIFYING`, `VERIFIED`) on 2026-02-05
+- Database enum was not migrated to include these new values
+- Polling script queries for uploads with these statuses, causing PostgreSQL constraint violation
+
+**Resolution:**
+- Created migration `20260210_add_verifying_verified_statuses` to add missing enum values:
+  - `VERIFYING` - Integrity verification in progress (async Celery task)
+  - `VERIFIED` - Integrity verified, ready to trigger workflow
+- Migration uses `ADD VALUE IF NOT EXISTS` for idempotency
+- Applied to development database immediately
+
+**Impact:**
+- Polling script now works correctly
+- Upload verification system is fully operational
+
+**Files Modified:**
+- `api/prisma/migrations/20260210_add_verifying_verified_statuses/migration.sql` (new)
+
+**Deployment Notes:**
+- This migration must be applied before deploying the async verification code
+- Safe to run multiple times (uses IF NOT EXISTS)
+- Production deployment: Run migration before restarting workers
+
+---
+
 ### 2026-02-05 - Async Upload Verification Implementation
 
 **Major Feature:** Implemented asynchronous upload integrity verification to prevent blocking PM2 cron script.
@@ -536,4 +603,6 @@ poetry run pytest tests/upload_verification/ -v
 
 1. **Orphan Detection:** TUS uploads that complete but fail to register (no `process_id` in DB) need detection/cleanup mechanism.
 
----**Last Updated:** 2026-02-05
+---
+
+**Last Updated:** 2026-02-10 21:45 UTC
