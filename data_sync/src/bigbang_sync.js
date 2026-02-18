@@ -14,7 +14,7 @@
  *   --skip-sessions             Skip genome browser session conversion
  *   --skip-conversion-logs      Skip conversion logs migration (from filesystem)
  *   --clear-locks               Clear any existing process locks before starting
- *   --clear-target-db           Clear all data from target database before migration
+ *   --clear-target-db           Clear all data from target database before migration (also clears locks)
  *   --help, -h                  Show help message
  *
  * Environment Variables (alternative to --cmg-uri):
@@ -41,13 +41,14 @@
  * 7. Convert datasets (RAW_DATA and DATA_PRODUCT)
  * 8. Convert dataset audit logs (from events)
  * 9. Convert stage/download logs (data_access_log, stage_request_log, dataset_state)
- * 10. Convert dataset import logs (CMG upload history)
- * 11. Convert dataset hierarchies
- * 12. Convert projects
- * 13. Convert conversions
- * 14. Convert conversion logs (from filesystem - production only)
- * 15. Convert sessions (optional - many will be skipped)
- * 16. Initialize cursors for pollers
+ * 10. Convert events collection (Download Copy events -> data_access_log)
+ * 11. Convert dataset import logs (CMG upload history)
+ * 12. Convert dataset hierarchies
+ * 13. Convert projects
+ * 14. Convert conversions
+ * 15. Convert conversion logs (from filesystem - production only)
+ * 16. Convert sessions (optional - many will be skipped)
+ * 17. Initialize cursors for pollers
  */
 
 require('module-alias/register');
@@ -76,6 +77,7 @@ const { syncUsers } = require('./sync/bigbang/sync_users');
 const { syncAllDatasets } = require('./sync/bigbang/sync_datasets');
 const { syncAuditLogs } = require('./sync/bigbang/sync_audit_logs');
 const { syncDownloadStageLogs } = require('./sync/bigbang/sync_download_stage_logs');
+const syncEventsCollection = require('./sync/bigbang/sync_events_collection');
 const { syncImportLogs } = require('./sync/bigbang/sync_import_logs');
 const { syncDatasetHierarchies } = require('./sync/bigbang/sync_dataset_hierarchies');
 const { syncProjects } = require('./sync/bigbang/sync_projects');
@@ -134,6 +136,7 @@ Options:
   --clear-locks               Clear any existing process locks before starting
   
   --clear-target-db           Clear all data from target database before migration (keeps schema)
+                              Also clears process locks to allow fresh start.
                               WARNING: This deletes all existing data!
   
   --help, -h             Show this help message
@@ -341,6 +344,15 @@ async function main() {
       process.exit(1);
     }
 
+    // Clear target database if requested (do this BEFORE lock check)
+    // When clearing target DB, also clear locks to allow fresh start
+    if (options.clearTargetDb) {
+      await clearTargetDatabase(prisma);
+      // Also clear locks since we're starting fresh
+      logger.info('[CLEAR-DB] Clearing process locks for fresh start...');
+      await forceReleaseAllProcessLocks(prisma);
+    }
+
     // Acquire process lock BEFORE starting migration
     lockAcquired = await acquireProcessLock(prisma, 'bigbang', DEFAULT_LOCK_TTL_MS);
 
@@ -361,11 +373,6 @@ async function main() {
       logger.error('    data: { locked_by: null, lock_expires_at: null } })');
       logger.error('');
       process.exit(1);
-    }
-
-    // Clear target database if requested
-    if (options.clearTargetDb) {
-      await clearTargetDatabase(prisma);
     }
 
     // Build connection URIs
@@ -428,43 +435,47 @@ async function main() {
     await syncAuditLogs(prisma, cmgDb, cmgUserId);
 
     // 9. Convert stage/download logs
-    logger.info('[9/16] Converting historic stage/download events to logs...');
+    logger.info('[9/17] Converting historic stage/download events to logs...');
     await syncDownloadStageLogs(prisma, cmgDb, cmgUserId);
 
-    // 10. Convert dataset import logs (CMG upload history -> Bioloop import logs)
-    logger.info('[10/16] Converting CMG upload history to import logs...');
+    // 10. Convert events collection (Download Copy events -> data_access_log)
+    logger.info('[10/17] Converting CMG events collection to data access logs...');
+    await syncEventsCollection(prisma, cmgDb, cmgUserId);
+
+    // 11. Convert dataset import logs (CMG upload history -> Bioloop import logs)
+    logger.info('[11/17] Converting CMG upload history to import logs...');
     await syncImportLogs(prisma, cmgDb, cmgUserId);
 
-    // 11. Convert dataset hierarchies
-    logger.info('[11/16] Converting dataset hierarchies...');
+    // 12. Convert dataset hierarchies
+    logger.info('[12/17] Converting dataset hierarchies...');
     await syncDatasetHierarchies(prisma, cmgDb);
 
-    // 12. Convert projects
-    logger.info('[12/16] Converting projects...');
+    // 13. Convert projects
+    logger.info('[13/17] Converting projects...');
     await syncProjects(prisma, cmgDb);
 
-    // 13. Convert conversions
-    logger.info('[13/16] Converting conversions...');
+    // 14. Convert conversions
+    logger.info('[14/17] Converting conversions...');
     await syncConversions(prisma, cmgDb);
 
-    // 14. Convert conversion logs (filesystem - production only)
+    // 15. Convert conversion logs (filesystem - production only)
     if (options.skipConversionLogs) {
-      logger.info('[14/16] Skipping conversion logs (--skip-conversion-logs flag provided)');
+      logger.info('[15/17] Skipping conversion logs (--skip-conversion-logs flag provided)');
     } else {
-      logger.info('[14/16] Converting historic conversion logs...');
+      logger.info('[15/17] Converting historic conversion logs...');
       await syncAllConversionLogs(prisma, cmgDb);
     }
 
-    // 15. Convert sessions (optional)
+    // 16. Convert sessions (optional)
     if (options.skipSessions) {
-      logger.info('[15/16] Skipping sessions (--skip-sessions flag provided)');
+      logger.info('[16/17] Skipping sessions (--skip-sessions flag provided)');
     } else {
-      logger.info('[15/16] Converting genome browser sessions...');
+      logger.info('[16/17] Converting genome browser sessions...');
       await syncSessions(prisma, cmgDb);
     }
 
-    // 16. Initialize cursors
-    logger.info('[16/16] Initializing poller cursors...');
+    // 17. Initialize cursors
+    logger.info('[17/17] Initializing poller cursors...');
     await initializeCursors(prisma, cmgDb);
 
     // Clear lock extender

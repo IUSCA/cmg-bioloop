@@ -134,8 +134,9 @@ dataset_audit.import (relation)
 ### UI Changes (4 files)
 
 **1. ui/src/services/dataset.js**
-- Updated `getUploadLogById()`: `/uploads/${id}` → `/datasets/uploads/logs/${id}`
-- Updated status endpoint: `/uploads/status/dataset/${id}` → `/datasets/uploads/status/${id}`
+- Updated `getUploadLogByDatasetId()` (renamed from `getUploadLogById`): Takes dataset_id, not upload_log_id
+- Route: `/datasets/uploads/${datasetId}/logs` (consistent with /datasets REST convention)
+- Updated status endpoint: `/uploads/status/dataset/${id}` → `/datasets/uploads/${datasetId}/status`
 
 **2. ui/src/pages/datasets/uploads/index.vue**
 - Changed `e.audit_log.dataset` → `e.dataset`

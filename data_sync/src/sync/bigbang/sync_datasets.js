@@ -7,6 +7,50 @@ const DUPLICATE_PREFIX = 'DUPLICATE';
 const UNKNOWN_PREFIX = 'UNKNOWN';
 
 /**
+ * Infer file extension from CMG file_type name
+ * Looks for known file type patterns (FASTQ, BAM, VCF, etc.) in the name
+ * Returns appropriate extension or defaults to '.dat' for unknown types
+ */
+function inferExtensionFromFileType(fileTypeName) {
+  const upperName = fileTypeName.toUpperCase();
+  
+  // Known file type mappings (check for these patterns in the name)
+  const extensionMap = {
+    'FASTQ': '.fastq',
+    'BAM': '.bam',
+    'VCF': '.vcf',
+    'BIGWIG': '.bw',
+    'BW': '.bw',
+    'FASTA': '.fa',
+    'FA': '.fa',
+    'GFF': '.gff',
+    'GTF': '.gtf',
+    'BED': '.bed',
+    'CLOUPE': '.cloupe',
+    'HTML': '.html',
+    'PDF': '.pdf',
+    'PNG': '.png',
+    'JPG': '.jpg',
+    'JPEG': '.jpg',
+    'TIF': '.tif',
+    'TIFF': '.tif',
+    'TSV': '.tsv',
+    'CSV': '.csv',
+    'TXT': '.txt',
+  };
+  
+  // Check if any known type is contained in the file_type name
+  for (const [pattern, extension] of Object.entries(extensionMap)) {
+    if (upperName.includes(pattern)) {
+      return extension;
+    }
+  }
+  
+  // Default to .dat for unknown types
+  return '.dat';
+}
+
+/**
  * Convert all datasets from CMG to Bioloop
  */
 async function syncAllDatasets(prisma, cmgDb) {
@@ -163,18 +207,29 @@ async function insertDataset(prisma, cmgItem, datasetType, name, isDeleted) {
       .replace(/\s+/g, '_')
       .replace(/[^A-Z0-9_-]/g, '');
     
-    // Look up analysis_type in database (case-insensitive)
-    const analysisType = await prisma.analysis_type.findFirst({
+    // Infer extension from file_type name
+    const inferredExtension = inferExtensionFromFileType(cmgItem.file_type);
+    
+    // Look up analysis_type in database (case-insensitive on both name and extension)
+    let analysisType = await prisma.analysis_type.findFirst({
       where: {
         name: { equals: normalizedName, mode: 'insensitive' },
+        extension: { equals: inferredExtension, mode: 'insensitive' },
       },
     });
     
     if (analysisType) {
       analysisTypeConnect = { connect: { id: analysisType.id } };
     } else {
-      // Log warning if file_type from CMG doesn't match any seeded analysis type
-      logger.warn(`[BIGBANG] No analysis_type found for CMG file_type: "${cmgItem.file_type}" (normalized: "${normalizedName}") on dataset ${cmgItem._id}`);
+      // Create missing analysis_type from CMG file_type
+      logger.info(`[BIGBANG] Creating new analysis_type: "${normalizedName}" with extension "${inferredExtension}" (from CMG file_type: "${cmgItem.file_type}")`);
+      analysisType = await prisma.analysis_type.create({
+        data: {
+          name: normalizedName,
+          extension: inferredExtension,
+        },
+      });
+      analysisTypeConnect = { connect: { id: analysisType.id } };
     }
   }
   

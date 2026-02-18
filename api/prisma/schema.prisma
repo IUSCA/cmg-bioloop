@@ -647,6 +647,7 @@ enum access_type {
   BROWSER
   SLATE_SCRATCH
   SLATE_PROJECT
+  DCWAN
 }
 
 enum NOTIFICATION_STATUS {

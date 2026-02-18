@@ -154,7 +154,7 @@ let refreshInterval = null;
 // Fetch upload details
 const fetchUpload = async () => {
   try {
-    const response = await datasetService.getUploadLogById(props.id);
+    const response = await datasetService.getUploadLogByDatasetId(props.id);
     upload.value = response.data;
   } catch (err) {
     console.error('Failed to fetch upload:', err);

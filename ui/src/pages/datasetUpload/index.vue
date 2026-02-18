@@ -31,7 +31,7 @@
           icon="add"
           class="px-1"
           color="success"
-          @click="router.push('/datasets/uploads/new')"
+          @click="router.push('/datasetUpload/new')"
         >
           Upload Dataset
         </va-button>
@@ -40,15 +40,6 @@
 
     <!-- table -->
     <va-data-table :items="pastUploads" :columns="columns" :loading="loading">
-      <template #cell(link)="{ rowData }">
-        <router-link
-          :to="`/datasets/uploads/${rowData.uploaded_dataset.id}`"
-          class="va-link"
-        >
-          <Icon icon="mdi:open-in-new" />
-        </router-link>
-      </template>
-
       <template #cell(status)="{ rowData }">
         <!-- Upload still in progress -->
         <div v-if="rowData.status === constants.UPLOAD_STATUSES.UPLOADING" class="flex justify-center">
@@ -70,23 +61,6 @@
               :size="24"
               :color="colors.warning"
             />
-          </va-popover>
-        </div>
-        <!-- Upload verification in progress -->
-        <div v-else-if="rowData.status === constants.UPLOAD_STATUSES.VERIFYING" class="flex justify-center">
-          <va-popover message="Verifying upload">
-            <half-circle-spinner
-              class="flex-none"
-              :animation-duration="1000"
-              :size="24"
-              :color="colors.info"
-            />
-          </va-popover>
-        </div>
-        <!-- Upload verified successfully -->
-        <div v-else-if="rowData.status === constants.UPLOAD_STATUSES.VERIFIED" class="flex justify-center">
-          <va-popover message="Upload verified">
-            <va-icon name="check_circle_outline" color="success" />
           </va-popover>
         </div>
         <!-- Integrated workflow running -->
@@ -224,18 +198,17 @@
 
 <script setup>
 import useSearchKeyShortcut from "@/composables/useSearchKeyShortcut";
+import config from "@/config";
+import constants from "@/constants";
+import datasetService from "@/services/dataset";
 import * as datetime from "@/services/datetime";
 import toast from "@/services/toast";
-import datasetService from "@/services/dataset";
 import wfService from "@/services/workflow";
 import { useAuthStore } from "@/stores/auth";
 import { useNavStore } from "@/stores/nav";
-import config from "@/config";
 import { HalfCircleSpinner } from "epic-spinners";
-import { useColors } from "vuestic-ui";
 import _ from "lodash";
-import constants from "@/constants";
-import { Icon } from '@iconify/vue';
+import { useColors } from "vuestic-ui";
 
 const { colors } = useColors();
 const nav = useNavStore();
@@ -279,95 +252,77 @@ const filter_query = computed(() => {
   };
 });
 
-const columns = computed(() => {
-  const baseColumns = [
-    {
-      key: "status",
-      label: "Status",
-      width: auth.canAdmin ? "6%" : "8%",
-      thAlign: "center",
-      tdAlign: "center",
-    },
-    {
-      key: "uploaded_dataset",
-      label: "Uploaded Dataset",
-      thAlign: "center",
-      tdAlign: "center",
-      tdStyle:
-        "white-space: pre-wrap; word-wrap: break-word; word-break: break-word;",
-      thStyle:
-        "white-space: pre-wrap; word-wrap: break-word; word-break: break-word;",
-    },
-    {
-      key: "uploaded_dataset_type",
-      label: "Dataset Type",
-      width: auth.canAdmin ? "10%" : "12%",
-      thAlign: "center",
-      tdAlign: "center",
-    },
-    {
-      key: "file_type",
-      label: "File Type",
-      width: auth.canAdmin ? "8%" : "10%",
-      thAlign: "center",
-      tdAlign: "center",
-    },
-    {
-      key: "genome",
-      label: "Genome",
-      width: auth.canAdmin ? "12%" : "15%",
-      thAlign: "center",
-      tdAlign: "center",
-    },
-    {
-      key: "source_dataset",
-      label: "Source Raw Data",
-      width: auth.canAdmin ? "12%" : "15%",
-      thAlign: "center",
-      tdAlign: "center",
-      tdStyle:
-        "white-space: pre-wrap; word-wrap: break-word; word-break: break-word;",
-      thStyle:
-        "white-space: pre-wrap; word-wrap: break-word; word-break: break-word;",
-    },
-    {
-      key: "user",
-      label: "Uploaded By",
-      width: auth.canAdmin ? "12%" : "15%",
-      thAlign: "center",
-      tdAlign: "center",
-      tdStyle:
-        "white-space: pre-wrap; word-wrap: break-word; word-break: break-word;",
-      thStyle:
-        "white-space: pre-wrap; word-wrap: break-word; word-break: break-word;",
-    },
-    {
-      key: "initiated_at",
-      label: "Uploaded On",
-      width: auth.canAdmin ? "8%" : "10%",
-      thAlign: "right",
-      tdAlign: "right",
-      thStyle:
-        "white-space: pre-wrap; word-wrap: break-word; word-break: break-word;",
-    },
-  ];
-
-  // Add link column at the start for admins
-  if (auth.canAdmin) {
-    return [
-      {
-        key: "link",
-        label: "Upload Details",
-        width: "8%",
-        thAlign: "center",
-        tdAlign: "center",
-      },
-      ...baseColumns,
-    ];
-  }
-
-  return baseColumns;
-});
+const columns = [
+  {
+    key: "status",
+    label: "Status",
+    width: "8%",
+    thAlign: "center",
+    tdAlign: "center",
+  },
+  {
+    key: "uploaded_dataset",
+    label: "Uploaded Dataset",
+    thAlign: "center",
+    tdAlign: "center",
+    tdStyle:
+      "white-space: pre-wrap; word-wrap: break-word; word-break: break-word;",
+    thStyle:
+      "white-space: pre-wrap; word-wrap: break-word; word-break: break-word;",
+  },
+  {
+    key: "uploaded_dataset_type",
+    label: "Dataset Type",
+    width: "12%",
+    thAlign: "center",
+    tdAlign: "center",
+  },
+  {
+    key: "file_type",
+    label: "File Type",
+    width: "10%",
+    thAlign: "center",
+    tdAlign: "center",
+  },
+  {
+    key: "genome",
+    label: "Genome",
+    width: "15%",
+    thAlign: "center",
+    tdAlign: "center",
+  },
+  {
+    key: "source_dataset",
+    label: "Source Raw Data",
+    width: "15%",
+    thAlign: "center",
+    tdAlign: "center",
+    tdStyle:
+      "white-space: pre-wrap; word-wrap: break-word; word-break: break-word;",
+    thStyle:
+      "white-space: pre-wrap; word-wrap: break-word; word-break: break-word;",
+  },
+  {
+    key: "user",
+    label: "Uploaded By",
+    width: "15%",
+    thAlign: "center",
+    tdAlign: "center",
+    tdStyle:
+      "white-space: pre-wrap; word-wrap: break-word; word-break: break-word;",
+    thStyle:
+      "white-space: pre-wrap; word-wrap: break-word; word-break: break-word;",
+  },
+  {
+    key: "initiated_at",
+    label: "Uploaded On",
+    width: "10%",
+    thAlign: "right",
+    tdAlign: "right",
+    thStyle:
+      "white-space: pre-wrap; word-wrap: break-word; word-break: break-word;",
+  },
+];
 
 const getUploadLogs = async () => {
   loading.value = true;
@@ -375,15 +330,13 @@ const getUploadLogs = async () => {
     .getDatasetUploadLogs(filter_query.value)
     .then((res) => {
       pastUploads.value = res.data.uploads.map((e) => {
-        let uploaded_dataset = e.dataset;
+        let uploaded_dataset = e.audit_log.dataset;
         const status = wfService.get_integrated_workflow_status(uploaded_dataset.workflows);
         const genomicDetails = uploaded_dataset.genomic_details?.[0];
-        // Get user from create audit log (filtered by action='create', only one exists)
-        const createAuditLog = uploaded_dataset.audit_logs?.[0];
         return {
           ...e,
-          initiated_at: uploaded_dataset.created_at,
-          user: createAuditLog?.user,
+          initiated_at: e.audit_log.timestamp,
+          user: e.audit_log.user,
           uploaded_dataset,
           source_dataset:
             uploaded_dataset.source_datasets.length > 0

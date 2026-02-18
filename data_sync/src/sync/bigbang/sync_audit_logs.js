@@ -92,7 +92,40 @@ async function datasetEventsToAuditLogs(prisma, cmgDb, cmgUserId, datasetType) {
     
     // Convert each event to an audit log entry
     // Only process workflow "finish" events to avoid duplicate "start"/"finish" entries
-    const events = cmgDataset.events || [];
+    let events = cmgDataset.events || [];
+    
+    // Handle case where events is a string (malformed data in CMG)
+    if (!Array.isArray(events)) {
+      if (typeof events === 'string') {
+        const trimmed = events.trim();
+        // Try to parse as JSON array
+        try {
+          const parsed = JSON.parse(trimmed);
+          if (Array.isArray(parsed)) {
+            logger.info(`[BIGBANG] Recovered events array from JSON string for dataset ${cmgDataset.name}: ${parsed.length} events`);
+            events = parsed;
+          } else {
+            logger.warn(`[BIGBANG] Parsed events but result is not an array for dataset ${cmgDataset.name}`);
+            processedCount++;
+            continue;
+          }
+        } catch (e) {
+          logger.warn(`[BIGBANG] Could not parse events string for dataset ${cmgDataset.name}: ${trimmed.substring(0, 100)}`);
+          processedCount++;
+          continue;
+        }
+      } else {
+        logger.warn(`[BIGBANG] [DIAGNOSTIC] Dataset events field is NOT an array - skipping audit logs`);
+        logger.warn(`[BIGBANG] [DIAGNOSTIC]   Collection: ${collectionName}`);
+        logger.warn(`[BIGBANG] [DIAGNOSTIC]   Dataset _id: ${cmgDataset._id}`);
+        logger.warn(`[BIGBANG] [DIAGNOSTIC]   Dataset name: ${cmgDataset.name || '(no name)'}`);
+        logger.warn(`[BIGBANG] [DIAGNOSTIC]   events type: ${typeof events}`);
+        logger.warn(`[BIGBANG] [DIAGNOSTIC]   events value: ${JSON.stringify(events).substring(0, 200)}`);
+        processedCount++;
+        continue; // Skip to next dataset
+      }
+    }
+    
     for (const event of events) {
       const timestamp = event.stamp;
       if (!timestamp) {

@@ -322,6 +322,31 @@ The previous chunk-based upload system used secure_download service. Key changes
 
 ## Changelog
 
+### 2026-02-11 - API Route Standardization
+
+**What Changed:**
+- Fixed `GET /datasets/uploads/:id/logs` to accept `dataset_id` instead of `upload_log_id`
+- All routes under `/datasets/uploads/:id/...` now consistently use `dataset_id` as the `:id` parameter
+- Updated UI service method: `getUploadLogById()` → `getUploadLogByDatasetId()`
+- Updated UI upload listing to link with `dataset_id` instead of `upload_log_id`
+
+**Why:**
+- Maintains REST convention: resource hierarchy should match URL structure
+- Under `/datasets/...` routes, `:id` should always refer to `dataset_id`, not internal IDs like `upload_log_id`
+- Provides consistency with other dataset routes (e.g., `/datasets/:id`, `/datasets/:id/status`)
+
+**Impact:**
+- API: Changed query from `findUnique({ where: { id: uploadLogId }})` to `findFirst({ where: { dataset_id: datasetId }})`
+- UI: Upload detail page route `/datasets/uploads/[id]` now expects `dataset_id` as param
+- Backward compatible: Since there's a 1:1 relationship between dataset and upload_log, behavior is functionally equivalent
+
+**Files Modified:**
+- `api/src/routes/datasets/uploads.js` - Updated GET /:id/logs endpoint
+- `ui/src/services/dataset.js` - Renamed method and updated route
+- `ui/src/pages/datasets/uploads/index.vue` - Updated link to use dataset_id
+- `ui/src/pages/datasets/uploads/[id].vue` - Updated API call
+- `api/src/middleware/tus.js` - Improved comments explaining path checking
+
 ### 2026-02-10 - Upload Details Page and Log Tracking Fix
 
 **Added Upload Details Page:**
@@ -340,9 +365,9 @@ The previous chunk-based upload system used secure_download service. Key changes
 - Previous uploads (before this fix) won't have logs available
 
 **API Changes:**
-- Added `GET /api/uploads/:id` endpoint for fetching upload details by upload log ID
+- Added `GET /api/datasets/uploads/:id/logs` endpoint for fetching upload details by dataset ID
 - Uses `datasets` permission (not `uploads`) to align with existing upload routes
-- Added `getUploadLogById(uploadLogId)` to `ui/src/services/dataset.js`
+- Added `getUploadLogByDatasetId(datasetId)` to `ui/src/services/dataset.js`
 
 **UI Changes:**
 - Dynamic table column widths based on admin status
@@ -351,10 +376,10 @@ The previous chunk-based upload system used secure_download service. Key changes
 
 **Files Modified:**
 - `workers/workers/tasks/verify_upload.py`: Fixed worker_process registration
-- `api/src/routes/uploads.js`: Added GET /:id endpoint
-- `ui/src/pages/uploads/[id].vue`: Created upload details page
-- `ui/src/pages/datasets/uploads/index.vue`: Added link column for admins
-- `ui/src/services/dataset.js`: Added getUploadLogById method
+- `api/src/routes/datasets/uploads.js`: Added GET /:id/logs endpoint (takes dataset_id)
+- `ui/src/pages/datasets/uploads/[id].vue`: Created upload details page
+- `ui/src/pages/datasets/uploads/index.vue`: Added link column for admins (links use dataset_id)
+- `ui/src/services/dataset.js`: Added getUploadLogByDatasetId method
 
 ### 2026-02-10 - Database Migration for VERIFYING/VERIFIED Statuses
 

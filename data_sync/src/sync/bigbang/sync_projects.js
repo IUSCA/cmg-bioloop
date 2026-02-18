@@ -101,8 +101,41 @@ async function syncProjects(prisma, cmgDb) {
       }
     }
     
-    // Get all dataproducts
-    const dataproductIds = cmgProject.dataproducts || [];
+    // Get all dataproducts (handle case where CMG stored as string instead of array)
+    let dataproductIds = cmgProject.dataproducts || [];
+    
+    // Handle case where dataproducts is a string (malformed data in CMG)
+    if (!Array.isArray(dataproductIds)) {
+      if (typeof dataproductIds === 'string') {
+        const trimmed = dataproductIds.trim();
+        // Try to parse string like "[id1, id2, id3]" (array of ObjectIds as string)
+        if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
+          try {
+            // Remove brackets and split by comma
+            const idsString = trimmed.slice(1, -1).trim();
+            if (idsString) {
+              // Split by comma and clean up each ID
+              const parsedIds = idsString.split(',').map(id => id.trim()).filter(id => id.length > 0);
+              logger.info(`[BIGBANG] Recovered dataproducts from string for project ${cmgProject.name}: ${parsedIds.length} IDs`);
+              dataproductIds = parsedIds;
+            } else {
+              // Empty array string "[]"
+              dataproductIds = [];
+            }
+          } catch (e) {
+            logger.error(`[BIGBANG] Could not parse dataproducts string for project ${cmgProject.name}: ${trimmed.substring(0, 100)}`);
+            continue; // Skip to next project
+          }
+        } else {
+          logger.error(`[BIGBANG] Invalid dataproducts string format for project ${cmgProject.name}: ${trimmed.substring(0, 100)}`);
+          continue; // Skip to next project
+        }
+      } else {
+        logger.error(`[BIGBANG] Invalid dataproducts type (${typeof dataproductIds}) for project ${cmgProject.name}, skipping`);
+        continue; // Skip to next project
+      }
+    }
+    
     for (const cmgDataproductId of dataproductIds) {
       const bioloopDataset = await prisma.dataset.findFirst({
         where: { cmg_id: cmgDataproductId.toString() },

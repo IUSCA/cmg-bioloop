@@ -43,6 +43,8 @@ const exports = {
   },
   download_types: {
     SLATE_SCRATCH: 'SLATE_SCRATCH',
+    SLATE_PROJECT: 'SLATE_PROJECT',
+    DCWAN: 'DCWAN',
     BROWSER: 'BROWSER',
   },
   metric_measurements: {
@@ -166,7 +168,7 @@ const exports = {
     import.meta.env.VITE_GENOME_BROWSER_URL || 'https://epigenomegateway.wustl.edu/browser',
   legacy: {
     enabled: true,
-  }
+  },
 };
 
 export default exports;

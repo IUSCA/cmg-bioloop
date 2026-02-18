@@ -986,7 +986,7 @@ router.patch(
 );
 
 /**
- * Get upload details by upload log ID
+ * Get upload details by dataset ID
  * GET /api/datasets/uploads/:id/logs
  */
 router.get(
@@ -994,13 +994,13 @@ router.get(
   isPermittedTo('read'),
   asyncHandler(async (req, res) => {
     // #swagger.tags = ['datasets']
-    // #swagger.summary = 'Get upload details by upload log ID'
+    // #swagger.summary = 'Get upload details by dataset ID'
 
-    const uploadLogId = parseInt(req.params.id, 10);
+    const datasetId = parseInt(req.params.id, 10);
 
-    // Get upload log
-    const uploadLog = await prisma.dataset_upload_log.findUnique({
-      where: { id: uploadLogId },
+    // Get upload log by dataset_id (1:1 relationship)
+    const uploadLog = await prisma.dataset_upload_log.findFirst({
+      where: { dataset_id: datasetId },
       include: {
         dataset: {
           select: {

@@ -192,8 +192,8 @@ class DatasetService {
     return api.get(`/datasets/uploads/${datasetId}/status`);
   }
 
-  getUploadLogById(uploadLogId) {
-    return api.get(`/datasets/uploads/${uploadLogId}/logs`);
+  getUploadLogByDatasetId(datasetId) {
+    return api.get(`/datasets/uploads/${datasetId}/logs`);
   }
 
   getDatasetUploadLogs({
