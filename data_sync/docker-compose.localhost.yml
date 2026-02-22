@@ -24,7 +24,7 @@ services:
       - "127.0.0.1:5435:5432"
     networks:
       - sandbox_network
-      - cmg-bioloop-3_default
+      - bioloop_default
       - cmg_cmg-network
     deploy:
       resources:
@@ -38,9 +38,9 @@ networks:
   sandbox_network:
     name: bioloop_sandbox
     driver: bridge
-  cmg-bioloop-3_default:
+  bioloop_default:
     external: true
-    name: cmg-bioloop-3_default
+    name: bioloop_default
   cmg_cmg-network:
     external: true
     name: cmg_cmg-network
