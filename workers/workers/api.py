@@ -377,10 +377,6 @@ def get_conversion_definition(definition_id: int):
         return r.json()
 
 
-def post_conversion_derived_datasets(derived_data: dict):
-    with APIServerSession() as s:
-        r = s.post('conversions/derived_datasets', json=derived_data)
-        r.raise_for_status()
 
 
 

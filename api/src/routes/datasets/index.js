@@ -234,6 +234,13 @@ const assoc_body_schema = {
     },
     toInt: true,
   },
+  '*.metadata': {
+    in: ['body'],
+    optional: true,
+    isObject: {
+      errorMessage: 'Metadata must be an object',
+    },
+  },
 };
 
 router.post(
@@ -245,8 +252,17 @@ router.post(
   asyncHandler(async (req, res, next) => {
     // #swagger.tags = ['datasets']
     // #swagger.summary = Add new associations between datasets
+    // Default derivation_method to 'manual_assignment' if not provided
+    const dataWithDefaults = req.body.map((item) => ({
+      ...item,
+      metadata: {
+        derivation_method: 'manual_assignment',
+        ...item.metadata,
+      },
+    }));
+    
     await prisma.dataset_hierarchy.createMany({
-      data: req.body,
+      data: dataWithDefaults,
     });
     res.sendStatus(200);
   }),

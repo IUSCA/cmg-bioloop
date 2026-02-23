@@ -255,22 +255,12 @@ async function get_dataset({
   console.log('workflow_include', workflow_include);
 
   // Build conversions include based on whether full conversion details are needed
-  // Always include derived_datasets when conversion feature is enabled (for derived datasets display)
   const getConversionsInclude = () => {
-    if (!config.enabled_features.conversion) {
+    if (!config.enabled_features.conversion || !include_conversions) {
       return false;
     }
-    // Always include derived_datasets for the derived datasets table
-    // Include full conversion details only when include_conversions is true
     return {
-      include: {
-        ...(include_conversions ? conversionService.INCLUDE : {}),
-        derived_datasets: {
-          include: {
-            dataset: true, // Get the actual derived dataset
-          },
-        },
-      },
+      include: conversionService.INCLUDE,
     };
   };
 
@@ -344,51 +334,14 @@ async function get_dataset({
     });
   }
 
-  // Combine manually-assigned and conversion-derived datasets with method indicators
-  // dataset.conversions contains conversions where THIS dataset is the SOURCE (input)
-  // Each conversion's derived_datasets contains the OUTPUT datasets from that conversion
-  if (config.enabled_features.conversion && dataset.conversions) {
-    // Add derivation_method to manually-assigned datasets (from dataset_hierarchy table)
-    const manualDerived = (dataset.derived_datasets || []).map((dd) => ({
+  // Extract derivation_method from dataset_hierarchy.metadata
+  // dataset.derived_datasets contains all derived datasets from dataset_hierarchy table
+  // The metadata.derivation_method field indicates how the dataset was derived
+  if (dataset.derived_datasets) {
+    dataset.derived_datasets = (dataset.derived_datasets || []).map((dd) => ({
       ...dd,
-      derivation_method: 'manual',
+      derivation_method: dd.metadata?.derivation_method || 'manual_assignment',
     }));
-
-    // Add derivation_method to conversion-derived datasets
-    // Iterate through all conversions where this dataset is the source,
-    // and collect their derived_datasets (outputs)
-    const conversionDerived = [];
-    (dataset.conversions || []).forEach((conversion) => {
-      (conversion.derived_datasets || []).forEach((cdd) => {
-        conversionDerived.push({
-          source_id: id,
-          derived_id: cdd.dataset.id,
-          assigned_at: cdd.created_at,
-          derivation_method: 'conversion',
-        });
-      });
-    });
-
-    // Combine both arrays, removing duplicates (prefer conversion method if exists)
-    const derivedMap = new Map();
-
-    // First add manual assignments
-    manualDerived.forEach((item) => {
-      derivedMap.set(item.derived_id, item);
-    });
-
-    // Then add/override with conversion-derived (conversion takes precedence)
-    conversionDerived.forEach((item) => {
-      derivedMap.set(item.derived_id, item);
-    });
-
-    // Replace derived_datasets with combined array
-    dataset.derived_datasets = Array.from(derivedMap.values());
-
-    // Clean up conversions if not requested (only needed for derived_datasets extraction)
-    if (!include_conversions) {
-      delete dataset.conversions;
-    }
   }
 
   return dataset;
@@ -1374,12 +1327,19 @@ const buildDatasetCreateQuery = async (data) => {
   }
 
   // Create source dataset relationships (can have multiple sources)
+  // Default derivation_method to 'manual_assignment' for relationships created at dataset creation time
   const sourceRelationships = [];
   if (src_dataset_id) {
-    sourceRelationships.push({ source_id: src_dataset_id });
+    sourceRelationships.push({ 
+      source_id: src_dataset_id,
+      metadata: { derivation_method: 'manual_assignment' },
+    });
   }
   if (source_data_product_id) {
-    sourceRelationships.push({ source_id: source_data_product_id });
+    sourceRelationships.push({ 
+      source_id: source_data_product_id,
+      metadata: { derivation_method: 'manual_assignment' },
+    });
   }
   if (sourceRelationships.length > 0) {
     create_query.source_datasets = {

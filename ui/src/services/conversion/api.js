@@ -24,7 +24,6 @@ class ConversionService {
     id,
     params = {
       include_dataset: false,
-      include_derived_datasets: false,
       include_definition: false,
     },
   ) {

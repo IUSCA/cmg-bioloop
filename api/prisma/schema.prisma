@@ -43,7 +43,6 @@ model dataset {
   analysis_type_id         Int?
   analysis_type            analysis_type?               @relation(fields: [analysis_type_id], references: [id])
   conversions              conversion[]
-  derived_from_conversions conversion_derived_dataset[]
   genomic_details          dataset_genomic_attributes?
   upload_logs              dataset_upload_log[]
   import_logs              dataset_import_log[]
@@ -75,6 +74,7 @@ model dataset_hierarchy {
   source_id       Int
   derived_id      Int
   assigned_at     DateTime @default(now()) @db.Timestamp(6)
+  metadata        Json?
   source_dataset  dataset  @relation(name: "source_datasets", fields: [source_id], references: [id], onDelete: Cascade)
   derived_dataset dataset  @relation(name: "derived_datasets", fields: [derived_id], references: [id], onDelete: Cascade)
 
@@ -595,21 +595,8 @@ model conversion {
   definition       conversion_definition        @relation(fields: [definition_id], references: [id])
   initiator        user?                        @relation(fields: [initiator_id], references: [id], onDelete: SetNull)
   additional_args  Json? // e.g., { [ {"--no-lane-splitting": "true" }, {"--barcode-mismatches": "1"} ] }
-  derived_datasets conversion_derived_dataset[]
   requested_processes process_request[]
   metadata Json?
-}
-
-model conversion_derived_dataset {
-  conversion_id Int
-  dataset_id    Int
-  created_at    DateTime   @default(now()) @db.Timestamp(6)
-  updated_at    DateTime   @default(now()) @updatedAt @db.Timestamp(6)
-  metadata      Json? // Additional metadata about the derived dataset process
-  conversion    conversion @relation(fields: [conversion_id], references: [id], onDelete: Cascade)
-  dataset       dataset    @relation(fields: [dataset_id], references: [id], onDelete: Cascade)
-
-  @@id([conversion_id, dataset_id])
 }
 
 model dynamic_variable {

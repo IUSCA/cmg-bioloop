@@ -191,7 +191,6 @@ router.get(
   validate([
     param('id').isInt({ min: 1 }).toInt(),
     query('include_dataset').default(false).toBoolean(),
-    query('include_derived_datasets').default(false).toBoolean(),
     query('include_definition').default(false).toBoolean(),
   ]),
   asyncHandler(async (req, res, next) => {
@@ -231,8 +230,28 @@ router.get(
       limit, offset, sort_by, sort_order, type, name,
     } = req.query;
 
-    const filters = {
-      conversion_id: conversionId,
+    // Get the conversion to find its source dataset
+    const conversion = await prisma.conversion.findUnique({
+      where: { id: conversionId },
+      select: { dataset_id: true },
+    });
+
+    if (!conversion || !conversion.dataset_id) {
+      return res.json({
+        metadata: { count: 0 },
+        derived_datasets: [],
+      });
+    }
+
+    // Build filters for dataset_hierarchy
+    // Find hierarchies where source is this conversion's dataset
+    // AND metadata.derivation_method is 'conversion'
+    const hierarchyFilters = {
+      source_id: conversion.dataset_id,
+      metadata: {
+        path: ['derivation_method'],
+        equals: 'conversion',
+      },
     };
 
     // Add dataset filters through the relationship
@@ -248,24 +267,25 @@ router.get(
     }
 
     if (Object.keys(datasetFilters).length > 0) {
-      filters.dataset = datasetFilters;
+      hierarchyFilters.derived_dataset = datasetFilters;
     }
 
     // Build orderBy object
     const orderBy = {};
     if (sort_by === 'created_at' || sort_by === 'updated_at') {
-      orderBy[sort_by] = sort_order;
+      // These are on dataset_hierarchy (assigned_at maps to created_at)
+      orderBy.assigned_at = sort_order;
     } else if (['name', 'type', 'du_size', 'num_files', 'num_directories'].includes(sort_by)) {
       // Sort by dataset fields
-      orderBy.dataset = { [sort_by]: sort_order };
+      orderBy.derived_dataset = { [sort_by]: sort_order };
     } else {
       // Default fallback
-      orderBy.created_at = sort_order;
+      orderBy.assigned_at = sort_order;
     }
 
     // Handle sorting by size fields with null handling
     if (['du_size', 'size', 'bundle_size'].includes(sort_by)) {
-      orderBy.dataset = {
+      orderBy.derived_dataset = {
         [sort_by]: {
           nulls: 'last',
           sort: sort_order,
@@ -275,7 +295,7 @@ router.get(
 
     // Build include object
     const includeObject = {
-      dataset: {
+      derived_dataset: {
         select: {
           id: true,
           name: true,
@@ -289,55 +309,33 @@ router.get(
       },
     };
 
-    const [derived_datasets, total] = await Promise.all([
-      prisma.conversion_derived_dataset.findMany({
-        where: filters,
+    const [hierarchies, total] = await Promise.all([
+      prisma.dataset_hierarchy.findMany({
+        where: hierarchyFilters,
         include: includeObject,
         orderBy,
         take: limit,
         skip: offset,
       }),
-      prisma.conversion_derived_dataset.count({
-        where: filters,
+      prisma.dataset_hierarchy.count({
+        where: hierarchyFilters,
       }),
     ]);
+
+    // Transform to match previous response format
+    const derived_datasets = hierarchies.map((h) => ({
+      source_id: h.source_id,
+      derived_id: h.derived_id,
+      created_at: h.assigned_at,
+      updated_at: h.assigned_at,
+      metadata: h.metadata,
+      dataset: h.derived_dataset,
+    }));
 
     return res.json({
       metadata: { count: total },
       derived_datasets,
     });
-  }),
-);
-
-const derived_dataset_body_schema = {
-  '*.conversion_id': {
-    in: ['body'],
-    isInt: {
-      errorMessage: 'Conversion ID must be an integer',
-    },
-    toInt: true,
-  },
-  '*.dataset_id': {
-    in: ['body'],
-    isInt: {
-      errorMessage: 'Dataset ID must be an integer',
-    },
-    toInt: true,
-  },
-};
-
-router.post(
-  '/derived_datasets',
-  isPermittedTo('create'),
-  validate([
-    checkSchema(derived_dataset_body_schema),
-  ]),
-  asyncHandler(async (req, res, next) => {
-    // #swagger.tags = ['Conversions']
-    await prisma.conversion_derived_dataset.createMany({
-      data: req.body,
-    });
-    res.sendStatus(200);
   }),
 );
 

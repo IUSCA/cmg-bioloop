@@ -360,47 +360,7 @@ async function convertConversion(prisma, cmgDb, cmgConversion) {
   
   logger.debug(`[BIGBANG] Created conversion ${conversion.id}: ${argumentValuesToCreate.length} argument_values, ${additionalArgs ? additionalArgs.length : 0} additional_args`);
   
-  // Link derived datasets (dataproducts)
-  await linkDerivedDatasets(prisma, cmgDb, conversion.id, cmgConversion._id.toString());
-  
   return conversion;
-}
-
-/**
- * Link derived datasets to a conversion
- */
-async function linkDerivedDatasets(prisma, cmgDb, bioloopConversionId, cmgConversionId) {
-  // Find all dataproducts that have this conversion
-  const dataproducts = await cmgDb.collection('dataproducts').find({
-    conversion: new ObjectId(cmgConversionId),
-  }).toArray();
-  
-  for (const dataproduct of dataproducts) {
-    const bioloopDataset = await prisma.dataset.findFirst({
-      where: { cmg_id: dataproduct._id.toString() },
-    });
-    
-    if (bioloopDataset) {
-      // Check if link already exists (idempotency)
-      const existingLink = await prisma.conversion_derived_dataset.findUnique({
-        where: {
-          conversion_id_dataset_id: {
-            conversion_id: bioloopConversionId,
-            dataset_id: bioloopDataset.id,
-          },
-        },
-      });
-      
-      if (!existingLink) {
-        await prisma.conversion_derived_dataset.create({
-          data: {
-            conversion_id: bioloopConversionId,
-            dataset_id: bioloopDataset.id,
-          },
-        });
-      }
-    }
-  }
 }
 
 /**

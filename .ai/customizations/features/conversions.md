@@ -289,6 +289,71 @@
 
 ---
 
+## 2026-02-22
+
+### Conversion-Derived Data Products Tracked via dataset_hierarchy
+
+**Change:** Parent-child relationships for conversion-derived data products now use `dataset_hierarchy` table with metadata instead of separate `conversion_derived_dataset` table.
+
+**Architecture Decision:**
+- `dataset_hierarchy.metadata.derivation_method` tracks how a data product was derived:
+  - `'conversion'`: Created by a conversion pipeline (e.g., bcl2fastq, cellranger)
+  - `'manual_assignment'`: Manually created/uploaded by user or linked manually
+- Eliminates redundant tracking - all parent-child relationships in single table
+- Simplifies queries: no need to join multiple tables to get complete derivation information
+
+**Database Schema:**
+- `dataset_hierarchy` table: Added `metadata` JSON column
+- `conversion_derived_dataset` table: Removed (functionality merged into dataset_hierarchy)
+- Migration: `20260222225751_refactor_conversion_derived_to_hierarchy_metadata`
+
+**API Changes:**
+- `POST /datasets/associations`: Defaults `metadata.derivation_method` to `'manual_assignment'` if not provided
+- `GET /conversions/:id/derived_datasets`: Now queries `dataset_hierarchy` table filtered by `derivation_method='conversion'`
+- Removed: `POST /conversions/derived_datasets` endpoint (no longer needed)
+- `dataset` service: Simplified derived datasets logic - reads directly from `dataset_hierarchy.metadata`
+
+**Worker Changes:**
+- `derive_data_products` task: Creates dataset_hierarchy with `metadata: { derivation_method: 'conversion' }`
+- Removed: `api.post_conversion_derived_datasets()` function (no longer needed)
+- `buildDatasetCreateQuery`: Defaults to `'manual_assignment'` when creating hierarchies via `src_dataset_id` parameter
+
+**Bigbang Migration:**
+- `sync_dataset_hierarchies.js`: Determines derivation_method based on CMG `dataproduct.conversion` field
+  - If `dataproduct.conversion` exists → `'conversion'`
+  - Otherwise → `'manual_assignment'`
+- `sync_conversions.js`: No longer creates `conversion_derived_dataset` records
+- Tracks derivation method counts in migration logs
+
+**UI Changes:**
+- No changes required: `AssocDatasetList.vue` already reads `derivation_method` from datasets_meta
+- Removed: `include_derived_datasets` parameter from conversion API calls (no longer supported)
+
+**Query Pattern for Conversion-Derived Datasets:**
+```javascript
+// Old pattern: separate table
+const derivedDatasets = await prisma.conversion_derived_dataset.findMany({
+  where: { conversion_id }
+});
+
+// New pattern: dataset_hierarchy with metadata filter
+const conversion = await prisma.conversion.findUnique({ where: { id } });
+const derivedDatasets = await prisma.dataset_hierarchy.findMany({
+  where: {
+    source_id: conversion.dataset_id,
+    metadata: { path: ['derivation_method'], equals: 'conversion' }
+  }
+});
+```
+
+**Rationale:**
+- Single source of truth for parent-child relationships
+- More flexible metadata tracking (can add additional fields as needed)
+- Simpler schema with fewer junction tables
+- Consistent with Bioloop's approach of using metadata for extensibility
+
+---
+
 ## Future Entries
 
 Add entries here as decisions are made, changes are implemented, or issues are resolved.
@@ -305,5 +370,5 @@ Format:
 
 ---
 
-**Last Updated:** 2026-01-27
+**Last Updated:** 2026-02-22
 

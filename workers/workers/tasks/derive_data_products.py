@@ -260,25 +260,20 @@ def derive_data_products(celery_task, dataset_id: int, conversion_id: int):
             seen_ids.add(data_product['id'])
         
     # Create hierarchy relationships for all data products (created + conflicted)
+    # These are conversion-derived, so set derivation_method to 'conversion'
     if derived_data_products:
         dataset_hierarchy_data: list[dict] = []
-        conversion_derived_dataset_associations: list[dict] = []
         
         for data_product in derived_data_products:
             dataset_hierarchy_data.append({
                 "source_id": dataset['id'],
-                "derived_id": data_product['id']
-            })
-            conversion_derived_dataset_associations.append({
-                "conversion_id": conversion['id'],
-                "dataset_id": data_product['id']
+                "derived_id": data_product['id'],
+                "metadata": {
+                    "derivation_method": "conversion"
+                }
             })
 
-        # print("dataset_hierarchy_data: ")
-        # pprint.pprint(dataset_hierarchy_data)
-        # print("conversion_derived_dataset_associations: ")
-        # pprint.pprint(conversion_derived_dataset_associations)
-        print(f"Created {len(dataset_hierarchy_data)} dataset hierarchies...")
+        print(f"Creating {len(dataset_hierarchy_data)} dataset hierarchies with derivation_method='conversion'...")
         try:
             api.create_dataset_hierarchy(dataset_hierarchy_data)
             print("Dataset hierarchies created successfully")
@@ -287,18 +282,6 @@ def derive_data_products(celery_task, dataset_id: int, conversion_id: int):
             if e.response.status_code == 409:
                 print(f"Conflict creating dataset hierarchies: {e}")
                 print(f"Skipping creation of dataset hierarchies")
-            else:
-                raise
-
-        print(f"Creating {len(conversion_derived_dataset_associations)} conversion's derived-dataset associations...")
-        try:
-            api.post_conversion_derived_datasets(conversion_derived_dataset_associations)
-            print("Conversion's derived-dataset associations created successfully")
-        except requests.exceptions.HTTPError as e:
-            print(f"Error creating conversion's derived-dataset associations: {e}")
-            if e.response.status_code == 409:
-                print(f"Conflict creating conversion's derived-dataset associations: {e}")
-                print(f"Skipping creation of conversion's derived-dataset associations")
             else:
                 raise
         

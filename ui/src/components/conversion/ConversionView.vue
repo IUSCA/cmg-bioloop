@@ -203,7 +203,6 @@ function fetch_conversion(show_loading = false) {
   Promise.all([
     conversionApiService.get(props.conversionId, {
       include_dataset: true,
-      include_derived_datasets: true,
       include_definition: true,
     }),
     conversionApiService.getLogs(props.conversionId),

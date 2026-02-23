@@ -20,7 +20,6 @@ const INCLUDE = {
 
 function getAssociations({
   include_dataset = false,
-  include_derived_datasets = false,
   include_definition = false,
 }) {
   const associations = {
@@ -35,22 +34,6 @@ function getAssociations({
         du_size: true,
         num_files: true,
         num_directories: true,
-      },
-    };
-  }
-  if (include_derived_datasets) {
-    associations.derived_datasets = {
-      include: {
-        dataset: {
-          select: {
-            id: true,
-            name: true,
-            type: true,
-            du_size: true,
-            num_files: true,
-            num_directories: true,
-          },
-        },
       },
     };
   }
