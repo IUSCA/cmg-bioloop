@@ -145,12 +145,12 @@ class SessionService {
   }
 
   /**
-   * Check if a session is legacy (migrated from CMG)
+   * Check if a session is legacy (migrated from CMG via bigbang)
    * @param {Object} session - The session object
-   * @returns {boolean} - True if session has cmg_id
+   * @returns {boolean} - True if session was created via the bigbang migration
    */
   _isLegacySession(session) {
-    return !!(session && session.cmg_id);
+    return session?.metadata?.origin === 'legacy';
   }
 
   /**

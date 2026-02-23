@@ -44,6 +44,7 @@ async function syncProjects(prisma, cmgDb) {
       updated_at: project.updatedAt || new Date(),
       browser_enabled: project.browser || false,
       cmg_id: cmgId,
+      metadata: { origin: 'legacy' },
     });
     
     existingSlugs.add(slug); // Track in-batch duplicates

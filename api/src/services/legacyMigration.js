@@ -8,6 +8,33 @@
 const prisma = require('@/db');
 
 /**
+ * Check if a dataset is a legacy CMG dataset (created via bigbang migration).
+ * @param {Object} dataset - The dataset object with a metadata field
+ * @returns {boolean}
+ */
+function isLegacyDataset(dataset) {
+  return dataset?.metadata?.origin === 'legacy';
+}
+
+/**
+ * Check if a genome browser session is a legacy CMG session (created via bigbang migration).
+ * @param {Object} session - The session object with a metadata field
+ * @returns {boolean}
+ */
+function isLegacySession(session) {
+  return session?.metadata?.origin === 'legacy';
+}
+
+/**
+ * Check if a conversion is a legacy CMG conversion (created via bigbang migration).
+ * @param {Object} conversion - The conversion object with a metadata field
+ * @returns {boolean}
+ */
+function isLegacyConversion(conversion) {
+  return conversion?.metadata?.origin === 'legacy';
+}
+
+/**
  * Check if a dataset has reached a specific migration state
  * @param {number} datasetId - The dataset ID
  * @param {string} state - The state to check for
@@ -34,7 +61,7 @@ async function getDatasetMigrationStatus(datasetId) {
     where: { id: datasetId },
     select: {
       id: true,
-      cmg_id: true,
+      metadata: true,
     },
   });
 
@@ -42,8 +69,7 @@ async function getDatasetMigrationStatus(datasetId) {
     throw new Error(`Dataset with ID ${datasetId} not found`);
   }
 
-  // If no cmg_id, it's not a legacy dataset
-  if (!dataset.cmg_id) {
+  if (!isLegacyDataset(dataset)) {
     return {
       is_legacy: false,
       is_hydrated: false,
@@ -108,7 +134,6 @@ async function getSessionMigrationStatus(sessionId) {
     where: { id: sessionId },
     select: {
       id: true,
-      cmg_id: true,
       metadata: true,
     },
   });
@@ -121,12 +146,15 @@ async function getSessionMigrationStatus(sessionId) {
   const isHydrated = session.metadata?.is_hydrated === true;
 
   return {
-    is_legacy: !!session.cmg_id,
+    is_legacy: isLegacySession(session),
     is_hydrated: isHydrated,
   };
 }
 
 module.exports = {
+  isLegacyDataset,
+  isLegacySession,
+  isLegacyConversion,
   getDatasetMigrationStatus,
   getSessionMigrationStatus,
   isMigrationInProgress,

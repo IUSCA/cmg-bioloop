@@ -17,6 +17,7 @@ const { validateArgument, resolveDynamicArgumentValue } = require('../../utils/a
 const datasetService = require('../../services/dataset');
 const wfService = require('../../services/workflow');
 const conversionService = require('../../services/conversion');
+const legacyMigrationService = require('@/services/legacyMigration');
 
 const prisma = new PrismaClient();
 const isPermittedTo = accessControl('conversion');
@@ -962,9 +963,12 @@ router.get(
       return next(createError.NotFound('Dataset not found for conversion'));
     }
 
-    // Use cmg_id for legacy conversions, otherwise use bioloop id
+    // For legacy conversions, use the CMG ID as the path identifier (matching CMG's directory structure)
     // Use dataset NAME (not ID) as the path structure uses dataset names
-    const conversionIdentifier = conversion.cmg_id || String(conversion.id);
+    const isLegacyConversion = legacyMigrationService.isLegacyConversion(conversion);
+    const conversionIdentifier = isLegacyConversion
+      ? (conversion.cmg_id || String(conversion.id))
+      : String(conversion.id);
     const datasetName = conversion.dataset.name;
 
     // Get CONVERSION_OUTPUT_DIR from environment

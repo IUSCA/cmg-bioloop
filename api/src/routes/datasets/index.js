@@ -1062,7 +1062,7 @@ router.post(
       const legacyMigrationService = require('@/services/legacyMigration');
       let actualWorkflow = wf_name;
 
-      if (dataset.cmg_id) {
+      if (legacyMigrationService.isLegacyDataset(dataset)) {
         // This is a legacy CMG dataset
         const migrationStatus = await legacyMigrationService.getDatasetMigrationStatus(dataset.id);
 

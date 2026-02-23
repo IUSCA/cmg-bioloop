@@ -351,6 +351,7 @@ async function convertConversion(prisma, cmgDb, cmgConversion) {
       cmg_id: cmgConversion._id.toString(),
       initiated_at: cmgConversion.createdAt || new Date(),
       additional_args: additionalArgs,
+      metadata: { origin: 'legacy' },
       argument_values: {
         create: argumentValuesToCreate, // Create linked argument_value records
       },

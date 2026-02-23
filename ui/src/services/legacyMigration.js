@@ -25,10 +25,10 @@ export async function getDatasetMigrationStatus(datasetId) {
 /**
  * Check if a dataset is a legacy CMG dataset
  * @param {Object} dataset - The dataset object
- * @returns {boolean} - True if the dataset has a cmg_id
+ * @returns {boolean} - True if the dataset was created via the bigbang migration
  */
 export function isLegacyDataset(dataset) {
-  return !!(dataset && dataset.cmg_id);
+  return dataset?.metadata?.origin === 'legacy';
 }
 
 /**
@@ -79,10 +79,19 @@ export async function getSessionMigrationStatus(sessionId) {
 /**
  * Check if a session is a legacy CMG session
  * @param {Object} session - The session object
- * @returns {boolean} - True if the session has a cmg_id
+ * @returns {boolean} - True if the session was created via the bigbang migration
  */
 export function isLegacySession(session) {
-  return !!(session && session.cmg_id);
+  return session?.metadata?.origin === 'legacy';
+}
+
+/**
+ * Check if a project is a legacy CMG project
+ * @param {Object} project - The project object (or any object with a metadata field)
+ * @returns {boolean} - True if the project was created via the bigbang migration
+ */
+export function isLegacyProject(project) {
+  return project?.metadata?.origin === 'legacy';
 }
 
 /**
@@ -105,6 +114,7 @@ export default {
   getSessionMigrationStatus,
   isLegacyDataset,
   isLegacySession,
+  isLegacyProject,
   needsHydration,
   isSessionHydrated,
   isMigrationInProgress,

@@ -105,6 +105,7 @@ async function convertSession(prisma, cmgDb, cmgSession) {
       cmg_id: cmgSessionId, // Track CMG session for provenance
       created_at: cmgSession.createdAt || new Date(), // Preserve CMG creation timestamp
       metadata: {
+        origin: 'legacy',
         datasets: dataproductIds, // CMG dataproduct IDs for dataset lookup
       },
     },

@@ -295,6 +295,7 @@ async function seedAnalysisTypes(prisma) {
         data: {
           name: analysisType.name,
           extension: analysisType.extension,
+          metadata: { origin: 'legacy' },
         },
       });
       createdCount++;

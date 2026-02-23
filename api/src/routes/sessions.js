@@ -1482,7 +1482,7 @@ router.get(
       }
     };
 
-    const isLegacy = !!(session.cmg_id);
+    const isLegacy = legacyMigrationService.isLegacySession(session);
     const needsHydration = isLegacy && !(await isHydrationComplete(session.session_workflows));
 
     // If legacy AND not hydrated: fetch from BOTH sources

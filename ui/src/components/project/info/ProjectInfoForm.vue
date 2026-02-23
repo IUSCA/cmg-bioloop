@@ -61,6 +61,7 @@
 <script setup>
 import { useForm } from "vuestic-ui";
 // import projectService from "@/services/projects";
+import legacyMigrationService from "@/services/legacyMigration";
 import { useProjectFormStore } from "@/stores/projects/projectForm";
 import { storeToRefs } from "pinia";
 
@@ -72,12 +73,12 @@ const props = defineProps({
 });
 
 const projectFormStore = useProjectFormStore();
-const { name, description, browser_enabled, funding, cmg_id } =
+const { name, description, browser_enabled, funding, cmg_id, metadata } =
   storeToRefs(projectFormStore);
 
 // Check if this is historical CMG data
 const isHistoricalData = computed(() => {
-  return !!cmg_id.value;
+  return legacyMigrationService.isLegacyProject({ metadata: metadata.value });
 });
 
 // const { isValid } = useForm("formRef");

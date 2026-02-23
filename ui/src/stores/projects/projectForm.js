@@ -9,6 +9,7 @@ export const useProjectFormStore = defineStore("projectForm", {
     funding: "",
     dataset_dict: {},
     cmg_id: null,
+    metadata: null,
     form: {
       isValid: false,
     },

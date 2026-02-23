@@ -49,6 +49,7 @@
 <script setup>
 import config from '@/config';
 import DatasetService from '@/services/dataset';
+import legacyMigrationService from '@/services/legacyMigration';
 import { formatAnalysisType, humanizeAnalysisType } from '@/services/sessionUtils';
 import toast from '@/services/toast';
 import { computed, ref, watch } from 'vue';
@@ -70,7 +71,7 @@ const analysisTypeInput = ref(humanizeAnalysisType(props.data.metadata?.analysis
 
 // Check if this is historical CMG data
 const isHistoricalData = computed(() => {
-  return !!props.data?.cmg_id;
+  return legacyMigrationService.isLegacyDataset(props.data);
 });
 
 // Show Analysis Type field only for DATA_PRODUCT datasets when genome browser is enabled

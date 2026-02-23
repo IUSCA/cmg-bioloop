@@ -896,7 +896,7 @@ const handleViewInBrowser = async () => {
     
     for (const dataset of unstagedDatasets) {
       // Check if dataset needs staging or migration
-      const needsMigration = dataset.cmg_id && dataset.migration_status && !dataset.migration_status.is_migrated;
+      const needsMigration = legacyMigrationService.isLegacyDataset(dataset) && dataset.migration_status && !dataset.migration_status.is_migrated;
       
       datasetsNeedingStaging.push({
         ...dataset,
@@ -913,10 +913,10 @@ const handleViewInBrowser = async () => {
     }
 
     // All datasets are staged - now check if legacy session needs hydration
-    if (session.value.cmg_id) {
+    if (legacyMigrationService.isLegacySession(session.value)) {
       // Check if all legacy datasets have been migrated
       const allDatasets = [...stagedDatasets, ...unstagedDatasets];
-      const legacyDatasets = allDatasets.filter(ds => ds.cmg_id);
+      const legacyDatasets = allDatasets.filter(ds => legacyMigrationService.isLegacyDataset(ds));
       
       if (legacyDatasets.length > 0) {
         const allMigrated = legacyDatasets.every(

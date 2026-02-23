@@ -227,6 +227,7 @@ async function insertDataset(prisma, cmgItem, datasetType, name, isDeleted) {
         data: {
           name: normalizedName,
           extension: inferredExtension,
+          metadata: { origin: 'legacy' },
         },
       });
       analysisTypeConnect = { connect: { id: analysisType.id } };
@@ -245,10 +246,14 @@ async function insertDataset(prisma, cmgItem, datasetType, name, isDeleted) {
   // - DATA_PRODUCT: same as num_files (all files in dataproduct are genome files)
   const metadataValue = (() => {
     if (datasetType === 'RAW_DATA') {
-      return cmgItem.cbcls ? { num_genome_files: cmgItem.cbcls } : null;
+      return cmgItem.cbcls
+        ? { origin: 'legacy', num_genome_files: cmgItem.cbcls }
+        : { origin: 'legacy' };
     } else {
       // DATA_PRODUCT: num_genome_files = num_files
-      return numFilesValue > 0 ? { num_genome_files: numFilesValue } : null;
+      return numFilesValue > 0
+        ? { origin: 'legacy', num_genome_files: numFilesValue }
+        : { origin: 'legacy' };
     }
   })();
 

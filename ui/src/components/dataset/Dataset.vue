@@ -136,7 +136,7 @@
                   <!-- Delete Action Button-->
                   <va-button
                     v-if="config.enable_delete_archive && dataset.archive_path"
-                    :disabled="is_delete_pending || !!dataset.cmg_id"
+                    :disabled="is_delete_pending || legacyMigrationService.isLegacyDataset(dataset)"
                     color="danger"
                     border-color="danger"
                     class="flex-initial"
@@ -541,7 +541,7 @@ async function handleBrowseFilesClick() {
   }
 
   // If not staged, check if staging is already in progress
-  if (dataset.value.cmg_id) {
+  if (legacyMigrationService.isLegacyDataset(dataset.value)) {
     try {
       const inProgress = await legacyMigrationService.isMigrationInProgress(dataset.value.id);
       if (inProgress) {

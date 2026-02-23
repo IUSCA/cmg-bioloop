@@ -110,7 +110,7 @@
                 border-color="danger"
                 class="flex-none"
                 color="danger"
-                :disabled="!!project.cmg_id"
+                :disabled="legacyMigrationService.isLegacyProject(project)"
                 @click="openModalToDeleteProject"
               >
                 <div class="flex items-center gap-2">
@@ -162,6 +162,7 @@
 </template>
 
 <script setup>
+import legacyMigrationService from "@/services/legacyMigration";
 import projectService from "@/services/projects";
 import toast from "@/services/toast";
 import { useAuthStore } from "@/stores/auth";
@@ -236,8 +237,8 @@ const users = computed(() => {
 const editModal = ref(null);
 
 function openModalToEditProject() {
-  const { name, description, browser_enabled, funding, cmg_id } = project.value;
-  projectFormStore.$patch({ name, description, browser_enabled, funding, cmg_id });
+  const { name, description, browser_enabled, funding, cmg_id, metadata } = project.value;
+  projectFormStore.$patch({ name, description, browser_enabled, funding, cmg_id, metadata });
   editModal.value.show();
 }
 

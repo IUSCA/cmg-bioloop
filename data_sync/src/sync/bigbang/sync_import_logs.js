@@ -175,6 +175,7 @@ async function syncImportLogs(prisma, cmgDb, cmgUserId) {
               source_run: sourceRun,
               notes: cmgUpload.notes || null,
               metadata: {
+                origin: 'legacy',
                 cmg_upload_id: uploadId,
                 cmg_dataproduct_id: dataproductCmgId, // Track which dataproduct was created
                 cmg_source_dataset: cmgUpload.dataset ? cmgUpload.dataset.toString() : null,

@@ -40,15 +40,15 @@ def has_reached_state(dataset_id: int, state: str) -> bool:
 
 def is_legacy_dataset(dataset: Dict) -> bool:
     """
-    Check if a dataset is a legacy CMG dataset.
+    Check if a dataset is a legacy CMG dataset (created via bigbang migration).
     
     Args:
         dataset: The dataset dictionary
     
     Returns:
-        True if the dataset has a cmg_id, False otherwise
+        True if the dataset has metadata.origin == 'legacy', False otherwise
     """
-    return bool(dataset.get('cmg_id'))
+    return dataset.get('metadata', {}).get('origin') == 'legacy'
 
 
 def is_hydrated(dataset_id: int) -> bool:
