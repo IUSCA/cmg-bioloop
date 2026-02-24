@@ -10,6 +10,8 @@ const _ = require('lodash/fp');
 const config = require('config');
 const pm = require('picomatch');
 const he = require('he');
+
+// const logger = require('@/services/logger');
 const path = require('path');
 const prisma = require('@/db');
 const asyncHandler = require('@/middleware/asyncHandler');
@@ -19,6 +21,7 @@ const datasetService = require('@/services/dataset');
 const { formatAnalysisType } = require('@/utils/sessionUtils');
 const authService = require('@/services/auth');
 const wfService = require('@/services/workflow');
+const legacyMigrationService = require('@/services/legacyMigration');
 const CONSTANTS = require('@/constants');
 const logger = require('@/services/logger');
 const utils = require('../../utils');
@@ -40,18 +43,19 @@ router.get(
     let n_wf_result;
     if (req.query.type) {
       result = await prisma.$queryRaw`
-        select count(*)     as "count",
-        sum(du_size) as total_size,
-        SUM(
-                CASE
-                    WHEN metadata -> 'num_genome_files' IS NOT NULL
-                        THEN (metadata ->> 'num_genome_files')::int
-                    ELSE 0
-                    END
-            )        AS total_num_genome_files
-        from dataset
-        where is_deleted = false and type = ${req.query.type};
-      `;
+            select count(*)     as "count",
+                   sum(du_size) as total_size,
+                   SUM(
+                           CASE
+                               WHEN metadata -> 'num_genome_files' IS NOT NULL
+                                   THEN (metadata ->> 'num_genome_files')::int
+                               ELSE 0
+                               END
+                   )            AS total_num_genome_files
+            from dataset
+            where is_deleted = false
+              and type = ${req.query.type};
+        `;
 
       n_wf_result = await prisma.workflow.aggregate({
         where: {
@@ -137,88 +141,6 @@ router.get(
   }),
 );
 
-const buildQueryObject = ({
-  deleted, archived, staged, type, name, days_since_last_staged,
-  has_workflows, has_derived_data, has_source_data,
-  created_at_start, created_at_end, updated_at_start, updated_at_end,
-  match_name_exact, id,
-}) => {
-  const query_obj = _.omitBy(_.isUndefined)({
-    is_deleted: deleted,
-    is_staged: staged,
-    type,
-    name: name ? {
-      ...(match_name_exact ? { equals: name } : { contains: name }),
-      mode: 'insensitive', // case-insensitive search
-    } : undefined,
-  });
-
-  // has_workflows=true: datasets with one or more workflows associated
-  // has_workflows=false: datasets with no workflows associated
-  // has_workflows=undefined/null: no query based on workflow association
-  if (!_.isNil(has_workflows)) {
-    query_obj.workflows = { [has_workflows ? 'some' : 'none']: {} };
-  }
-
-  if (!_.isNil(has_derived_data)) {
-    query_obj.derived_datasets = { [has_derived_data ? 'some' : 'none']: {} };
-  }
-
-  if (!_.isNil(has_source_data)) {
-    query_obj.source_datasets = { [has_source_data ? 'some' : 'none']: {} };
-  }
-
-  if (!_.isNil(archived)) {
-    query_obj.archive_path = archived ? { not: null } : null;
-  }
-
-  // staged datasets where there is no STAGED state in last x days
-  if (_.isNumber(days_since_last_staged)) {
-    const xDaysAgo = new Date();
-    xDaysAgo.setDate(xDaysAgo.getDate() - days_since_last_staged);
-
-    query_obj.is_staged = true;
-    query_obj.NOT = {
-      states: {
-        some: {
-          state: 'STAGED',
-          timestamp: {
-            gte: xDaysAgo,
-          },
-        },
-      },
-    };
-  }
-
-  // created_at filter
-  if (created_at_start && created_at_end) {
-    query_obj.created_at = {
-      gte: new Date(created_at_start),
-      lte: new Date(created_at_end),
-    };
-  }
-
-  // updated_at filter
-  if (updated_at_start && updated_at_end) {
-    query_obj.updated_at = {
-      gte: new Date(updated_at_start),
-      lte: new Date(updated_at_end),
-    };
-  }
-
-  // id filter
-  if (id) {
-    // if id is an array, use 'in' operator
-    if (Array.isArray(id)) {
-      query_obj.id = { in: id };
-    } else {
-      query_obj.id = id;
-    }
-  }
-
-  return query_obj;
-};
-
 const assoc_body_schema = {
   '*.source_id': {
     in: ['body'],
@@ -260,7 +182,7 @@ router.post(
         ...item.metadata,
       },
     }));
-    
+
     await prisma.dataset_hierarchy.createMany({
       data: dataWithDefaults,
     });
@@ -534,6 +456,8 @@ router.get(
     query('sort_order').default('desc').isIn(['asc', 'desc']),
     query('match_name_exact').default(false).toBoolean(),
     query('include_states').toBoolean().optional(),
+    query('include_audit_logs').toBoolean().optional(),
+    query('include_projects').toBoolean().optional(),
     query('id').isInt().toInt().optional(),
   ]),
   asyncHandler(async (req, res, next) => {
@@ -563,6 +487,8 @@ router.get(
         derived_datasets: true,
         bundle: req.query.bundle || false,
         states: req.query.include_states || false,
+        ...(req.query.include_audit_logs ? CONSTANTS.INCLUDE_AUDIT_LOGS : {}),
+        ...(req.query.include_projects ? CONSTANTS.INCLUDE_PROJECTS : {}),
       },
     };
 
@@ -591,8 +517,8 @@ router.get(
     query('bundle').optional().toBoolean(),
     query('include_projects').optional().toBoolean(),
     query('initiator').optional().toBoolean(),
-    query('include_conversions').toBoolean().default(false),
     query('include_source_instrument').toBoolean().optional(),
+    query('include_conversions').toBoolean().default(false),
     query('include_genomic_attributes').toBoolean().optional(),
   ]),
   datasetService.dataset_access_check,
@@ -601,7 +527,7 @@ router.get(
     // only select path and md5 columns from the dataset_file table if files is
     // true
 
-    console.log('req.query', req.query);
+    // console.log('req.query', req.query);
 
     const dataset = await datasetService.get_dataset({
       id: req.params.id,
@@ -613,8 +539,8 @@ router.get(
       bundle: req.query.bundle || false,
       includeProjects: req.query.include_projects || false,
       initiator: req.query.initiator || false,
-      include_conversions: req.query.include_conversions || false,
       include_source_instrument: req.query.include_source_instrument || false,
+      include_conversions: req.query.include_conversions || false,
       include_genomic_attributes: req.query.include_genomic_attributes || false,
     });
 
@@ -624,6 +550,30 @@ router.get(
 
 // Create a new dataset
 // Used by - workers + UI
+/**
+ * Create a new dataset.
+ *
+ * @route POST /datasets
+ * @param {Object} req.body - The dataset data.
+ * @param {string} req.body.name - The name of the dataset (required).
+ * @param {string} req.body.type - The type of the dataset (must be one of the configured dataset types).
+ * @param {string} req.body.origin_path - The origin path of the dataset (required).
+ * @param {BigInt} [req.body.du_size] - The disk usage size of the dataset.
+ * @param {BigInt} [req.body.size] - The size of the dataset.
+ * @param {BigInt} [req.body.bundle_size] - The size of the dataset bundle.
+ * @param {string} [req.body.project_id] - The ID of an existing project to associate with the dataset.
+ * @param {string} [req.body.src_instrument_id] - The ID of the source instrument.
+ * @param {string} [req.body.src_dataset_id] - The ID of the source dataset.
+ * @param {string} [req.body.create_method] - The method used to create the dataset.
+ * @param {string} [req.body.workflow_id] - The ID of the associated workflow.
+ * @param {string} [req.body.state] - The initial state of the dataset.
+ * @param {Object} [req.body.metadata] - Additional metadata for the dataset.
+ * @param {Object} req.user - The authenticated user making the request.
+ * @param {string} req.user.id - The ID of the authenticated user.
+ * @param {string[]} req.user.roles - The roles of the authenticated user.
+ * @returns {Promise<Object>} The created dataset object.
+ * @throws {Error} If dataset creation fails or if the origin path is restricted.
+ */
 router.post(
   '/',
   isPermittedTo('create'),
@@ -635,6 +585,7 @@ router.post(
     body('size').optional().notEmpty().customSanitizer(BigInt),
     body('bundle_size').optional().notEmpty().customSanitizer(BigInt),
     body('project_id').optional(),
+    body('origin_path').notEmpty().escape(),
     body('src_instrument_id').optional(),
     body('src_dataset_id').optional(),
     body('source_data_product_id').optional(),
@@ -642,6 +593,7 @@ router.post(
     body('workflow_id').optional(),
     body('state').optional(),
     body('metadata').optional(),
+    body('description').optional().notEmpty().escape(),
     body('file_type').optional(),
     body('genome_type').optional(),
     body('genome_value').optional(),
@@ -661,7 +613,7 @@ router.post(
     const {
       import_space, create_method, project_id, src_instrument_id, src_dataset_id, source_data_product_id,
       name, type, origin_path, du_size, size, bundle_size, workflow_id, state, metadata,
-      file_type, genome_type, genome_value, import_notes,
+      description, file_type, genome_type, genome_value, import_notes,
     } = req.body;
 
     // remove any HTML entities inserted by browser because of URL encoding
@@ -690,7 +642,6 @@ router.post(
       size,
       bundle_size,
       workflow_id,
-      project_id,
       user_id: req.user.id,
       src_instrument_id,
       src_dataset_id,
@@ -698,6 +649,7 @@ router.post(
       state,
       create_method,
       metadata,
+      description,
       file_type,
       genome_type,
       genome_value,
@@ -707,7 +659,12 @@ router.post(
     // idempotence: creates dataset or returns error 409 on repeated requests
     // If many concurrent transactions are trying to create the same dataset, only one will succeed
     // will return dataset if successful, otherwise will return 409 so that client can handle next steps accordingly
-    const dataset = await datasetService.create(prisma, createQuery);
+    const dataset = await datasetService.create({
+      tx: prisma,
+      data: createQuery,
+      project_id,
+      requester_id: req.user.id,
+    });
 
     if (dataset) res.json(dataset);
     else next(createError.Conflict('Unique constraint failed'));
@@ -723,6 +680,17 @@ router.post(
     body('datasets.*.name').notEmpty(),
     body('datasets.*.type').isIn(config.get('dataset_types')),
     body('datasets.*.origin_path').notEmpty(),
+    body('datasets.*.du_size').optional().notEmpty().customSanitizer(BigInt), // convert to BigInt
+    body('datasets.*.size').optional().notEmpty().customSanitizer(BigInt),
+    body('datasets.*.bundle_size').optional().notEmpty().customSanitizer(BigInt),
+    body('datasets.*.project_id').optional(),
+    body('datasets.*.src_instrument_id').optional(),
+    body('datasets.*.src_dataset_id').optional(),
+    body('datasets.*.create_method').optional(),
+    body('datasets.*.workflow_id').optional(),
+    body('datasets.*.state').optional(),
+    body('datasets.*.metadata').optional(),
+    body('datasets.*.description').optional().notEmpty().escape(),
   ]),
   asyncHandler(async (req, res, next) => {
     /* eslint-disable */
@@ -806,11 +774,17 @@ router.post(
         } */
       /* eslint-enable */
 
-    const data = await Promise.all(
-      req.body.datasets.map((d) => datasetService.buildDatasetCreateQuery(d)),
-    );
+    const data = req.body.datasets
+      .map((d) => datasetService.buildDatasetCreateQuery({
+        ...d,
+        user_id: req.user.id,
+      }));
 
-    const results = await Promise.allSettled(data.map((d) => datasetService.create(prisma, d)));
+    const results = await Promise.allSettled(data.map((d) => datasetService.create({
+      tx: prisma,
+      data: d,
+      requester_id: req.user.id,
+    })));
 
     // separate results into created and failed
     const created = [];
@@ -1075,7 +1049,6 @@ router.post(
     // If staging a dataset Log the staging attempt first.
     if (wf_name === CONSTANTS.WORKFLOWS.STAGE) {
       // Check if this is a legacy dataset that needs hydration
-      const legacyMigrationService = require('@/services/legacyMigration');
       let actualWorkflow = wf_name;
 
       if (legacyMigrationService.isLegacyDataset(dataset)) {
@@ -1262,12 +1235,24 @@ router.get(
       },
     });
 
-    try {
-      const download_url = await datasetService.get_download_url({ dataset, file });
-      console.log('download_url', download_url);
-      res.json(download_url);
-    } catch (e) {
-      console.error('Download URL generation failed:', e);
+    if (dataset.metadata.stage_alias) {
+      const download_file_path = isFileDownload
+        ? `${dataset.metadata.stage_alias}/${file.path}`
+        : `${datasetService.get_bundle_name(dataset)}`;
+      const url = new URL(download_file_path, `${config.get('download_server.base_url')}`);
+      // use url.pathname instead of download_file_path to deal with spaces in
+      // the file path oauth scope cannot contain spaces
+      const download_token = await authService.get_download_token(url.pathname);
+
+      const downloadUrl = new URL(
+        `download/${encodeURIComponent(download_file_path)}`,
+        config.get('download_server.base_url'),
+      );
+      res.json({
+        url: downloadUrl.href,
+        bearer_token: download_token.accessToken,
+      });
+    } else {
       next(createError.NotFound('Dataset is not prepared for download'));
     }
   }),

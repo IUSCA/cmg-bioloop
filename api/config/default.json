@@ -113,11 +113,11 @@
   ],
   "fileExtensionMapping": {
     ".bam": "BAM",
-    ".bam.bai": "BAI", 
+    ".bam.bai": "BAI",
     ".bai": "BAI",
     ".vcf.gz": "VCF_GZ",
     ".vcf.gz.tbi": "TBI",
-    ".tbi": "TBI", 
+    ".tbi": "TBI",
     ".bw": "BIGWIG",
     ".bigwig": "BIGWIG",
     ".bed": "BED",
@@ -131,7 +131,7 @@
   },
   "workflow_registry": {
     "integrated": {
-      "description": "End-to-end workflow for datasets on fetch node (uploads, imports, conversions)",
+      "description": "An end-to-end workflow to inspect, archive, state and validate a dataset",
       "steps": [
         {
           "name": "await stability",
@@ -365,11 +365,13 @@
     "slateProject": ""
   },
   "enabled_features": {
+    "import": true,
     "upload": true,
     "upload_verify_checksums": false,
     "fs": true,
     "downloads": true,
-    "signup": true,
+    "signup": false,
+    "auto_create_project_on_dataset_creation": true,
     "genome_browser": true,
     "conversion": true
   },

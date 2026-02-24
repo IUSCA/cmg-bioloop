@@ -310,7 +310,7 @@ router.get(
   }),
 );
 
-// - Register an uploaded dataset in the system (TUS Upload)
+// - Register an uploaded dataset in the system
 // - Used by UI
 router.post(
   '/',
@@ -328,7 +328,7 @@ router.post(
   ]),
   asyncHandler(async (req, res, next) => {
     // #swagger.tags = ['datasets']
-    // #swagger.summary = 'Register an uploaded dataset in the system (TUS Upload)'
+    // #swagger.summary = 'Register an uploaded dataset in the system'
 
     const {
       project_id, src_instrument_id, src_dataset_id, source_data_product_id, name, type,
@@ -349,7 +349,6 @@ router.post(
       const datasetCreateQuery = await datasetService.buildDatasetCreateQuery({
         name,
         type,
-        project_id,
         user_id: req.user.id,
         src_instrument_id,
         src_dataset_id,
@@ -364,8 +363,10 @@ router.post(
 
       const dataset_upload_log = await prisma.$transaction(async (tx) => {
         logger.info(`[UPLOAD-CREATE] Starting database transaction for '${name}'`);
-        
-        const createdDataset = await datasetService.create(tx, datasetCreateQuery);
+
+        const createdDataset = await datasetService.create({
+          tx, data: datasetCreateQuery, project_id, requester_id: req.user.id,
+        });
         logger.info(`[UPLOAD-CREATE] Dataset created`, {
           dataset_id: createdDataset.id,
           dataset_name: createdDataset.name,
@@ -382,7 +383,7 @@ router.post(
           `${createdDataset.id}`,
           createdDataset.name,
         );
-        
+
         await tx.dataset.update({
           where: { id: createdDataset.id },
           data: {
@@ -420,12 +421,12 @@ router.post(
           where: { id: created_dataset_upload_log.id },
           include: CONSTANTS.INCLUDE_DATASET_UPLOAD_LOG_RELATIONS,
         });
-        
+
         logger.info(`[UPLOAD-CREATE] Transaction complete, returning upload log`, {
           upload_log_id: updated_dataset_upload_log.id,
           dataset_id: createdDataset.id,
         });
-        
+
         return updated_dataset_upload_log;
       });
 
@@ -585,7 +586,7 @@ router.post(
       // Get file size
       const stats = fs.statSync(tusFilePath);
       fileSize = stats.size;
-      
+
       logger.info(`[UPLOAD-COMPLETE] File size determined`, {
         dataset_id: datasetId,
         process_id,
@@ -751,7 +752,7 @@ router.post(
         logger.info(`[UPLOAD-COMPLETE] Attempting to mark upload as failed`, {
           dataset_id: datasetId,
         });
-        
+
         // Get existing metadata first
         const existingLog = await prisma.dataset_upload_log.findFirst({
           where: {
@@ -772,7 +773,7 @@ router.post(
             },
           },
         });
-        
+
         logger.info(`[UPLOAD-COMPLETE] Upload marked as PROCESSING_FAILED`, {
           dataset_id: datasetId,
         });

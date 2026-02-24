@@ -1,10 +1,15 @@
 <template>
-  <va-inner-loading :loading="loading" class="h-full">
+  <va-inner-loading
+    :loading="loading"
+    class="h-full"
+    data-testid="inner-loading"
+  >
     <va-stepper
       v-model="step"
       :steps="steps"
       controlsHidden
       class="h-full create-data-product-stepper"
+      data-testid="stepper"
     >
       <!-- Step icons and labels -->
       <template
@@ -21,16 +26,21 @@
           @click="setStep(i)"
           :disabled="isStepperButtonDisabled(i)"
           preset="secondary"
+          :data-testid="`step-button-${i}`"
         >
           <div class="flex flex-col items-center">
-            <Icon :icon="s.icon" />
-            <span class="hidden sm:block"> {{ s.label }} </span>
+            <Icon :icon="s.icon" data-testid="step-icon" />
+            <span class="hidden sm:block" data-testid="step-label">
+              {{ s.label }}
+            </span>
           </div>
         </va-button>
       </template>
 
+      <!-- Step 0 (File selector) -->
       <template #step-content-0>
-        <div class="flex flex-col">
+        <div class="flex flex-col" data-testid="step-content-0">
+          <!-- Analysis Type selector -->
           <div class="flex w-full pb-6">
             <va-select
               v-model="selectedFileType"
@@ -58,22 +68,29 @@
           </div>
 
           <va-divider class="mb-6" />
-          
+
+          <!-- Buttons to select the files/directory to upload -->
           <SelectFileButtons
             :disabled="submitAttempted || loading || validatingForm"
             @files-added="onFilesAdded"
             @directory-added="onDirectoryAdded"
+            data-testid="select-file-buttons"
           />
-          <va-divider />
+          <va-divider data-testid="divider-step-0" />
           <SelectedFilesTable
             @file-removed="removeFile"
             :files="displayedFilesToUpload"
+            data-testid="upload-selected-files-table"
           />
         </div>
       </template>
 
+      <!-- Step 1: Metadata ('General Info') -->
       <template #step-content-1>
-        <div class="flex w-full pb-6 items-center">
+        <div
+          class="flex w-full pb-6 items-center"
+          data-testid="upload-metadata-dataset-type-row"
+        >
           <va-select
             v-model="selectedDatasetType"
             :text-by="'label'"
@@ -82,41 +99,53 @@
             label="Dataset Type"
             placeholder="Select dataset type"
             class="flex-grow"
+            data-testid="upload-metadata-dataset-type-select"
           />
           <div class="flex items-center ml-2">
-            <va-popover>
+            <va-popover data-testid="upload-metadata-dataset-type-popover">
               <template #body>
-                <div class="w-96">
-                  Raw Data: Original, unprocessed data collected from
+                <div class="w-96" data-testid="dataset-type-help-text">
+                  - Raw Data: Original, unprocessed data collected from
                   instruments.
                   <br />
-                  Data Product: Processed data derived from Raw Data
+                  - Data Product: Processed data derived from Raw Data
                 </div>
               </template>
-              <Icon icon="mdi:information" class="text-xl text-gray-500" />
+              <Icon
+                icon="mdi:help-circle"
+                class="text-xl text-gray-500"
+                data-testid="dataset-type-help-icon"
+              />
             </va-popover>
           </div>
         </div>
 
-        <div class="flex w-full pb-6">
+        <div
+          class="flex w-full pb-6"
+          data-testid="upload-metadata-assign-source-row"
+        >
           <div class="w-60 flex flex-shrink-0 mr-4">
             <div class="flex items-center">
               <va-checkbox
-                v-model="isAssignedSourceRawData"
+                v-model="willAssignSourceRawData"
                 @update:modelValue="resetRawDataSearch"
-                :disabled="willUploadRawData"
+                :disabled="submitAttempted || isRawDataCheckboxDisabled"
                 color="primary"
                 label="Assign source Raw Data"
                 class="flex-grow"
+                data-testid="upload-metadata-assign-source-checkbox"
               />
             </div>
           </div>
 
-          <div class="flex-grow flex items-center">
+          <div
+            class="flex-grow flex items-center"
+            data-testid="upload-metadata-dataset-autocomplete-row"
+          >
             <DatasetSelectAutoComplete
               v-model:selected="selectedRawData"
               v-model:search-term="datasetSearchText"
-              :disabled="submitAttempted || !isAssignedSourceRawData"
+              :disabled="submitAttempted || !isRawDataSearchEnabled"
               :dataset-type="config.dataset.types.RAW_DATA.key"
               placeholder="Search Raw Data"
               @clear="resetRawDataSearch"
@@ -124,27 +153,36 @@
               @close="onRawDataSearchClose"
               class="flex-grow"
               :label="'Dataset'"
+              :messages="noRawDataToAssign ? 'No Raw Data to select' : null"
+              data-test-id="upload-metadata-dataset-autocomplete"
             >
             </DatasetSelectAutoComplete>
-            <va-popover>
+            <va-popover data-testid="upload-metadata-dataset-autocomplete-popover">
               <template #body>
-                <div class="w-96">
+                <div class="w-96" data-testid="raw-data-help-text">
                   Associating a Data Product with a source Raw Data establishes
                   a clear lineage between the original data and its processed
                   form. This linkage helps to trace the origins of processed
                   data
                 </div>
               </template>
-              <Icon icon="mdi:information" class="ml-2 text-xl text-gray-500" />
+              <Icon
+                icon="mdi:help-circle"
+                class="ml-2 text-xl text-gray-500"
+                data-testid="raw-data-help-icon"
+              />
             </va-popover>
           </div>
         </div>
 
-        <div class="flex w-full pb-6">
+        <div
+          class="flex w-full pb-6"
+          data-testid="upload-metadata-assign-project-row"
+        >
           <div class="w-60 flex flex-shrink-0 mr-4">
             <div class="flex items-center">
               <va-checkbox
-                v-model="isAssignedProject"
+                v-model="willAssignProject"
                 @update:modelValue="
                   (val) => {
                     if (!val) {
@@ -152,9 +190,11 @@
                     }
                   }
                 "
+                :disabled="submitAttempted || isProjectCheckboxDisabled"
                 color="primary"
                 label="Assign Project"
                 class="flex-grow"
+                data-testid="upload-metadata-assign-project-checkbox"
               />
             </div>
           </div>
@@ -163,16 +203,18 @@
             <ProjectAsyncAutoComplete
               v-model:selected="projectSelected"
               v-model:search-term="projectSearchText"
-              :disabled="submitAttempted || !isAssignedProject"
+              :disabled="submitAttempted || !isProjectSearchEnabled"
               placeholder="Search Projects"
               @clear="resetProjectSearch"
               @open="onProjectSearchOpen"
               @close="onProjectSearchClose"
               class="flex-grow"
               :label="'Project'"
+              :messages="noProjectsToAssign ? 'No Projects to select' : null"
+              data-test-id="upload-metadata-project-autocomplete"
             >
             </ProjectAsyncAutoComplete>
-            <va-popover>
+            <va-popover data-testid="upload-metadata-project-autocomplete-popover">
               <template #body>
                 <div class="w-96">
                   Assigning a dataset to a project establishes a connection
@@ -183,16 +225,19 @@
                   members working on the same project.
                 </div>
               </template>
-              <Icon icon="mdi:information" class="ml-2 text-xl text-gray-500" />
+              <Icon icon="mdi:help-circle" class="ml-2 text-xl text-gray-500" />
             </va-popover>
           </div>
         </div>
 
-        <div class="flex w-full pb-6">
+        <div
+          class="flex w-full pb-6"
+          data-testid="upload-metadata-assign-instrument-row"
+        >
           <div class="w-60 flex flex-shrink-0 mr-4">
             <div class="flex items-center">
               <va-checkbox
-                v-model="isAssignedSourceInstrument"
+                v-model="willAssignSourceInstrument"
                 @update:modelValue="
                   (val) => {
                     if (!val) {
@@ -200,9 +245,11 @@
                     }
                   }
                 "
+                :disabled="submitAttempted || isInstrumentsCheckboxDisabled"
                 color="primary"
                 label="Assign source Instrument"
                 class="flex-grow"
+                data-testid="upload-metadata-assign-instrument-checkbox"
               />
             </div>
           </div>
@@ -211,31 +258,36 @@
             <va-select
               v-model="selectedSourceInstrument"
               :options="sourceInstrumentOptions"
-              :disabled="!isAssignedSourceInstrument"
+              :disabled="submitAttempted || !isInstrumentSelectionEnabled"
               label="Source Instrument"
               placeholder="Select Source Instrument"
               class="flex-grow"
               :text-by="'name'"
               :track-by="'id'"
+              :messages="
+                noInstrumentsToAssign ? 'No Instruments to select' : null
+              "
+              data-testid="upload-metadata-source-instrument-select"
             />
             <div class="flex items-center ml-2">
-              <va-popover>
+              <va-popover data-testid="upload-metadata-source-instrument-popover">
                 <template #body>
                   <div class="w-72">
                     Source instrument where this data was collected from.
                   </div>
                 </template>
-                <Icon icon="mdi:information" class="text-xl text-gray-500" />
+                <Icon icon="mdi:help-circle" class="text-xl text-gray-500" />
               </va-popover>
             </div>
           </div>
         </div>
 
+        <!-- Source Data Product select -->
         <div v-if="shouldShowSourceDataProductField" class="flex w-full pb-6">
           <div class="w-60 flex flex-shrink-0 mr-4">
             <div class="flex items-center">
               <va-checkbox
-                v-model="isAssignedSourceDataProduct"
+                v-model="willAssignSourceDataProduct"
                 @update:modelValue="resetSourceDataProductSearch"
                 :disabled="submitAttempted"
                 color="primary"
@@ -249,7 +301,7 @@
             <DatasetSelectAutoComplete
               v-model:selected="selectedSourceDataProduct"
               v-model:search-term="sourceDataProductSearchText"
-              :disabled="submitAttempted || !isAssignedSourceDataProduct"
+              :disabled="submitAttempted || !willAssignSourceDataProduct"
               :dataset-type="config.dataset.types.DATA_PRODUCT.key"
               placeholder="Search Data Product"
               @clear="resetSourceDataProductSearch"
@@ -272,6 +324,7 @@
         </div>
       </template>
 
+      <!-- Step 2: Genomic Details -->
       <template #step-content-2>
         <div class="flex w-full pb-6">
           <va-select
@@ -314,6 +367,7 @@
         </div>
       </template>
 
+      <!-- Step 3: Start Upload / Upload Details -->
       <template #step-content-3>
         <!-- Always show two cards: Left (metadata with dataset name) and Right (file list with upload progress) -->
         <div class="flex flex-row" v-if="selectingFiles || selectingDirectory">
@@ -328,7 +382,7 @@
               <va-card-content>
                 <UploadedDatasetDetails
                   v-if="selectingFiles || selectingDirectory"
-                  v-model:populated-dataset-name="populatedDatasetName"
+                  v-model:populated-dataset-name="uploadedDatasetName"
                   :dataset="datasetUploadLog?.dataset"
                   :selected-dataset-type="selectedDatasetType.value"
                   :file-type="selectedFileType"
@@ -354,7 +408,7 @@
           </div>
 
           <va-divider vertical />
-          
+
           <!-- RIGHT CARD: File List and Upload Progress -->
           <div class="flex-1">
             <va-card>
@@ -369,19 +423,19 @@
                     </div>
                     <va-progress-bar :model-value="checksumProgress" color="info" />
                   </div>
-                  
+
                   <!-- Overall upload progress -->
                   <div>
                     <div class="text-sm font-semibold mb-2">
                       Upload Progress: {{ submitAttempted ? `${filesUploaded} / ${totalFiles} files (${uploadProgress}%)` : 'Not started' }}
                     </div>
-                    <va-progress-bar 
-                      :model-value="submitAttempted ? uploadProgress : 0" 
+                    <va-progress-bar
+                      :model-value="submitAttempted ? uploadProgress : 0"
                       :color="submitAttempted ? 'primary' : 'secondary'"
                     />
                   </div>
                 </div>
-                
+
                 <!-- File list -->
                 <div class="file-list" style="max-height: 400px; overflow-y: auto">
                   <div v-for="file in displayedFilesToUpload" :key="file.name" class="mb-2 pb-2 border-b border-gray-200 last:border-b-0">
@@ -400,6 +454,7 @@
       <!-- custom controls -->
       <template #controls="{ nextStep, prevStep }">
         <div class="flex items-center justify-around w-full">
+          <!-- Previous button -->
           <va-button
             class="flex-none"
             preset="primary"
@@ -410,26 +465,31 @@
               }
             "
             :disabled="isPreviousButtonDisabled"
+            data-testid="upload-previous-button"
           >
             Previous
           </va-button>
-          <va-button
-            v-if="uploadRegistrationFailed"
+          <!-- Next / Upload / Retry buttons -->
+          <div
             class="flex-none"
-            @click="retryApiCall"
-            color="warning"
+            data-testid="upload-next-button"
           >
-            Retry
-          </va-button>
-          <va-button
-            v-else
-            class="flex-none"
-            @click="onNextClick(nextStep)"
-            :color="isLastStep ? 'success' : 'primary'"
-            :disabled="isNextButtonDisabled"
-          >
-            {{ isLastStep ? "Upload" : "Next" }}
-          </va-button>
+            <va-button
+              v-if="uploadRegistrationFailed"
+              @click="retryApiCall"
+              color="warning"
+            >
+              Retry
+            </va-button>
+            <va-button
+              v-else
+              @click="onNextClick(nextStep)"
+              :color="isLastStep ? 'success' : 'primary'"
+              :disabled="isNextButtonDisabled"
+            >
+              {{ isLastStep ? "Upload" : "Next" }}
+            </va-button>
+          </div>
         </div>
       </template>
     </va-stepper>
@@ -444,33 +504,34 @@
     @cancel="handleCancelFileType"
     :ok-button-props="{ disabled: isFileTypeFormInvalid }"
   >
-      <div class="flex flex-col gap-4">
-        <va-input
-          v-model="newFileTypeName"
-          label="Name"
-          placeholder="e.g., FASTQ"
-          :rules="[(value) => !!value || 'Name is required']"
-        />
-        <va-input
-          v-model="newFileTypeExtension"
-          label="Extension"
-          placeholder="e.g., .fastq.gz"
-          :rules="[
+    <div class="flex flex-col gap-4">
+      <va-input
+        v-model="newFileTypeName"
+        label="Name"
+        placeholder="e.g., FASTQ"
+        :rules="[(value) => !!value || 'Name is required']"
+      />
+      <va-input
+        v-model="newFileTypeExtension"
+        label="Extension"
+        placeholder="e.g., .fastq.gz"
+        :rules="[
             (value) => !!value || 'Extension is required',
             (value) => !checkDuplicateFileType(newFileTypeName, value) || 'This file type already exists'
           ]"
-        />
-      </div>
+      />
+    </div>
   </va-modal>
 </template>
 
 <script setup>
 import DatasetSelectAutoComplete from "@/components/dataset/DatasetSelectAutoComplete.vue";
 import config from "@/config";
-import Constants from "@/constants";
-import analysisTypeService from "@/services/analysisType";
+import { default as Constants } from "@/constants";
 import datasetService from "@/services/dataset";
 import instrumentService from "@/services/instrument";
+import projectService from "@/services/projects";
+import analysisTypeService from "@/services/analysisType";
 import toast from "@/services/toast";
 import { _getUploadServiceURL } from "@/services/upload";
 import { formatBytes } from "@/services/utils";
@@ -493,12 +554,14 @@ const STEP_KEYS = {
   UPLOAD: "upload",
 };
 
+// Various errors that may be shown to the user during the process of uploading a dataset.
 const UNKNOWN_VALIDATION_ERROR = "An unknown error occurred";
 const DATASET_NAME_REQUIRED_ERROR = "Dataset name cannot be empty";
 const DATASET_NAME_HAS_SPACES_ERROR = "Dataset name cannot contain spaces";
 const DATASET_NAME_MIN_LENGTH_ERROR =
   "Dataset name must have 3 or more characters.";
 
+// The various steps that the user will taken through during the process of uploading a dataset.
 const steps = [
   {
     key: STEP_KEYS.SELECT_FILES,
@@ -522,6 +585,7 @@ const steps = [
   },
 ];
 
+// Types of Datasets available to upload
 const datasetTypes = [
   {
     label: config.dataset.types.RAW_DATA.label,
@@ -533,100 +597,161 @@ const datasetTypes = [
   },
 ];
 
+// Whether individual files are being uploaded, or a single directory is being uploaded.
 const FILE_TYPE = {
   FILE: "file",
   DIRECTORY: "directory",
 };
 
+// An object containing the form validation errors for each step.
 const formErrors = ref({
   [STEP_KEYS.SELECT_FILES]: null,
   [STEP_KEYS.GENERAL_INFO]: null,
   [STEP_KEYS.GENOMIC_DETAILS]: null,
   [STEP_KEYS.UPLOAD]: null,
 });
-const isAssignedSourceInstrument = ref(true);
-const isAssignedSourceRawData = ref(true);
-const selectedRawData = ref(null);
+
+// Bearer token used to send requests to the File-Upload API
+const uploadToken = ref(useLocalStorage("uploadToken", ""));
+
+// Search-text for Dataset Search
 const datasetSearchText = ref("");
+// Search-text for Project search
 const projectSearchText = ref("");
-const isAssignedProject = ref(true);
-const submissionSuccess = ref(false);
+
+// Options available to choose from in the `Dataset Type` dropdown.
 const datasetTypeOptions = ref(datasetTypes);
-const isAssignedSourceDataProduct = ref(false);
-const selectedSourceDataProduct = ref(null);
-const sourceDataProductSearchText = ref('');
+
+// The type of Dataset that the user has selected to upload.
 const selectedDatasetType = ref(
+  // By default, it is assumed that user will upload a Data Product.
   datasetTypes.find((e) => e.value === config.dataset.types.DATA_PRODUCT.key),
 );
-// `willUploadRawData` determines whether the user will upload a Raw Data or a
-// Data Product. By default, the user will upload a Data Product.
-const willUploadRawData = ref(false);
-// `stepPristineStates` tracks if a step's form fields are pristine (i.e. not
-// touched by user) or not. Errors are only shown when a step's form fields are
-// not pristine.
+
+/**
+ * `stepPristineStates` tracks if a step's form fields are pristine (i.e. not touched by user) or not.
+ * Errors are only shown when a step's form fields are not pristine.
+ */
 const stepPristineStates = ref([
   { [STEP_KEYS.SELECT_FILES]: true },
   { [STEP_KEYS.GENERAL_INFO]: true },
   { [STEP_KEYS.GENOMIC_DETAILS]: true },
   { [STEP_KEYS.UPLOAD]: true },
 ]);
+// `stepIsPristine` determines whether any of the fields in the current step have been interacted with by the user.
+const stepIsPristine = computed(() => {
+  return !!Object.values(stepPristineStates.value[step.value])[0];
+});
+
 const loading = ref(false);
 const validatingForm = ref(false);
-const selectedSourceInstrument = ref(null);
-const sourceInstrumentOptions = ref([]);
-const projectSelected = ref(null);
+
+// `datasetUploadLog` stores information about the uploaded Dataset that is persisted to the Database.
 const datasetUploadLog = ref(null);
+
+// Various values related to the submission process.
+const submissionSuccess = ref(false);
 const submissionStatus = ref(Constants.UPLOAD_STATUSES.UNINITIATED);
 const statusChipColor = ref("");
 const submissionAlert = ref(""); // For handling network errors before upload begins
 const submissionAlertColor = ref("");
 const isSubmissionAlertVisible = ref(false);
 const submitAttempted = ref(false);
+
+// The files selected by the user for uploading.
 const filesToUpload = ref([]);
-const displayedFilesToUpload = ref([]);
+// The directory selected by the user for uploading.
 const selectedDirectory = ref(null);
+// The list of files being uploaded that are displayed to the user.
+const displayedFilesToUpload = ref([]);
+
+// Determine if the user has selected any files to upload.
+const noFilesSelected = computed(() => {
+  return filesToUpload.value?.length === 0;
+});
+
+// Determines if a file has been selected to upload
 const selectingFiles = ref(false);
+// Determines if a directory has been selected to upload
 const selectingDirectory = ref(false);
-const populatedDatasetName = ref("");
+
+
+/**
+ * Name given to the dataset that the user will upload. This can either be pre-populated by the form,
+ * or set by the user.
+ * - If a directory is selected for uploading, this value is pre-populated by setting it to the name of the directory.
+ * - Is a file is selected for uploading, this value is not set.
+ *
+ * In both of the above cases, the user can select a name of their choosing before initiating the upload.
+ */
+const uploadedDatasetName = ref("");
+
+// Current step index
 const step = ref(0);
+
+const isLastStep = computed(() => {
+  return step.value === steps.length - 1;
+});
+
 const uploadCancelled = ref(false);
+
+// The list of available Instruments for assigning to the Dataset being uploaded.
+const sourceInstrumentOptions = ref([]);
+
+// The Raw Data that will be assigned to the Dataset being uploaded.
+const selectedRawData = ref(null);
+// The (existing) Project that will be assigned to the Dataset being ingested.
+const projectSelected = ref(null);
+// The (new) Project that will be assigned to the Dataset being ingested.
+const projectCreated = ref(null);
+// The Instrument that will be assigned to the Dataset being uploaded.
+const selectedSourceInstrument = ref(null);
+
+// determines whether there are any Raw Data options to choose from
+const noRawDataToAssign = ref(false);
+// determines whether there are any Project options to choose from
+const noProjectsToAssign = ref(false);
+// determines whether there are any Instrument options to choose from
+const noInstrumentsToAssign = ref(false);
+
+// Determines whether the Dataset being uploaded is of type Raw Data or some other type.
+const willUploadRawData = computed(() => {
+  return (
+    selectedDatasetType.value["value"] === config.dataset.types.RAW_DATA.key
+  );
+});
+
+// Determines whether a new Project will be created and associated with the Dataset being uploaded.
+const willCreateNewProject = computed(() => {
+  return (
+    noProjectsToAssign.value &&
+    auth.isFeatureEnabled("auto_create_project_on_dataset_creation")
+  );
+});
+
+// determines whether a Data Product will be assigned as a parent to the Dataset being uploaded
+const willAssignSourceDataProduct = ref(false);
+// the (existing) Data Product which will be assigned as a parent to the Dataset being uploaded
+const selectedSourceDataProduct = ref(null);
+// search text, used to search for Data Products
+const sourceDataProductSearchText = ref('');
+
+// Analysis Type
 const selectedFileType = ref(null);
+
+// Genomic Details
 const selectedGenomeType = ref(null);
 const selectedGenomeValue = ref(null);
+
+const analysisTypes = ref([]);
+
+// Show/hide modal to create new Analysis Type in the system
 const showCreateFileTypeModal = ref(false);
+// A new Analysis Type created in the system by the user
+const newlyCreatedFileType = ref(null);
+// Name and extension of the new Analysis Type being created
 const newFileTypeName = ref('');
 const newFileTypeExtension = ref('');
-const analysisTypes = ref([]);
-const newlyCreatedFileType = ref(null); // Track the file type created via modal
-
-// Auto-prepend dot to extension
-watch(newFileTypeExtension, (newVal) => {
-  if (newVal && !newVal.startsWith('.')) {
-    newFileTypeExtension.value = `.${newVal}`;
-  }
-});
-
-// Validation errors
-// Check if name/extension combo already exists (case-insensitive)
-const checkDuplicateFileType = (name, extension) => {
-  if (!name || !extension) return false;
-  
-  // Normalize name the same way we do when creating (to match API format)
-  const normalizedName = name.trim().toUpperCase().replace(/\s+/g, '_').replace(/[^A-Z0-9_]/g, '');
-  const normalizedExt = extension.trim().toLowerCase();
-  
-  return analysisTypes.value.some(at => 
-    at.name.toUpperCase() === normalizedName && 
-    at.extension.toLowerCase() === normalizedExt
-  );
-};
-
-// Form is invalid if fields are empty OR duplicate exists
-const isFileTypeFormInvalid = computed(() => {
-  return !newFileTypeName.value || 
-         !newFileTypeExtension.value || 
-         checkDuplicateFileType(newFileTypeName.value, newFileTypeExtension.value);
-});
 
 // Upload progress state
 const uploadProgress = ref(0);
@@ -638,28 +763,17 @@ const isComputingChecksum = ref(false); // Track checksum computation state
 const checksumProgress = ref(0); // Track checksum computation progress (0-100)
 const computedChecksum = ref(null); // Store computed checksum before upload
 
-/**
- * Format duration in milliseconds to human-readable string
- * @param {number} ms - Duration in milliseconds
- * @returns {string} Formatted duration (e.g., "1.5s", "2.3m", "1.2h")
- */
-const formatDuration = (ms) => {
-  const seconds = ms / 1000;
-  if (seconds < 60) {
-    return `${seconds.toFixed(1)}s`;
-  } else if (seconds < 3600) {
-    const minutes = seconds / 60;
-    return `${minutes.toFixed(1)}m`;
-  } else {
-    const hours = seconds / 3600;
-    return `${hours.toFixed(1)}h`;
-  }
-};
+// Form is invalid if fields are empty OR duplicate exists
+const isFileTypeFormInvalid = computed(() => {
+  return !newFileTypeName.value ||
+    !newFileTypeExtension.value ||
+    checkDuplicateFileType(newFileTypeName.value, newFileTypeExtension.value);
+});
 
 /**
  * Computed: Determine if upload completed successfully
  * Used to show success indicators and change UI text from "Files to Upload" to "Files Uploaded"
- * 
+ *
  * Success condition: When files are uploaded AND registered with API successfully
  * This is indicated by:
  * - statusChipColor is "success" (set in handleUploadComplete after successful API registration)
@@ -721,10 +835,6 @@ const isNextButtonDisabled = computed(() => {
   );
 });
 
-const stepIsPristine = computed(() => {
-  return !!Object.values(stepPristineStates.value[step.value])[0];
-});
-
 const filesNotUploaded = computed(() => {
   return filesToUpload.value.filter(
     (e) => e.uploadStatus !== Constants.UPLOAD_STATUSES.UPLOADED,
@@ -735,13 +845,9 @@ const someFilesPendingUpload = computed(
   () => filesNotUploaded.value.length > 0,
 );
 
-const isLastStep = computed(() => {
-  return step.value === steps.length - 1;
-});
-
 const uploadFormData = computed(() => {
   return {
-    name: populatedDatasetName.value,
+    name: uploadedDatasetName.value,
     type: selectedDatasetType.value["value"],
     ...(selectedRawData.value && {
       src_dataset_id: selectedRawData.value.id,
@@ -749,20 +855,16 @@ const uploadFormData = computed(() => {
     ...(selectedSourceDataProduct.value && {
       source_data_product_id: selectedSourceDataProduct.value.id,
     }),
-    project_id: projectSelected.value ? projectSelected.value.id : null,
-    src_instrument_id: selectedSourceInstrument.value
-      ? selectedSourceInstrument.value.id
-      : null,
-    // Genomic details
+    ...(projectSelected.value && !willCreateNewProject.value && { project_id: projectSelected.value.id }),
+    ...(selectedSourceInstrument.value && {
+      src_instrument_id: selectedSourceInstrument.value.id,
+    }),
+    // Analysis Type
     file_type: selectedFileType.value || null,
+    // Genomic details
     genome_type: selectedGenomeType.value?.value || selectedGenomeType.value || null,
     genome_value: selectedGenomeValue.value || null,
-    // Note: files_metadata removed - upload service tracks files internally, not in database
   };
-});
-
-const noFilesSelected = computed(() => {
-  return filesToUpload.value?.length === 0;
 });
 
 const fileTypeOptions = computed(() => {
@@ -783,10 +885,10 @@ const shouldShowSourceDataProductField = computed(() => {
   // Show field only if:
   // 1. Dataset type is DATA_PRODUCT
   const isDataProduct = selectedDatasetType.value?.value === config.dataset.types.DATA_PRODUCT.key;
-  
+
   // 2. File type is FASTQ
   const isFastq = selectedFileType.value?.name?.toUpperCase() === 'FASTQ';
-  
+
   return isDataProduct && isFastq;
 });
 
@@ -802,6 +904,12 @@ const availableGenomeValues = computed(() => {
   return genomes;
 });
 
+/**
+ * Handler invoked when the user selects one or files that are to be uploaded.
+ * - Clears the directory to be uploaded if one was set before, along with the files in it.
+ * - Sets the new list files to be uploaded.
+ * @param files The list of files selected by the user to be uploaded.
+ */
 const onFilesAdded = (files) => {
   clearSelectedDirectoryToUpload();
   setFiles(files);
@@ -809,6 +917,14 @@ const onFilesAdded = (files) => {
   setUploadedFileType(FILE_TYPE.FILE);
 };
 
+/**
+ * Handler invoked when the user selects a directory that is to be uploaded.
+ * - Clears the files to be uploaded if some were set before.
+ * - Sets the new directory be uploaded, along with the list of files in it.
+ * @param directoryDetails Information about the files selected by the user.
+ * @param {File[]} directoryDetails.files - Array of File objects representing the files in the directory.
+ * @param {string} directoryDetails.directoryName - The name of the directory being uploaded.
+ */
 const onDirectoryAdded = (directoryDetails) => {
   clearSelectedFilesToUpload();
   setDirectory(directoryDetails);
@@ -816,29 +932,9 @@ const onDirectoryAdded = (directoryDetails) => {
   setUploadedFileType(FILE_TYPE.DIRECTORY);
 };
 
-const clearSelectedRawData = () => {
+const resetRawDataSearch = () => {
   selectedRawData.value = null;
   datasetSearchText.value = "";
-};
-
-const resetProjectSearch = () => {
-  projectSelected.value = null;
-  projectSearchText.value = "";
-};
-
-const resetRawDataSearch = (val) => {
-  clearSelectedRawData();
-  if (!val) {
-    datasetTypeOptions.value = datasetTypes;
-  } else {
-    datasetTypeOptions.value = datasetTypes.filter(
-      (e) => e.value === config.dataset.types.DATA_PRODUCT.key,
-    );
-    selectedDatasetType.value = datasetTypeOptions.value.find(
-      (e) => e.value === config.dataset.types.DATA_PRODUCT.key,
-    );
-    willUploadRawData.value = false;
-  }
 };
 
 const onRawDataSearchOpen = () => {
@@ -851,12 +947,27 @@ const onRawDataSearchClose = () => {
   }
 };
 
+const resetProjectSearch = () => {
+  projectSelected.value = null;
+  projectSearchText.value = "";
+};
+
+const onProjectSearchOpen = () => {
+  projectSelected.value = null;
+};
+
+const onProjectSearchClose = () => {
+  if (!projectSelected.value) {
+    projectSearchText.value = "";
+  }
+};
+
 const clearSelectedSourceDataProduct = () => {
   selectedSourceDataProduct.value = null;
   sourceDataProductSearchText.value = '';
 };
 
-const resetSourceDataProductSearch = (val) => {
+const resetSourceDataProductSearch = () => {
   clearSelectedSourceDataProduct();
 };
 
@@ -870,16 +981,52 @@ const onSourceDataProductSearchClose = () => {
   }
 };
 
-const onProjectSearchOpen = () => {
-  projectSelected.value = null;
+// Load analysis types from API
+const loadAnalysisTypes = () => {
+  analysisTypeService
+    .getAll()
+    .then((res) => {
+      analysisTypes.value = res.data;
+    })
+    .catch((err) => {
+      toast.error('Failed to load file types');
+      console.error(err);
+    });
 };
 
-const onProjectSearchClose = () => {
-  if (!projectSelected.value) {
-    projectSearchText.value = "";
+// Check if name/extension combo already exists (case-insensitive)
+const checkDuplicateFileType = (name, extension) => {
+  if (!name || !extension) return false;
+
+  // Normalize name the same way we do when creating (to match API format)
+  const normalizedName = name.trim().toUpperCase().replace(/\s+/g, '_').replace(/[^A-Z0-9_]/g, '');
+  const normalizedExt = extension.trim().toLowerCase();
+
+  return analysisTypes.value.some(at =>
+    at.name.toUpperCase() === normalizedName &&
+    at.extension.toLowerCase() === normalizedExt
+  );
+};
+
+/**
+ * Format duration in milliseconds to human-readable string
+ * @param {number} ms - Duration in milliseconds
+ * @returns {string} Formatted duration (e.g., "1.5s", "2.3m", "1.2h")
+ */
+const formatDuration = (ms) => {
+  const seconds = ms / 1000;
+  if (seconds < 60) {
+    return `${seconds.toFixed(1)}s`;
+  } else if (seconds < 3600) {
+    const minutes = seconds / 60;
+    return `${minutes.toFixed(1)}m`;
+  } else {
+    const hours = seconds / 3600;
+    return `${hours.toFixed(1)}h`;
   }
 };
 
+// Determines whether the stepper button should be disabled for any given step.
 const isStepperButtonDisabled = (stepIndex) => {
   return (
     submitAttempted.value ||
@@ -890,6 +1037,7 @@ const isStepperButtonDisabled = (stepIndex) => {
   );
 };
 
+// Handler invoked when a file that is currently selected for upload is removed from the list of files to be uploaded.
 const removeFile = (fileIndex) => {
   if (selectingDirectory.value) {
     selectingDirectory.value = false;
@@ -902,6 +1050,7 @@ const removeFile = (fileIndex) => {
   }
 };
 
+// Async function to check if a Dataset already exists in the system for a given name and type.
 const validateIfExists = (value) => {
   return new Promise((resolve, reject) => {
     // Vuestic claims that it should not run async validation if synchronous
@@ -927,26 +1076,26 @@ const validateIfExists = (value) => {
   });
 };
 
-const resetFormErrors = () => {
-  formErrors.value = {
-    [STEP_KEYS.SELECT_FILES]: null,
-    [STEP_KEYS.GENERAL_INFO]: null,
-    [STEP_KEYS.GENOMIC_DETAILS]: null,
-    [STEP_KEYS.UPLOAD]: null,
-  };
-};
-
+/**
+ * Async function to check if a name selected for the Dataset being uploaded is valid.
+ *
+ * Conditions to consider a name valid:
+ * - Not empty
+ * - Minimum length of 3 characters
+ * - No spaces
+ * - Does not already exist in the system
+ */
 const validateDatasetName = async () => {
-  if (!populatedDatasetName.value) {
+  if (!uploadedDatasetName.value) {
     return { isNameValid: false, error: DATASET_NAME_REQUIRED_ERROR };
-  } else if (populatedDatasetName.value?.length < 3) {
+  } else if (uploadedDatasetName.value?.length < 3) {
     return { isNameValid: false, error: DATASET_NAME_MIN_LENGTH_ERROR };
-  } else if (populatedDatasetName.value?.indexOf(" ") > -1) {
+  } else if (uploadedDatasetName.value?.indexOf(" ") > -1) {
     return { isNameValid: false, error: DATASET_NAME_HAS_SPACES_ERROR };
   }
 
   validatingForm.value = true;
-  return validateIfExists(populatedDatasetName.value)
+  return validateIfExists(uploadedDatasetName.value)
     .then((res) => {
       const datasetExistsError = (datasetType) => {
         const datasetTypeLabel = datasetTypes.find(
@@ -967,9 +1116,11 @@ const validateDatasetName = async () => {
     });
 };
 
+
+// Clears any details related to the directory that is currently selected for upload, and the files within it.
 const clearSelectedDirectoryToUpload = ({
-  clearDirectoryFiles = true,
-} = {}) => {
+                                          clearDirectoryFiles = true,
+                                        } = {}) => {
   // clear files within the directory being removed
   if (clearDirectoryFiles) {
     clearSelectedFilesToUpload();
@@ -978,19 +1129,27 @@ const clearSelectedDirectoryToUpload = ({
   selectedDirectory.value = null;
 };
 
+// Clears the list of files that are currently selected for upload.
 const clearSelectedFilesToUpload = () => {
   displayedFilesToUpload.value = [];
 };
 
+// Sets the type of content that is to be uploaded (individual files or a single directory).
 const setUploadedFileType = (fileType) => {
-  if (fileType === FILE_TYPE.FILE) {
-    selectingFiles.value = true;
-    selectingDirectory.value = false;
-  } else if (fileType === FILE_TYPE.DIRECTORY) {
-    selectingDirectory.value = true;
-    selectingFiles.value = false;
-  }
+  selectingFiles.value = fileType === FILE_TYPE.FILE;
+  selectingDirectory.value = fileType === FILE_TYPE.DIRECTORY;
 };
+
+// Reset form errors across all steps.
+const resetFormErrors = () => {
+  formErrors.value = {
+    [STEP_KEYS.SELECT_FILES]: null,
+    [STEP_KEYS.GENERAL_INFO]: null,
+    [STEP_KEYS.GENOMIC_DETAILS]: null,
+    [STEP_KEYS.UPLOAD]: null,
+  };
+};
+
 
 const setFormErrors = async () => {
   resetFormErrors();
@@ -1004,15 +1163,13 @@ const setFormErrors = async () => {
 
   if (step.value === 1) {
     if (
-      (isAssignedSourceRawData.value && !selectedRawData.value) ||
-      (isAssignedProject.value && !projectSelected.value) ||
-      (isAssignedSourceInstrument.value && !selectedSourceInstrument.value) ||
-      (isAssignedSourceDataProduct.value && !selectedSourceDataProduct.value)
+      (willAssignSourceRawData.value && !selectedRawData.value) ||
+      (willAssignProject.value && !projectSelected.value) ||
+      (willAssignSourceInstrument.value && !selectedSourceInstrument.value) ||
+      (willAssignSourceDataProduct.value && !selectedSourceDataProduct.value)
     ) {
       formErrors.value[STEP_KEYS.GENERAL_INFO] = true;
       return;
-    } else {
-      formErrors.value[STEP_KEYS.GENERAL_INFO] = null;
     }
   }
 
@@ -1048,37 +1205,37 @@ const onSubmit = async () => {
     preUpload()
       .then(async () => {
         submissionSuccess.value = true;
-        
+
         // COMPUTE CHECKSUMS FIRST (before upload starts)
         // Skip if already computed (e.g., on retry after upload failure)
         console.log('=== CHECKSUM VERIFICATION CHECK (BEFORE UPLOAD) ===');
         console.log('Feature enabled?', _isChecksumVerificationEnabled());
         console.log('Files to hash:', filesToUpload.value.length);
         console.log('Already computed?', computedChecksum.value ? 'YES' : 'NO');
-        
+
         let checksumStartTime = null;
         let checksumEndTime = null;
-        
+
         if (_isChecksumVerificationEnabled() && !computedChecksum.value) {
           try {
             console.log('✓ STARTING checksum computation BEFORE upload...');
             console.log('  Setting isComputingChecksum = true');
             isComputingChecksum.value = true;
             checksumProgress.value = 0;
-            
+
             checksumStartTime = performance.now();
-            
+
             const files = filesToUpload.value.map(f => f.file);
             console.log('  Files mapped:', files.map(f => `${f.name} (${f.size} bytes)`));
-            
+
             console.log('  Calling _computeManifestHash...');
             computedChecksum.value = await _computeManifestHash(files, (progress) => {
               console.log(`  Checksum progress: ${progress}%`);
               checksumProgress.value = progress;
             });
-            
+
             checksumEndTime = performance.now();
-            
+
             if (computedChecksum.value) {
               console.log('✓ CHECKSUM COMPUTED (BEFORE UPLOAD):', {
                 manifest_hash: computedChecksum.value.manifest_hash,
@@ -1097,12 +1254,12 @@ const onSubmit = async () => {
             console.log('  Setting isComputingChecksum = false');
             isComputingChecksum.value = false;
             checksumProgress.value = 0;
-            
+
             if (checksumStartTime && checksumEndTime) {
               const duration = checksumEndTime - checksumStartTime;
               console.log(`⏱️  CHECKSUM COMPUTATION TIME: ${formatDuration(duration)}`);
             }
-            
+
             console.log('=== CHECKSUM COMPUTATION COMPLETE (BEFORE UPLOAD) ===');
           }
         } else if (computedChecksum.value) {
@@ -1115,31 +1272,31 @@ const onSubmit = async () => {
         } else {
           console.log('✗ Checksum verification disabled - skipping computation');
         }
-        
+
         // NOW START UPLOAD
         submissionStatus.value = Constants.UPLOAD_STATUSES.UPLOADING;
 
         // Use resumable upload protocol instead of old chunk system
         // Get the actual File objects to upload
         const filesToUploadList = filesToUpload.value.map(f => f.file);
-        
+
         totalFiles.value = filesToUploadList.length;
         filesUploaded.value = 0;
         uploadProgress.value = 0;
 
         console.log('=== STARTING FILE UPLOAD ===');
         const uploadStartTime = performance.now();
-        
+
         const uploadServiceURL = _getUploadServiceURL(window.location.origin);
         const uploaded = await uploadFilesWithTus(filesToUploadList, uploadServiceURL);
-        
+
         const uploadEndTime = performance.now();
-        
+
         if (uploaded) {
           const uploadDuration = uploadEndTime - uploadStartTime;
           console.log(`⏱️  FILE UPLOAD TIME: ${formatDuration(uploadDuration)}`);
           console.log('=== FILE UPLOAD COMPLETE ===');
-          
+
           handleUploadComplete();
           resolve();
         } else {
@@ -1184,7 +1341,7 @@ const postSubmit = () => {
 };
 
 const handleSubmit = () => {
-  onSubmit() // resolves once all files have been uploaded (TUS handles workflow triggering internally)
+  onSubmit() // resolves once all files have been uploaded
     .then(() => {
       // Upload complete - handleUploadComplete() already triggered the workflow
       // Nothing more to do here
@@ -1215,19 +1372,20 @@ const onNextClick = (nextStep) => {
   }
 };
 
-// Evaluates selected file checksums, logs the upload
+/**
+ * This function logs any upload-related information that needs to be persisted in the database.
+ */
 const preUpload = async () => {
-  // TUS doesn't need pre-calculated checksums - it handles that internally
-  // Just create or update the upload log
+  // Create or update the upload log
 
   const isUpdate = !!datasetUploadLog.value?.id;
   const logData = isUpdate
     ? {
-        status: Constants.UPLOAD_STATUSES.UPLOADING,
-      }
+      status: Constants.UPLOAD_STATUSES.UPLOADING,
+    }
     : {
-        ...uploadFormData.value,
-      };
+      ...uploadFormData.value,
+    };
 
   console.log('[PRE-UPLOAD] Starting pre-upload registration', {
     is_update: isUpdate,
@@ -1238,7 +1396,7 @@ const preUpload = async () => {
   try {
     const res = await createOrUpdateUploadLog(logData);
     datasetUploadLog.value = res.data;
-    
+
     console.log('[PRE-UPLOAD] SUCCESS: Upload log created/updated', {
       upload_log_id: datasetUploadLog.value.id,
       dataset_id: datasetUploadLog.value.audit_log?.dataset?.id,
@@ -1257,7 +1415,10 @@ const preUpload = async () => {
   }
 };
 
-// Log (or update) upload status
+/**
+ * Creates a log entry for this Dataset's upload in the database, or updates an existing log.
+ * @param data
+ */
 const createOrUpdateUploadLog = (data) => {
   if (!uploadCancelled.value) {
     const isCreate = !datasetUploadLog.value;
@@ -1266,144 +1427,285 @@ const createOrUpdateUploadLog = (data) => {
       dataset_id: datasetUploadLog.value?.audit_log?.dataset?.id,
       data,
     });
-    
+
     return isCreate
       ? datasetService.logDatasetUpload(data)
       : datasetService.updateDatasetUploadLog(
-          datasetUploadLog.value?.audit_log?.dataset.id,
-          data,
-        );
+        datasetUploadLog.value?.audit_log?.dataset.id,
+        data,
+      );
   } else {
     console.log('[CREATE-OR-UPDATE-LOG] Upload cancelled, rejecting');
     return Promise.reject();
   }
 };
 
-// Removed: Old uploadFiles function - replaced by uploadFilesWithTus (TUS protocol implementation)
 
-const setFiles = (files) => {
-  _.range(0, files.length).forEach((i) => {
-    const file = files.item(i);
-    filesToUpload.value.push({
-      type: FILE_TYPE.FILE,
-      file: file,
-      name: file.name,
-      formattedSize: formatBytes(file.size),
-      progress: 0,
+// TUS upload logic
+const uploadFilesWithTus = async (files, endpoint) => {
+  // Safety check: ensure upload log exists
+  if (!datasetUploadLog.value || !datasetUploadLog.value.dataset) {
+    console.error('Dataset upload log not initialized');
+    throw new Error('Dataset upload log not initialized');
+  }
+
+  // Get token directly from localStorage (more reliable than Pinia store in this context)
+  const userToken = localStorage.getItem('token');
+  if (!userToken) {
+    console.error('No authentication token available');
+    throw new Error('Authentication token not found');
+  }
+
+  console.log('Starting upload with token:', userToken ? `Token exists (length: ${userToken.length})` : 'No token');
+
+  let uploadedCount = 0;
+  let totalBytes = 0;
+  let uploadedBytes = 0;
+
+  // Calculate total size
+  files.forEach(file => {
+    totalBytes += file.size;
+  });
+
+  // TEST ONLY: Check if we should simulate mid-upload failure
+  // Set localStorage.setItem('SIMULATE_UPLOAD_FAILURE', 'mid-upload') to enable
+  // Set localStorage.setItem('SIMULATE_UPLOAD_FAILURE_COUNT', '5') to fail 5 times
+  const simulateFailure = localStorage.getItem('SIMULATE_UPLOAD_FAILURE');
+  const simulateFailureCount = localStorage.getItem('SIMULATE_UPLOAD_FAILURE_COUNT');
+  if (simulateFailure) {
+    console.warn(`🧪 [TEST MODE] Upload failure simulation ENABLED: ${simulateFailure}`);
+    console.warn(`   Failure count: ${simulateFailureCount || '1'} (1=fail once then succeed, 5=exhaust retries)`);
+    console.warn(`   To disable: localStorage.removeItem('SIMULATE_UPLOAD_FAILURE')`);
+  }
+
+  const uploadPromises = files.map((file, index) => {
+    return new Promise((resolve, reject) => {
+      console.log(`[TUS-CLIENT] Starting upload for file ${index + 1}/${files.length}:`, {
+        name: file.name,
+        size: file.size,
+        type: file.type,
+        dataset_id: datasetUploadLog.value.dataset.id,
+        simulate_failure: simulateFailure || 'none',
+      });
+
+      // TEST ONLY: Check for failure count configuration
+      // Set localStorage.setItem('SIMULATE_UPLOAD_FAILURE_COUNT', '5') to fail 5 times (exhausts retries)
+      const simulateFailureCount = localStorage.getItem('SIMULATE_UPLOAD_FAILURE_COUNT');
+
+      // Overall timeout for this upload (30 seconds)
+      // If TUS retries don't complete within this time, give up and show "Upload Failed"
+      const UPLOAD_TIMEOUT_MS = 30000; // 30 seconds
+      let timeoutId = null;
+      let upload = null;
+
+      // Start timeout timer - will abort upload if it exceeds 30 seconds
+      timeoutId = setTimeout(() => {
+        console.error(`[TUS-CLIENT] ⏱️  Upload TIMEOUT after ${UPLOAD_TIMEOUT_MS / 1000}s for ${file.name}`);
+        console.error(`[TUS-CLIENT] Aborting upload due to timeout...`);
+
+        if (upload) {
+          upload.abort(true); // true = shouldTerminate (delete partial upload on server)
+        }
+
+        reject(new Error(`Upload timeout after ${UPLOAD_TIMEOUT_MS / 1000} seconds - retries exhausted or server not responding`));
+      }, UPLOAD_TIMEOUT_MS);
+
+      upload = new tus.Upload(file, {
+        endpoint,
+        // Increased retries for testing: allows up to 15 attempts total (1 initial + 14 retries)
+        // Delays: 0s, 1s, 2s, 3s, 5s, 8s, 13s, 21s, 34s, 55s (Fibonacci-like progression)
+        // This ensures we can test scenarios where retries exceed 30s timeout
+        retryDelays: [0, 1000, 2000, 3000, 5000, 8000, 13000, 21000, 34000, 55000, 89000, 144000, 233000, 377000],
+        metadata: {
+          dataset_id: String(datasetUploadLog.value.dataset.id),
+          filename: file.name,
+          filetype: file.type || 'application/octet-stream',
+          selection_mode: selectingDirectory.value ? 'directory' : 'files',
+          relative_path: file.webkitRelativePath || file.name,
+          directory_name: selectingDirectory.value && selectedDirectory.value ? selectedDirectory.value.name : '',
+        },
+        headers: {
+          Authorization: `Bearer ${userToken}`,
+          ...(simulateFailure ? {
+            'X-Simulate-Failure': simulateFailure,
+            ...(simulateFailureCount ? { 'X-Simulate-Failure-Count': simulateFailureCount } : {})
+          } : {}),
+        },
+        onError: (error) => {
+          // Clear timeout on error
+          if (timeoutId) {
+            clearTimeout(timeoutId);
+          }
+
+          console.error(`[TUS-CLIENT] Upload FAILED for ${file.name}:`, {
+            error_message: error.message,
+            error_type: error.constructor.name,
+            error_stack: error.stack,
+            file_name: file.name,
+            file_size: file.size,
+            dataset_id: datasetUploadLog.value.dataset.id,
+            upload_url: upload.url,
+            // Check if it's an HTTP error
+            originalRequest: error.originalRequest ? {
+              method: error.originalRequest.getMethod(),
+              url: error.originalRequest.getURL(),
+              status: error.originalResponse?.getStatus(),
+              statusText: error.originalResponse?.getBody(),
+            } : null,
+          });
+          reject(error);
+        },
+        onProgress: (bytesUploaded, bytesTotal) => {
+          // Update overall progress
+          const totalUploadedSoFar = uploadedBytes + bytesUploaded;
+          uploadProgress.value = Math.round((totalUploadedSoFar / totalBytes) * 100);
+
+          // Log progress every 10% for large files
+          const fileProgress = (bytesUploaded / bytesTotal) * 100;
+          if (fileProgress % 10 < 1) {
+            console.log(`[TUS-CLIENT] Upload progress for ${file.name}: ${fileProgress.toFixed(1)}%`, {
+              bytes_uploaded: bytesUploaded,
+              bytes_total: bytesTotal,
+            });
+          }
+        },
+        onSuccess: async () => {
+          // Clear timeout on success
+          if (timeoutId) {
+            clearTimeout(timeoutId);
+          }
+
+          uploadedCount++;
+          uploadedBytes += file.size;
+          filesUploaded.value = uploadedCount;
+          uploadProgress.value = Math.round((uploadedBytes / totalBytes) * 100);
+
+          // Store the process_id for this file - will be sent to API after all uploads complete
+          const processId = upload.url.split('/').pop();
+          if (!uploadProcessIds.value) {
+            uploadProcessIds.value = [];
+          }
+          uploadProcessIds.value.push({
+            process_id: processId,
+            relative_path: file.webkitRelativePath || file.name,
+          });
+
+          console.log(`[TUS-CLIENT] Upload SUCCESS for ${file.name}`, {
+            process_id: processId,
+            file_size: file.size,
+            upload_url: upload.url,
+          });
+          resolve();
+        },
+      });
+
+      // Start the upload
+      console.log(`[TUS-CLIENT] Initiating upload.start() for ${file.name}`);
+      upload.start();
     });
   });
-  displayedFilesToUpload.value = filesToUpload.value;
-};
 
-const setDirectory = (directoryDetails) => {
-  const directoryFiles = directoryDetails.files;
-  let directorySize = 0;
-  _.range(0, directoryFiles.length).forEach((i) => {
-    const file = directoryFiles[i];
-    filesToUpload.value.push({
-      type: FILE_TYPE.FILE,
-      file: file,
-      name: file.name,
-      formattedSize: formatBytes(file.size),
-      progress: 0,
-      path: file.path,
+  try {
+    console.log(`[TUS-CLIENT] Waiting for all ${uploadPromises.length} upload(s) to complete...`);
+    await Promise.all(uploadPromises);
+    console.log(`[TUS-CLIENT] All uploads completed successfully`);
+    return true;
+  } catch (error) {
+    console.error('[TUS-CLIENT] One or more uploads failed:', {
+      error_message: error.message,
+      error_type: error.constructor.name,
+      total_files: files.length,
+      uploaded_count: uploadedCount,
     });
-    directorySize += file.size;
-  });
-  selectedDirectory.value = {
-    type: FILE_TYPE.DIRECTORY,
-    name: directoryDetails.directoryName,
-    formattedSize: formatBytes(directorySize),
-    progress: 0,
-  };
-
-  displayedFilesToUpload.value = [selectedDirectory.value];
+    return false;
+  }
 };
 
-watch(selectedDatasetType, (newVal) => {
-  if (newVal["value"] === config.dataset.types.RAW_DATA.key) {
-    isAssignedSourceRawData.value = false;
-    clearSelectedRawData();
-    willUploadRawData.value = true;
-    // Hide and clear source data product if switching to raw data
-    isAssignedSourceDataProduct.value = false;
-    clearSelectedSourceDataProduct();
-  } else {
-    willUploadRawData.value = false;
-  }
-});
+const handleUploadComplete = async () => {
+  // Call API to register all process_ids - this is the critical call
+  // Only show success if this succeeds
+  try {
+    const datasetId = datasetUploadLog.value.dataset.id;
 
-// Hide and clear source data product if file type is not FASTQ
-watch(selectedFileType, (newVal) => {
-  if (newVal?.name?.toUpperCase() !== 'FASTQ') {
-    isAssignedSourceDataProduct.value = false;
-    clearSelectedSourceDataProduct();
-  }
-});
+    console.log('[UPLOAD-COMPLETE] Starting upload completion API call', {
+      dataset_id: datasetId,
+      process_ids_count: uploadProcessIds.value?.length || 0,
+    });
 
-// Clear genome value when genome type changes
-watch(selectedGenomeType, () => {
-  selectedGenomeValue.value = null;
-});
+    // Build metadata with checksum (use pre-computed checksum from before upload)
+    let metadata = {};
 
-watch(selectingFiles, () => {
-  if (selectingFiles.value) {
-    populatedDatasetName.value = "";
-  }
-});
-
-watch(selectingDirectory, () => {
-  if (selectingDirectory.value) {
-    populatedDatasetName.value = selectedDirectory.value.name;
-  }
-});
-
-// Form errors are set when this component mounts, or when a form field's value
-// changes, or when the current step changes.
-watch(
-  [
-    step,
-    populatedDatasetName,
-    projectSelected,
-    isAssignedProject,
-    selectedRawData,
-    isAssignedSourceRawData,
-    selectedSourceInstrument,
-    isAssignedSourceInstrument,
-    selectedSourceDataProduct,
-    isAssignedSourceDataProduct,
-    selectingFiles,
-    selectingDirectory,
-    filesToUpload,
-    selectedFileType,
-    selectedGenomeType,
-    selectedGenomeValue,
-  ],
-  async (newVals, oldVals) => {
-    // Mark step's form fields as not pristine, for fields' errors to be shown
-    const stepKey = Object.keys(stepPristineStates.value[step.value])[0];
-    if (stepKey === STEP_KEYS.UPLOAD) {
-      // `1` corresponds to `populatedDatasetName`
-      stepPristineStates.value[step.value][stepKey] = !oldVals[1] && newVals[1];
+    console.log('=== USING PRE-COMPUTED CHECKSUM (from before upload) ===');
+    if (computedChecksum.value) {
+      console.log('✓ Checksum available:', {
+        manifest_hash: computedChecksum.value.manifest_hash,
+        file_count: computedChecksum.value.file_count,
+        total_size: computedChecksum.value.total_size,
+        mode: computedChecksum.value.mode
+      });
+      metadata.checksum = computedChecksum.value;
     } else {
-      stepPristineStates.value[step.value][stepKey] = false;
+      console.log('⚠ No pre-computed checksum available (checksum disabled or computation failed)');
     }
 
-    await setFormErrors();
-  },
-);
+    // Call /complete with the last process_id (for single file) or first (for multi)
+    // The worker will handle moving all files based on upload metadata
+    const lastUpload = uploadProcessIds.value[uploadProcessIds.value.length - 1];
 
-// Load analysis types from API
-const loadAnalysisTypes = () => {
-  analysisTypeService
-    .getAll()
-    .then((res) => {
-      analysisTypes.value = res.data;
-    })
-    .catch((err) => {
-      toast.error('Failed to load file types');
-      console.error(err);
+    const completePayload = {
+      process_id: lastUpload.process_id,
+      selection_mode: selectingDirectory.value ? 'directory' : 'files',
+      directory_name: selectingDirectory.value && selectedDirectory.value ? selectedDirectory.value.name : '',
+      relative_path: lastUpload.relative_path,
+      metadata: Object.keys(metadata).length > 0 ? metadata : undefined,
+    };
+
+    console.log('[UPLOAD-COMPLETE] Calling /complete endpoint', {
+      dataset_id: datasetId,
+      payload: completePayload,
     });
+
+    const response = await datasetService.completeDatasetUpload(datasetId, completePayload);
+
+    console.log('[UPLOAD-COMPLETE] API call SUCCESS', {
+      dataset_id: datasetId,
+      response,
+    });
+
+    // Success - show green status
+    uploadRegistrationFailed.value = false;
+    submissionStatus.value = Constants.UPLOAD_STATUSES.UPLOADED;
+    statusChipColor.value = "success";
+    submissionAlert.value = "All files have been uploaded successfully!";
+    submissionAlertColor.value = "success";
+    isSubmissionAlertVisible.value = true;
+    submissionSuccess.value = true;
+
+  } catch (error) {
+    console.error('[UPLOAD-COMPLETE] API call FAILED:', {
+      error_message: error.message,
+      error_response: error.response?.data,
+      error_status: error.response?.status,
+      error_stack: error.stack,
+      dataset_id: datasetUploadLog.value?.audit_log?.dataset?.id,
+    });
+
+    // API call failed - show retry option
+    uploadRegistrationFailed.value = true;
+    submissionStatus.value = Constants.UPLOAD_STATUSES.UPLOAD_FAILED;
+    statusChipColor.value = "warning";
+    submissionAlert.value = "Files uploaded but registration failed. Please retry.";
+    submissionAlertColor.value = "warning";
+    isSubmissionAlertVisible.value = true;
+    submissionSuccess.value = false;
+  }
+};
+
+// Retry the API call to register the upload
+const retryApiCall = async () => {
+  submissionAlert.value = "Retrying ...";
+  submissionAlertColor.value = "info";
+  await handleUploadComplete();
 };
 
 // Open modal and clear fields
@@ -1461,23 +1763,424 @@ const handleCancelFileType = () => {
   showCreateFileTypeModal.value = false;
 };
 
-onMounted(() => {
-  loading.value = true;
-  instrumentService
-    .getAll()
-    .then((res) => {
-      sourceInstrumentOptions.value = res.data;
-    })
-    .catch((err) => {
-      toast.error("Failed to load resources");
-      console.error(err);
-    })
-    .finally(() => {
-      loading.value = false;
+/**
+ * Persists the details of the files selected for uploading in this component's state.
+ *
+ * @param {File[]} files - Array of File objects representing the files in the directory.
+ */
+const setFiles = (files) => {
+  _.range(0, files.length).forEach((i) => {
+    const file = files.item(i);
+    filesToUpload.value.push({
+      type: FILE_TYPE.FILE,
+      file: file,
+      name: file.name,
+      formattedSize: formatBytes(file.size),
+      progress: 0,
     });
-  loadAnalysisTypes();
+  });
+  displayedFilesToUpload.value = filesToUpload.value;
+};
+
+/**
+ * Persists the details of the files contained inside the directory selected for uploading in this component's state.
+ *
+ * @param {Object} directoryDetails - Details of the directory selected for uploading.
+ * @param {File[]} directoryDetails.files - Array of File objects representing the files in the directory.
+ * @param {string} directoryDetails.directoryName - The name of the directory has been selected for uploading.
+ */
+const setDirectory = (directoryDetails) => {
+  const directoryFiles = directoryDetails.files;
+  let directorySize = 0;
+  _.range(0, directoryFiles.length).forEach((i) => {
+    const file = directoryFiles[i];
+    filesToUpload.value.push({
+      type: FILE_TYPE.FILE,
+      file: file,
+      name: file.name,
+      formattedSize: formatBytes(file.size),
+      progress: 0,
+      path: file.path,
+    });
+    directorySize += file.size;
+  });
+  selectedDirectory.value = {
+    type: FILE_TYPE.DIRECTORY,
+    name: directoryDetails.directoryName,
+    formattedSize: formatBytes(directorySize),
+    progress: 0,
+  };
+
+  displayedFilesToUpload.value = [selectedDirectory.value];
+};
+
+// If a user is uploading a directory, the name of the Dataset to be uploaded will be pre-populated to be the same as
+// the name of the directory they have selected for uploading.
+watch(selectingDirectory, () => {
+  if (selectingDirectory.value) {
+    uploadedDatasetName.value = selectedDirectory.value.name;
+  }
 });
 
+// If a user is uploading individual files, the name of the Dataset to be uploaded will be entered by them. Therefore,
+// clear the name, if it is already pre-populated.
+watch(selectingFiles, () => {
+  if (selectingFiles.value) {
+    uploadedDatasetName.value = "";
+  }
+});
+
+/**
+ * ## Instrument checkbox and selection behavior
+ *
+ * This section explains the behavior of the "Assign Source Instrument" checkbox and select fields.
+ * The state is managed through refs, computed properties and watchers.
+ *
+ * Initial State:
+ * - If no Instruments available to assign:
+ *   - Checkbox is unchecked and disabled
+ *   - Instrument select is disabled
+ * - If Instrument is available to assign:
+ *   - Checkbox is checked and enabled
+ *   - Instrument select is enabled
+ *
+ * State changes:
+ * - User interaction with checkbox:
+ *    - If user unchecks:
+ *      - Checkbox remains enabled
+ *      - Search field becomes disabled
+ *    - If user checks:
+ *      - Checkbox remains enabled
+ *      - Search field becomes enabled
+ */
+/**
+ * `Assign Source Instrument` checkbox is disabled if:
+ * - There are no Instrument options to choose from
+ */
+const isInstrumentsCheckboxDisabled = computed(() => {
+  return noInstrumentsToAssign.value;
+});
+/**
+ * Instrument selection is enabled if:
+ * - `Assign Source Instrument` checkbox is enabled, AND
+ * - `Assign Source Instrument` checkbox is checked
+ */
+const isInstrumentSelectionEnabled = computed(() => {
+  return (
+    !isInstrumentsCheckboxDisabled.value && willAssignSourceInstrument.value
+  );
+});
+/**
+ * `instrumentsCheckboxInternalState`: Internal checked/unchecked state for the `Assign Source Instrument` checkbox.
+ * - Used as the default state of the checkbox
+ * - Used to update the state of the checkbox
+ */
+const instrumentsCheckboxInternalState = ref(true);
+/**
+ * `willAssignSourceInstrument`: Determines whether the user wants to assign an Instrument to the Dataset being
+ * uploaded.
+ * - This is a writable Computed property that manages the checked/unchecked state of the 'Assign
+ * Source Instruments' checkbox.
+ *
+ * @property {Function} get - Getter function for the checkbox state.
+ *   - Returns `false` if there are no Instruments to choose from.
+ *   - Otherwise, returns the internal checkbox state.
+ *
+ * @property {Function} set - Setter function for the checkbox state.
+ *   - Updates the internal checkbox state only if there are some Instrument options to choose from.
+ *
+ * @returns {boolean} The current checked/unchecked state of the 'Assign Source Instrument' checkbox.
+ */
+const willAssignSourceInstrument = computed({
+  get: () => {
+    if (noInstrumentsToAssign.value) {
+      return false;
+    }
+    return instrumentsCheckboxInternalState.value;
+  },
+  set: (newValue) => {
+    if (!noInstrumentsToAssign.value) {
+      instrumentsCheckboxInternalState.value = newValue;
+    }
+  },
+});
+
+/**
+ * ## Project checkbox and search behavior
+ *
+ * This section explains the behavior of the "Assign Project" checkbox and search fields.
+ * The state is managed through refs, computed properties and watchers.
+ *
+ * Initial State:
+ * - If no Project available to assign:
+ *   - Checkbox is unchecked and disabled
+ *   - Project search is disabled
+ * - If Project is available to assign:
+ *   - Checkbox is checked and enabled
+ *   - Project search is enabled
+ *
+ * State changes:
+ * - User interaction with checkbox:
+ *    - If user unchecks:
+ *      - Checkbox remains enabled
+ *      - Search field becomes disabled
+ *    - If user checks:
+ *      - Checkbox remains enabled
+ *      - Search field becomes enabled
+ */
+/**
+ * `Assign Project` checkbox is disabled if:
+ * - There are no Project options to choose from
+ */
+const isProjectCheckboxDisabled = computed(() => {
+  return noProjectsToAssign.value;
+});
+/**
+ * Project search field is enabled if:
+ * - `Assign Project` checkbox is enabled, AND
+ * - `Assign Project` checkbox is checked
+ */
+const isProjectSearchEnabled = computed(() => {
+  return !isProjectCheckboxDisabled.value && willAssignProject.value;
+});
+/**
+ * `projectCheckboxInternalState`: Internal checked/unchecked state for the `Assign Project` checkbox.
+ * - Used as the default state of the checkbox
+ * - Used to update the state of the checkbox
+ */
+const projectCheckboxInternalState = ref(true);
+/**
+ * `willAssignProject` determines whether the user wants to assign a Project to the Dataset being uploaded.
+ * - This is a writable Computed property that manages the checked/unchecked state of the 'Assign
+ * Project' checkbox.
+ *
+ * @property {Function} get - Getter function for the checkbox state.
+ *   - Returns `false` if there are no Projects to choose from.
+ *   - Otherwise, returns the internal checkbox state.
+ *
+ * @property {Function} set - Setter function for the checkbox state.
+ *   - Updates the internal checkbox state only if there are some Project option to choose from.
+ *
+ * @returns {boolean} The current checked/unchecked state of the 'Assign Project' checkbox.
+ */
+const willAssignProject = computed({
+  get: () => {
+    if (noProjectsToAssign.value) {
+      return false;
+    }
+    return projectCheckboxInternalState.value;
+  },
+  set: (newValue) => {
+    if (!noProjectsToAssign.value) {
+      projectCheckboxInternalState.value = newValue;
+    }
+  },
+});
+
+/**
+ * ## Source Raw Data checkbox and search behavior
+ *
+ * This section explains the behavior of the "Assign Raw Data" checkbox and search fields.
+ * The state is managed through refs, computed properties and watchers.
+ *
+ * Initial State:
+ * - If no Raw Data available to assign:
+ *   - Checkbox is unchecked and disabled
+ *   - Raw Data search is disabled
+ * - If Raw Data is available to assign:
+ *   - Checkbox is checked and enabled
+ *   - Raw Data search is enabled
+ *
+ * State changes:
+ * 1. When type of Dataset to be uploaded changes:
+ *    - If new type is Raw Data:
+ *      - Checkbox becomes unchecked and disabled (since a Raw Data cannot be assigned as the source of another Raw
+ *      Data)
+ *      - Search field is disabled
+ *    - If new type is not Raw Data:
+ *      - Checkbox becomes checked and enabled
+ *      - Search field is enabled
+ * 2. User interaction with checkbox:
+ *    - If user unchecks:
+ *      - Checkbox remains enabled
+ *      - Search field becomes disabled
+ *    - If user checks:
+ *      - Checkbox remains enabled
+ *      - Search field becomes enabled
+ */
+/**
+ * `Assign Raw Data` checkbox is disabled if:
+ * - There are no Raw Data options to choose from, OR,
+ * - The Dataset being uploaded is a Raw Data
+ */
+const isRawDataCheckboxDisabled = computed(() => {
+  return noRawDataToAssign.value || willUploadRawData.value;
+});
+/**
+ * Raw Data search field is enabled if:
+ * - `Assign Raw Data` checkbox is enabled, AND,
+ * - `Assign Raw Data` checkbox is checked
+ */
+const isRawDataSearchEnabled = computed(() => {
+  return !isRawDataCheckboxDisabled.value && willAssignSourceRawData.value;
+});
+/**
+ * `rawDataCheckboxInternalState`: Internal checked/unchecked state for the `Assign Raw Data` checkbox.
+ * - Used as the default state of the checkbox
+ * - Used to update the state of the checkbox
+ */
+const rawDataCheckboxInternalState = ref(true);
+/**
+ * `willAssignSourceRawData` determines whether the user wants to assign a source Raw Data to the Dataset being
+ * uploaded.
+ * - This is a writable Computed property that manages the checked/unchecked state of the 'Assign
+ * Raw Data' checkbox.
+ *
+ * @property {Function} get - Getter function for the checkbox state.
+ *   - Returns `false` if there are no Raw Data to choose from, or if the type of the Dataset being uploaded is a Raw
+ *   Data.
+ *   - Otherwise, returns the internal checkbox state.
+ *
+ * @property {Function} set - Setter function for the checkbox state.
+ *   - Updates the internal checkbox state only if there are some Raw Data options to choose from,
+ *   and the type of the Dataset being uploaded is not a Raw Data.
+ *
+ * @returns {boolean} The current checked/unchecked state of the 'Assign Raw Data' checkbox.
+ */
+const willAssignSourceRawData = computed({
+  get: () => {
+    if (noRawDataToAssign.value || willUploadRawData.value) {
+      return false;
+    }
+    return rawDataCheckboxInternalState.value;
+  },
+  set: (newValue) => {
+    if (!noRawDataToAssign.value && !willUploadRawData.value) {
+      rawDataCheckboxInternalState.value = newValue;
+    }
+  },
+});
+
+/**
+ * Handler for when the type of the Dataset to be uploaded changes.
+ * - Resets the search query for the Raw Data search field
+ * - Updates the internal state of the `Assign Raw Data` checkbox to `true` (checked) if:
+ *   - The Dataset to be uploaded is not of type Raw Data, AND
+ *   - There are Raw Data options to choose from for assignment to the uploaded Dataset
+ */
+watch(selectedDatasetType, () => {
+  resetRawDataSearch();
+  if (!willUploadRawData.value && !noRawDataToAssign.value) {
+    rawDataCheckboxInternalState.value = true;
+  }
+});
+
+// Auto-prepend dot to extension
+watch(newFileTypeExtension, (newVal) => {
+  if (newVal && !newVal.startsWith('.')) {
+    newFileTypeExtension.value = `.${newVal}`;
+  }
+});
+
+// Hide and clear source data product if file type is not FASTQ
+watch(selectedFileType, (newVal) => {
+  if (newVal?.name?.toUpperCase() !== 'FASTQ') {
+    willAssignSourceDataProduct.value = false;
+    clearSelectedSourceDataProduct();
+  }
+});
+
+// Clear genome value when genome type changes
+watch(selectedGenomeType, () => {
+  selectedGenomeValue.value = null;
+});
+
+// Form errors are set when this component mounts, or when a form field's value
+// changes, or when the current step changes.
+watch(
+  [
+    step,
+    uploadedDatasetName,
+    projectSelected,
+    willAssignProject,
+    selectedRawData,
+    willAssignSourceRawData,
+    selectedSourceDataProduct,
+    willAssignSourceDataProduct,
+    selectedSourceInstrument,
+    willAssignSourceInstrument,
+    selectingFiles,
+    selectingDirectory,
+    filesToUpload,
+    selectedFileType,
+    selectedGenomeType,
+    selectedGenomeValue,
+  ],
+  async (newVals, oldVals) => {
+    // Mark step's form fields as not pristine, for fields' errors to be shown
+    const stepKey = Object.keys(stepPristineStates.value[step.value])[0];
+    if (stepKey === STEP_KEYS.UPLOAD) {
+      // `1` corresponds to `uploadedDatasetName`
+      stepPristineStates.value[step.value][stepKey] = !oldVals[1] && newVals[1];
+    } else {
+      stepPristineStates.value[step.value][stepKey] = false;
+    }
+
+    await setFormErrors();
+  },
+);
+
+/**
+ * When first mounted, load the resources which will be needed in the rest of the form.
+ * - Load resources are:
+ *  - A list of Instruments that Datasets originate from
+ *  - A list of Raw Data that may be assigned to the Dataset being uploaded
+ *  - A list of Projects that may be assigned to the Dataset being uploaded
+ *
+ *  Only a subset of the entirety of the Raw Data and Projects available to the user for assignment are loaded at this
+ *  point. If a user has access to more Raw Data and Projects to choose from, they will be lazily-loaded later.
+ *  This initial load of a subset of options is done only to permanently disable the "Raw Data" and "Project"
+ *  search fields if the user has zero options to choose from.
+ */
+onMounted(async () => {
+  loading.value = true;
+
+  try {
+    // Load Instruments that will be available for assignment to the Dataset being uploaded.
+    const onLoadInstrumentResponse = await instrumentService.getAll();
+    sourceInstrumentOptions.value = onLoadInstrumentResponse.data;
+    noInstrumentsToAssign.value = sourceInstrumentOptions.value.length === 0;
+
+    // Do an initial load of Raw Data to verify whether the user has access to any Raw Data to choose from for
+    // assignment to the Dataset being uploaded. If not, the `Assign Raw Data` checkbox will always be disabled.
+    const onLoadRawDataOptionsResponse = await datasetService.getAll({
+      type: config.dataset.types.RAW_DATA.key,
+    });
+    noRawDataToAssign.value =
+      onLoadRawDataOptionsResponse.data.datasets.length === 0;
+
+    // Do an initial load of Projects to verify whether the user has access to any Projects to choose from for
+    // assignment to the Dataset being uploaded. If not, the `Assign Project` checkbox will always be disabled.
+    const onLoadProjectOptionsResponse = await projectService.getAll({
+      forSelf: !(auth.canOperate || auth.canAdmin),
+    });
+    noProjectsToAssign.value =
+      onLoadProjectOptionsResponse.data.projects.length === 0;
+
+    // get a list of Analysis-Types created in the system
+    await loadAnalysisTypes();
+  } catch (error) {
+    console.error("Error loading resources:", error);
+    toast.error("An error occurred. Please refresh the page to try again.");
+  }
+
+  loading.value = false;
+});
+
+/**
+ * Evaluate form-validation errors when first mounted, to make sure any form-buttons are disabled until all
+ * form-validations are passing.
+ */
 onMounted(() => {
   setFormErrors();
 });
@@ -1487,7 +2190,7 @@ onMounted(() => {
  *
  * This mechanism is designed to handle the scenario when a user attempts to navigate away from the current page
  * while the upload is incomplete. It uses Vue Router's navigation guards and component lifecycle hooks
- * to prompt the user for confirmation and cancel the upload if necessary.
+ * to prompt the user for confirmation and to mark the upload as cancelled if necessary.
  *
  * Key Components:
  *
@@ -1500,7 +2203,7 @@ onMounted(() => {
  *
  * 3. `onBeforeUnmount`:
  *    Lifecycle hook triggered when the component is about to be unmounted (which happens during navigation).
- *    It cancels the upload if it's incomplete.
+ *    It marks the upload as cancelled if it's incomplete.
  *
  * 4. `uploadCancelled`:
  *    A reactive variable used to signal that the upload should be considered cancelled.
@@ -1512,7 +2215,7 @@ onMounted(() => {
  *    - If user confirms, allows navigation; if user cancels, prevents navigation
  * 3. If navigation is allowed, `onBeforeUnmount` is triggered
  *    - Sets `uploadCancelled` to true
- *    - If upload is incomplete, sends a request to cancel the upload
+ *    - If upload is incomplete, marks the upload as cancelled
  *
  */
 
@@ -1520,9 +2223,9 @@ onBeforeRouteLeave(() => {
   // Before navigating to a different route, show user a confirmation dialog
   return isUploadIncomplete.value
     ? window.confirm(
-        "Leaving this page before all files have been uploaded will" +
-          " cancel the upload. Do you wish to continue?",
-      )
+      "Leaving this page before all files have been uploaded will" +
+      " cancel the upload. Do you wish to continue?",
+    )
     : true;
 });
 
@@ -1557,367 +2260,6 @@ onMounted(() => {
 onBeforeUnmount(() => {
   window.removeEventListener("beforeunload", onBeforeUnload);
 });
-
-/* eslint-disable */
-// /**
-//  * Browser Tab Closure Handling Mechanism
-//  *
-//  * This mechanism is designed to handle the scenario when a user attempts to close the browser tab
-//  * during an incomplete upload process. It uses a combination of browser events and a local storage
-//  * flag to determine whether to cancel the upload.
-//  *
-//  * Key Components:
-//  *
-//  * 1. `isClosingBrowserTab`:
-//  *    A reactive variable stored in local storage that indicates whether the browser tab is about to be closed.
-//  *
-//  * 2. `onBeforeUnload`:
-//  *    Event handler triggered when the user attempts to close the tab. It shows a browser
-//  *    confirmation dialog asking the user if they want to leave. If the upload is incomplete at this point,
-//  *    a flag (`isClosingBrowserTab`) is set to track this, with a reset-timeout.
-//  *
-//  * 3. `onUnload`:
-//  *    Event handler triggered if the user confirms that they wish to close the tab.
-//  *    - if the user confirms closing the tab within a short delay (500ms):
-//  *      - It checks if the upload is incomplete, and if so, cancels the upload
-//  *    - if the user takes longer than 500ms to confirm closing the tab:
-//  *      - The upload is not cancelled. In this case the system will end up with an incomplete upload,
-//  *        which can be cleaned up later.
-//  *
-//  * 4. Event Listeners:
-//  *    Added on component mount and removed on unmount to ensure proper cleanup of an incomplete upload.
-//  *
-//  * Flow:
-//  * 1. User attempts to close tab
-//  * 2. `onBeforeUnload` is triggered
-//  *    - Shows confirmation dialog
-//  *    - Sets the `isClosingBrowserTab` flag to `true`
-//  *    - Starts a 500ms timeout after which the flag is reset
-//  * 3. If user confirms that they wish to close the tab, `onUnload` is triggered
-//  *    - Checks `isClosingBrowserTab` and `isUploadIncomplete`
-//  *    - Cancels upload if both are true
-//  * 4. If user doesn't confirm within 500ms, the `isClosingBrowserTab` flag is reset
-//  *
-//  */
-//
-// // Used to indicate if the user intends to close the current browser tab.
-// const isClosingBrowserTab = ref(false);
-//
-// const onBeforeUnload = (e) => {
-//   debugger;
-//   if (isUploadIncomplete.value) {
-//     console.log(
-//         "Show user a browser alert to get confirmation before leaving the page",
-//     );
-//     e.returnValue = true; // this shows the browser alert before user leaves the page
-//     isClosingBrowserTab.value = true;
-//
-//     // If user hasn't confirmed or cancelled the browser alert within a short
-//     // delay, assume they are not leaving the page.
-//     // setTimeout(() => {
-//     //   console.log("500 ms elapsed. Assume user won't leave the page.");
-//     //   isClosingBrowserTab.value = false;
-//     // }, 500);
-//   }
-// };
-//
-// const onUnload = () => {
-//   if (isClosingBrowserTab.value) {
-//     console.log(
-//         "User confirmed that they are leaving page. Upload is incomplete, and will be cancelled.",
-//     );
-//     datasetService.cancelDatasetUpload(
-//         datasetUploadLog.value.audit_log.dataset.id,
-//     );
-//   } else {
-//     console.log(
-//         "User did not confirm leaving page within 500 ms. Upload is incomplete, but will not be cancelled.",
-//     );
-//   }
-//   isClosingBrowserTab.value = false;
-// };
-
-// TUS upload logic
-const uploadFilesWithTus = async (files, endpoint) => {
-  // Safety check: ensure upload log exists
-  if (!datasetUploadLog.value || !datasetUploadLog.value.dataset) {
-    console.error('Dataset upload log not initialized');
-    throw new Error('Dataset upload log not initialized');
-  }
-
-  // Get token directly from localStorage (more reliable than Pinia store in this context)
-  const userToken = localStorage.getItem('token');
-  if (!userToken) {
-    console.error('No authentication token available');
-    throw new Error('Authentication token not found');
-  }
-
-  console.log('Starting upload with token:', userToken ? `Token exists (length: ${userToken.length})` : 'No token');
-
-  let uploadedCount = 0;
-  let totalBytes = 0;
-  let uploadedBytes = 0;
-
-  // Calculate total size
-  files.forEach(file => {
-    totalBytes += file.size;
-  });
-
-  // TEST ONLY: Check if we should simulate mid-upload failure
-  // Set localStorage.setItem('SIMULATE_UPLOAD_FAILURE', 'mid-upload') to enable
-  // Set localStorage.setItem('SIMULATE_UPLOAD_FAILURE_COUNT', '5') to fail 5 times
-  const simulateFailure = localStorage.getItem('SIMULATE_UPLOAD_FAILURE');
-  const simulateFailureCount = localStorage.getItem('SIMULATE_UPLOAD_FAILURE_COUNT');
-  if (simulateFailure) {
-    console.warn(`🧪 [TEST MODE] Upload failure simulation ENABLED: ${simulateFailure}`);
-    console.warn(`   Failure count: ${simulateFailureCount || '1'} (1=fail once then succeed, 5=exhaust retries)`);
-    console.warn(`   To disable: localStorage.removeItem('SIMULATE_UPLOAD_FAILURE')`);
-  }
-
-  const uploadPromises = files.map((file, index) => {
-    return new Promise((resolve, reject) => {
-      console.log(`[TUS-CLIENT] Starting upload for file ${index + 1}/${files.length}:`, {
-        name: file.name,
-        size: file.size,
-        type: file.type,
-        dataset_id: datasetUploadLog.value.dataset.id,
-        simulate_failure: simulateFailure || 'none',
-      });
-      
-      // TEST ONLY: Check for failure count configuration
-      // Set localStorage.setItem('SIMULATE_UPLOAD_FAILURE_COUNT', '5') to fail 5 times (exhausts retries)
-      const simulateFailureCount = localStorage.getItem('SIMULATE_UPLOAD_FAILURE_COUNT');
-      
-      // Overall timeout for this upload (30 seconds)
-      // If TUS retries don't complete within this time, give up and show "Upload Failed"
-      const UPLOAD_TIMEOUT_MS = 30000; // 30 seconds
-      let timeoutId = null;
-      let upload = null;
-      
-      // Start timeout timer - will abort upload if it exceeds 30 seconds
-      timeoutId = setTimeout(() => {
-        console.error(`[TUS-CLIENT] ⏱️  Upload TIMEOUT after ${UPLOAD_TIMEOUT_MS / 1000}s for ${file.name}`);
-        console.error(`[TUS-CLIENT] Aborting upload due to timeout...`);
-        
-        if (upload) {
-          upload.abort(true); // true = shouldTerminate (delete partial upload on server)
-        }
-        
-        reject(new Error(`Upload timeout after ${UPLOAD_TIMEOUT_MS / 1000} seconds - retries exhausted or server not responding`));
-      }, UPLOAD_TIMEOUT_MS);
-      
-      upload = new tus.Upload(file, {
-        endpoint,
-        // Increased retries for testing: allows up to 15 attempts total (1 initial + 14 retries)
-        // Delays: 0s, 1s, 2s, 3s, 5s, 8s, 13s, 21s, 34s, 55s (Fibonacci-like progression)
-        // This ensures we can test scenarios where retries exceed 30s timeout
-        retryDelays: [0, 1000, 2000, 3000, 5000, 8000, 13000, 21000, 34000, 55000, 89000, 144000, 233000, 377000],
-        metadata: {
-          dataset_id: String(datasetUploadLog.value.dataset.id),
-          filename: file.name,
-          filetype: file.type || 'application/octet-stream',
-          selection_mode: selectingDirectory.value ? 'directory' : 'files',
-          relative_path: file.webkitRelativePath || file.name,
-          directory_name: selectingDirectory.value && selectedDirectory.value ? selectedDirectory.value.name : '',
-        },
-        headers: {
-          Authorization: `Bearer ${userToken}`,
-          ...(simulateFailure ? { 
-            'X-Simulate-Failure': simulateFailure,
-            ...(simulateFailureCount ? { 'X-Simulate-Failure-Count': simulateFailureCount } : {})
-          } : {}),
-        },
-        onError: (error) => {
-          // Clear timeout on error
-          if (timeoutId) {
-            clearTimeout(timeoutId);
-          }
-          
-          console.error(`[TUS-CLIENT] Upload FAILED for ${file.name}:`, {
-            error_message: error.message,
-            error_type: error.constructor.name,
-            error_stack: error.stack,
-            file_name: file.name,
-            file_size: file.size,
-            dataset_id: datasetUploadLog.value.dataset.id,
-            upload_url: upload.url,
-            // Check if it's an HTTP error
-            originalRequest: error.originalRequest ? {
-              method: error.originalRequest.getMethod(),
-              url: error.originalRequest.getURL(),
-              status: error.originalResponse?.getStatus(),
-              statusText: error.originalResponse?.getBody(),
-            } : null,
-          });
-          reject(error);
-        },
-        onProgress: (bytesUploaded, bytesTotal) => {
-          // Update overall progress
-          const totalUploadedSoFar = uploadedBytes + bytesUploaded;
-          uploadProgress.value = Math.round((totalUploadedSoFar / totalBytes) * 100);
-          
-          // Log progress every 10% for large files
-          const fileProgress = (bytesUploaded / bytesTotal) * 100;
-          if (fileProgress % 10 < 1) {
-            console.log(`[TUS-CLIENT] Upload progress for ${file.name}: ${fileProgress.toFixed(1)}%`, {
-              bytes_uploaded: bytesUploaded,
-              bytes_total: bytesTotal,
-            });
-          }
-        },
-        onSuccess: async () => {
-          // Clear timeout on success
-          if (timeoutId) {
-            clearTimeout(timeoutId);
-          }
-          
-          uploadedCount++;
-          uploadedBytes += file.size;
-          filesUploaded.value = uploadedCount;
-          uploadProgress.value = Math.round((uploadedBytes / totalBytes) * 100);
-          
-          // Store the process_id for this file - will be sent to API after all uploads complete
-          const processId = upload.url.split('/').pop();
-          if (!uploadProcessIds.value) {
-            uploadProcessIds.value = [];
-          }
-          uploadProcessIds.value.push({
-            process_id: processId,
-            relative_path: file.webkitRelativePath || file.name,
-          });
-          
-          console.log(`[TUS-CLIENT] Upload SUCCESS for ${file.name}`, {
-            process_id: processId,
-            file_size: file.size,
-            upload_url: upload.url,
-          });
-          resolve();
-        },
-      });
-
-      // Start the upload
-      console.log(`[TUS-CLIENT] Initiating upload.start() for ${file.name}`);
-      upload.start();
-    });
-  });
-
-  try {
-    console.log(`[TUS-CLIENT] Waiting for all ${uploadPromises.length} upload(s) to complete...`);
-    await Promise.all(uploadPromises);
-    console.log(`[TUS-CLIENT] All uploads completed successfully`);
-    return true;
-  } catch (error) {
-    console.error('[TUS-CLIENT] One or more uploads failed:', {
-      error_message: error.message,
-      error_type: error.constructor.name,
-      total_files: files.length,
-      uploaded_count: uploadedCount,
-    });
-    return false;
-  }
-};
-
-const handleUploadComplete = async () => {
-  // Call API to register all process_ids - this is the critical call
-  // Only show success if this succeeds
-  try {
-    const datasetId = datasetUploadLog.value.dataset.id;
-    
-    console.log('[UPLOAD-COMPLETE] Starting upload completion API call', {
-      dataset_id: datasetId,
-      process_ids_count: uploadProcessIds.value?.length || 0,
-    });
-    
-    // Build metadata with checksum (use pre-computed checksum from before upload)
-    let metadata = {};
-    
-    console.log('=== USING PRE-COMPUTED CHECKSUM (from before upload) ===');
-    if (computedChecksum.value) {
-      console.log('✓ Checksum available:', {
-        manifest_hash: computedChecksum.value.manifest_hash,
-        file_count: computedChecksum.value.file_count,
-        total_size: computedChecksum.value.total_size,
-        mode: computedChecksum.value.mode
-      });
-      metadata.checksum = computedChecksum.value;
-    } else {
-      console.log('⚠ No pre-computed checksum available (checksum disabled or computation failed)');
-    }
-    
-    // Call /complete with the last process_id (for single file) or first (for multi)
-    // The worker will handle moving all files based on upload metadata
-    const lastUpload = uploadProcessIds.value[uploadProcessIds.value.length - 1];
-    
-    const completePayload = {
-      process_id: lastUpload.process_id,
-      selection_mode: selectingDirectory.value ? 'directory' : 'files',
-      directory_name: selectingDirectory.value && selectedDirectory.value ? selectedDirectory.value.name : '',
-      relative_path: lastUpload.relative_path,
-      metadata: Object.keys(metadata).length > 0 ? metadata : undefined,
-    };
-    
-    console.log('[UPLOAD-COMPLETE] Calling /complete endpoint', {
-      dataset_id: datasetId,
-      payload: completePayload,
-    });
-    
-    const response = await datasetService.completeDatasetUpload(datasetId, completePayload);
-    
-    console.log('[UPLOAD-COMPLETE] API call SUCCESS', {
-      dataset_id: datasetId,
-      response,
-    });
-    
-    // Success - show green status
-    uploadRegistrationFailed.value = false;
-    submissionStatus.value = Constants.UPLOAD_STATUSES.UPLOADED;
-    statusChipColor.value = "success";
-    submissionAlert.value = "All files have been uploaded successfully!";
-    submissionAlertColor.value = "success";
-    isSubmissionAlertVisible.value = true;
-    submissionSuccess.value = true;
-    
-  } catch (error) {
-    console.error('[UPLOAD-COMPLETE] API call FAILED:', {
-      error_message: error.message,
-      error_response: error.response?.data,
-      error_status: error.response?.status,
-      error_stack: error.stack,
-      dataset_id: datasetUploadLog.value?.audit_log?.dataset?.id,
-    });
-    
-    // API call failed - show retry option
-    uploadRegistrationFailed.value = true;
-    submissionStatus.value = Constants.UPLOAD_STATUSES.UPLOAD_FAILED;
-    statusChipColor.value = "warning";
-    submissionAlert.value = "Files uploaded but registration failed. Please retry.";
-    submissionAlertColor.value = "warning";
-    isSubmissionAlertVisible.value = true;
-    submissionSuccess.value = false;
-  }
-};
-
-// Retry the API call to register the upload
-const retryApiCall = async () => {
-  submissionAlert.value = "Retrying ...";
-  submissionAlertColor.value = "info";
-  await handleUploadComplete();
-};
-
-//
-// onMounted(() => {
-//   window.addEventListener("beforeunload", onBeforeUnload);
-//   window.addEventListener("unload", onUnload);
-// });
-//
-// onBeforeUnmount(() => {
-//   window.removeEventListener("beforeunload", onBeforeUnload);
-//   window.removeEventListener("unload", onUnload);
-//   // once the `onUnload` handler is finished, the `isClosingBrowserTab` flag
-//   // can be reset
-//   isClosingBrowserTab.value = false;
-// });
-/* eslint-enable */
 </script>
 
 <style lang="scss">

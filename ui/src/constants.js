@@ -92,6 +92,13 @@ const exports = {
         path: '/workflows',
         test_id: 'sidebar-workflows',
       },
+      {
+        feature_key: "alerts",
+        icon: "mdi:alert-outline",
+        title: "Alerts",
+        path: "/alerts",
+        test_id: "sidebar-alerts",
+      },
       // {
       //   icon: "mdi-account-multiple",
       //   title: "Group Management",
@@ -156,6 +163,18 @@ const exports = {
           NOT_A_USER: 'not_a_user',
         },
       },
+    },
+  },
+  alerts: {
+    types: {
+      INFO: "INFO",
+      WARNING: "WARNING",
+      ERROR: "ERROR",
+    },
+    statuses: {
+      SCHEDULED: "SCHEDULED",
+      ACTIVE: "ACTIVE",
+      EXPIRED: "EXPIRED",
     },
   },
   GENOME_TYPES: {

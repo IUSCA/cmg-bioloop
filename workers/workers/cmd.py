@@ -37,10 +37,8 @@ def execute(cmd: list[str], **kwargs) -> tuple[str, str]:
     """
     kwargs.pop('capture_output', None)
     kwargs.pop('text', None)
-
     encoding_errors = kwargs.pop('encoding_errors', 'strict')
     p = subprocess.run(cmd, capture_output=True, text=True, encoding='utf-8', errors=encoding_errors, **kwargs)
-    
     if p.returncode != 0:
         msg = {
             'return_code': p.returncode,
@@ -87,13 +85,13 @@ def read_popen_pipes(p, blocking_delay: float = 0.5):
 def register_process(celery_task, process, process_start_time):
     try:
         hostname = socket.getfqdn()
-        
+
         # Get workflow_id and step from task attributes if available (WorkflowTask)
         # Otherwise use None/defaults (regular Celery task)
         workflow_id = getattr(celery_task, 'workflow_id', None)
         step = getattr(celery_task, 'step', celery_task.name)
         task_id = getattr(celery_task, 'id', celery_task.request.id)
-        
+
         worker_process = api.register_process({
             'workflow_id': workflow_id,
             'step': step,
@@ -122,11 +120,11 @@ def execute_with_log_tracking(cmd: list[str], celery_task: WorkflowTask, cwd: st
     # Handle None cwd by defaulting to current working directory
     # if not cwd:
     #     cwd = os.getcwd()
-    
+
     # Capture all output for error reporting
     captured_stdout = []
     captured_stderr = []
-    
+
     with subprocess.Popen(cmd,
                           cwd=cwd,
                           stdout=subprocess.PIPE,
@@ -136,7 +134,7 @@ def execute_with_log_tracking(cmd: list[str], celery_task: WorkflowTask, cwd: st
         process_start_time = utils.current_time_iso8601()
         worker_process_id = register_process(celery_task, p, process_start_time)
         all_lines = read_popen_pipes(p, blocking_delay)
-        
+
         for lines in all_lines:
             # Capture output for error reporting
             for line in lines:
@@ -144,7 +142,7 @@ def execute_with_log_tracking(cmd: list[str], celery_task: WorkflowTask, cwd: st
                     captured_stdout.append(line.message)
                 elif line.level == 'stderr':
                     captured_stderr.append(line.message)
-            
+
             data = [log_object(line) for line in lines]
             try:
                 if not worker_process_id:
@@ -157,7 +155,7 @@ def execute_with_log_tracking(cmd: list[str], celery_task: WorkflowTask, cwd: st
         # Provide captured output in error message
         stdout_text = ''.join(captured_stdout) if captured_stdout else None
         stderr_text = ''.join(captured_stderr) if captured_stderr else None
-        
+
         msg = {
             'return_code': p.returncode,
             'stdout': stdout_text,

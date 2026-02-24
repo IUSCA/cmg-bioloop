@@ -41,4 +41,15 @@ config = {
         'recency_threshold_seconds': 0, # 0 minutes
         'minimum_dataset_size': TEN_MEGABYTES,
     },
+    'register_ondemand': {
+        'RAW_DATA': {
+            'source_dir': '/opt/sca/data/register_ondemand/raw_data',
+        },
+        'DATA_PRODUCT': {
+            'source_dir': '/opt/sca/data/register_ondemand/data_products',
+        },
+    },
+    'logs': {
+        'register_ondemand': '/opt/sca/logs/register_ondemand'
+    }
 }

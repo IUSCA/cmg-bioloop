@@ -302,6 +302,39 @@ def update_dataset_upload(uploaded_dataset_id: int, log_data: dict):
         r.raise_for_status()
 
 
+def create_notification(payload: dict):
+    with APIServerSession() as s:
+        r = s.post('notifications', json=payload)
+        r.raise_for_status()
+
+
+
+def get_all_projects():
+    with APIServerSession() as s:
+        r = s.get('projects/all')
+        r.raise_for_status()
+        projects = r.json()['projects']
+        return projects
+
+
+def get_project(project_id: str,
+                include_datasets: bool = False):
+    with APIServerSession() as s:
+        r = s.get(f'projects/{project_id}',
+                  params={
+                      'include_datasets': include_datasets,
+                  })
+        r.raise_for_status()
+        return r.json()
+
+
+def initiate_workflow(dataset_id: int, workflow_name: str):
+    with APIServerSession() as s:
+        r = s.post(f'datasets/{dataset_id}/workflow/{workflow_name}')
+        r.raise_for_status()
+        return r.json()
+
+
 def get_stalled_uploads():
     """Get uploads that are UPLOADED but workflow hasn't started (>5 min)"""
     with APIServerSession() as s:
@@ -350,21 +383,16 @@ def update_dataset_upload_log(dataset_id: int, log_data: dict) -> dict:
         return r.json()
 
 
-def create_notification(payload: dict):
-    with APIServerSession() as s:
-        r = s.post('notifications', json=payload)
-        r.raise_for_status()
-
 
 def get_conversion(conversion_id: int,
                    include_dataset: bool = False,
                    include_definition: bool = False):
     with APIServerSession() as s:
-        r = s.get(f'conversions/{conversion_id}', 
-                    params={
-                        'include_dataset': include_dataset,
-                        'include_definition': include_definition,
-                    }
+        r = s.get(f'conversions/{conversion_id}',
+                  params={
+                      'include_dataset': include_dataset,
+                      'include_definition': include_definition,
+                  }
                   )
         r.raise_for_status()
         return r.json()
@@ -413,10 +441,10 @@ def get_process_artifacts(process_request_id: int,
 def get_session(session_id: int) -> dict:
     """
     Get a session by ID.
-    
+
     Args:
         session_id: ID of the session to retrieve
-    
+
     Returns:
         dict: Session data
     """
@@ -429,7 +457,7 @@ def get_session(session_id: int) -> dict:
 def update_session(session_id: int, update_data: dict):
     """
     Update a session.
-    
+
     Args:
         session_id: ID of the session to update
         update_data: Data to update
@@ -443,7 +471,7 @@ def update_session(session_id: int, update_data: dict):
 def update_session_tracks(session_id: int, track_ids: list[int]):
     """
     Update tracks associated with a session.
-    
+
     Args:
         session_id: ID of the session
         track_ids: List of track IDs to associate with the session
@@ -457,10 +485,10 @@ def update_session_tracks(session_id: int, track_ids: list[int]):
 def get_dataset_by_cmg_id(cmg_id: str) -> dict:
     """
     Get a dataset by its CMG ID.
-    
+
     Args:
         cmg_id: CMG ID of the dataset
-    
+
     Returns:
         dict: Dataset data, or None if not found
     """
@@ -475,11 +503,11 @@ def get_dataset_by_cmg_id(cmg_id: str) -> dict:
 def get_dataset_file_by_name_and_dataset(filename: str, dataset_id: int) -> dict:
     """
     Get a dataset file by filename and dataset ID.
-    
+
     Args:
         filename: Name of the file
         dataset_id: ID of the dataset
-    
+
     Returns:
         dict: Dataset file data, or None if not found
     """
@@ -495,10 +523,10 @@ def get_dataset_file_by_name_and_dataset(filename: str, dataset_id: int) -> dict
 def get_track_by_dataset_file_id(dataset_file_id: int) -> dict:
     """
     Get a track by dataset file ID.
-    
+
     Args:
         dataset_file_id: ID of the dataset file
-    
+
     Returns:
         dict: Track data, or None if not found
     """

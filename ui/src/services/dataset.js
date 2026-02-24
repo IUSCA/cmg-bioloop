@@ -32,7 +32,9 @@ class DatasetService {
    * @returns          Object containing matching datasets, and count of matching datasets
    */
   getAll(params) {
-    const url = !auth.canOperate ? `/datasets/${auth.user.username}/all` : '/datasets';
+    const url = !auth.canOperate
+      ? `/datasets/${auth.user.username}/all`
+      : "/datasets";
     // What qs.stringify does?
     // Before: /datasets?id[]=1&id[]=2&id[]=3
     // After: /datasets?id=1&id=2&id=3
@@ -40,7 +42,8 @@ class DatasetService {
     // so we need to clean the parameters (removes keys which have null/undefined value).
     return api.get(url, {
       params: cleanParams(params),
-      paramsSerializer: (params) => qs.stringify(params, { arrayFormat: 'repeat' }),
+      paramsSerializer: (params) =>
+        qs.stringify(params, { arrayFormat: "repeat" }),
     });
   }
 
@@ -80,8 +83,8 @@ class DatasetService {
         toast.success('A workflow has started to stage the dataset');
       })
       .catch((err) => {
-        console.error('unable to stage the dataset', err);
-        toast.error('Unable to stage the dataset');
+        console.error("unable to stage the dataset", err);
+        toast.error("Unable to stage the dataset");
         return Promise.reject(err);
       });
   }

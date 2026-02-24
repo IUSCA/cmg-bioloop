@@ -51,6 +51,27 @@ const INCLUDE_AUDIT_LOGS = {
   },
 };
 
+const INCLUDE_PROJECTS = {
+  projects: {
+    select: {
+      project: {
+        select: {
+          id: true,
+          name: true,
+          slug: true,
+          description: true,
+          browser_enabled: true,
+          funding: true,
+          metadata: true,
+          created_at: true,
+          updated_at: true,
+          owner_id: true,
+        },
+      },
+    },
+  },
+};
+
 const INCLUDE_DATASET_UPLOAD_LOG_RELATIONS = {
   dataset: {
     select: {
@@ -64,6 +85,11 @@ const INCLUDE_DATASET_UPLOAD_LOG_RELATIONS = {
       source_datasets: {
         select: {
           source_dataset: true,
+        },
+      },
+      projects: {
+        select: {
+          project: true,
         },
       },
       genomic_details: {
@@ -145,6 +171,18 @@ const auth = {
   },
 };
 
+const ALERT_STATUSES = {
+  SCHEDULED: 'SCHEDULED',
+  ACTIVE: 'ACTIVE',
+  EXPIRED: 'EXPIRED',
+};
+
+const ALERT_TYPES = {
+  INFO: 'INFO',
+  WARNING: 'WARNING',
+  ERROR: 'ERROR',
+};
+
 // Genome Browser - File Roles
 const FILE_ROLES = {
   PRIMARY: 'PRIMARY',
@@ -221,7 +259,10 @@ module.exports = {
   DATASET_CREATE_METHODS,
   UPLOAD_STATUSES,
   WORKFLOWS,
+  ALERT_TYPES,
+  ALERT_STATUSES,
   DATASET_STATES,
+  INCLUDE_PROJECTS,
   FILE_ROLES,
   INDEX_TYPES_BY_MAIN_FORMAT,
   INDEX_FORMATS,

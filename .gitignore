@@ -64,10 +64,19 @@ qc
 backup
 
 !db/postgres
-db/backups
+!db/backups
 db/backups/*.sql
 db/backups/*.psql
 db/backups/*.dump
+db/db_postgres
+db/postgres/data
+db/mongo/data
+db/db/backups
+db/db/postgres
+db/db/db_postgres
+db/prod/db_postgres
+
+
 todo.md
 
 # Backup files
@@ -78,14 +87,8 @@ backup_*.sql.gz
 
 rhythm_api/
 rhythm/rhythm_api
+
 signet/signet
-db/mongo/data
-db/postgres/data
-db/db/backups
-db/db_postgres
-db/db/postgres
-db/db/db_postgres
-db/prod/db_postgres
 
 cmg_data/dump/
 cmg_data/data/
