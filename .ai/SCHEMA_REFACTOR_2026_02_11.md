@@ -92,14 +92,15 @@ dataset_audit.import (relation)
 - All queries changed from `where: { audit_log: { dataset_id } }` to `where: { dataset_id }`
 - Updated includes to fetch dataset directly
 - Added 8 new routes moved from `api/src/routes/uploads.js`:
-  - `GET /:id/logs` - Get upload log by ID
+  - `GET /:id/logs` - Get upload log by dataset ID (was `GET /uploads/:id` with upload_log_id)
   - `GET /:datasetId/status` - Get dataset upload status
   - `GET /stalled` - Get stalled uploads (for workers)
   - `GET /failed` - Get failed uploads (for workers)
   - `GET /expired` - Get expired uploads
   - `GET /all-process-ids` - Get all process IDs
   - `GET /by-status` - Get uploads by status
-  - `PATCH /:id/logs` - Update upload log by ID
+  - `PATCH /:id/logs` - Update upload log by dataset ID
+- **Route parameter consistency:** All `:id` parameters now refer to `dataset_id`
 
 **3. api/src/routes/datasets/index.js**
 - Updated import log queries to use direct dataset relation
@@ -345,16 +346,18 @@ npx prisma generate
 ### API Endpoints (URL Changes)
 Old endpoints under `/api/uploads/*` moved to `/api/datasets/uploads/*`:
 
-| Old Endpoint | New Endpoint |
-|--------------|--------------|
-| `GET /api/uploads/:id` | `GET /api/datasets/uploads/:id/logs` |
-| `GET /api/uploads/status/dataset/:id` | `GET /api/datasets/uploads/:id/status` |
-| `GET /api/uploads/stalled` | `GET /api/datasets/uploads/stalled` |
-| `GET /api/uploads/failed` | `GET /api/datasets/uploads/failed` |
-| `GET /api/uploads/expired` | `GET /api/datasets/uploads/expired` |
-| `GET /api/uploads/all-process-ids` | `GET /api/datasets/uploads/all-process-ids` |
-| `GET /api/uploads/by-status` | `GET /api/datasets/uploads/by-status` |
-| `PATCH /api/uploads/:id` | `PATCH /api/datasets/uploads/:id/logs` |
+| Old Endpoint | Old Parameter | New Endpoint | New Parameter |
+|--------------|---------------|--------------|---------------|
+| `GET /api/uploads/:id` | `upload_log_id` | `GET /api/datasets/uploads/:id/logs` | `dataset_id` |
+| `GET /api/uploads/status/dataset/:id` | `dataset_id` | `GET /api/datasets/uploads/:datasetId/status` | `dataset_id` |
+| `GET /api/uploads/stalled` | - | `GET /api/datasets/uploads/stalled` | - |
+| `GET /api/uploads/failed` | - | `GET /api/datasets/uploads/failed` | - |
+| `GET /api/uploads/expired` | - | `GET /api/datasets/uploads/expired` | - |
+| `GET /api/uploads/all-process-ids` | - | `GET /api/datasets/uploads/all-process-ids` | - |
+| `GET /api/uploads/by-status` | - | `GET /api/datasets/uploads/by-status` | - |
+| `PATCH /api/uploads/:id` | `upload_log_id` | `PATCH /api/datasets/uploads/:id/logs` | `dataset_id` |
+
+**Key Change:** All `:id` parameters in new routes consistently refer to `dataset_id` (not `upload_log_id`).
 
 **Note:** TUS upload endpoint `/api/uploads/files` remains unchanged.
 

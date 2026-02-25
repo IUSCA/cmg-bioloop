@@ -11,7 +11,9 @@ We've migrated from a custom chunk-based upload system to the **TUS (The Upload 
 
 ## Architecture Comparison
 
-### Old Architecture (Chunk-Based)
+### Old Architecture (Chunk-Based) - For Reference
+
+**Note for migration:** This was the previous implementation. If migrating a Bioloop fork, this is what needs to be replaced.
 
 ```
 ┌─────────┐     ┌──────────────────┐     ┌─────────────────┐     ┌──────────┐
@@ -30,7 +32,7 @@ We've migrated from a custom chunk-based upload system to the **TUS (The Upload 
                into final file
 ```
 
-**Issues:**
+**Limitations of old system:**
 - Complex chunk tracking logic in UI, API, and workers
 - Manual resume required client-side state management
 - Separate service (secure_download) added operational complexity
@@ -129,9 +131,9 @@ No client-side state management required.
 Server tracks offset in .json metadata file.
 ```
 
-**Old Way:** Required storing chunk IDs, tracking completion state, handling retries manually.
+**Old chunk-based system:** Required storing chunk IDs, tracking completion state, handling retries manually.
 
-**New Way:** Client asks server "where was I?" — server responds with byte offset. Zero client state.
+**New TUS system:** Client asks server "where was I?" — server responds with byte offset. Zero client state.
 
 ---
 
@@ -233,35 +235,55 @@ TUS: Binary success/fail
 
 ```
                     ┌───────────────┐
-                    │   UPLOADING   │◀──────────────────────┐
-                    └───────┬───────┘                       │
-                            │                               │
-              TUS upload complete                    (Retry)│
-                            │                               │
-                            ▼                               │
-                    ┌───────────────┐                       │
-                    │   UPLOADED    │───────────────────────┘
+                    │   UPLOADING   │
                     └───────┬───────┘
                             │
-              Polling job picks up
+              TUS upload complete
                             │
-              ┌─────────────┴─────────────┐
-              │                           │
+                            ▼
+                    ┌───────────────┐
+                    │   UPLOADED    │
+                    └───────┬───────┘
+                            │
+              Polling job spawns
+              verification task
+                            │
+                            ▼
+                    ┌───────────────┐
+                    │   VERIFYING   │◀──────────────┐
+                    └───────┬───────┘               │
+                            │                       │
+              ┌─────────────┴─────────────┐         │
+              │                           │    (Task retry)
      Verification OK            Verification Failed
-              │                           │
-              ▼                           ▼
-    ┌─────────────────┐         ┌─────────────────────┐
-    │    COMPLETE     │         │ VERIFICATION_FAILED │
-    └────────┬────────┘         └─────────────────────┘
-             │
+              │                           │         │
+              ▼                           ▼         │
+      ┌───────────────┐         ┌─────────────────────┐
+      │   VERIFIED    │         │ VERIFICATION_FAILED │
+      └───────┬───────┘         └─────────────────────┘
+              │
     Workflow triggered
-             │
-             ▼
-    ┌─────────────────┐
-    │ Workflow status │
-    │ (via Rhythm)    │
-    └─────────────────┘
+              │
+              ▼
+      ┌───────────────┐
+      │   COMPLETE    │
+      └───────┬───────┘
+              │
+    Workflow processing
+              │
+              ▼
+      ┌─────────────────┐
+      │ Workflow status │
+      │ (via Rhythm)    │
+      └─────────────────┘
 ```
+
+**Key Transitions:**
+- `UPLOADING` → `UPLOADED`: TUS upload completes, `/complete` endpoint called
+- `UPLOADED` → `VERIFYING`: Polling job spawns async verification Celery task
+- `VERIFYING` → `VERIFIED`: Verification task succeeds
+- `VERIFYING` → `VERIFICATION_FAILED`: Verification task fails after max retries
+- `VERIFIED` → `COMPLETE`: Polling job triggers integrated workflow
 
 ---
 
@@ -317,4 +339,4 @@ The TUS architecture supports:
 
 ---
 
-*Last Updated: 2026-02-05*
+*Last Updated: 2026-02-11*

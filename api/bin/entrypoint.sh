@@ -64,7 +64,7 @@ echo "Seeded database"
 echo "Checking if the required environment variables are set..."
 
 # Check if the required environment variable is set
-if [ "${OAUTH_DOWNLOAD_CLIENT_ID}" = "xxx" ] || [ "${OAUTH_DOWNLOAD_CLIENT_SECRET}" = "xxx" ] || [ "${OAUTH_UPLOAD_CLIENT_ID}" = "xxx" ] || [ "${OAUTH_UPLOAD_CLIENT_SECRET}" = "xxx" ]; then  
+if [ "${OAUTH_DOWNLOAD_CLIENT_ID}" = "xxx" ] || [ "${OAUTH_DOWNLOAD_CLIENT_SECRET}" = "xxx" ]; then  
   echo "One or more required environment variables are set to 'xxx'. Generating new OAuth client credentials..."
   response=$(curl --silent --request POST \
     --url http://signet:5050/create_client \
@@ -94,14 +94,6 @@ if [ "${OAUTH_DOWNLOAD_CLIENT_ID}" = "xxx" ] || [ "${OAUTH_DOWNLOAD_CLIENT_SECRE
   sed -i '/^OAUTH_DOWNLOAD_CLIENT_SECRET/d' .env
   echo "OAUTH_DOWNLOAD_CLIENT_SECRET=$client_secret" >> .env
   export OAUTH_DOWNLOAD_CLIENT_SECRET=$client_secret
-
-  sed -i '/^OAUTH_UPLOAD_CLIENT_ID/d' .env
-  echo "OAUTH_UPLOAD_CLIENT_ID=$client_id" >> .env
-  export OAUTH_UPLOAD_CLIENT_ID=$client_id
-  
-  sed -i '/^OAUTH_UPLOAD_CLIENT_SECRET/d' .env
-  echo "OAUTH_UPLOAD_CLIENT_SECRET=$client_secret" >> .env
-  export OAUTH_UPLOAD_CLIENT_SECRET=$client_secret
 
   sed -i '/^OAUTH_GENOME_BROWSER_CLIENT_ID/d' .env
   echo "OAUTH_GENOME_BROWSER_CLIENT_ID=$client_id" >> .env

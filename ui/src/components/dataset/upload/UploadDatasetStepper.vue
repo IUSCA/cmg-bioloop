@@ -611,9 +611,6 @@ const formErrors = ref({
   [STEP_KEYS.UPLOAD]: null,
 });
 
-// Bearer token used to send requests to the File-Upload API
-const uploadToken = ref(useLocalStorage("uploadToken", ""));
-
 // Search-text for Dataset Search
 const datasetSearchText = ref("");
 // Search-text for Project search

@@ -44,7 +44,7 @@ The upload feature allows users to upload datasets directly from their web brows
 1. For each file, TUS client sends:
    - `POST /uploads/files` - Creates upload slot, returns upload ID
    - `PATCH /uploads/files/{id}` - Sends actual file bytes (resumable)
-2. TUS metadata includes: `entity_type`, `entity_id`, `filename`, `relative_path`
+2. TUS metadata includes: `dataset_id`, `filename`, `relative_path`, `selection_mode`, `directory_name`
 3. Files stored temporarily in TUS upload directory
 
 ### 3. Completion Phase
@@ -81,7 +81,9 @@ The upload feature allows users to upload datasets directly from their web brows
 ### UI
 - `ui/src/components/dataset/upload/UploadDatasetStepper.vue` - Upload UI
 - `ui/src/services/upload/checksum.js` - BLAKE3 manifest hash computation (uses `hash-wasm`)
-- `ui/src/views/DatasetUploadsPage.vue` - Upload logs table
+- `ui/src/pages/datasets/uploads/index.vue` - Upload logs table
+- `ui/src/pages/datasets/uploads/[id].vue` - Upload details page
+- `ui/src/services/dataset.js` - Upload-related API calls
 
 ---
 
@@ -220,17 +222,38 @@ UPLOAD_HOST_DIR=/N/scratch/cmguser/cmg-bioloop/uploads
 
 ## API Endpoints
 
-### Upload Management
+### Upload Management (all under `/datasets/uploads`)
+**Create & Complete:**
 - `POST /datasets/uploads` - Create dataset and upload log
 - `POST /datasets/uploads/:id/complete` - Register TUS completion, move files
-- `PATCH /datasets/uploads/:id/upload-log` - Update upload metadata
-- `GET /datasets/uploads` - List uploads (filters out those without `process_id`)
-- `GET /datasets/uploads/:username` - User's uploads
 
-### TUS Endpoints (mounted at /uploads/files)
+**Query:**
+- `GET /datasets/uploads` - List all uploads (with filters)
+- `GET /datasets/uploads/:username` - List user's uploads
+- `GET /datasets/uploads/:id/logs` - Get upload log by dataset ID
+- `GET /datasets/uploads/:datasetId/status` - Get upload status by dataset ID
+- `GET /datasets/uploads/:id/upload-log` - Get upload log by dataset ID
+
+**Update:**
+- `PATCH /datasets/uploads/:id` - Update upload metadata (with ownership check)
+- `PATCH /datasets/uploads/:id/upload-log` - Update upload log metadata
+
+**Worker Endpoints:**
+- `GET /datasets/uploads/stalled` - Get stalled uploads needing processing
+- `GET /datasets/uploads/failed` - Get failed uploads eligible for retry
+- `GET /datasets/uploads/expired` - Get expired uploads
+- `GET /datasets/uploads/all-process-ids` - Get all upload process IDs
+- `GET /datasets/uploads/by-status` - Get uploads by status
+
+**Note:** All `:id` parameters refer to `dataset_id` (not upload_log_id) for REST consistency.
+
+### TUS Protocol Endpoints (mounted at `/uploads/files`)
 - `POST /uploads/files` - Create TUS upload
-- `PATCH /uploads/files/:id` - Send file data
-- `HEAD /uploads/files/:id` - Check upload status
+- `PATCH /uploads/files/:id` - Send file data (resumable)
+- `HEAD /uploads/files/:id` - Check upload offset/status
+- `OPTIONS /uploads/files` - CORS preflight
+
+**Authentication:** TUS endpoints use standard Bearer token from `authenticate` middleware (no separate upload token needed).
 
 ---
 
@@ -296,31 +319,79 @@ The upload UI (`UploadDatasetStepper.vue`) has a 4-step process:
 
 ## Removed Components (2026-02)
 
-The `process_dataset_upload` workflow was removed. Previously:
+**For migration to other Bioloop forks:** These components from the OLD upload system must be removed if present in the target fork.
+
+The `process_dataset_upload` workflow was removed during TUS migration. 
+
+**Old flow:**
 - UI → API → `process_dataset_upload` workflow → `integrated` workflow
 
-Now:
+**New flow:**
 - UI → API → Polling job → `integrated` workflow directly
 
-Removed from: `workers/tasks/`, `workers/api.py`, `api/constants.js`, `api/routes/`, `ui/services/`
+**What to remove from target fork:**
+- `workers/tasks/process_dataset_upload.py` (if exists)
+- References in `workers/api.py`, `api/constants.js`, `api/routes/`, `ui/services/`
+- See `.ai/UPLOAD_CLEANUP_2026_02_11.md` for complete deletion list
 
 ---
 
-## Migration from Chunk-Based Upload
+## Migration from Chunk-Based Upload (Reference)
+
+**For other Bioloop forks:** This table helps identify what needs to be replaced when migrating from the old chunk-based system.
 
 The previous chunk-based upload system used secure_download service. Key changes:
 
-| Aspect | Old (Chunk-based) | New (TUS) |
-|--------|-------------------|-----------|
+| Aspect | Old (Chunk-based) - REMOVE | New (TUS) - IMPLEMENT |
+|--------|---------------------------|----------------------|
 | Upload Handler | secure_download service | API service (TUS server) |
 | Protocol | Custom chunk API | TUS 1.0 protocol |
 | Resume Support | Manual chunk tracking | Built-in TUS resumable |
 | File Assembly | Worker merges chunks | TUS handles directly |
 | Max File Size | Limited by chunk handling | 100 GB |
+| Authentication | OAuth upload tokens | Standard Bearer token |
+| Checksum | MD5 per chunk | BLAKE3 manifest |
+
+**Migration checklist:** See `.ai/UPLOAD_FEATURE_DOCUMENTATION_INDEX.md` for complete porting guide.
 
 ---
 
 ## Changelog
+
+### 2026-02-11 - Documentation Cleanup & Verification
+
+**What Changed:**
+- Fixed TUS metadata fields in documentation to match implementation: `dataset_id`, `filename`, `relative_path`, `selection_mode`, `directory_name` (removed obsolete `entity_type`, `entity_id`)
+- Expanded API endpoint list to document all 14 routes under `/datasets/uploads`
+- Fixed file path reference: `ui/src/pages/datasets/uploads/index.vue` (was incorrectly `ui/src/views/DatasetUploadsPage.vue`)
+- Added authentication note: TUS uses standard Bearer token (no separate upload token mechanism)
+- Clarified route parameter consistency: All `:id` parameters refer to `dataset_id`
+- Removed broken `/uploads` route reference from `api/src/routes/index.js`
+- Updated `docs/features/tus-upload-architecture.md` state machine diagram to include VERIFYING/VERIFIED states
+
+**Files Modified:**
+- `.ai/bioloop/features/uploads.md` - Documentation updates
+- `.ai/SCHEMA_REFACTOR_2026_02_11.md` - Route parameter clarifications
+- `docs/features/tus-upload-architecture.md` - State machine diagram update
+- `UPLOAD_DOCS_STATUS_REPORT.md` - Documentation status update
+- `api/src/routes/index.js` - Removed broken `/uploads` route reference
+
+**Dead Code Removed (2026-02-11):**
+- ✅ `ui/src/services/upload/token.js` - Deleted unused upload token service
+- ✅ `ui/src/stores/auth.js` - Removed `refreshUploadToken()` method, `uploadToken` ref, and import
+- ✅ `ui/src/components/dataset/upload/UploadDatasetStepper.vue` - Removed unused `uploadToken` ref
+- ✅ `ui/src/config.js` - Removed `refreshTokenTMinusSeconds.uploadToken` config
+- ✅ `api/config/default.json` - Removed obsolete `process_dataset_upload` workflow definition
+- ✅ `api/.env.default` - Removed `OAUTH_UPLOAD_CLIENT_ID` and `OAUTH_UPLOAD_CLIENT_SECRET`
+- ✅ `api/config/custom-environment-variables.json` - Removed `oauth.upload` config mappings
+- ✅ `api/config/default.json` - Removed `oauth.upload.scope_prefix`
+- ✅ `api/src/services/auth.js` - Removed `get_upload_token()` function and export
+- ✅ `api/bin/entrypoint.sh` - Removed OAuth upload token generation logic
+- ✅ `api/package.json` - Removed `spark-md5` dependency (replaced by BLAKE3)
+- ✅ `secure_download/package.json` - Removed `spark-md5` dependency
+- ✅ `secure_download/config/default.json` - Removed `upload_scope` config
+- ✅ `ui/src/pages/datasetUpload/index.vue` - Deleted duplicate old upload list page
+- ✅ `MERGE_COMPARISON_REPORT.md` - Deleted outdated merge comparison file
 
 ### 2026-02-11 - API Route Standardization
 
@@ -606,7 +677,6 @@ poetry run pytest tests/upload_verification/ -v
 - **Docs cleanup:** Deleted obsolete `docs/features/dataset_upload.md` and upload diagrams
 - **Docs cleanup:** Deleted migration tracking files (`TUS_*.md`, `UPLOAD_CHECKSUM_*.md`)
 - **Docs cleanup:** Fixed `.ai/bioloop/features/imports-downloads.md` (removed incorrect upload references)
-- **Docs cleanup:** Removed `process_dataset_upload` and `cancel_dataset_upload` from `BIOLOOP_WORKFLOW_ARCHITECTURE.md`
 - **Architecture doc:** Created `docs/features/tus-upload-architecture.md` for tech lead overview
 
 ### 2026-02-04
@@ -641,12 +711,13 @@ poetry run pytest tests/upload_verification/ -v
 **Route Consolidation:**
 - All upload routes moved from `/api/uploads/*` to `/api/datasets/uploads/*`
 - Routes consolidated:
-  - `GET /:id/logs` - Get upload log by ID (was `/api/uploads/:id`)
-  - `GET /:id/status` - Get dataset upload status
+  - `GET /:id/logs` - Get upload log by dataset ID (was `/api/uploads/:id`, used upload_log_id)
+  - `GET /:datasetId/status` - Get dataset upload status
   - `GET /stalled` - Get stalled uploads (was `/api/uploads/stalled`)
   - `GET /failed` - Get failed uploads (was `/api/uploads/failed`)
   - `PATCH /:id/logs` - Update upload log (was `/api/uploads/:id`)
 - TUS upload endpoint `/api/uploads/files` unchanged
+- **Note:** `:id` parameter consistently refers to `dataset_id` across all routes
 
 **Query Simplification:**
 - Old: `where: { audit_log: { dataset_id, create_method: 'UPLOAD' } }`

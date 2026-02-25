@@ -47,7 +47,6 @@ router.use('/notifications', require('./notifications') /* #swagger.security = [
 router.use('/tracks', require('./tracks') /* #swagger.security = [{"BearerAuth": []}] */);
 router.use('/sessions', require('./sessions') /* #swagger.security = [{"BearerAuth": []}] */);
 router.use('/instruments', require('./instruments') /* #swagger.security = [{"BearerAuth": []}] */);
-router.use('/uploads', require('./uploads') /* #swagger.security = [{"BearerAuth": []}] */);
 router.use('/alerts', require('./alerts') /* #swagger.security = [{"BearerAuth": []}] */);
 router.use('/conversions', require('./conversions') /* #swagger.security = [{"BearerAuth": []}] */);
 router.use('/process_requests', require('./process_requests') /* #swagger.security = [{"BearerAuth": []}] */);

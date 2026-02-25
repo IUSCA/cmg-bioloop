@@ -14,7 +14,6 @@ const exports = {
     import.meta.env.VITE_MICROSOFT_RETURN || "https://localhost/auth/microsoft",
   refreshTokenTMinusSeconds: {
     appToken: 300,
-    uploadToken: 20,
   },
   analyticsId: 'G-FOO',
   appTitle: 'CMG',

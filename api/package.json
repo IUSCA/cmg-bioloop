@@ -65,7 +65,6 @@
     "multer": "2.0.2",
     "picomatch": "^4.0.2",
     "regex-username": "^2.0.0",
-    "spark-md5": "^3.0.2",
     "swagger-autogen": "^2.23.5",
     "swagger-ui-express": "^5.0.0",
     "the-big-username-blacklist": "^1.5.2",
