@@ -311,6 +311,120 @@ TUS: Binary success/fail
 
 ---
 
+## Known Failure Modes & Resolutions
+
+This section documents production failure modes that have been identified, diagnosed, and resolved. Each entry explains root cause, symptom, and the fix applied.
+
+---
+
+### 1. 413 Entity Too Large on PATCH Request
+
+**Symptom:**
+- Upload fails early (often showing some progress in the UI)
+- Browser network tab shows `PATCH /api/uploads/files/{id}` returning `413`
+- API logs show no PATCH entry at all (request rejected before reaching the API)
+- `DELETE /api/uploads/files/{id}` appears ~30 seconds later (TUS abort cleanup)
+
+**Root cause:**
+`tus-js-client` defaults to uploading the entire file in a single PATCH request body when no `chunkSize` is configured. Nginx's `client_max_body_size 100M` rejects any request body over 100 MB — meaning any file over 100 MB fails. The "progress" shown in the UI before failure is XHR upload progress to nginx; nginx was buffering the body and then rejecting it.
+
+The TUS client retries the rejected PATCH using the configured `retryDelays`. After ~30 seconds of retries the frontend upload timeout fires, calling `upload.abort(true)` which triggers the DELETE to clean up the partial upload on the server.
+
+**Fix:**
+Set `chunkSize: 50 * 1024 * 1024` (50 MB) in the TUS client config in `UploadDatasetStepper.vue` and `GenericUploader.vue`. 50 MB is safely under the 100 M nginx limit and enables TUS's protocol-level resume (without chunking there is nothing to resume from).
+
+```javascript
+// ui/src/components/dataset/upload/UploadDatasetStepper.vue
+// ui/src/components/upload/GenericUploader.vue
+upload = new tus.Upload(file, {
+  chunkSize: 50 * 1024 * 1024,  // 50 MB per PATCH request
+  ...
+});
+```
+
+---
+
+### 2. Nginx Buffering Chunks Before Forwarding to API
+
+**Symptom:**
+- PATCH requests show upload progress in the browser but never appear in API logs
+- Uploads of files slightly under 100 MB may hang or fail inconsistently
+
+**Root cause:**
+By default, nginx buffers the entire request body from the client before forwarding it to the upstream API (`proxy_request_buffering on`). This means nginx holds the full 50 MB chunk in memory/disk before the API sees any of it. This negates TUS's streaming design, increases latency, and can cause failures if nginx's internal buffer limits are hit.
+
+**Fix:**
+Add a dedicated nested `location /api/uploads/` block inside the main `/api/` block in `/etc/nginx/conf.d/cmg.conf`. Using a nested block (rather than modifying the main `/api/` block) means all other API endpoints are unaffected.
+
+```nginx
+location /api/ {
+    # ... existing config unchanged ...
+
+    location /api/uploads/ {
+        proxy_pass http://172.19.0.2:3030/uploads/;
+        proxy_request_buffering off;   # stream chunk body directly to API, no buffering
+        client_body_timeout 300;       # allow slow clients up to 5 min to send a chunk
+        proxy_read_timeout 300;        # allow API up to 5 min to respond after receiving a chunk
+    }
+}
+```
+
+The nested location covers all TUS endpoints:
+- `POST /api/uploads/files` — create upload
+- `PATCH /api/uploads/files/{id}` — send chunk (primary upload path)
+- `HEAD /api/uploads/files/{id}` — query offset for resume
+- `DELETE /api/uploads/files/{id}` — abort/terminate
+
+Nginx prefix matching means `/api/uploads/` (more specific) always wins over `/api/` for these paths.
+
+---
+
+### 3. Nginx Timeout Directives Explained
+
+The two timeout directives added to the `/api/uploads/` block serve distinct purposes:
+
+| Directive | Controls | Default | Why It Matters for Uploads |
+|-----------|----------|---------|---------------------------|
+| `client_body_timeout 300` | How long nginx waits between successive reads of the request body **from the client** | 60s | On a slow connection, uploading a 50 MB chunk at ~1 MB/s takes ~50 s — borderline for the 60s default. 300s gives a 5-minute window per chunk for slow connections. |
+| `proxy_read_timeout 300` | How long nginx waits for **a response from the API** after forwarding the request | 60s | After receiving a full chunk, the API writes it to disk and responds with the new offset. On a loaded server with slow disk I/O, this could theoretically exceed 60s. 300s prevents premature gateway timeouts. |
+
+Note: `proxy_buffering` (response buffering, upstream → client) is separate and not changed — it has no effect on upload performance.
+
+---
+
+### 4. Frontend Upload Timeout Too Tight for Large Files
+
+**Symptom:**
+- Uploads of large files abort with "Upload timeout after 30 seconds" even when the server is healthy
+- `DELETE /api/uploads/files/{id}` appears exactly 30 seconds after the POST (the abort cleanup)
+
+**Root cause:**
+A hardcoded `UPLOAD_TIMEOUT_MS = 30000` (30 s) was set as an overall timeout for each file upload. This was originally intended to catch TUS getting permanently stuck in a retry loop, but it also fires for any legitimate large file upload that takes more than 30 s — which includes any file over ~300 MB on a 10 MB/s connection.
+
+**Fix:**
+Make the timeout proportional to file size, assuming a minimum upload speed of 512 KB/s, with a floor of 60 s and a ceiling of 30 minutes:
+
+```javascript
+// ui/src/components/dataset/upload/UploadDatasetStepper.vue
+const MIN_TIMEOUT_MS = 60 * 1000;           // 60 seconds minimum
+const MAX_TIMEOUT_MS = 30 * 60 * 1000;      // 30 minutes maximum
+const MIN_SPEED_BYTES_PER_MS = 512 * 1024 / 1000;  // 512 KB/s
+const UPLOAD_TIMEOUT_MS = Math.min(MAX_TIMEOUT_MS, Math.max(MIN_TIMEOUT_MS, file.size / MIN_SPEED_BYTES_PER_MS));
+```
+
+Representative values:
+
+| File size | Timeout |
+|-----------|---------|
+| 10 MB | 60 s (floor) |
+| 100 MB | ~3.3 min |
+| 300 MB | ~9.7 min |
+| 10 GB | 30 min (ceiling) |
+
+The timeout does not affect upload speed. It is only a failure-detection safeguard: `onSuccess` clears the timer immediately when an upload completes normally, regardless of how long it took.
+
+---
+
 ## Future Extensibility
 
 The TUS architecture supports:
@@ -339,4 +453,4 @@ The TUS architecture supports:
 
 ---
 
-*Last Updated: 2026-02-11*
+*Last Updated: 2026-02-18*
