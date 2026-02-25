@@ -4,8 +4,7 @@
 name: bioloop
 services:
   ui:
-    restart: unless-stopped
-    image: node:20
+    image: node:21
     ports:
       - 127.0.0.1:443:443
     env_file:
@@ -189,9 +188,9 @@ services:
   # You must clone the rhythm_api repo and place it in the rhythm folder
   rhythm:
     restart: unless-stopped
-    build:
-      context: ../rhythm_api
-    # image: harbor.sca.iu.edu/rhythm/api:latest
+#    build:
+#      context: ../rhythm_api
+    image: harbor.sca.iu.edu/rhythm/api:latest
     expose:
       - 5001
     ports:
@@ -215,7 +214,6 @@ services:
     depends_on:
       - queue
       - mongo
-      # - api
 
   # Secure_download container
   secure_download:
@@ -224,7 +222,7 @@ services:
     expose:
       - 3060
     ports:
-      - 127.0.0.1:3060:3060
+      - "3060:3060"
     env_file:
       - secure_download/.env.default # For all default settings
     volumes:
@@ -235,7 +233,7 @@ services:
     command: ["npm", "run", "dev"]
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3060/health"]
-      interval: 60s
+      interval: 30s
       timeout: 10s
       retries: 5
 
@@ -243,9 +241,10 @@ services:
   # You must clone the signet repo and place it in the signet folder
   signet:
     restart: unless-stopped
-    build:
-      context: /Users/ripandey/dev/signet
-      dockerfile: Dockerfile
+#    build:
+#      context: /Users/ripandey/dev/signet
+#      dockerfile: Dockerfile
+    image: harbor.sca.iu.edu/signet/signet:latest
     expose:
       - 5050
     ports:
@@ -258,7 +257,7 @@ services:
     command: ["exec", "gunicorn", "--bind", ":5050", "--workers", "1", "--threads", "1", "--timeout", "0", "app:app"]
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:5050/health"]
-      interval: 60s
+      interval: 30s
       timeout: 10s
       retries: 5
     depends_on:
@@ -282,7 +281,7 @@ services:
       - signet_db:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD", "pg_isready", "-U", "appuser"]
-      interval: 2s
+      interval: 10s
       timeout: 10s
       retries: 5
 
@@ -359,15 +358,6 @@ services:
         condition: service_healthy
     profiles:
       - metrics
-
-  # Conversion pipelines setup services
-  # To use other pipelines, mount from host:
-  # conversion_worker:
-  #   volumes:
-  #     - /path/to/cellranger-8.0.1:/opt/cellranger-8.0.1:ro
-
-
-
 
 volumes:
   grafana_data:

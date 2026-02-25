@@ -2,8 +2,8 @@ const express = require('express');
 const createError = require('http-errors');
 const config = require('config');
 const { param } = require('express-validator');
-const fs = require('fs');
 const path = require('path');
+const fs = require('fs');
 
 const { validate } = require('../middleware/validators');
 const asyncHandler = require('../middleware/asyncHandler');
@@ -15,12 +15,30 @@ function remove_leading_slash(str) {
   return str?.replace(/^\/+/, '');
 }
 
+/**
+ * Get a stream of the file at the given path
+ * @param {string} filePath - The path to the file to stream
+ * @returns {fs.ReadStream} - A stream of the file
+ */
+function getFileStream(filePath) {
+  const _filePath = path.join(config.get('download_path'), filePath);
+  if (!fs.existsSync(_filePath)) {
+    throw createError.NotFound('File not found');
+  }
+  const stream = fs.createReadStream(_filePath);
+  stream.on('error', (err) => {
+    console.error('Error streaming file:', err);
+    throw createError.InternalServerError('Error downloading file');
+  });
+  return stream;
+}
+
 // The trailing * ensures that this route can accept a file's path as a string after
 // the dataset's bundle name, in case a specific file is being requested for download.
 router.get(
-  '/:bundle_name*',
+  '/:file_path',
   validate([
-    param('bundle_name').escape().notEmpty(),
+    param('file_path').escape().notEmpty(),
   ]),
   asyncHandler(async (req, res, next) => {
     logger.info('inside /download/:bundle_name');
@@ -47,62 +65,39 @@ router.get(
     logger.info('download_scopes');
     logger.info(JSON.stringify(download_scopes, null, 2));
 
-    // if (download_scopes.length === 0) {
-    //   return next(createError.Forbidden('Invalid scope'));
-    // }
-
-    const token_file_path = remove_leading_slash(download_scopes[0].slice(SCOPE_PREFIX.length));
-    const req_path = remove_leading_slash(req.path);
-
-    // if (req_path === token_file_path) {
-    logger.info('req_path === token_file_path');
-    logger.info(`req_path: ${req_path}`);
-    logger.info(`token_file_path: ${token_file_path}`);
-
-    // Check if we're in Docker mode (NODE_ENV === 'docker')
-    if (process.env.NODE_ENV === 'docker') {
-      logger.info('Docker mode detected, serving file directly with Express');
-
-      // Set headers for file download
-      res.set('content-type', 'application/octet-stream; charset=utf-8');
-
-      // Get and print the size of the token file path
-      const fullFilePath = path.join('/opt/sca/data/downloads/', token_file_path);
-    
-      // Check if file exists - throw error if not
-      const stats = fs.statSync(fullFilePath);
-      logger.info(`File size: ${stats.size} bytes`);
-
-      // Create read stream and pipe to response
-      const fileStream = fs.createReadStream(fullFilePath);
-      fileStream.pipe(res);
-
-      fileStream.on('error', (error) => {
-        logger.error(`Error streaming file: ${error.message}`);
-        if (!res.headersSent) {
-          res.status(500).send('Error streaming file');
-        }
-      });
-
-      return; // Exit early, don't send X-Accel-Redirect
+    if (download_scopes.length === 0) {
+      return next(createError.Forbidden('Invalid scope'));
     }
 
-    // Production mode: use nginx X-Accel-Redirect
-    logger.info('Production mode detected, using nginx X-Accel-Redirect');
-    res.set('X-Accel-Redirect', `/data/${token_file_path}`);
+    const token_file_path = remove_leading_slash(download_scopes[0].slice(SCOPE_PREFIX.length));
+    const req_path = remove_leading_slash(decodeURIComponent(req.path));
 
-    // make browser download response instead of attempting to render it
-    res.set('content-type', 'application/octet-stream; charset=utf-8');
+    if (req_path === token_file_path) {
+      logger.info('req_path === token_file_path');
+      logger.info(`req_path: ${req_path}`);
+      logger.info(`token_file_path: ${token_file_path}`);
 
-    // makes nginx not cache the response file
-    // otherwise the response cuts off at 1GB as the max buffer size is reached
-    // and the file download fails
-    // https://stackoverflow.com/a/64282626
-    res.set('X-Accel-Buffering', 'no');
-    res.send('');
-    // } else {
-    //   return next(createError.Forbidden('Invalid path'));
-    // }
+      // make browser download response instead of attempting to render it
+      res.set('content-type', 'application/octet-stream; charset=utf-8');
+
+      if (config.get('mode') !== 'production') {
+        // In docker/dev/local/test mode, directly stream the file using Express
+        const stream = getFileStream(token_file_path);
+        stream.pipe(res);
+      } else {
+        // In production mode, use nginx X-Accel-Redirect
+        res.set('X-Accel-Redirect', `/data/${token_file_path}`);
+
+        // makes nginx not cache the response file
+        // otherwise the response cuts off at 1GB as the max buffer size is reached
+        // and the file download fails
+        // https://stackoverflow.com/a/64282626
+        res.set('X-Accel-Buffering', 'no');
+        res.send('');
+      }
+    } else {
+      return next(createError.Forbidden('Invalid path'));
+    }
   }),
 );
 

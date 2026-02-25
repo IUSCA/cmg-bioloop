@@ -1,3 +1,4 @@
 {
+  "mode": "docker",
   "data_root": "/opt/sca/data/staged/data_products"
 }

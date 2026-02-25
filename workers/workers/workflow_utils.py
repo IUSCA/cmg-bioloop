@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import shutil
 import time
 from contextlib import contextmanager
 from pathlib import Path
@@ -37,11 +38,18 @@ def get_wf_body(wf_name: str) -> dict:
 def get_archive_dir(dataset_type: str,
                     legacy_dataset: bool = False) -> str:
     if legacy_dataset:
-        sda_dir = config["paths"][dataset_type]["archive_legacy"]
+        dataset_type_archive_dir = config["paths"][dataset_type]["archive_legacy"]
     else:
-        sda_dir = config["paths"][dataset_type]["archive"]
-    sda.ensure_directory(sda_dir)  # create the directory if it does not exist
-    return sda_dir
+        dataset_type_archive_dir = config["paths"][dataset_type]["archive"]
+    
+    # create the directory if it does not exist
+    if config.get('mode') != 'production':
+      _dataset_type_archive_dir = Path(dataset_type_archive_dir)
+      _dataset_type_archive_dir.mkdir(parents=True, exist_ok=True)
+    else:
+      sda.ensure_directory(dataset_type_archive_dir)
+
+    return dataset_type_archive_dir
 
 
 @contextmanager
@@ -164,59 +172,43 @@ def download_file_from_sda(sda_file_path: str,
             sda.get(sda_file=sda_file_path, local_file=str(local_file_path), verify_checksum=verify_checksum)
 
 
-def wait_for_sda_upload(sda_file_path: str,
-                       expected_checksum: str = None,
-                       *,
-                       celery_task: WorkflowTask = None,
-                       poll_interval_seconds: int = 300,
-                       timeout_seconds: int = 86400) -> None:
+def archive(local_file_path: Path, archive_path: str, *, celery_task: WorkflowTask = None) -> str:
     """
-    Wait for a file to finish uploading to SDA (HSI-based tape storage).
+    Archive a Dataset to its archive location.
     
-    This function is used during legacy migration when the CMG application
-    is uploading files to SDA concurrently. This worker waits for the upload
-    to complete before proceeding.
-    
-    HSI Version: hsi.10.3.0.p3
-    
-    Implementation Strategy:
-    1. Poll SDA at regular intervals to check if file exists
-    2. Once file exists, verify it's complete by checking:
-       - File size is stable between checks
-       - Checksum matches expected value (if provided)
-    3. Update progress periodically via celery_task
-    4. Timeout if file doesn't appear within timeout_seconds
-    
-    Args:
-        sda_file_path: Path to file in SDA (e.g., '/path/on/sda/dataset.tar')
-        expected_checksum: Expected MD5 checksum of the file (optional)
-        celery_task: Celery task for progress tracking (optional)
-        poll_interval_seconds: How often to check SDA (default: 300 seconds / 5 minutes)
-        timeout_seconds: Maximum time to wait (default: 86400 seconds / 24 hours)
-    
-    Raises:
-        TimeoutError: If file doesn't appear or complete within timeout_seconds
-        Exception: If checksum verification fails
-    
-    PLACEHOLDER: Implementation to be completed with actual HSI commands
+    @param local_file_path: Path to the Dataset to archive
+    @param archive_path: Path to the Dataset's archived location
+    @param celery_task: Celery task for progress tracking
+    @return: The final archive path where the Dataset was stored
     """
-    logger.info(f'Waiting for SDA upload to complete: {sda_file_path}')
-    logger.info(f'Poll interval: {poll_interval_seconds}s, Timeout: {timeout_seconds}s')
+    if config.get('mode') != 'production':
+        archive_file_path = Path(archive_path)
+        archive_file_path.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(local_file_path, archive_file_path)
+    else:
+        upload_file_to_sda(
+            local_file_path=local_file_path,
+            sda_file_path=archive_path,
+            celery_task=celery_task
+        )
+
+
+def stage(archive_path: str, local_file_path: Path, *, celery_task: WorkflowTask = None) -> None:
+    """
+    Stage an archived Dataset from its archive location.
     
-    # TODO: Implement actual waiting logic using HSI commands
-    # Suggested implementation:
-    # 1. Use sda.exists() to check if file exists
-    # 2. Use sda.get_size() to check if size is stable
-    # 3. Use sda.get_hash() to verify checksum
-    # 4. Track elapsed time and raise TimeoutError if exceeded
-    # 5. Update celery_task progress periodically
-    
-    raise NotImplementedError(
-        'wait_for_sda_upload is a placeholder. Implementation required:\n'
-        '1. Poll SDA using HSI commands at regular intervals\n'
-        '2. Check file existence with sda.exists()\n'
-        '3. Verify file size stability with sda.get_size()\n'
-        '4. Verify checksum with sda.get_hash() if expected_checksum provided\n'
-        '5. Update progress via celery_task.update_progress()\n'
-        '6. Raise TimeoutError if timeout_seconds exceeded'
-    )
+    @param archive_path: Path to the archived Dataset
+    @param local_file_path: Path to stage the archived Dataset to
+    @param celery_task: Celery task for progress tracking
+    """
+
+    if config.get('mode') != 'production':
+        archive_file_path = Path(archive_path)        
+        local_file_path.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(archive_file_path, local_file_path)
+    else:
+        download_file_from_sda(
+            sda_file_path=archive_path,
+            local_file_path=local_file_path,
+            celery_task=celery_task
+        )

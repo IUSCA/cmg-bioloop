@@ -67,42 +67,20 @@ def stage(celery_task: WorkflowTask, dataset: dict) -> (str, str):
     """
     staging_dir, alias = compute_staging_path(dataset)
 
-    archive_path = dataset['archive_path']
+    archived_bundle_path = dataset['archive_path']
     alias_dir = staging_dir.parent
     alias_dir.mkdir(parents=True, exist_ok=True)
 
     bundle = dataset["bundle"]
     bundle_md5 = bundle["md5"]
     bundle_download_path = Path(get_bundle_staged_path(dataset=dataset))
-    
+
     # Ensure parent directory exists
     bundle_download_path.parent.mkdir(parents=True, exist_ok=True)
 
-    # Determine if archive_path is SDA or local filesystem
-    # Use SDA if APP_ENV is 'production'
-    app_env = os.environ.get('APP_ENV', None)
-    is_sda_path = (app_env == 'production')
-    
-    if is_sda_path:
-        # Production mode: Download from SDA
-        logger.info(f'Downloading bundle from SDA {archive_path} to {bundle_download_path}')
-        wf_utils.download_file_from_sda(sda_file_path=archive_path,
-                                        local_file_path=bundle_download_path,
-                                        celery_task=celery_task)
-    else:
-        # Docker/local mode: Copy from local archive
-        logger.info(f'Copying bundle from local archive {archive_path} to {bundle_download_path}')
-        
-        # Ensure the archive file exists
-        if not Path(archive_path).exists():
-            raise FileNotFoundError(f'Archive file not found at: {archive_path}')
-        
-        # Copy the file from archive to staging
-        shutil.copy2(archive_path, bundle_download_path)
-        
-        # Verify the copy was successful
-        if not bundle_download_path.exists():
-            raise Exception(f'Failed to copy bundle from archive to staging: {bundle_download_path}')
+    wf_utils.stage(archive_path=archived_bundle_path,
+                   local_file_path=bundle_download_path,
+                   celery_task=celery_task)
 
     evaluated_checksum = utils.checksum(bundle_download_path)
     if evaluated_checksum != bundle_md5:

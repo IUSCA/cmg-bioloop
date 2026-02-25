@@ -4,7 +4,19 @@ echo "Running entrypoint script for rhythm container"
 
 set -e
 
-api_env="api/.env"
+# Always run from the app root so relative paths map to the mounted volumes
+APP_ROOT="/app"
+if [ -d "$APP_ROOT" ]; then
+  cd "$APP_ROOT"
+fi
+
+API_DIR="${APP_ROOT}/api"
+if [ ! -d "$API_DIR" ]; then
+  echo "ERROR: Expected API directory at $API_DIR not found."
+  exit 1
+fi
+
+api_env="${API_DIR}/.env"
 
 echo "Starting Rhythm API..."
 
@@ -13,14 +25,13 @@ if [ -f "$api_env" ]; then
   echo ".env file exists in api directory."
 else
   echo "Creating .env file in api directory..."
-  touch $api_env
+  touch "$api_env"
 fi
 
 # remove all content from .env file
 
-# Generate keys in the API directory so API can find them
-if [ -f "api/keys/auth.key" ] && [ -f "api/keys/auth.pub" ]; then 
-  echo "Keys already exist in API directory. Skipping key generation."
+if [ -f "keys/auth.key" ] && [ -f "keys/auth.pub" ]; then 
+  echo "Keys already exist. Skipping key generation."
 else
   echo "Generating keys in API keys directory"
   mkdir -p api/keys/

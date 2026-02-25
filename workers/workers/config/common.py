@@ -7,10 +7,8 @@ from dotenv import load_dotenv
 load_dotenv()  # take environment variables from .env.
 YEAR = datetime.datetime.now().year
 APP_API_TOKEN = os.environ['APP_API_TOKEN']
-# print(f'APP_API_TOKEN: {APP_API_TOKEN}')
-
 API_BASE_URL = os.environ['API_BASE_URL']
-# CMG_API_* vars are for a different production app - not used in this codebase
+# CMG_API_* vars refer to the legacy CMG application's API
 CMG_API_BASE_URL = os.environ.get('CMG_API_BASE_URL', '')
 CMG_API_TOKEN = os.environ.get('CMG_API_TOKEN', '')
 
@@ -38,6 +36,7 @@ ONE_GIGABYTE = 1024 * 1024 * 1024
 FIVE_MINUTES = 5 * 60
 
 config = {
+    'mode': 'default',
     'app_id': APP_ID,
     'default_queue': FETCH_QUEUE,
     'fetch_queue': FETCH_QUEUE,
@@ -53,6 +52,7 @@ config = {
         'conn_timeout': 5,  # seconds
         'read_timeout': 30  # seconds
     },
+    # Legacy CMG application's API connection details
     'cmg_api': {
         'base_url': CMG_API_BASE_URL,
         'auth_token': CMG_API_TOKEN,
@@ -350,9 +350,9 @@ config = {
         'file_metadata_batch_size': 25000
     },
     'genomic_conversion_programs': [
-        'bcl2fastq', 'bcl-convert', 'cellranger-v8.0.1', 'cellranger-v6.1.2', 
-        'cellranger-v4.0.0', 'cellranger-arc', 'cellranger-arc-v2', 
-        'cellranger-atac', 'spaceranger-v3.0.1', 'spaceranger-v1.3.1', 
+        'bcl2fastq', 'bcl-convert', 'cellranger-v8.0.1', 'cellranger-v6.1.2',
+        'cellranger-v4.0.0', 'cellranger-arc', 'cellranger-arc-v2',
+        'cellranger-atac', 'spaceranger-v3.0.1', 'spaceranger-v1.3.1',
         'spaceranger-v1.1.0'
     ],
     'genomic_conversion': {
