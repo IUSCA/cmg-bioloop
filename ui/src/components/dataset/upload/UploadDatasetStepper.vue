@@ -528,22 +528,22 @@
 import DatasetSelectAutoComplete from "@/components/dataset/DatasetSelectAutoComplete.vue";
 import config from "@/config";
 import { default as Constants } from "@/constants";
+import analysisTypeService from "@/services/analysisType";
 import datasetService from "@/services/dataset";
 import instrumentService from "@/services/instrument";
 import projectService from "@/services/projects";
-import analysisTypeService from "@/services/analysisType";
 import toast from "@/services/toast";
 import { _getUploadServiceURL } from "@/services/upload";
+import {
+  _computeManifestHash,
+  _isChecksumVerificationEnabled,
+} from "@/services/upload/checksum";
 import { formatBytes } from "@/services/utils";
 import { useAuthStore } from "@/stores/auth";
 import { Icon } from "@iconify/vue";
 import _ from "lodash";
 import * as tus from "tus-js-client";
 import { VaDivider, VaPopover } from "vuestic-ui";
-import {
-  _computeManifestHash,
-  _isChecksumVerificationEnabled,
-} from "@/services/upload/checksum";
 
 const auth = useAuthStore();
 
@@ -1437,7 +1437,6 @@ const createOrUpdateUploadLog = (data) => {
   }
 };
 
-
 // TUS upload logic
 const uploadFilesWithTus = async (files, endpoint) => {
   // Safety check: ensure upload log exists
@@ -1484,31 +1483,37 @@ const uploadFilesWithTus = async (files, endpoint) => {
         dataset_id: datasetUploadLog.value.dataset.id,
         simulate_failure: simulateFailure || 'none',
       });
-
+      
       // TEST ONLY: Check for failure count configuration
       // Set localStorage.setItem('SIMULATE_UPLOAD_FAILURE_COUNT', '5') to fail 5 times (exhausts retries)
       const simulateFailureCount = localStorage.getItem('SIMULATE_UPLOAD_FAILURE_COUNT');
-
-      // Overall timeout for this upload (30 seconds)
-      // If TUS retries don't complete within this time, give up and show "Upload Failed"
-      const UPLOAD_TIMEOUT_MS = 30000; // 30 seconds
+      
+      // Overall timeout for this upload, scaled by file size.
+      // Assumes a minimum upload speed of 512 KB/s, with a floor of 60s and a ceiling of 30min.
+      // This prevents aborting large legitimate uploads while still catching permanently stuck uploads.
+      const MIN_TIMEOUT_MS = 60 * 1000;          // 60 seconds minimum
+      const MAX_TIMEOUT_MS = 30 * 60 * 1000;     // 30 minutes maximum
+      const MIN_SPEED_BYTES_PER_MS = 512 * 1024 / 1000; // 512 KB/s
+      const UPLOAD_TIMEOUT_MS = Math.min(MAX_TIMEOUT_MS, Math.max(MIN_TIMEOUT_MS, file.size / MIN_SPEED_BYTES_PER_MS));
       let timeoutId = null;
       let upload = null;
-
+      
       // Start timeout timer - will abort upload if it exceeds 30 seconds
       timeoutId = setTimeout(() => {
         console.error(`[TUS-CLIENT] ⏱️  Upload TIMEOUT after ${UPLOAD_TIMEOUT_MS / 1000}s for ${file.name}`);
         console.error(`[TUS-CLIENT] Aborting upload due to timeout...`);
-
+        
         if (upload) {
           upload.abort(true); // true = shouldTerminate (delete partial upload on server)
         }
-
+        
         reject(new Error(`Upload timeout after ${UPLOAD_TIMEOUT_MS / 1000} seconds - retries exhausted or server not responding`));
       }, UPLOAD_TIMEOUT_MS);
-
+      
       upload = new tus.Upload(file, {
         endpoint,
+        // 50MB chunks - stays under Nginx client_max_body_size (100M) and enables resume on failure
+        chunkSize: 50 * 1024 * 1024,
         // Increased retries for testing: allows up to 15 attempts total (1 initial + 14 retries)
         // Delays: 0s, 1s, 2s, 3s, 5s, 8s, 13s, 21s, 34s, 55s (Fibonacci-like progression)
         // This ensures we can test scenarios where retries exceed 30s timeout
@@ -1523,7 +1528,7 @@ const uploadFilesWithTus = async (files, endpoint) => {
         },
         headers: {
           Authorization: `Bearer ${userToken}`,
-          ...(simulateFailure ? {
+          ...(simulateFailure ? { 
             'X-Simulate-Failure': simulateFailure,
             ...(simulateFailureCount ? { 'X-Simulate-Failure-Count': simulateFailureCount } : {})
           } : {}),
@@ -1533,7 +1538,7 @@ const uploadFilesWithTus = async (files, endpoint) => {
           if (timeoutId) {
             clearTimeout(timeoutId);
           }
-
+          
           console.error(`[TUS-CLIENT] Upload FAILED for ${file.name}:`, {
             error_message: error.message,
             error_type: error.constructor.name,
@@ -1556,7 +1561,7 @@ const uploadFilesWithTus = async (files, endpoint) => {
           // Update overall progress
           const totalUploadedSoFar = uploadedBytes + bytesUploaded;
           uploadProgress.value = Math.round((totalUploadedSoFar / totalBytes) * 100);
-
+          
           // Log progress every 10% for large files
           const fileProgress = (bytesUploaded / bytesTotal) * 100;
           if (fileProgress % 10 < 1) {
@@ -1571,12 +1576,12 @@ const uploadFilesWithTus = async (files, endpoint) => {
           if (timeoutId) {
             clearTimeout(timeoutId);
           }
-
+          
           uploadedCount++;
           uploadedBytes += file.size;
           filesUploaded.value = uploadedCount;
           uploadProgress.value = Math.round((uploadedBytes / totalBytes) * 100);
-
+          
           // Store the process_id for this file - will be sent to API after all uploads complete
           const processId = upload.url.split('/').pop();
           if (!uploadProcessIds.value) {
@@ -1586,7 +1591,7 @@ const uploadFilesWithTus = async (files, endpoint) => {
             process_id: processId,
             relative_path: file.webkitRelativePath || file.name,
           });
-
+          
           console.log(`[TUS-CLIENT] Upload SUCCESS for ${file.name}`, {
             process_id: processId,
             file_size: file.size,
@@ -1623,15 +1628,15 @@ const handleUploadComplete = async () => {
   // Only show success if this succeeds
   try {
     const datasetId = datasetUploadLog.value.dataset.id;
-
+    
     console.log('[UPLOAD-COMPLETE] Starting upload completion API call', {
       dataset_id: datasetId,
       process_ids_count: uploadProcessIds.value?.length || 0,
     });
-
+    
     // Build metadata with checksum (use pre-computed checksum from before upload)
     let metadata = {};
-
+    
     console.log('=== USING PRE-COMPUTED CHECKSUM (from before upload) ===');
     if (computedChecksum.value) {
       console.log('✓ Checksum available:', {
@@ -1644,11 +1649,11 @@ const handleUploadComplete = async () => {
     } else {
       console.log('⚠ No pre-computed checksum available (checksum disabled or computation failed)');
     }
-
+    
     // Call /complete with the last process_id (for single file) or first (for multi)
     // The worker will handle moving all files based on upload metadata
     const lastUpload = uploadProcessIds.value[uploadProcessIds.value.length - 1];
-
+    
     const completePayload = {
       process_id: lastUpload.process_id,
       selection_mode: selectingDirectory.value ? 'directory' : 'files',
@@ -1656,19 +1661,19 @@ const handleUploadComplete = async () => {
       relative_path: lastUpload.relative_path,
       metadata: Object.keys(metadata).length > 0 ? metadata : undefined,
     };
-
+    
     console.log('[UPLOAD-COMPLETE] Calling /complete endpoint', {
       dataset_id: datasetId,
       payload: completePayload,
     });
-
+    
     const response = await datasetService.completeDatasetUpload(datasetId, completePayload);
-
+    
     console.log('[UPLOAD-COMPLETE] API call SUCCESS', {
       dataset_id: datasetId,
       response,
     });
-
+    
     // Success - show green status
     uploadRegistrationFailed.value = false;
     submissionStatus.value = Constants.UPLOAD_STATUSES.UPLOADED;
@@ -1677,7 +1682,7 @@ const handleUploadComplete = async () => {
     submissionAlertColor.value = "success";
     isSubmissionAlertVisible.value = true;
     submissionSuccess.value = true;
-
+    
   } catch (error) {
     console.error('[UPLOAD-COMPLETE] API call FAILED:', {
       error_message: error.message,
@@ -1686,7 +1691,7 @@ const handleUploadComplete = async () => {
       error_stack: error.stack,
       dataset_id: datasetUploadLog.value?.audit_log?.dataset?.id,
     });
-
+    
     // API call failed - show retry option
     uploadRegistrationFailed.value = true;
     submissionStatus.value = Constants.UPLOAD_STATUSES.UPLOAD_FAILED;

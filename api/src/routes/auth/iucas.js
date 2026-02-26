@@ -23,7 +23,6 @@ router.get(
   ]),
   asyncHandler(async (req, res, next) => {
     // #swagger.tags = ['Auth']
-    console.log('req.query.service', req.query.service);
     const loginUrl = IULogin.get_login_url(req.query.service);
     res.json({ url: loginUrl });
   }),

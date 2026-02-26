@@ -220,20 +220,20 @@ async function get_dataset({
   include_conversions = false,
   include_genomic_attributes = false,
 }) {
-  // console.log('get_dataset', {
-  //   id,
-  //   files,
-  //   workflows,
-  //   last_task_run,
-  //   prev_task_runs,
-  //   only_active,
-  //   bundle,
-  //   includeProjects,
-  //   initiator,
-  //   include_conversions,
-  //   include_source_instrument,
-  //   include_genomic_attributes,
-  // });
+  console.log('get_dataset', {
+    id,
+    files,
+    workflows,
+    last_task_run,
+    prev_task_runs,
+    only_active,
+    bundle,
+    includeProjects,
+    initiator,
+    include_conversions,
+    include_source_instrument,
+    include_genomic_attributes,
+  });
   const fileSelect = files ? {
     select: {
       path: true,
@@ -254,7 +254,6 @@ async function get_dataset({
       },
     },
   } : INCLUDE_WORKFLOWS;
-  console.log('workflow_include', workflow_include);
 
   // Build conversions include based on whether full conversion details are needed
   const getConversionsInclude = () => {
@@ -297,7 +296,6 @@ async function get_dataset({
     },
   });
   const dataset_workflows = dataset.workflows;
-  console.log('dataset_workflows', dataset_workflows);
 
   if (workflows && dataset.workflows.length > 0) {
     console.log('if workflows and dataset.workflows.length > 0');

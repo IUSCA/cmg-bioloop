@@ -93,12 +93,12 @@ const exports = {
       enabledForRoles: [],
     },
     import: {
-      enabledForRoles: ["admin"],
+      enabledForRoles: ['admin', 'operator'],
     },
     downloads: true,
     signup: false,
     uploads: {
-      enabledForRoles: ["admin"],
+      enabledForRoles: ['admin', 'operator'],
     },
     auto_create_project_on_dataset_creation: {
       enabledForRoles: ["user"],
