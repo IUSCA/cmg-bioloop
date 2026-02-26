@@ -388,6 +388,48 @@ API and UI changes should **NOT** require restarts unless:
 - Focus on functionality first
 - Clean up linter errors only when requested
 
+### Linting Workflow
+
+**IMPORTANT:** The agent's built-in `ReadLints` tool uses an internal formatter that may not match the project's preferred style (ESLint + Prettier config). Always use `npm run lint` to apply authoritative project formatting.
+
+Both `ui` and `api` have two lint scripts:
+- `npm run lint` — lints and auto-fixes all files in the service directory
+- `npm run lint:file -- <relative-path>` — lints and auto-fixes a single file
+
+#### In Docker/Localhost Mode
+
+Run lint from within the container using `docker compose exec` (from the repo root):
+
+```bash
+# Lint entire ui service
+docker compose exec ui npm run lint
+
+# Lint entire api service
+docker compose exec api npm run lint
+
+# Lint a single file (path relative to service root)
+docker compose exec ui npm run lint:file -- src/components/dataset/import/ImportStepper.vue
+docker compose exec api npm run lint:file -- src/routes/datasets/uploads.js
+```
+
+#### In Production Mode (No Docker Access)
+
+In production there are no containers. Install dependencies on the host first (if not already installed), then run lint directly:
+
+```bash
+# Lint ui (run from repo root or ui/ directory)
+cd ui && npm install && npm run lint
+
+# Lint api (run from repo root or api/ directory)
+cd api && npm install && npm run lint
+
+# Lint a single file
+cd ui && npm run lint:file -- src/components/dataset/import/ImportStepper.vue
+cd api && npm run lint:file -- src/routes/datasets/uploads.js
+```
+
+**Note:** `npm install` is only needed if `node_modules/` is absent. In production, dependencies are typically already installed, so `npm run lint` alone should suffice.
+
 ### Emoji Usage Policy
 
 **NEVER use emojis in code:**

@@ -189,7 +189,7 @@ services:
   rhythm:
     restart: unless-stopped
 #    build:
-#      context: ../rhythm_api
+    #      context: ../rhythm_api
     image: harbor.sca.iu.edu/rhythm/api:latest
     expose:
       - 5001
@@ -242,8 +242,8 @@ services:
   signet:
     restart: unless-stopped
 #    build:
-#      context: /Users/ripandey/dev/signet
-#      dockerfile: Dockerfile
+    #      context: /Users/ripandey/dev/signet
+    #      dockerfile: Dockerfile
     image: harbor.sca.iu.edu/signet/signet:latest
     expose:
       - 5050
