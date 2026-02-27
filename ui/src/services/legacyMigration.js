@@ -95,6 +95,15 @@ export function isLegacyProject(project) {
 }
 
 /**
+ * Check if a user is a legacy CMG user
+ * @param {Object} user - The user object
+ * @returns {boolean} - True if the user was created via the bigbang migration
+ */
+export function isLegacyUser(user) {
+  return user?.metadata?.origin === 'legacy';
+}
+
+/**
  * Check if a session is hydrated
  * @param {number} sessionId - The session ID
  * @returns {Promise<boolean>} - True if the session is hydrated
@@ -115,6 +124,7 @@ export default {
   isLegacyDataset,
   isLegacySession,
   isLegacyProject,
+  isLegacyUser,
   needsHydration,
   isSessionHydrated,
   isMigrationInProgress,
