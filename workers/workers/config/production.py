@@ -3,6 +3,7 @@ import datetime
 YEAR = datetime.datetime.now().year
 
 config = {
+    'mode': 'production',
     'app_id': 'cmg-test.sca.iu.edu',
     'default_queue': 'cmg-bioloop-fetch.cmg-test.sca.iu.edu.q',
     'fetch_queue': 'cmg-bioloop-fetch.cmg-test.sca.iu.edu.q',
@@ -17,6 +18,7 @@ config = {
     'paths': {
         'root': '/N/scratch/cmguser',
         'RAW_DATA': {
+            'archive': f'production/{YEAR}/raw_data',
             'stage': '/N/scratch/cmguser/cmg-bioloop/stage/raw_data',
             'migration': '/N/scratch/cmguser/cmg-bioloop/migration/raw_data',
             # 'stage': '/test',
@@ -29,6 +31,7 @@ config = {
             'qc': '/N/scratch/cmguser/cmg-bioloop/qc/raw_data'
         },
         'DATA_PRODUCT': {
+            'archive': f'production/{YEAR}/data_products',
             # 'upload': '/opt/sca/uploads/cpa/data_products',
             'stage': '/N/scratch/cmguser/cmg-bioloop/stage/data_products',
             'migration': '/N/scratch/cmguser/cmg-bioloop/migration/data_products',
