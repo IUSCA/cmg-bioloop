@@ -220,20 +220,20 @@ async function get_dataset({
   include_conversions = false,
   include_genomic_attributes = false,
 }) {
-  console.log('get_dataset', {
-    id,
-    files,
-    workflows,
-    last_task_run,
-    prev_task_runs,
-    only_active,
-    bundle,
-    includeProjects,
-    initiator,
-    include_conversions,
-    include_source_instrument,
-    include_genomic_attributes,
-  });
+  // console.log('get_dataset', {
+  //   id,
+  //   files,
+  //   workflows,
+  //   last_task_run,
+  //   prev_task_runs,
+  //   only_active,
+  //   bundle,
+  //   includeProjects,
+  //   initiator,
+  //   include_conversions,
+  //   include_source_instrument,
+  //   include_genomic_attributes,
+  // });
   const fileSelect = files ? {
     select: {
       path: true,

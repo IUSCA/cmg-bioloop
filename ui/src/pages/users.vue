@@ -216,7 +216,7 @@
             </div>
 
             <!-- Delete User Text and Trash Bin Button -->
-            <div v-if="auth.canAdmin && !editedUser.cmg_id" class="flex items-center gap-2 ml-auto">
+            <div v-if="auth.canAdmin && !legacyMigrationService.isLegacyUser(editedUser)" class="flex items-center gap-2 ml-auto">
               <span class="trash-can-button-text"> DELETE USER </span>
               <va-button
                 color="danger"
@@ -372,6 +372,7 @@
 <script setup>
 import useQueryPersistence from "@/composables/useQueryPersistence";
 import * as datetime from "@/services/datetime";
+import legacyMigrationService from "@/services/legacyMigration";
 import toast from "@/services/toast";
 import UserService from "@/services/user";
 import { useAuthStore } from "@/stores/auth";
@@ -395,7 +396,7 @@ const autofill = ref({
 
 // Check if this is historical CMG user data
 const isHistoricalUser = computed(() => {
-  return !!editedUser.value?.cmg_id;
+  return legacyMigrationService.isLegacyUser(editedUser.value);
 });
 
 // New variables for delete confirmation modals

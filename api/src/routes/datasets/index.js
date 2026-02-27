@@ -527,7 +527,7 @@ router.get(
     // only select path and md5 columns from the dataset_file table if files is
     // true
 
-    console.log('req.query', req.query);
+    // console.log('req.query', req.query);
 
     const dataset = await datasetService.get_dataset({
       id: req.params.id,
@@ -774,13 +774,12 @@ router.post(
         } */
       /* eslint-enable */
 
-    const data = req.body.datasets
-      .map((d) => datasetService.buildDatasetCreateQuery({
-        ...d,
-        user_id: req.user.id,
-      }));
+    const queries = await Promise.all(req.body.datasets.map((d) => datasetService.buildDatasetCreateQuery({
+      ...d,
+      user_id: req.user.id,
+    })));
 
-    const results = await Promise.allSettled(data.map((d) => datasetService.create({
+    const results = await Promise.allSettled(queries.map((d) => datasetService.create({
       tx: prisma,
       data: d,
       requester_id: req.user.id,
@@ -793,13 +792,13 @@ router.post(
     results.forEach((result, index) => {
       if (result.status === 'fulfilled') {
         if (result.value) created.push(result.value);
-        else conflicted.push(_.pick(['name', 'type'])(data[index]));
+        else conflicted.push(_.pick(['name', 'type'])(queries[index]));
       } else if (result.reason instanceof Prisma.PrismaClientKnownRequestError && result.reason?.code === 'P2002') {
         // P2002 - Unique constraint failed
-        conflicted.push(_.pick(['name', 'type'])(data[index]));
+        conflicted.push(_.pick(['name', 'type'])(queries[index]));
       } else {
-        logger.warn(`Error creating dataset: ${JSON.stringify({ dataset: data[index], error: result.reason })}`);
-        errored.push(_.pick(['name', 'type'])(data[index]));
+        logger.warn(`Error creating dataset: ${JSON.stringify({ dataset: queries[index], error: result.reason })}`);
+        errored.push(_.pick(['name', 'type'])(queries[index]));
       }
     });
     res.json({
