@@ -384,6 +384,7 @@ router.post(
         'user_argument_values must be an array of objects with argument_name and value fields',
       ),
     body('process_requests').optional().isArray(),
+    body('metadata').optional().isObject(),
   ]),
   asyncHandler(async (req, res, next) => {
     // #swagger.tags = ['Conversions']
@@ -499,9 +500,13 @@ router.post(
               argument_id: Number(argument_id),
               value: conversionService.convertValueForStorage(value, definition),
             })),
+          },
+          additional_args: req.body.user_argument_values.length > 0 ? req.body.user_argument_values : null,
+          metadata: {
+            origin: 'bioloop',
+            ...(req.body.metadata || {}),
+          },
         },
-        additional_args: req.body.user_argument_values.length > 0 ? req.body.user_argument_values : null,
-      },
     });
 
       // create Process Requests (optional field, only if provided)
@@ -627,6 +632,7 @@ async function validateAndCreateConversion(
     initiator_id,
     user_argument_values = [],
     process_request = [],
+    metadata = {},
   } = {},
 ) {
   const argVals = _.cloneDeep(argument_values);
@@ -708,6 +714,10 @@ async function validateAndCreateConversion(
           })),
         },
         additional_args: user_argument_values.length > 0 ? user_argument_values : null,
+        metadata: {
+          origin: 'bioloop',
+          ...metadata,
+        },
       },
     });
 
@@ -774,6 +784,7 @@ router.post(
     body('argument_values').default([]).isArray(),
     body('user_argument_values').default([]).isArray(),
     body('process_requests').optional().isArray(),
+    body('metadata').optional().isObject(),
   ]),
   asyncHandler(async (req, res, next) => {
     // #swagger.tags = ['Conversions']
@@ -849,6 +860,7 @@ router.post(
             argument_values: argVals,
             user_argument_values: req.body.user_argument_values,
             process_request: req.body.process_requests,
+            metadata: req.body.metadata,
           },
         )),
       );

@@ -354,6 +354,33 @@ const derivedDatasets = await prisma.dataset_hierarchy.findMany({
 
 ---
 
+## 2026-02-27
+
+### Conversion metadata.origin Tracking for Derived Data Products
+
+**Problem:** Data products derived from conversions submitted via Bioloop UI were getting `metadata.origin = 'legacy'` instead of `metadata.origin = 'bioloop'`, causing the integrated workflow inspect step to incorrectly treat them as legacy datasets (attempting to read from an extracted archive path that does not exist).
+
+**Root Cause:** `derive_data_products.py` was propagating `origin: 'legacy'` to all derived data products whenever `config.legacy_application_active` was `True`, regardless of whether the conversion was submitted from Bioloop UI or from the legacy CMG sync scripts.
+
+**Fix:**
+
+1. **API layer** (`api/src/routes/conversions/index.js`):
+   - `POST /conversions` (single): Now sets `metadata.origin = 'bioloop'` by default when creating the conversion record. Accepts an optional `metadata` body field to allow callers to override (e.g., future legacy poller scripts can pass `{ origin: 'legacy' }`).
+   - `POST /conversions/bulk`: Same — accepts optional `metadata` body field, threads it into each `validateAndCreateConversion` call, which also defaults to `origin: 'bioloop'`.
+
+2. **Worker layer** (`workers/workers/tasks/derive_data_products.py`):
+   - Removed dependency on `config.legacy_application_active` for determining data product origin.
+   - Now reads `conversion.metadata.origin` directly and propagates it to all derived data product payloads.
+   - Falls back to `'bioloop'` if `metadata.origin` is absent (safety net for existing conversions created before this change that lack metadata).
+
+**Design Decision:**
+- `conversion.metadata.origin` is the source of truth for how the conversion was initiated.
+- Derived data products inherit the origin of their parent conversion.
+- Default is `'bioloop'` at the API layer; `'legacy'` will be set explicitly by the CMG poller scripts once that feature is implemented.
+
+**TODO (not yet implemented):**
+- CMG poller scripts that submit conversions to Bioloop on behalf of legacy CMG sequencing runs must pass `metadata: { origin: 'legacy' }` when calling `POST /conversions` or `POST /conversions/bulk`.
+
 ## Future Entries
 
 Add entries here as decisions are made, changes are implemented, or issues are resolved.

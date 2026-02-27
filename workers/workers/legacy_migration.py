@@ -51,6 +51,19 @@ def is_legacy_dataset(dataset: Dict) -> bool:
     return dataset.get('metadata', {}).get('origin') == 'legacy'
 
 
+def is_legacy_conversion(conversion: Dict) -> bool:
+    """
+    Check if a conversion is a legacy CMG conversion (submitted by legacy CMG sync scripts).
+
+    Args:
+        conversion: The conversion dictionary
+
+    Returns:
+        True if the conversion has metadata.origin == 'legacy', False otherwise
+    """
+    return (conversion.get('metadata') or {}).get('origin') == 'legacy'
+
+
 def is_hydrated(dataset_id: int) -> bool:
     """
     Check if a legacy dataset has been hydrated (metadata populated).

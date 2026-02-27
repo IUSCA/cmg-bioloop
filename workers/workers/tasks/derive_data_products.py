@@ -15,6 +15,7 @@ import workers.workflow_utils as wf_utils
 from workers.celery_app import app as celery_app
 from workers.config import config
 from workers.conversion import get_conversion_output_dir
+from workers.legacy_migration import is_legacy_conversion
 
 app = Celery("tasks")
 app.config_from_object(celeryconfig)
@@ -177,14 +178,17 @@ def derive_data_products(celery_task, dataset_id: int, conversion_id: int):
         
         data_products_to_create.append(product_payload)
 
-    # Tag derived Data Products with metadata.origin='legacy' when the legacy CMG application is still active,
-    # since these Data Products originate from a conversion triggered in the CMG application.
-    if config.get('legacy_application_active', False):
-        for product_payload in data_products_to_create:
-            product_payload['metadata'] = {
-                **product_payload.get('metadata', {}),
-                'origin': 'legacy',
-            }
+    # Propagate the conversion's origin to derived data products.
+    # 
+    #  - Conversions created via Bioloop UI have metadata.origin='bioloop'.
+    #  - Conversions created via the CMG UI (which will also be created in CMG-Bioloop
+    #     by the database-sync-scripts) will have metadata.origin='legacy'
+    conversion_origin = 'legacy' if is_legacy_conversion(conversion) else 'bioloop'
+    for product_payload in data_products_to_create:
+        product_payload['metadata'] = {
+            **product_payload.get('metadata', {}),
+            'origin': conversion_origin,
+        }
 
     # Create all data products using bulk API
     print(f"Creating {len(data_products_to_create)} data products via bulk API...")

@@ -455,8 +455,8 @@ export {
   arrayEquals,
   capitalize,
   caseInsensitiveIncludes,
-  cmp,
   cleanParams,
+  cmp,
   dayjs,
   difference,
   downloadFile,
@@ -474,9 +474,11 @@ export {
   mapValues,
   maybePluralize,
   navigateBackSafely,
+  readFileAsText,
   sanitize,
   setIntersection,
   snakeCaseToTitleCase,
   union,
-  validateEmail,
+  validateEmail
 };
+
