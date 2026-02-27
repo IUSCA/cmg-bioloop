@@ -63,14 +63,27 @@ def create_report(celery_task: WorkflowTask, dataset_dir: Path, dataset_qc_dir: 
 
 def _generate_qc(celery_task, dataset_id, **kwargs):
     dataset = api.get_dataset(dataset_id=dataset_id)
+
+    is_dataset_created_by_conversion = dataset.get('create_method') == 'CONVERSION'
+
+    if is_dataset_created_by_conversion:
+        if not dataset.get('origin_path'):
+            raise Exception(f"Dataset {dataset_id} created by Genomic Conversion has no origin_path; cannot run QC")
+        dataset_dir = Path(dataset['origin_path'])
+    else:
+        if not dataset.get('is_staged') or not dataset.get('staged_path'):
+            raise Exception(f"Dataset {dataset_id} is not staged; cannot generate QC")
+        dataset_dir = Path(dataset['staged_path'])
+
     dataset_type = dataset['type']
+    # dataset_qc_dir is intentionally placed under the configured qc root, not under
+    # the origin_path parent (which is an instrument drop directory for new datasets).
     dataset_qc_dir = Path(config['paths'][dataset_type]['qc']) / dataset['name'] / 'qc'
-    staged_path = Path(dataset['staged_path'])
 
     # todo: ensure fastqc is being run at the same path in CMG
     report_id = create_report(
         celery_task=celery_task,
-        dataset_dir=staged_path,
+        dataset_dir=dataset_dir,
         dataset_qc_dir=dataset_qc_dir,
         report_id=(dataset.get('metadata', {}) or {}).get('report_id', None)
     )

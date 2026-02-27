@@ -38,6 +38,7 @@ config = {
                 'generate_archive_node': '/tmp/cmg-bioloop/bundles/data_products',
                 'stage': '/N/scratch/cmguser/cmg-bioloop/bundles/data_products',
             },
+            'qc': '/N/scratch/cmguser/cmg-bioloop/qc/data_products',
         },
         'download_dir': '/N/scratch/cmguser/cmg-bioloop/production/downloads',
         'conversion': {
@@ -78,7 +79,7 @@ config = {
             # K2 (Compbio) host's Origin paths
             'source_dir_test': '/home/cmguser/cmg-bioloop-ingestion-test/origin/data_products',
         },
-        'recency_threshold_seconds': 300,  # 1 minute for standard Illumina datasets
+        'recency_threshold_seconds': 0,  # 1 minute for standard Illumina datasets
         'recency_threshold_seconds_nanopore': 21600,  # 6 hours for nanopore datasets
     },
     'stage': {

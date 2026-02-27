@@ -154,6 +154,7 @@ def derive_data_products(celery_task, dataset_id: int, conversion_id: int):
             "name": output_dir.name,
             "type": "DATA_PRODUCT",
             "origin_path": str(output_dir),
+            "create_method": "CONVERSION",
         }
         
         # Add file_type (analysis_type) if configured
