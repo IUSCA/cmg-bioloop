@@ -22,6 +22,8 @@ config = {
             # 'stage': '/test',
             'bundle': {
                 'generate': '/N/scratch/cmguser/cmg-bioloop/stage/raw_data',
+                # generate_archive_node: used by archive nodes (k2/k3/k4) that don't have /N/scratch access
+                'generate_archive_node': '/tmp/cmg-bioloop/bundles/raw_data',
                 'stage': '/N/scratch/cmguser/cmg-bioloop/bundles/raw_data',
             },
             'qc': '/N/scratch/cmguser/cmg-bioloop/qc/raw_data'
@@ -32,6 +34,8 @@ config = {
             'migration': '/N/scratch/cmguser/cmg-bioloop/migration/data_products',
             'bundle': {
                 'generate': '/N/scratch/cmguser/cmg-bioloop/stage/data_products',
+                # generate_archive_node: used by archive nodes (k2/k3/k4) that don't have /N/scratch access
+                'generate_archive_node': '/tmp/cmg-bioloop/bundles/data_products',
                 'stage': '/N/scratch/cmguser/cmg-bioloop/bundles/data_products',
             },
         },

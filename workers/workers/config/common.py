@@ -69,6 +69,8 @@ config = {
             'migration': '/path/to/migration/raw_data',
             'bundle': {
                 'generate': '/path/for/raw_data/bundle/generation',
+                # generate_archive_node: used by archive nodes that don't have access to Slate scratch
+                'generate_archive_node': '/tmp/cmg-bioloop/bundles/raw_data',
                 'stage': '/path/for/raw_data/bundle/staging',
             },
             'qc': '/path/to/qc'
@@ -81,6 +83,8 @@ config = {
             'migration': '/path/to/migration/data_products',
             'bundle': {
                 'generate': '/path/for/data_products/bundle/generation',
+                # generate_archive_node: used by archive nodes that don't have access to Slate scratch
+                'generate_archive_node': '/tmp/cmg-bioloop/bundles/data_products',
                 'stage': '/path/for/data_products/bundle/staging',
             },
         },
@@ -107,7 +111,7 @@ config = {
         'poll_interval_seconds': 10,
         'full_scan_every_n_scans': 90  # every 90th scan will be a full scan / full scan every 15 minutes
     },
-    'service_user': 'bioloopuser',
+    'service_user': 'cmguser',
     'stage': {
         'purge': {
             'days_to_live': 20,

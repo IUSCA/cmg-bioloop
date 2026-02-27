@@ -34,7 +34,7 @@ module.exports = {
       name: "watch",
       script: "python",
       args: "-u -m workers.scripts.watch",
-      watch: false,
+      watch: true,
       interpreter: "",
       log_date_format: "YYYY-MM-DD HH:mm Z",
       error_file: "../logs/workers/watch.err",
@@ -46,7 +46,7 @@ module.exports = {
       name: "metrics",
       script: "python",
       args: "-u -m workers.scripts.metrics",
-      watch: false,
+      watch: true,
       interpreter: "",
       log_date_format: "YYYY-MM-DD HH:mm Z",
       error_file: "../logs/workers/metrics.err",
@@ -60,7 +60,7 @@ module.exports = {
     //   name: "purge_staged_datasets",
     //   script: "python",
     //   args: "-u -m workers.scripts.purge_staged_datasets",
-    //   watch: false,
+    //   watch: true,
     //   interpreter: "",
     //   log_date_format: "YYYY-MM-DD HH:mm Z",
     //   error_file: "../logs/workers/purge_staged_datasets.err",
@@ -74,7 +74,7 @@ module.exports = {
     //   name: "purge_stale_workflows",
     //   script: "python",
     //   args: "-u -m workers.scripts.purge_stale_workflows",
-    //   watch: false,
+    //   watch: true,
     //   interpreter: "",
     //   log_date_format: "YYYY-MM-DD HH:mm Z",
     //   error_file: "../logs/workers/purge_stale_workflows.err",
@@ -88,7 +88,7 @@ module.exports = {
     //   name: "populate_bundles",
     //   script: "python",
     //   args: "-u -m workers.scripts.populate_bundles",
-    //   watch: false,
+    //   watch: true,
     //   interpreter: "",
     //   log_date_format: "YYYY-MM-DD HH:mm Z",
     //   error_file: "../logs/workers/populate_bundles.err",
@@ -108,6 +108,9 @@ module.exports = {
       autorestart: false,
       exp_backoff_restart_delay: 100,
       max_restarts: 3,
+      env: {
+        XALT_DIR: "",  // Disable XALT per-import subprocess calls that cause KeyboardInterrupt on restart
+      },
     }
   ]
 }

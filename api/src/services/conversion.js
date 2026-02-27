@@ -68,8 +68,11 @@ function getArgsList(conversion) {
     .filter((argVal) => !argVal.argument.position)
     .flatMap((argVal) => {
       const arg = argVal.argument;
-      if (arg.is_flag && (argVal.value === 'true' || argVal.value === true)) {
-        return [arg.name];
+      if (arg.is_flag) {
+        if (argVal.value === 'true' || argVal.value === true) {
+          return [arg.name];
+        }
+        return [];
       }
       return [arg.name, argVal.value];
     });

@@ -68,7 +68,10 @@ def generate_metadata(celery_task, source: Path):
 
 def inspect_dataset(celery_task, dataset_id, **kwargs):
     dataset = api.get_dataset(dataset_id=dataset_id)
-    
+
+    if dataset is None:
+        raise exc.RetryableException(f'Dataset {dataset_id} not found or API returned null')
+
     # For legacy datasets, use extracted archive path instead of origin_path
     if is_legacy_dataset(dataset):
         source = get_retrieved_archive_extraction_path(dataset)

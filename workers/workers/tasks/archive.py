@@ -135,7 +135,7 @@ def archive(celery_task: WorkflowTask, dataset: dict, delete_local_file: bool = 
        - STRICT: Fails if archive cannot be found or hash cannot be retrieved from HSI
        - Saves bundle metadata to database (md5 from HSI)
 
-    2. Standard flow (new Dataset registration):
+    2. Registrations which occur in CMG-Bioloop only, and not in CMG.
        - Creates tar bundle locally
        - Computes hash locally
        - Uploads to SDA
@@ -169,7 +169,7 @@ def archive(celery_task: WorkflowTask, dataset: dict, delete_local_file: bool = 
     # Ensure parent directory exists
     bundle.parent.mkdir(parents=True, exist_ok=True)
 
-    # If dataset has CMG ID, wait for CMG to complete archival
+    # If dataset has CMG ID, it means the legacy CMG application is also archiving this dataset concurrently. Wait for CMG to complete archival
     if cmg_id:
         logger.info(f'{dataset_name} - detected CMG ID: {cmg_id}')
 
@@ -267,6 +267,33 @@ def archive(celery_task: WorkflowTask, dataset: dict, delete_local_file: bool = 
             logger.error(error_msg)
             raise Exception(error_msg)
     else:
+        logger.info(f'Creating tar bundle for dataset: {dataset["name"]}')
+        
+        # Determine bundle generation path based on workflow
+        # Datasets can be ingested via the 'Integrated' workflow, or the 'Intake Integrated' workflow.
+        # If the Dataset being ingested in present on one of the intake nodes (k2/k3/k4), the archive will be created on the Archive node.
+        # If the Dataset being ingested in present on one of the fetch nodes (Slate-scratch / Slate-project), the archive will be created on the Fetch node.
+        workflow_name = celery_task.workflow.workflow.get('name', '') if celery_task.workflow else ''
+        # Determine if this task is running on the Archive node or the Fetch node
+        is_archive_node = workflow_name == 'intake_integrated'
+        is_fetch_node = workflow_name == 'integrated'
+
+        bundle_config = config["paths"][dataset["type"]]["bundle"]        
+
+        # Determine the bundle-generation base path based on whether this task is running on the Archive node or the Fetch node
+        if is_archive_node:
+            bundle_base = bundle_config['generate_archive_node']
+        elif is_fetch_node:
+            bundle_base = bundle_config['generate']
+        else:
+            raise Exception(f'Invalid workflow name: {workflow_name}. Expected workflow name to be either "intake_integrated" or "integrated".')
+        
+        # Tar the dataset directory and compute checksum
+        bundle = Path(f'{bundle_base}/{dataset["name"]}.tar')
+        
+        # Ensure parent directory exists
+        bundle.parent.mkdir(parents=True, exist_ok=True)
+
         make_tarfile(celery_task=celery_task,
                      tar_path=bundle,
                      source_dir=dataset['origin_path'],
@@ -287,7 +314,8 @@ def archive(celery_task: WorkflowTask, dataset: dict, delete_local_file: bool = 
                           archive_path=dataset_bundle_path,
                           celery_task=celery_task)
 
-        if delete_local_file:
+        # If the task is running on the Archive node, or if the delete_local_file flag is set, delete the local bundle
+        if is_archive_node or delete_local_file:
             # file successfully archived, delete the local copy
             logger.info("Deleting local bundle after successful archiving")
             bundle.unlink()
