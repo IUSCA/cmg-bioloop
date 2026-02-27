@@ -153,9 +153,9 @@ def archive(celery_task: WorkflowTask, dataset: dict, delete_local_file: bool = 
         Exception: If legacy_migration enabled and CMG validation fails
         Exception: If SDA archive cannot be verified or hash cannot be retrieved
     """
-    # Check if this is a legacy dataset and if legacy migration is still in progress
+    # Check if this is a legacy dataset and if the legacy CMG application is still active
     is_legacy = is_legacy_dataset(dataset)
-    legacy_migration_incomplete = not config.get('legacy_migration', {}).get('completed', True)
+    legacy_application_active = config.get('legacy_application_active', False)
 
     # Check if dataset has a CMG ID (was registered in CMG concurrently)
     cmg_id = dataset.get('cmg_id')
@@ -174,7 +174,7 @@ def archive(celery_task: WorkflowTask, dataset: dict, delete_local_file: bool = 
         logger.info(f'{dataset_name} - detected CMG ID: {cmg_id}')
 
         # STRICT VALIDATION: If legacy_migration is enabled, we MUST be able to verify CMG's archival
-        if legacy_migration_incomplete:
+        if legacy_application_active:
             logger.info(f'{dataset_name} - legacy_migration is enabled, strict validation required')
 
             # Verify we can find the dataset in CMG

@@ -988,11 +988,18 @@ async function _handle_project_association({
 async function create({
   tx, data, requester_id = null, project_id = null,
 } = {}) {
+  // If the legacy CMG application is still active and the origin-application has been explicitly set,
+  // mark this dataset as originating from CMG-Bioloop (as opposed to the legacy CMG app).
+  const legacyApplicationActive = config.has('legacy_application_active') && config.get('legacy_application_active');
+  const createData = (legacyApplicationActive && !data.metadata?.origin)
+    ? { ...data, metadata: { ...data.metadata, origin: 'bioloop' } }
+    : data;
+
   // find if a dataset with the same name and type already exists
   const existingDataset = await tx.dataset.findFirst({
     where: {
-      name: data.name,
-      type: data.type,
+      name: createData.name,
+      type: createData.type,
       is_deleted: false,
     },
     select: {
@@ -1010,7 +1017,7 @@ async function create({
   let created_dataset;
   try {
     created_dataset = await tx.dataset.create({
-      data,
+      data: createData,
     });
 
     await _handle_project_association({

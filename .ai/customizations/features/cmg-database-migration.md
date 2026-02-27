@@ -677,6 +677,58 @@
 
 ---
 
+## 2026-02-22
+
+### metadata.origin Column Added to Business Object Tables
+
+- **Change:** Added `metadata Json?` column to tables: `dataset`, `analysis_type`, `dataset_import_log`, `workflow`, `project`, `genome_browser_session`, `conversion`
+  - Migration files created under `api/prisma/migrations/`
+  - All new columns are nullable JSONB
+
+- **Decision:** `metadata.origin` values for rows created by bigbang vs. poller scripts:
+  - `'legacy'` — row was created by the bigbang migration (one-time historical CMG → Bioloop migration)
+  - `'sync'` — row was created by a poller script representing a purely Bioloop-native sync event (e.g. project/user ACL sync)
+
+- **Clarification:** The `'legacy'` origin also applies to poller-created datasets and conversions that originate from CMG:
+  - When a new Upload/Import happens in CMG and the poller registers the corresponding dataset in Bioloop → `metadata.origin = 'legacy'`
+  - When a new Conversion happens in CMG and the poller creates the corresponding `conversion` row in Bioloop → `metadata.origin = 'legacy'`
+  - Rationale: these rows represent CMG-originated data regardless of whether they were created by bigbang or the ongoing poller
+
+- **Change:** All `cmg_id`-based legacy detection checks replaced with `metadata.origin === 'legacy'` checks
+  - Centralized in service helpers: `api/src/services/legacyMigration.js` (`isLegacyDataset`, `isLegacySession`, `isLegacyConversion`), `ui/src/services/legacyMigration.js` (`isLegacyDataset`, `isLegacySession`, `isLegacyProject`), `workers/workers/legacy_migration.py` (`is_legacy_dataset`)
+  - All UI components and API routes now call these service helpers instead of checking `metadata.origin` directly
+
+### metadata.origin Rules (Full Decision)
+
+The `metadata.origin` field encodes how/where a business object was created:
+
+| Value | Meaning | Set by |
+|---|---|---|
+| `'legacy'` | Row represents CMG-originated data (bigbang migration, watch.py on non-legacy-app paths while CMG is active, derive_data_products while CMG is active) | bigbang sync, watch.py, derive_data_products.py, future poller CMG-upload importer |
+| `'bioloop'` | Row was created natively in Bioloop while CMG is still running | `datasetService.create()` (API) — set automatically when `legacy_application_active=true` and no origin is already present |
+| `'sync'` | Row was created by poller sync scripts for non-CMG-data-origin events | TBD — future poller ACL/project sync rows |
+| not set | CMG is no longer active (`legacy_application_active=false`) — origin tracking not needed | any code path when flag is false |
+
+**`legacy_application_active` config flag:**
+- Workers: `config['legacy_application_active']` (boolean, default `False` when key absent)
+- API: `config.get('legacy_application_active')` via node-config (currently `true` in `api/config/default.json`)
+- Replaces the old `legacy_migration.completed` pattern — semantically equivalent: `legacy_application_active=True` ↔ `legacy_migration.completed=False`
+
+**watch.py origin logic:**
+- `legacy_application_active=True` AND candidate path IS under an obs6-obs12 path → `origin='legacy'` (dataset originates in CMG-managed infrastructure)
+- `legacy_application_active=True` AND candidate path is NOT under any obs6-obs12 path → no origin set (API will assign `'bioloop'`)
+- `legacy_application_active=False` → no origin set
+
+### TODO: Poller Script Updates Required
+
+The following poller scripts must be updated to set `metadata.origin` on rows they create:
+
+- [ ] **dataset poller / CMG Upload importer** — when a new CMG Upload is detected and a Bioloop dataset is created to register it, set `metadata = { origin: 'legacy' }` (confirmed: NOT yet implemented — no poller currently creates datasets from CMG Uploads)
+- [ ] **conversion poller** — when creating a new `conversion` row from a CMG Conversion, set `metadata = { origin: 'legacy' }`
+- [ ] **Any other poller** that creates rows in `analysis_type`, `dataset_import_log`, `workflow`, `project`, or `genome_browser_session` — set `metadata = { origin: 'sync' }` (or `'legacy'` if the row represents CMG-originated data)
+
+---
+
 ## Future Entries
 
 Add entries here as decisions are made, changes are implemented, or issues are resolved.
@@ -693,5 +745,5 @@ Format:
 
 ---
 
-**Last Updated:** 2026-01-27
+**Last Updated:** 2026-02-22
 

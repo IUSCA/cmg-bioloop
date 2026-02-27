@@ -16,6 +16,55 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
+# _LEGACY_APP_SOURCE_DIR_KEYS: Config keys for the source directories watched by the
+#  legacy CMG application for the appearance of new Datasets.
+# 
+# - Datasets found under these paths originate from (i.e. were registered by) the
+#  legacy CMG application, not CMG-Bioloop, and are therefore tagged with
+#  metadata.origin='legacy' in CMG-Bioloop.
+_LEGACY_APP_SOURCE_DIR_KEYS = [
+    'source_dir_ns2000',        # obs6  - k2 NS2000
+    'source_dir_miseq',         # obs7  - k3 MiSeq
+    'source_dir_novaseq2',      # obs8  - k3 NovaSeq2
+    'source_dir_ns6000',        # obs9  - k3 NS6000
+    'source_dir_novaseqx1',     # obs10 - k4 NovaSeqX1
+    'source_dir_nanopore_p2solo', # obs11 - Nanopore P2Solo
+    'source_dir_nanopore_p24',    # obs12 - Nanopore P24
+]
+
+
+def _get_legacy_app_source_dirs() -> list[Path]:
+    """Return the filesystem directories that the legacy CMG application watches for the appearance of new datasets."""
+    raw_data_reg = config['registration'].get('RAW_DATA', {})
+    return [Path(raw_data_reg[k]) for k in _LEGACY_APP_SOURCE_DIR_KEYS if k in raw_data_reg]
+
+
+def _compute_dataset_origin(candidate: Path) -> str | None:
+    """
+    Determine the application (among CMG and CMG-Bioloop) that this candidate dataset originated from (i.e.
+    the application registered this dataset).
+
+    Returns 'legacy' if:
+      - legacy_application_active is True in config (i.e. the legacy
+        CMG application is still active and running), AND
+      - the candidate appears inside a directory that is watched by the legacy
+        CMG application for the appearance of new datasets.
+
+    Returns None otherwise.
+    """
+    if not config.get('legacy_application_active', False):
+        return None
+    legacy_dirs = _get_legacy_app_source_dirs()
+    candidate_resolved = candidate.resolve()
+    for legacy_dir in legacy_dirs:
+        try:
+            if candidate_resolved.is_relative_to(legacy_dir):
+                return 'legacy'
+        except ValueError:
+            pass
+    return None
+
+
 class Register:
     def __init__(self, dataset_type, default_wf_name='integrated', **kwargs):
         self.dataset_type = dataset_type
@@ -95,10 +144,17 @@ class Register:
             'type': self.dataset_type,
             'origin_path': str(candidate.resolve()),
         }
-        if self.metadata:
-            dataset_payload['metadata'] = self.metadata
-            logger.info(f'Including metadata: {self.metadata}')
-        
+        # add metadata to the dataset payload
+        # - origin: 'legacy' if the dataset originates from the legacy CMG application
+        # - other metadata from the watch script configuration
+        payload_metadata = dict(self.metadata) if self.metadata else {}
+        origin = _compute_dataset_origin(candidate)
+        if origin:
+            payload_metadata['origin'] = origin
+        if payload_metadata:
+            dataset_payload['metadata'] = payload_metadata
+            logger.info(f'Including metadata: {payload_metadata}')
+
         logger.info(f'Making API call to create dataset: {candidate.name}')
         try:
             created_dataset = api.create_dataset(dataset_payload)
@@ -121,8 +177,15 @@ class Register:
                 'type': self.dataset_type,
                 'origin_path': str(candidate.resolve()),
             }
-            if self.metadata:
-                dataset_payload['metadata'] = self.metadata
+            # add metadata to the dataset payload
+            # - origin: 'legacy' if the dataset originates from the legacy CMG application
+            # - other metadata from the watch script configuration
+            payload_metadata = dict(self.metadata) if self.metadata else {}
+            origin = _compute_dataset_origin(candidate)
+            if origin:
+                payload_metadata['origin'] = origin
+            if payload_metadata:
+                dataset_payload['metadata'] = payload_metadata
             data.append(dataset_payload)
 
         logger.info(f'Making bulk API call to create {len(data)} datasets')
@@ -181,6 +244,11 @@ class RegisterDataProduct(Register):
 
 
 if __name__ == "__main__":
+    # Create dataset-observers for filesystem-spaces which are not watched by the legacy CMG application for the appearance of new Datasets.
+    # At the moment, these filesystem-spaces are:
+    # - Slate-scratch
+    # - Slate-project
+    
     # 1. Create dataset-observers for Slate-scratch
     obs1 = Observer(
         name='raw_data_obs---slate_scratch',
@@ -196,7 +264,6 @@ if __name__ == "__main__":
         interval=config['registration']['poll_interval_seconds'],
         full_scan_every_n_scans=config['registration']['full_scan_every_n_scans']
     )
-
     # 2. Create dataset-observers for Slate-project
     obs3 = Observer(
         name='raw_data_obs---slate_project',
@@ -213,79 +280,85 @@ if __name__ == "__main__":
         full_scan_every_n_scans=config['registration']['full_scan_every_n_scans']
     )
 
-    # 3. Create dataset-observers for Knight (k*) nodes:
-    # These are archive-only nodes - use intake_integrated workflow
-    # 3.1 Create dataset-observers for k2 (Compbio) host
+    # ------------------------------------------------------------------------------------------------
 
+    # Create dataset-observers for filesystem-spaces which are watched by the legacy CMG application for the appearance of new Datasets.
+    # At the moment, these filesystem-spaces are on hosts:
+    # - Knight (k*) hosts
+    # - Nanopore host
+    # 
+    # Note: Both Knight (k*) and Nanopore hosts are archive-only nodes. For Datasets placed on these nodes,
+    # we use the `intake_integrated` workflow to ingest the Datasets, instead of the `integrated` workflow.
+    
+    # 1. Create dataset-observers for Knight (k*) hosts:
+    # 1.1 Create dataset-observers for k2 (Compbio) host
     obs5 = Observer(
-        name='raw_data_obs---k2',
+        name='raw_data_obs---k2--test',
         dir_path=config['registration']['RAW_DATA']['source_dir_test'],
         callback=Register('RAW_DATA', default_wf_name='intake_integrated').register,
         interval=config['registration']['poll_interval_seconds'],
         full_scan_every_n_scans=config['registration']['full_scan_every_n_scans']
     )
+    obs5 = Observer(
+        name='raw_data_obs---k2--nextseq',
+        dir_path=config['registration']['RAW_DATA']['source_dir_nextseq'],
+        callback=Register('RAW_DATA', default_wf_name='intake_integrated').register,
+        interval=config['registration']['poll_interval_seconds'],
+        full_scan_every_n_scans=config['registration']['full_scan_every_n_scans']
+    )
+    obs6 = Observer(
+        name='raw_data_obs---k2--ns2000',
+        dir_path=config['registration']['RAW_DATA']['source_dir_ns2000'],
+        callback=Register('RAW_DATA', default_wf_name='intake_integrated').register,
+        interval=config['registration']['poll_interval_seconds'],
+        full_scan_every_n_scans=config['registration']['full_scan_every_n_scans']
+    )
+    # 1.2 Create dataset-observers for k3 (Compbio) host
+    obs7 = Observer(
+        name='raw_data_obs---k3--miseq',
+        dir_path=config['registration']['RAW_DATA']['source_dir_miseq'],
+        callback=Register('RAW_DATA', default_wf_name='intake_integrated').register,
+        interval=config['registration']['poll_interval_seconds'],
+        full_scan_every_n_scans=config['registration']['full_scan_every_n_scans']
+    )
+    obs8 = Observer(
+        name='raw_data_obs---k3--novaseq2',
+        dir_path=config['registration']['RAW_DATA']['source_dir_novaseq2'],
+        callback=Register('RAW_DATA', default_wf_name='intake_integrated').register,
+        interval=config['registration']['poll_interval_seconds'],
+        full_scan_every_n_scans=config['registration']['full_scan_every_n_scans']
+    )
+    obs9 = Observer(
+        name='raw_data_obs---k3--ns6000',
+        dir_path=config['registration']['RAW_DATA']['source_dir_ns6000'],
+        callback=Register('RAW_DATA', default_wf_name='intake_integrated').register,
+        interval=config['registration']['poll_interval_seconds'],
+        full_scan_every_n_scans=config['registration']['full_scan_every_n_scans']
+    )
+    # 1.3 Create dataset-observers for k4 (Compbio) host
+    obs10 = Observer(
+        name='raw_data_obs---k4--novaseqx1',
+        dir_path=config['registration']['RAW_DATA']['source_dir_novaseqx1'],
+        callback=Register('RAW_DATA', default_wf_name='intake_integrated').register,
+        interval=config['registration']['poll_interval_seconds'],
+        full_scan_every_n_scans=config['registration']['full_scan_every_n_scans']
+    )
 
-    # obs5 = Observer(
-    #     name='raw_data_obs---k2',
-    #     dir_path=config['registration']['RAW_DATA']['source_dir_nextseq'],
-    #     callback=Register('RAW_DATA', default_wf_name='intake_integrated').register,
-    #     interval=config['registration']['poll_interval_seconds'],
-    #     full_scan_every_n_scans=config['registration']['full_scan_every_n_scans']
-    # )
-    # obs6 = Observer(
-    #     name='raw_data_obs---k2',
-    #     dir_path=config['registration']['RAW_DATA']['source_dir_ns2000'],
-    #     callback=Register('RAW_DATA', default_wf_name='intake_integrated').register,
-    #     interval=config['registration']['poll_interval_seconds'],
-    #     full_scan_every_n_scans=config['registration']['full_scan_every_n_scans']
-    # )
-    # 3.2 Create dataset-observers for k3 (Compbio) host
-    # obs7 = Observer(
-    #     name='raw_data_obs---k3',
-    #     dir_path=config['registration']['RAW_DATA']['source_dir_miseq'],
-    #     callback=Register('RAW_DATA', default_wf_name='intake_integrated').register,
-    #     interval=config['registration']['poll_interval_seconds'],
-    #     full_scan_every_n_scans=config['registration']['full_scan_every_n_scans']
-    # )
-    # obs8 = Observer(
-    #     name='raw_data_obs---k3',
-    #     dir_path=config['registration']['RAW_DATA']['source_dir_novaseq2'],
-    #     callback=Register('RAW_DATA', default_wf_name='intake_integrated').register,
-    #     interval=config['registration']['poll_interval_seconds'],
-    #     full_scan_every_n_scans=config['registration']['full_scan_every_n_scans']
-    # )
-    # obs9 = Observer(
-    #     name='raw_data_obs---k3',
-    #     dir_path=config['registration']['RAW_DATA']['source_dir_ns6000'],
-    #     callback=Register('RAW_DATA', default_wf_name='intake_integrated').register,
-    #     interval=config['registration']['poll_interval_seconds'],
-    #     full_scan_every_n_scans=config['registration']['full_scan_every_n_scans']
-    # )
-    # 3.3 Create dataset-observers for k4 (Compbio) host
-    # obs10 = Observer(
-    #     name='raw_data_obs---k4',
-    #     dir_path=config['registration']['RAW_DATA']['source_dir_novaseqx1'],
-    #     callback=Register('RAW_DATA', default_wf_name='intake_integrated').register,
-    #     interval=config['registration']['poll_interval_seconds'],
-    #     full_scan_every_n_scans=config['registration']['full_scan_every_n_scans']
-    # )
-
-    # 4. Create dataset-observers for Nanopore host
-    # These are archive-only nodes - use intake_integrated workflow
-    # obs11 = Observer(
-    #     name='raw_data_obs---nanopore_1',
-    #     dir_path=config['registration']['RAW_DATA']['source_dir_nanopore_1'],
-    #     callback=Register('RAW_DATA', default_wf_name='intake_integrated').register,
-    #     interval=config['registration']['poll_interval_seconds'],
-    #     full_scan_every_n_scans=config['registration']['full_scan_every_n_scans']
-    # )
-    # obs12 = Observer(
-    #     name='raw_data_obs---nanopore_2',
-    #     dir_path=config['registration']['RAW_DATA']['source_dir_nanopore_2'],
-    #     callback=Register('RAW_DATA', default_wf_name='intake_integrated').register,
-    #     interval=config['registration']['poll_interval_seconds'],
-    #     full_scan_every_n_scans=config['registration']['full_scan_every_n_scans']
-    # )
+    # 2. Create dataset-observers for Nanopore host
+    obs11 = Observer(
+        name='raw_data_obs---nanopore--p2solo',
+        dir_path=config['registration']['RAW_DATA']['source_dir_nanopore_p2solo'],
+        callback=Register('RAW_DATA', default_wf_name='intake_integrated').register,
+        interval=config['registration']['poll_interval_seconds'],
+        full_scan_every_n_scans=config['registration']['full_scan_every_n_scans']
+    )
+    obs12 = Observer(
+        name='raw_data_obs---nanopore--p24',
+        dir_path=config['registration']['RAW_DATA']['source_dir_nanopore_p24'],
+        callback=Register('RAW_DATA', default_wf_name='intake_integrated').register,
+        interval=config['registration']['poll_interval_seconds'],
+        full_scan_every_n_scans=config['registration']['full_scan_every_n_scans']
+    )
 
     # Register all dataset-observers to the poller
     poller = Poller()
@@ -294,7 +367,7 @@ if __name__ == "__main__":
     poller.register(obs3)
     poller.register(obs4)
     poller.register(obs5)
-    # poller.register(obs5)
+    poller.register(obs5)
     # poller.register(obs6)
     # poller.register(obs7)
     # poller.register(obs8)

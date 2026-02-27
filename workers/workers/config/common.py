@@ -387,9 +387,7 @@ config = {
             'slurm_script_dir': '/slurm_scripts',
         },
     },
-    'legacy_migration': {
-        'completed': False,
-    },
+    'legacy_application_active': True,
     'upload': {
       'verify_checksums': True,  # Enable BLAKE3 manifest-based checksum verification
     }

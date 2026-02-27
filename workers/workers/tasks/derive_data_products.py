@@ -176,7 +176,16 @@ def derive_data_products(celery_task, dataset_id: int, conversion_id: int):
             }
         
         data_products_to_create.append(product_payload)
-    
+
+    # Tag derived Data Products with metadata.origin='legacy' when the legacy CMG application is still active,
+    # since these Data Products originate from a conversion triggered in the CMG application.
+    if config.get('legacy_application_active', False):
+        for product_payload in data_products_to_create:
+            product_payload['metadata'] = {
+                **product_payload.get('metadata', {}),
+                'origin': 'legacy',
+            }
+
     # Create all data products using bulk API
     print(f"Creating {len(data_products_to_create)} data products via bulk API...")
     result = api.bulk_create_datasets(data_products_to_create)

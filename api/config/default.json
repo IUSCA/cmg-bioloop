@@ -383,5 +383,6 @@
     "spaceranger-v3.0.1",
     "spaceranger-v1.3.1",
     "spaceranger-v1.1.0"
-  ]
+  ],
+  "legacy_application_active": true
 }

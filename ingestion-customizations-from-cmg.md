@@ -14,8 +14,8 @@ Developer notes:
 ```
     'registration': {
         'RAW_DATA': {
-            'source_dir_nanopore_1': '/path/to/source/raw_data',
-            'source_dir_nanopore_2': '/path/to/source/raw_data_2',
+            'source_dir_nanopore_p2solo': '/path/to/source/raw_data',
+            'source_dir_nanopore_p24': '/path/to/source/raw_data_2',
 ```
 - these are the same paths where watch,py picks new dataset dirs up from.).
 

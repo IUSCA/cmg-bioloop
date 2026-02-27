@@ -64,8 +64,8 @@ config = {
             # NOTE: Bioloop workers use the below dict's keys to detect whether or not a Dataset should be
             # considered a 'nanopore' dataset. If these keys are changed, the behavior of method
             # ``is_nanopore_dataset()`` in ``dataset.py`` will need to be updated accordingly.
-            'source_dir_nanopore_1': '/data/p2solo',
-            'source_dir_nanopore_2': '/zpool/p24',
+            'source_dir_nanopore_p2solo': '/data/p2solo',
+            'source_dir_nanopore_p24': '/zpool/p24',
         },
         'DATA_PRODUCT': {
             'source_dir_scratch': '/N/scratch/cmguser/cmg-bioloop/origin/data_products',
