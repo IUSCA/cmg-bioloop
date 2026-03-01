@@ -98,6 +98,20 @@
 - Fix (attempt 2, root cause): `PATCH /sessions/:id` in `api/src/routes/sessions.js` never read or applied the `metadata` field from the request body, so `finish_session_hydration` (worker task) could never persist `metadata.is_hydrated = true`. Because of this `isSessionHydrated()` always returned `false` for every session, making attempt 1's `isHydrated` check ineffective.
   - Fix: Added `metadata` body validator and shallow-merge logic to `PATCH /sessions/:id`: `{ ...existingMetadata, ...incomingMetadata }`. Existing keys (`origin`, `datasets`, etc.) are preserved; `is_hydrated: true` is now correctly written to the DB.
 
+## 2026-03-01 (continued)
+
+- Change: `GET /sessions/:id` now returns full Rhythm workflow objects in `session_workflows` (instead of partial `{ workflow_id, created_at, status, name }`). The enrichment now spreads the entire `enrichedWf` object from Rhythm, giving the UI `id`, `steps`, `steps_done`, `total_steps`, `updated_at`, etc. needed by `WorkflowCompact` and `Workflow` components.
+- Change: Added a "WORKFLOWS" section to `ui/src/pages/sessions/[id].vue`. It is rendered only for legacy sessions (`session.metadata.origin === 'legacy'`) and displays all workflows from `session.session_workflows` using the same `collapsible` + `WorkflowCompact` + `Workflow` pattern used in the dataset detail view. Active workflows expand by default; auto-polling at `config.dataset_polling_interval` is started/stopped based on whether any session workflow is still running.
+
+## 2026-03-01 (continued)
+
+- Change: Added `dataset_id` query filter to `GET /conversions` (API) and `GET /sessions` (API) so both endpoints can be scoped to a specific dataset.
+- Change: `GET /conversions` now accepts an `include_workflow_status` boolean query parameter. When `true`, the response enriches each conversion with a `workflow_status` field (batch-fetched from Rhythm by `workflow_id`).
+- Change: `GET /sessions` `dataset_id` filter resolves via `session_tracks -> track -> dataset_file -> dataset_id` nested relation.
+- Change: Added `DatasetConversions.vue` component that shows an "Associated Conversions" table on `/datasets/:id` for `RAW_DATA` type datasets. Status column: legacy conversions (detected via `conversion.metadata?.origin`) show a static green checkmark; non-legacy conversions fetch workflow statuses in a batch call to `/workflows` and render them via `WorkflowStatusIcon`.
+- Change: Added `DatasetSessions.vue` component that shows an "Associated Sessions" table on `/datasets/:id` for `DATA_PRODUCT` type datasets. No Status column.
+- Change: `Dataset.vue` renders Associated Conversions after the existing Associated Datasets section, gated on `dataset.type === 'RAW_DATA'`; renders Associated Sessions gated on `dataset.type === 'DATA_PRODUCT'`.
+
 ## Future Entries
 
 Add entries here as decisions are made, changes are implemented, or issues are resolved.

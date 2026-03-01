@@ -70,6 +70,7 @@ router.get(
   isPermittedTo('read'),
   validate([
     query('dataset_name').optional().trim().isLength({ min: 1 }),
+    query('dataset_id').optional().isInt({ min: 1 }).toInt(),
     query('definition_name').optional().trim().isLength({ min: 1 }),
     query('program_name').optional().trim().isLength({ min: 1 }),
     query('initiator').optional().trim().isLength({ min: 1 }),
@@ -77,11 +78,13 @@ router.get(
     query('offset').isInt({ min: 0 }).toInt().optional(),
     query('sort_by').default('initiated_at'),
     query('sort_order').default('desc').isIn(['asc', 'desc']),
+    query('include_workflow_status').optional().toBoolean().default(false),
   ]),
   asyncHandler(async (req, res, next) => {
   // #swagger.tags = ['Conversions']
     const {
       dataset_name,
+      dataset_id,
       definition_name,
       program_name,
       initiator,
@@ -89,10 +92,15 @@ router.get(
       offset,
       sort_by,
       sort_order,
+      include_workflow_status,
     } = req.query;
 
     // Build where clause
     const where = {};
+
+    if (dataset_id) {
+      where.dataset_id = dataset_id;
+    }
 
     if (dataset_name) {
       where.dataset = {
@@ -177,6 +185,37 @@ router.get(
       ...conversion,
       args_list: conversionService.getArgsList(conversion),
     }));
+
+    if (include_workflow_status) {
+      const workflowIds = conversionsWithArgs
+        .filter((c) => c.workflow_id)
+        .map((c) => c.workflow_id);
+
+      let workflowStatusMap = {};
+      if (workflowIds.length > 0) {
+        try {
+          const wfRes = await wfService.getAll({ workflow_ids: workflowIds });
+          workflowStatusMap = (wfRes.data.results || []).reduce((acc, wf) => {
+            acc[wf.id] = wf.status;
+            return acc;
+          }, {});
+        } catch (e) {
+          // continue without status enrichment
+        }
+      }
+
+      const conversionsWithStatus = conversionsWithArgs.map((conversion) => ({
+        ...conversion,
+        workflow_status: conversion.workflow_id
+          ? (workflowStatusMap[conversion.workflow_id] ?? null)
+          : null,
+      }));
+
+      return res.json({
+        metadata: { count },
+        conversions: conversionsWithStatus,
+      });
+    }
 
     return res.json({
       metadata: { count },
@@ -569,6 +608,7 @@ router.post(
         data: {
           id: wf.workflow_id,
           dataset_id: dataset.id,
+          ...(initiator_id && { initiator_id }),
         },
       });
 
@@ -753,6 +793,7 @@ async function validateAndCreateConversion(
       data: {
         id: wf.workflow_id,
         dataset_id: dataset.id,
+        ...(initiator_id && { initiator_id }),
       },
     });
 

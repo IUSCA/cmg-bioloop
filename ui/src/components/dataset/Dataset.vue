@@ -280,6 +280,30 @@
         :derived_datasets_meta="dataset?.derived_datasets"
       />
 
+      <!-- Associated Conversions (raw data only) -->
+      <div v-if="dataset.type === 'RAW_DATA' && dataset.id">
+        <va-card>
+          <va-card-title>
+            <span class="text-xl">Associated Conversions</span>
+          </va-card-title>
+          <va-card-content style="margin-top: -20px">
+            <DatasetConversions :dataset-id="dataset.id" />
+          </va-card-content>
+        </va-card>
+      </div>
+
+      <!-- Associated Sessions (data products only) -->
+      <div v-if="dataset.type === 'DATA_PRODUCT' && dataset.id">
+        <va-card>
+          <va-card-title>
+            <span class="text-xl">Associated Sessions</span>
+          </va-card-title>
+          <va-card-content style="margin-top: -20px">
+            <DatasetSessions :dataset-id="dataset.id" />
+          </va-card-content>
+        </va-card>
+      </div>
+
       <!-- Audit logs -->
       <div v-if="dataset?.audit_logs?.length">
         <va-card>

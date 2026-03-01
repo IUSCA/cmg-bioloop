@@ -299,6 +299,7 @@ router.get(
     query('title').trim().optional(),
     query('genome').trim().optional(),
     query('genome_type').trim().optional(),
+    query('dataset_id').optional().isInt({ min: 1 }).toInt(),
     query('limit').isInt({ min: 1, max: 100 }).optional().toInt(),
     query('offset').isInt({ min: 0 }).optional().toInt(),
     query('sort_by').isIn(['title', 'genome', 'created_at', 'updated_at']).optional(),
@@ -309,6 +310,7 @@ router.get(
       title,
       genome,
       genome_type,
+      dataset_id,
       limit = 25,
       offset = 0,
       sort_by = 'created_at',
@@ -338,6 +340,17 @@ router.get(
     }
     if (genome_type) {
       filter_query.genome_type = { contains: genome_type, mode: 'insensitive' };
+    }
+    if (dataset_id) {
+      filter_query.session_tracks = {
+        some: {
+          track: {
+            dataset_file: {
+              dataset_id,
+            },
+          },
+        },
+      };
     }
 
     // Get sessions with related data
@@ -670,6 +683,9 @@ router.get(
           select: {
             workflow_id: true,
             created_at: true,
+            initiator: {
+              select: { id: true, username: true, name: true },
+            },
           },
         },
         _count: {
@@ -733,14 +749,14 @@ router.get(
           workflow_ids: sessionWorkflowIds,
         });
 
-        // Enrich session_workflows with status and name from Rhythm
+        // Enrich session_workflows with full Rhythm workflow data, preserving
+        // the DB-sourced initiator which Rhythm does not know about.
         session.session_workflows = session.session_workflows.map((sw) => {
           const enrichedWf = wf_res.data.results.find((w) => w.id === sw.workflow_id);
-          return {
-            ...sw,
-            status: enrichedWf?.status || null,
-            name: enrichedWf?.name || null,
-          };
+          if (enrichedWf) {
+            return { ...enrichedWf, initiator: sw.initiator };
+          }
+          return { id: sw.workflow_id, created_at: sw.created_at, status: null, name: null, initiator: sw.initiator };
         });
       } catch (error) {
         logger.warn(`Failed to fetch workflow status for session ${id}`, error);
