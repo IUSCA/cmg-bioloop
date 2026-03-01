@@ -109,11 +109,11 @@ router.get(
         }),
         prisma.session_workflow.findMany({
           where: { workflow_id: { in: wf_ids } },
-          select: { session_id: true, workflow_id: true },
+          select: { session_id: true, workflow_id: true, initiator: true },
         }),
         prisma.conversion.findMany({
           where: { workflow_id: { in: wf_ids } },
-          select: { id: true, workflow_id: true },
+          select: { id: true, workflow_id: true, initiator: true },
         }),
       ]);
 
@@ -127,8 +127,18 @@ router.get(
         return acc;
       }, {});
 
+      const session_initiator_by_workflow = session_wf_rows.reduce((acc, row) => {
+        if (row.initiator) acc[row.workflow_id] = row.initiator;
+        return acc;
+      }, {});
+
       const conversion_id_by_workflow = conversion_rows.reduce((acc, row) => {
         acc[row.workflow_id] = row.id;
+        return acc;
+      }, {});
+
+      const conversion_initiator_by_workflow = conversion_rows.reduce((acc, row) => {
+        if (row.initiator) acc[row.workflow_id] = row.initiator;
         return acc;
       }, {});
 
@@ -141,7 +151,9 @@ router.get(
             dataset_id: app_workflow?.dataset_id ?? null,
             conversion_id: conversion_id_by_workflow[wf.id] ?? null,
             session_id: session_id_by_workflow[wf.id] ?? null,
-            initiator: id_initiator_map[wf.id],
+            initiator: id_initiator_map[wf.id]
+              || conversion_initiator_by_workflow[wf.id]
+              || session_initiator_by_workflow[wf.id],
           };
         }),
       });
@@ -369,12 +381,36 @@ router.get(
   asyncHandler(
     async (req, res, next) => {
       // #swagger.tags = ['Workflow']
+      const wf_id = req.params.id;
       const api_res = await wf_service.getOne(
-        req.params.id,
+        wf_id,
         req.query.last_task_runs,
         req.query.prev_task_runs,
       );
-      res.json(api_res.data);
+
+      // Enrich with initiator from the app DB (Rhythm does not store initiators).
+      // Priority: workflow table → conversion table → session_workflow table.
+      const [wf_row, conversion_row, session_wf_row] = await Promise.all([
+        prisma.workflow.findUnique({
+          where: { id: wf_id },
+          select: { initiator: true },
+        }),
+        prisma.conversion.findFirst({
+          where: { workflow_id: wf_id },
+          select: { initiator: true },
+        }),
+        prisma.session_workflow.findFirst({
+          where: { workflow_id: wf_id },
+          select: { initiator: true },
+        }),
+      ]);
+
+      const initiator = wf_row?.initiator
+        || conversion_row?.initiator
+        || session_wf_row?.initiator
+        || null;
+
+      res.json({ ...api_res.data, initiator });
     },
   ),
 );

@@ -75,18 +75,6 @@
         <span>{{ datetime.fromNow(value) }}</span>
       </template>
 
-      <template #cell(actions)="{ rowData }">
-        <div class="flex gap-1 justify-end">
-          <template v-if="auth.canOperate">
-            <va-button
-              preset="plain"
-              icon="delete"
-              color="danger"
-              @click="openDeleteModal(rowData)"
-            />
-          </template>
-        </div>
-      </template>
     </va-data-table>
 
     <!-- pagination -->
@@ -100,27 +88,20 @@
     />
 
     <TrackSearchModal ref="searchModal" @search="handleSearch" />
-
-    <!-- Delete Modal -->
-    <DeleteTrackModal ref="deleteModal" :data="selectedForDeletion" @update="fetch_items" />
   </div>
 </template>
 
 <script setup>
-import DeleteTrackModal from '@/components/tracks/DeleteTrackModal.vue';
 import useQueryPersistence from '@/composables/useQueryPersistence';
 import useSearchKeyShortcut from '@/composables/useSearchKeyShortcut';
 import * as datetime from '@/services/datetime';
 import toast from '@/services/toast';
 import trackService from '@/services/track';
-import { useAuthStore } from '@/stores/auth';
 import { useTracksStore } from '@/stores/tracks';
 
 useSearchKeyShortcut();
 
-const router = useRouter();
 const store = useTracksStore();
-const auth = useAuthStore();
 
 const PAGE_SIZE_OPTIONS = [25, 50, 100];
 
@@ -129,9 +110,6 @@ const tracks = ref([]);
 const data_loading = ref(false);
 const total_results = ref(0);
 const searchModal = ref(null);
-const deleteModal = ref(null);
-const selectedForDeletion = ref({});
-
 // Query parameters
 const query = ref({
   page: 1,
@@ -239,13 +217,6 @@ const columns = [
     tdAlign: 'center',
     thStyle: 'white-space: pre-wrap; word-wrap: break-word; word-break: break-word;',
   },
-  {
-    key: 'actions',
-    label: 'Actions',
-    width: '10%',
-    thAlign: 'right',
-    tdAlign: 'right',
-  },
 ];
 
 async function fetch_items() {
@@ -296,15 +267,6 @@ function clearFilters() {
     name: null,
   };
   query.value.page = 1; // Reset to first page when clearing filters
-}
-
-function openDeleteModal(track) {
-  selectedForDeletion.value = track;
-  deleteModal.value.show();
-}
-
-function viewTrack(track) {
-  router.push(`/tracks/${track.id}`);
 }
 
 // Watch for changes in query and filters

@@ -106,32 +106,6 @@ export const useTracksStore = defineStore('tracks', () => {
     }
   };
 
-  const deleteTrack = async (id) => {
-    loading.value = true;
-    error.value = null;
-
-    try {
-      await trackService.delete(id);
-
-      // Remove from tracks list
-      const index = tracks.value.findIndex((t) => t.id === id);
-      if (index !== -1) {
-        tracks.value.splice(index, 1);
-        metadata.value.count -= 1;
-      }
-
-      // Clear current track if it's the one being deleted
-      if (currentTrack.value?.id === id) {
-        currentTrack.value = null;
-      }
-    } catch (err) {
-      error.value = err.response?.data?.error || 'Failed to delete track';
-      throw err;
-    } finally {
-      loading.value = false;
-    }
-  };
-
   const clearError = () => {
     error.value = null;
   };
@@ -160,7 +134,6 @@ export const useTracksStore = defineStore('tracks', () => {
     fetchTrack,
     createTrack,
     updateTrack,
-    deleteTrack,
     clearError,
     clearCurrentTrack,
   };

@@ -65,15 +65,6 @@ class TrackService {
     return api.patch(`/tracks/${id}`, trackData);
   }
 
-  /**
-   * Delete a track (admin/operator only - bypasses project access control)
-   * @param {number} id - Track ID
-   * @returns {Promise} Empty response
-   */
-  delete(id) {
-    return api.delete(`/tracks/${id}`);
-  }
-
   _getTrackColor(fileType) {
     const colors = {
       bam: "primary",

@@ -141,52 +141,21 @@
         </va-card-content>
       </va-card>
 
-      <!-- Actions -->
-      <va-card>
-        <va-card-title>
-          <span class="text-lg">Actions</span>
-        </va-card-title>
-        <va-card-content>
-          <div class="flex justify-start gap-3">
-            <va-button
-              v-if="auth.canOperate"
-              color="danger"
-              border-color="danger"
-              preset="secondary"
-              class="flex-initial"
-              @click="deleteTrack"
-            >
-              <va-icon name="delete" class="pr-2 text-2xl" />
-              Delete Track
-            </va-button>
-          </div>
-        </va-card-content>
-      </va-card>
     </div>
-
-    <!-- Delete Track Modal -->
-    <DeleteTrackModal ref="deleteTrackModal" :data="track" @update="handleTrackDeleted" />
   </div>
 </template>
 
 <script setup>
-import DeleteTrackModal from '@/components/tracks/DeleteTrackModal.vue';
 import * as datetime from '@/services/datetime';
 import { formatDatasetType } from '@/services/sessionUtils';
 import toast from '@/services/toast';
 import trackService from '@/services/track';
-import { useAuthStore } from '@/stores/auth';
 import { useNavStore } from '@/stores/nav';
 import { useTracksStore } from '@/stores/tracks';
 
 const route = useRoute();
-const router = useRouter();
 const tracksStore = useTracksStore();
-const auth = useAuthStore();
 const nav = useNavStore();
-
-// Reactive state
-const deleteTrackModal = ref(null);
 
 // Computed
 const track = computed(() => tracksStore.currentTrack);
@@ -239,14 +208,6 @@ const formatFileSize = (bytes) => {
   const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
   const i = Math.floor(Math.log(bytes) / Math.log(1024));
   return Math.round((bytes / Math.pow(1024, i)) * 100) / 100 + ' ' + sizes[i];
-};
-
-const deleteTrack = () => {
-  deleteTrackModal.value.show();
-};
-
-const handleTrackDeleted = () => {
-  router.push('/tracks');
 };
 
 // Load track data

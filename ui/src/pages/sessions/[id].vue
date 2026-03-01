@@ -241,6 +241,36 @@
             </va-card-content>
           </va-card>
         </div>
+
+        <!-- Workflows (legacy sessions only) -->
+        <div v-if="isLegacySession" class="grid grid-cols-1 gap-3">
+          <div>
+            <span class="flex text-xl my-2 font-bold">WORKFLOWS</span>
+            <div v-if="sessionWorkflowsDisplay.length > 0" class="space-y-2">
+              <collapsible
+                v-for="workflow in sessionWorkflowsDisplay"
+                :key="workflow.id"
+                v-model="workflow.collapse_model"
+              >
+                <template #header-content>
+                  <WorkflowCompact :workflow="workflow" />
+                </template>
+                <div>
+                  <workflow :workflow="workflow" @update="loadSession" />
+                </div>
+              </collapsible>
+            </div>
+            <div
+              v-else
+              class="text-center bg-slate-200 dark:bg-slate-800 py-2 rounded shadow"
+            >
+              <i-mdi-card-remove-outline class="inline-block text-4xl pr-3" />
+              <span class="text-lg">
+                No workflows associated with this session.
+              </span>
+            </div>
+          </div>
+        </div>
       </div>
 
       <!-- Action Buttons -->
@@ -532,9 +562,11 @@ import sessionService from '@/services/session';
 import toast from '@/services/toast';
 import trackService from '@/services/track';
 import { formatBytes } from '@/services/utils';
+import workflowService from '@/services/workflow';
 import { useAuthStore } from '@/stores/auth';
 import { useNavStore } from '@/stores/nav';
 import { useSessionsStore } from '@/stores/sessions';
+import config from '@/config';
 import { nextTick } from 'vue';
 
 const route = useRoute();
@@ -569,6 +601,51 @@ const loading = computed(() => sessionsStore.loading);
 const _error = computed(() => sessionsStore.error);
 
 const needsHydration = computed(() => sessionService._needsHydration(session.value));
+
+const isLegacySession = computed(() => legacyMigrationService.isLegacySession(session.value));
+
+// Session workflows display state (with collapse_model tracking)
+const sessionWorkflowsDisplay = ref([]);
+
+watch(
+  () => session.value?.session_workflows,
+  (newWorkflows) => {
+    if (!newWorkflows) {
+      sessionWorkflowsDisplay.value = [];
+      return;
+    }
+    sessionWorkflowsDisplay.value = newWorkflows.map((w, i) => ({
+      ...w,
+      collapse_model:
+        !workflowService.is_workflow_done(w) ||
+        (sessionWorkflowsDisplay.value || [])[i]?.collapse_model ||
+        false,
+    }));
+  },
+  { immediate: true },
+);
+
+const hasActiveSessionWorkflows = computed(() =>
+  sessionWorkflowsDisplay.value.some((wf) => !workflowService.is_workflow_done(wf)),
+);
+
+const sessionWorkflowPollingInterval = computed(() =>
+  hasActiveSessionWorkflows.value ? config.dataset_polling_interval : null,
+);
+
+const { resume: resumeWorkflowPoll, pause: pauseWorkflowPoll } = useIntervalFn(
+  () => loadSession(),
+  sessionWorkflowPollingInterval,
+  { immediate: false },
+);
+
+watch(hasActiveSessionWorkflows, (newVal) => {
+  if (newVal) {
+    resumeWorkflowPoll();
+  } else {
+    pauseWorkflowPoll();
+  }
+});
 
 const canEditSession = computed(() => {
   return session.value?.user_id === auth.user?.id;
