@@ -68,7 +68,7 @@ def _generate_qc(celery_task, dataset_id, **kwargs):
 
     if is_dataset_created_by_conversion:
         if not dataset.get('origin_path'):
-            raise Exception(f"Dataset {dataset_id} created by Genomic Conversion has no origin_path; cannot run QC")
+            raise Exception(f"Dataset {dataset_id} created by Conversion has no origin_path; cannot run QC")
         dataset_dir = Path(dataset['origin_path'])
     else:
         if not dataset.get('is_staged') or not dataset.get('staged_path'):
