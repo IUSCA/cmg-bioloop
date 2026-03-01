@@ -381,6 +381,27 @@ const derivedDatasets = await prisma.dataset_hierarchy.findMany({
 **TODO (not yet implemented):**
 - CMG poller scripts that submit conversions to Bioloop on behalf of legacy CMG sequencing runs must pass `metadata: { origin: 'legacy' }` when calling `POST /conversions` or `POST /conversions/bulk`.
 
+## 2026-03-01
+
+### Bug Fix: Derived Datasets Scoped to Their Conversion
+
+**Problem:** `GET /conversions/:id/derived_datasets` returned the same set of data products for all conversions that shared the same input dataset. All conversions had `dataset_id` pointing to the same raw dataset, so the old query (`source_id = conversion.dataset_id` + `metadata.derivation_method = 'conversion'`) returned every conversion-derived child of that dataset, regardless of which conversion produced it.
+
+**Fix:** `dataset_hierarchy.metadata` now stores `{ conversion_id }` instead of `{ derivation_method }`. The query filters by `metadata.conversion_id = conversionId`, which uniquely identifies the producing conversion.
+
+**`derivation_method` removed entirely:** The field was redundant with `dataset.create_method` (values `'conversion'` ↔ `CONVERSION`, `'manual_assignment'` ↔ everything else). All reads/writes of `metadata.derivation_method` have been removed. The "Derivation Method" column in `AssocDatasetList.vue` now reads `rowData.create_method` from the already-fetched dataset objects.
+
+**Bigbang step order changed:** `syncDatasetHierarchies` moved from step 12 to step 14 (after `syncConversions`) so bioloop `conversion.id` is available when writing hierarchy metadata.
+
+**Files changed:**
+- `workers/workers/tasks/derive_data_products.py`
+- `api/src/routes/conversions/index.js`
+- `api/src/services/dataset.js`
+- `api/src/routes/datasets/index.js`
+- `data_sync/src/sync/bigbang/sync_dataset_hierarchies.js`
+- `data_sync/src/bigbang_sync.js`
+- `ui/src/components/dataset/AssocDatasetList.vue`
+
 ## Future Entries
 
 Add entries here as decisions are made, changes are implemented, or issues are resolved.
