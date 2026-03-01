@@ -170,7 +170,7 @@
             </va-card-title>
             <va-card-content>
               <!-- Show message if legacy session not hydrated and no tracks -->
-              <div 
+              <div
                 v-if="needsHydration && !associatedTracks?.length"
                 class="text-center py-8 text-gray-600 dark:text-gray-400"
               >
@@ -203,7 +203,8 @@
 
                   <template #cell(genome)="{ rowData }">
                     <va-chip v-if="rowData.genomeType || rowData.genomeValue" size="small" outline>
-                      {{ rowData.genomeType || '' }}{{ rowData.genomeValue ? ` (${rowData.genomeValue})` : '' }}
+                      {{ rowData.genomeType || ''
+                      }}{{ rowData.genomeValue ? ` (${rowData.genomeValue})` : '' }}
                     </va-chip>
                   </template>
 
@@ -394,7 +395,8 @@
 
               <template #cell(genome)="{ rowData }">
                 <va-chip v-if="rowData.genome_type || rowData.genome_value" size="small" outline>
-                  {{ rowData.genome_type || '' }}{{ rowData.genome_value ? ` (${rowData.genome_value})` : '' }}
+                  {{ rowData.genome_type || ''
+                  }}{{ rowData.genome_value ? ` (${rowData.genome_value})` : '' }}
                 </va-chip>
               </template>
 
@@ -675,11 +677,9 @@ const currentTrackPage = ref(1);
 const trackPageSize = ref(25);
 const TRACK_PAGE_SIZE_OPTIONS = [25, 50, 100];
 
-const trackStartIndex = computed(() => 
-  (currentTrackPage.value - 1) * trackPageSize.value
-);
+const trackStartIndex = computed(() => (currentTrackPage.value - 1) * trackPageSize.value);
 
-const trackEndIndex = computed(() => 
+const trackEndIndex = computed(() =>
   Math.min(trackStartIndex.value + trackPageSize.value, associatedTracks.value.length)
 );
 
@@ -893,11 +893,14 @@ const handleViewInBrowser = async () => {
 
     // Check if any datasets need staging/migration
     const datasetsNeedingStaging = [];
-    
+
     for (const dataset of unstagedDatasets) {
       // Check if dataset needs staging or migration
-      const needsMigration = legacyMigrationService.isLegacyDataset(dataset) && dataset.migration_status && !dataset.migration_status.is_migrated;
-      
+      const needsMigration =
+        legacyMigrationService.isLegacyDataset(dataset) &&
+        dataset.migration_status &&
+        !dataset.migration_status.is_migrated;
+
       datasetsNeedingStaging.push({
         ...dataset,
         needs_migration: needsMigration,
@@ -914,29 +917,34 @@ const handleViewInBrowser = async () => {
 
     // All datasets are staged - now check if legacy session needs hydration
     if (legacyMigrationService.isLegacySession(session.value)) {
-      // Check if all legacy datasets have been migrated
-      const allDatasets = [...stagedDatasets, ...unstagedDatasets];
-      const legacyDatasets = allDatasets.filter(ds => legacyMigrationService.isLegacyDataset(ds));
-      
-      if (legacyDatasets.length > 0) {
-        const allMigrated = legacyDatasets.every(
-          ds => ds.migration_status && ds.migration_status.is_migrated
-        );
-        
-        if (!allMigrated) {
-          toast.warning('Some legacy datasets are still being migrated. Please wait for migration to complete.');
-          return;
-        }
-      }
-      
-      // Check if session is hydrated
+      // Check hydration first - if already hydrated, proceed directly to browser selection
       const isHydrated = await legacyMigrationService.isSessionHydrated(session.value.id);
-      
+
       if (!isHydrated) {
-        // Session needs hydration
+        // Session not yet hydrated - check that all legacy datasets have finished migrating
+        // before showing the hydration modal (migration is a prerequisite for hydration)
+        const allDatasets = [...stagedDatasets, ...unstagedDatasets];
+        const legacyDatasets = allDatasets.filter((ds) =>
+          legacyMigrationService.isLegacyDataset(ds)
+        );
+
+        if (legacyDatasets.length > 0) {
+          const allMigrated = legacyDatasets.every(
+            (ds) => ds.migration_status && ds.migration_status.is_migrated
+          );
+
+          if (!allMigrated) {
+            toast.warning(
+              'Some legacy datasets are still being migrated. Please wait for migration to complete.'
+            );
+            return;
+          }
+        }
+
         showHydrationModal.value = true;
         return;
       }
+      // Session is already hydrated - proceed to Genome-Browser-selection
     }
 
     // All datasets are staged, all legacy datasets migrated, session hydrated (if needed)
@@ -953,12 +961,10 @@ const handleViewInBrowser = async () => {
  * After staging workflows are triggered, check if we can proceed to hydration/browser
  */
 const handleStagingRequested = async () => {
-  toast.info(
-    'Staging workflows have been requested. You can proceed once all workflows complete.'
-  );
+  toast.info('Staging workflows have been requested. You can proceed once all workflows complete.');
   showUnstagedModal.value = false;
   datasetsToStage.value = [];
-  
+
   // Note: Don't automatically proceed to next step
   // User needs to click "View in Genome Browser" again after staging completes
   // This allows them to monitor workflow progress first
@@ -973,7 +979,9 @@ const handleHydrateSession = async () => {
   hydratingSession.value = true;
   try {
     await sessionService.hydrateSession(session.value.id);
-    toast.success('Session hydration workflow started. Tracks will be available once hydration completes.');
+    toast.success(
+      'Session hydration workflow started. Tracks will be available once hydration completes.'
+    );
     showHydrationModal.value = false;
   } catch (error) {
     console.error('Failed to start session hydration:', error);

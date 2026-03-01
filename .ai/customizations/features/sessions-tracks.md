@@ -90,6 +90,12 @@
 
 ---
 
+## 2026-03-01
+
+- Fix: `handleViewInBrowser()` in `ui/src/pages/sessions/[id].vue` incorrectly showed "Some legacy datasets are still being migrated" toast even after all workflows completed.
+- Root cause: The migration check (`ds.migration_status.is_migrated`) ran against datasets returned from `session_tracks` after hydration. The API only attaches `migration_status` to datasets fetched from `metadata.datasets` (the pre-hydration path). Once the session is hydrated the API uses the `session_tracks`-only path, which does not attach `migration_status`, so `allMigrated` evaluated to `false`.
+- Fix: Check `isSessionHydrated` first. If the session is already hydrated, skip the migration-status check entirely and proceed to browser selection. The migration check is now guarded inside the `!isHydrated` branch, where it is meaningful as a prerequisite gate before showing the hydration modal.
+
 ## Future Entries
 
 Add entries here as decisions are made, changes are implemented, or issues are resolved.
