@@ -334,16 +334,6 @@ async function get_dataset({
     });
   }
 
-  // Extract derivation_method from dataset_hierarchy.metadata
-  // dataset.derived_datasets contains all derived datasets from dataset_hierarchy table
-  // The metadata.derivation_method field indicates how the dataset was derived
-  if (dataset.derived_datasets) {
-    dataset.derived_datasets = (dataset.derived_datasets || []).map((dd) => ({
-      ...dd,
-      derivation_method: dd.metadata?.derivation_method || 'manual_assignment',
-    }));
-  }
-
   return dataset;
 }
 
@@ -1425,19 +1415,15 @@ const buildDatasetCreateQuery = async (data) => {
     };
   }
 
-  // Create source dataset relationships (can have multiple sources)
-  // Default derivation_method to 'manual_assignment' for relationships created at dataset creation time
   const sourceRelationships = [];
   if (src_dataset_id) {
     sourceRelationships.push({
       source_id: src_dataset_id,
-      metadata: { derivation_method: 'manual_assignment' },
     });
   }
   if (source_data_product_id) {
     sourceRelationships.push({
       source_id: source_data_product_id,
-      metadata: { derivation_method: 'manual_assignment' },
     });
   }
   if (sourceRelationships.length > 0) {

@@ -273,8 +273,7 @@ def derive_data_products(celery_task, dataset_id: int, conversion_id: int):
             derived_data_products.append(data_product)
             seen_ids.add(data_product['id'])
         
-    # Create hierarchy relationships for all data products (created + conflicted)
-    # These are conversion-derived, so set derivation_method to 'conversion'
+        # Create hierarchy relationships for all data products (created + conflicted)
     if derived_data_products:
         dataset_hierarchy_data: list[dict] = []
         
@@ -283,11 +282,11 @@ def derive_data_products(celery_task, dataset_id: int, conversion_id: int):
                 "source_id": dataset['id'],
                 "derived_id": data_product['id'],
                 "metadata": {
-                    "derivation_method": "conversion"
+                    "conversion_id": conversion_id
                 }
             })
 
-        print(f"Creating {len(dataset_hierarchy_data)} dataset hierarchies with derivation_method='conversion'...")
+        print(f"Creating {len(dataset_hierarchy_data)} dataset hierarchies...")
         try:
             api.create_dataset_hierarchy(dataset_hierarchy_data)
             print("Dataset hierarchies created successfully")

@@ -230,27 +230,22 @@ router.get(
       limit, offset, sort_by, sort_order, type, name,
     } = req.query;
 
-    // Get the conversion to find its source dataset
-    const conversion = await prisma.conversion.findUnique({
+    const conversionExists = await prisma.conversion.findUnique({
       where: { id: conversionId },
-      select: { dataset_id: true },
+      select: { id: true },
     });
 
-    if (!conversion || !conversion.dataset_id) {
+    if (!conversionExists) {
       return res.json({
         metadata: { count: 0 },
         derived_datasets: [],
       });
     }
 
-    // Build filters for dataset_hierarchy
-    // Find hierarchies where source is this conversion's dataset
-    // AND metadata.derivation_method is 'conversion'
     const hierarchyFilters = {
-      source_id: conversion.dataset_id,
       metadata: {
-        path: ['derivation_method'],
-        equals: 'conversion',
+        path: ['conversion_id'],
+        equals: conversionId,
       },
     };
 

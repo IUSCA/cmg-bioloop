@@ -174,17 +174,8 @@ router.post(
   asyncHandler(async (req, res, next) => {
     // #swagger.tags = ['datasets']
     // #swagger.summary = Add new associations between datasets
-    // Default derivation_method to 'manual_assignment' if not provided
-    const dataWithDefaults = req.body.map((item) => ({
-      ...item,
-      metadata: {
-        derivation_method: 'manual_assignment',
-        ...item.metadata,
-      },
-    }));
-
     await prisma.dataset_hierarchy.createMany({
-      data: dataWithDefaults,
+      data: req.body,
     });
     res.sendStatus(200);
   }),

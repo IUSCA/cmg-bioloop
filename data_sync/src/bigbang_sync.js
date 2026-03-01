@@ -446,17 +446,17 @@ async function main() {
     logger.info('[11/17] Converting CMG upload history to import logs...');
     await syncImportLogs(prisma, cmgDb, cmgUserId);
 
-    // 12. Convert dataset hierarchies
-    logger.info('[12/17] Converting dataset hierarchies...');
-    await syncDatasetHierarchies(prisma, cmgDb);
+    // 12. Convert conversions
+    logger.info('[12/17] Converting conversions...');
+    await syncConversions(prisma, cmgDb);
 
     // 13. Convert projects
     logger.info('[13/17] Converting projects...');
     await syncProjects(prisma, cmgDb);
 
-    // 14. Convert conversions
-    logger.info('[14/17] Converting conversions...');
-    await syncConversions(prisma, cmgDb);
+    // 14. Convert dataset hierarchies (must run after conversions so conversion_id can be stored)
+    logger.info('[14/17] Converting dataset hierarchies...');
+    await syncDatasetHierarchies(prisma, cmgDb);
 
     // 15. Convert conversion logs (filesystem - production only)
     if (options.skipConversionLogs) {

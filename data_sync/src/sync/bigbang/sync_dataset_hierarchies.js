@@ -8,9 +8,9 @@ const logger = require('../../logger');
  * Links are created by looking at dataproduct.dataset field which references
  * the source raw dataset that was used to create the derived data product.
  * 
- * Derivation method is determined by checking CMG dataproduct fields:
- * - If dataproduct.conversion exists → derivation_method: 'conversion'
- * - Otherwise → derivation_method: 'manual_assignment'
+ * For conversion-derived data products (dataproduct.conversion is set), the
+ * Bioloop conversion_id is stored in metadata so the conversion view can show
+ * only the data products it produced.
  */
 async function syncDatasetHierarchies(prisma, cmgDb) {
   logger.info('[BIGBANG] Converting dataset hierarchies...');
@@ -20,8 +20,7 @@ async function syncDatasetHierarchies(prisma, cmgDb) {
   
   let createdCount = 0;
   let skippedCount = 0;
-  const skipReasons = {};  // Track reasons for skipping
-  const derivationMethodCounts = { conversion: 0, manual_assignment: 0 };  // Track derivation methods
+  const skipReasons = {};
   
   for (const cmgDataProduct of cmgDataProducts) {
     // Find the corresponding Bioloop DATA_PRODUCT
@@ -95,30 +94,34 @@ async function syncDatasetHierarchies(prisma, cmgDb) {
       continue;
     }
     
-    // Determine derivation method based on CMG dataproduct fields
-    // - If dataproduct.conversion exists → created by conversion pipeline
-    // - Otherwise → manually assigned/uploaded by user
-    const derivationMethod = cmgDataProduct.conversion ? 'conversion' : 'manual_assignment';
-    derivationMethodCounts[derivationMethod]++;
-    
-    // Insert the hierarchy relationship with derivation method metadata
+    let hierarchyMetadata = null;
+
+    if (cmgDataProduct.conversion) {
+      const bioloopConversion = await prisma.conversion.findFirst({
+        where: { cmg_id: cmgDataProduct.conversion.toString() },
+        select: { id: true },
+      });
+
+      if (bioloopConversion) {
+        hierarchyMetadata = { conversion_id: bioloopConversion.id };
+      } else {
+        logger.warn(`[BIGBANG] Bioloop conversion not found for CMG ID: ${cmgDataProduct.conversion} (dataproduct: ${cmgDataProduct._id})`);
+      }
+    }
+
     await prisma.dataset_hierarchy.create({
       data: {
         source_id: bioloopRawData.id,
         derived_id: bioloopDataProduct.id,
-        metadata: {
-          derivation_method: derivationMethod,
-        },
+        metadata: hierarchyMetadata,
       },
     });
-    
+
     createdCount++;
-    logger.debug(`[BIGBANG] Created hierarchy: ${bioloopRawData.name} (${bioloopRawData.type}) → ${bioloopDataProduct.name} (${bioloopDataProduct.type}), method=${derivationMethod}`);
+    logger.debug(`[BIGBANG] Created hierarchy: ${bioloopRawData.name} → ${bioloopDataProduct.name}${hierarchyMetadata ? ` (conversion_id: ${hierarchyMetadata.conversion_id})` : ''}`);
   }
   
-  // Log detailed summary
   logger.info(`[BIGBANG] Dataset hierarchy conversion complete: ${createdCount} created, ${skippedCount} skipped`);
-  logger.info(`[BIGBANG] Derivation methods: ${derivationMethodCounts.conversion} via conversion, ${derivationMethodCounts.manual_assignment} via manual assignment/upload`);
   
   // Show breakdown of skip reasons
   if (Object.keys(skipReasons).length > 0) {

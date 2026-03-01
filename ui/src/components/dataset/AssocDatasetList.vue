@@ -14,12 +14,12 @@
       </template>
 
       <template #cell(derivation_method)="{ rowData }">
-        <va-chip 
-          v-if="derivation_method_map.get(rowData.id)"
-          :color="derivation_method_map.get(rowData.id) === 'conversion' ? 'info' : 'secondary'"
+        <va-chip
+          v-if="rowData.create_method"
+          :color="rowData.create_method === 'CONVERSION' ? 'info' : 'secondary'"
           size="small"
         >
-          {{ derivation_method_map.get(rowData.id) === 'conversion' ? 'Conversion' : 'Manual Assignment' }}
+          {{ rowData.create_method === 'CONVERSION' ? 'Conversion' : 'Manual Assignment' }}
         </va-chip>
       </template>
 
@@ -104,15 +104,6 @@ const dataset_ids = computed(() =>
     return meta.derived_id;
   })
 );
-
-const derivation_method_map = computed(() => {
-  const map = new Map();
-  props.datasets_meta.forEach((meta) => {
-    const id = props.relationship_type === 'source' ? meta.source_id : meta.derived_id;
-    map.set(id, meta.derivation_method);
-  });
-  return map;
-});
 
 // pagination
 const page = ref(1);
