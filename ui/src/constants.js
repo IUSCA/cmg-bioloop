@@ -363,6 +363,38 @@ const exports = {
     PENDING: 'PENDING',
     COMPLETE: 'COMPLETE',
   },
+  WORKFLOW_SUBJECT_CONFIGS: {
+    integrated: {
+      label: 'Dataset',
+      subjectKey: 'dataset_id',
+      getRoute: (id) => `/datasets/${id}`,
+    },
+    stage: {
+      label: 'Dataset',
+      subjectKey: 'dataset_id',
+      getRoute: (id) => `/datasets/${id}`,
+    },
+    stage_migrated: {
+      label: 'Dataset',
+      subjectKey: 'dataset_id',
+      getRoute: (id) => `/datasets/${id}`,
+    },
+    delete: {
+      label: 'Dataset',
+      subjectKey: 'dataset_id',
+      getRoute: (id) => `/datasets/${id}`,
+    },
+    genomic_conversion: {
+      label: 'Conversion',
+      subjectKey: 'conversion_id',
+      getRoute: (id) => `/conversions/${id}`,
+    },
+    hydrate_session: {
+      label: 'Session',
+      subjectKey: 'session_id',
+      getRoute: (id) => `/sessions/${id}`,
+    },
+  },
   artifact_type: {
     JOB_SCRIPT: 'JOB_SCRIPT',
     ENVIRONMENT_SETUP: 'ENVIRONMENT_SETUP',

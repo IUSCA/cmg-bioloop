@@ -24,33 +24,21 @@
           </span>
         </span>
 
-        <div v-if="props.show_dataset && dataset_id">
-          <div class="flex text-sm gap-x-3">
-            <div class="grow">
-              <span>
-                Dataset:
-                <router-link :to="`/datasets/${dataset_id}`" class="va-link"
-                  >#{{ dataset_id }}</router-link
-                >
-              </span>
-            </div>
-
-            <div v-if="workflow?.initiator" class="grow gap-2">
-              <span>
-                Initiated by: {{ workflow.initiator?.name }} (
-                {{ workflow.initiator?.username }} )
-              </span>
-            </div>
+        <div class="flex text-sm gap-x-3">
+          <div v-if="props.show_subject && subject" class="grow">
+            <span>
+              {{ subject.label }}:
+              <router-link :to="subject.to" class="va-link"
+                >#{{ subject.id }}</router-link
+              >
+            </span>
           </div>
-        </div>
-        <div v-else>
-          <div class="flex text-sm gap-x-3">
-            <div v-if="workflow?.initiator" class="grow">
-              <span>
-                Initiated by: {{ workflow.initiator?.name }} (
-                {{ workflow.initiator?.username }} )
-              </span>
-            </div>
+
+          <div v-if="workflow?.initiator" class="grow gap-2">
+            <span>
+              Initiated by: {{ workflow.initiator?.name }} (
+              {{ workflow.initiator?.username }} )
+            </span>
           </div>
         </div>
       </div>
@@ -122,10 +110,11 @@
 import WorkflowStatusIcon from "@/components/runs/WorkflowStatusIcon.vue";
 import * as datetime from "@/services/datetime";
 import workflowService from "@/services/workflow";
+import workflowUtils from "@/services/workflowUtils";
 
 const props = defineProps({
   workflow: Object,
-  show_dataset: {
+  show_subject: {
     type: Boolean,
     default: false,
   },
@@ -133,12 +122,7 @@ const props = defineProps({
 
 // eslint-disable-next-line vue/no-dupe-keys
 const workflow = ref({});
-const dataset_id = computed(() => {
-  // dataset_id is the first argument of the args in the task object
-  const a_step = (workflow.value?.steps || [])[0];
-  const x = (a_step?.last_task_run?.args || [])[0];
-  return x;
-});
+const subject = computed(() => workflowUtils.resolveWorkflowSubject(workflow.value));
 const elapsed_time = computed(() => {
   if (!workflowService.is_workflow_done(workflow.value)) {
     const now = new Date();

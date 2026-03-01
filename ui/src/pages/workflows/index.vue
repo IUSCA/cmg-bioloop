@@ -149,7 +149,7 @@
           <div class="flex-[0_0_90%]">
             <workflowCompact
               :workflow="workflow"
-              :show_dataset="!!workflow.dataset_id"
+              :show_subject="true"
             />
           </div>
         </template>

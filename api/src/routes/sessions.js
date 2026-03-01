@@ -778,11 +778,12 @@ router.patch(
       }
       return true;
     }),
+    body('metadata').isObject().optional(),
   ],
   asyncHandler(async (req, res) => {
     const { id } = req.params;
     const {
-      title, genome, genome_type, is_public, track_ids,
+      title, genome, genome_type, is_public, track_ids, metadata,
     } = req.body;
 
     // Check if session exists and user has access
@@ -847,6 +848,12 @@ router.patch(
     if (genome !== undefined) updateData.genome = genome;
     if (genome_type !== undefined) updateData.genome_type = genome_type;
     if (is_public !== undefined) updateData.is_public = is_public;
+    if (metadata !== undefined) {
+      updateData.metadata = {
+        ...(existingSession.metadata || {}),
+        ...metadata,
+      };
+    }
 
     const session = await prisma.genome_browser_session.update({
       where: { id },

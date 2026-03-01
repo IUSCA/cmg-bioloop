@@ -96,25 +96,41 @@ router.get(
       // for each workflow, get initiator details from the app db
       const wf_ids = api_res.data.results.map((wf) => wf.id);
 
-      const rows = await prisma.workflow.findMany({
-        where: {
-          id: {
-            in: wf_ids,
+      const [rows, session_wf_rows, conversion_rows] = await Promise.all([
+        prisma.workflow.findMany({
+          where: {
+            id: {
+              in: wf_ids,
+            },
           },
-        },
-        include: {
-          initiator: true,
-          // conversion: !!include_conversion,
-        },
-      });
+          include: {
+            initiator: true,
+          },
+        }),
+        prisma.session_workflow.findMany({
+          where: { workflow_id: { in: wf_ids } },
+          select: { session_id: true, workflow_id: true },
+        }),
+        prisma.conversion.findMany({
+          where: { workflow_id: { in: wf_ids } },
+          select: { id: true, workflow_id: true },
+        }),
+      ]);
 
       const id_initiator_map = rows.reduce((acc, wf) => {
         acc[wf.id] = wf.initiator;
         return acc;
       }, {});
 
-      // console.log('id_initiator_map', JSON.stringify(id_initiator_map, null,
-      // 2));
+      const session_id_by_workflow = session_wf_rows.reduce((acc, row) => {
+        acc[row.workflow_id] = row.session_id;
+        return acc;
+      }, {});
+
+      const conversion_id_by_workflow = conversion_rows.reduce((acc, row) => {
+        acc[row.workflow_id] = row.id;
+        return acc;
+      }, {});
 
       res.json({
         metadata: api_res.data.metadata,
@@ -122,7 +138,9 @@ router.get(
           const app_workflow = rows.find((app_wf) => app_wf.id === wf.id);
           return {
             ...wf,
-            dataset_id: app_workflow?.dataset_id,
+            dataset_id: app_workflow?.dataset_id ?? null,
+            conversion_id: conversion_id_by_workflow[wf.id] ?? null,
+            session_id: session_id_by_workflow[wf.id] ?? null,
             initiator: id_initiator_map[wf.id],
           };
         }),

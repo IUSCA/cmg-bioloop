@@ -92,9 +92,11 @@
 
 ## 2026-03-01
 
-- Fix: `handleViewInBrowser()` in `ui/src/pages/sessions/[id].vue` incorrectly showed "Some legacy datasets are still being migrated" toast even after all workflows completed.
-- Root cause: The migration check (`ds.migration_status.is_migrated`) ran against datasets returned from `session_tracks` after hydration. The API only attaches `migration_status` to datasets fetched from `metadata.datasets` (the pre-hydration path). Once the session is hydrated the API uses the `session_tracks`-only path, which does not attach `migration_status`, so `allMigrated` evaluated to `false`.
-- Fix: Check `isSessionHydrated` first. If the session is already hydrated, skip the migration-status check entirely and proceed to browser selection. The migration check is now guarded inside the `!isHydrated` branch, where it is meaningful as a prerequisite gate before showing the hydration modal.
+- Fix (attempt 1): `handleViewInBrowser()` in `ui/src/pages/sessions/[id].vue` incorrectly showed "Some legacy datasets are still being migrated" toast even after all workflows completed.
+  - Root cause: The migration check (`ds.migration_status.is_migrated`) ran against datasets returned from `session_tracks` after hydration. The API only attaches `migration_status` to datasets fetched from `metadata.datasets` (the pre-hydration path). Once the session is hydrated the API uses the `session_tracks`-only path, which does not attach `migration_status`, so `allMigrated` evaluated to `false`.
+  - Fix: Check `isSessionHydrated` first. If the session is already hydrated, skip the migration-status check entirely and proceed to browser selection. The migration check is now guarded inside the `!isHydrated` branch, where it is meaningful as a prerequisite gate before showing the hydration modal.
+- Fix (attempt 2, root cause): `PATCH /sessions/:id` in `api/src/routes/sessions.js` never read or applied the `metadata` field from the request body, so `finish_session_hydration` (worker task) could never persist `metadata.is_hydrated = true`. Because of this `isSessionHydrated()` always returned `false` for every session, making attempt 1's `isHydrated` check ineffective.
+  - Fix: Added `metadata` body validator and shallow-merge logic to `PATCH /sessions/:id`: `{ ...existingMetadata, ...incomingMetadata }`. Existing keys (`origin`, `datasets`, etc.) are preserved; `is_hydrated: true` is now correctly written to the DB.
 
 ## Future Entries
 
