@@ -12,11 +12,25 @@ const importSources = [
     path: '/N/project/yunliu-general/SCA_incoming',
     label: 'SCA Incoming',
     description: 'SCA incoming data on Slate-Project filesystem',
+    sort_order: 1,
   },
   {
     path: '/N/project/CMG-SCA',
     label: 'CMG-SCA',
-    description: 'CMG-SCA project directory on Slate-Project filesystem',
+    description: 'CMG-SCA incoming data on Slate-Project filesystem',
+    sort_order: 2,
+  },
+  {
+    path: '/N/scratch/cmguser/cmg-bioloop/imports',
+    label: 'CMG-Bioloop Slate-Scratch',
+    description: 'Incoming data on CMG-Bioloop Slate-Scratch filesystem',
+    sort_order: 3,
+  },
+  {
+    path: '/N/project/CMG-SCA/cmg-bioloop/imports',
+    label: 'CMG-Bioloop Slate-Project',
+    description: 'Incoming data on CMG-Bioloop Slate-Project filesystem',
+    sort_order: 4,
   },
 ];
 
@@ -25,7 +39,7 @@ async function main() {
     importSources.map((source) => prisma.import_source.upsert({
       where: { path: source.path },
       create: source,
-      update: { label: source.label, description: source.description },
+      update: { label: source.label, description: source.description, sort_order: source.sort_order },
     })),
   );
 

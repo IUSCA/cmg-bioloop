@@ -398,18 +398,20 @@ async function main() {
       path: '/opt/sca/data/imports/entrypoint',
       label: 'Imports',
       description: 'Default import source for docker/dev environment',
+      sort_order: 1,
     },
     {
       path: '/opt/sca/data/project/entrypoint',
       label: 'Project',
       description: 'Project filesystem import source for docker/dev environment',
+      sort_order: 2,
     },
   ];
   await Promise.all(
     importSources.map((source) => prisma.import_source.upsert({
       where: { path: source.path },
       create: source,
-      update: { label: source.label, description: source.description },
+      update: { label: source.label, description: source.description, sort_order: source.sort_order },
     })),
   );
   console.log(`seeded ${importSources.length} import sources`);

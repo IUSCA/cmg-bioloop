@@ -12,7 +12,10 @@ router.get(
   isPermittedTo('read'),
   asyncHandler(async (req, res) => {
     const sources = await prisma.import_source.findMany({
-      orderBy: { label: 'asc' },
+      orderBy: [
+        { sort_order: { sort: 'asc', nulls: 'last' } },
+        { label: 'asc' },
+      ],
     });
     res.json(sources);
   }),
