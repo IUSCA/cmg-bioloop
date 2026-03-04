@@ -237,8 +237,16 @@ const users = computed(() => {
 const editModal = ref(null);
 
 function openModalToEditProject() {
-  const { name, description, browser_enabled, funding, cmg_id, metadata } = project.value;
-  projectFormStore.$patch({ name, description, browser_enabled, funding, cmg_id, metadata });
+  const { name, description, browser_enabled, funding, cmg_id, metadata } =
+    project.value;
+  projectFormStore.$patch({
+    name,
+    description,
+    browser_enabled,
+    funding,
+    cmg_id,
+    metadata,
+  });
   editModal.value.show();
 }
 

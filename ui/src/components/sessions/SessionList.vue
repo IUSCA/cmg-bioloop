@@ -27,7 +27,7 @@
       :filters="filters"
       @remove-filter="removeFilter"
       @clear-all="clearFilters"
-    /> 
+    />
 
     <!-- Sessions table -->
     <va-card>
@@ -46,7 +46,8 @@
 
         <template #cell(genome)="{ item }">
           <va-chip v-if="item.genome_type || item.genome" size="small" outline>
-            {{ item.genome_type || '' }}{{ item.genome ? ` (${item.genome})` : '' }}
+            {{ item.genome_type || ""
+            }}{{ item.genome ? ` (${item.genome})` : "" }}
           </va-chip>
         </template>
 
@@ -73,7 +74,6 @@
 
         <template #cell(actions)="{ item }">
           <div class="flex gap-1">
-
             <va-button
               v-if="canDeleteSession(item)"
               preset="plain"
@@ -128,12 +128,10 @@ import { useAuthStore } from "@/stores/auth";
 import { useSessionsStore } from "@/stores/sessions";
 import { useDebounceFn } from "@vueuse/core";
 import { computed, onMounted, ref, watch } from "vue";
-import { useRouter } from "vue-router";
 import DeleteSessionModal from "./DeleteSessionModal.vue";
 import SessionSearchFilters from "./SessionSearchFilters.vue";
 import SessionSearchModal from "./SessionSearchModal.vue";
 
-const router = useRouter();
 const sessionsStore = useSessionsStore();
 const auth = useAuthStore();
 
@@ -159,14 +157,6 @@ const filters = ref({
   genome_type: "",
 });
 
-// Default values function for query persistence
-const defaultParams = () => ({
-  page: 1,
-  page_size: 25,
-  sort_by: "created_at",
-  sort_order: "desc",
-});
-
 const defaultFilters = () => ({
   title: "",
   genome: "",
@@ -175,12 +165,12 @@ const defaultFilters = () => ({
 
 // Computed
 const sessions = computed(() => {
-  console.log('[SessionList] sessions:', sessionsStore.sessions.length);
+  console.log("[SessionList] sessions:", sessionsStore.sessions.length);
   return sessionsStore.sessions;
 });
 const loading = computed(() => sessionsStore.loading);
 const metadata = computed(() => {
-  console.log('[SessionList] metadata:', sessionsStore.metadata);
+  console.log("[SessionList] metadata:", sessionsStore.metadata);
   return sessionsStore.metadata;
 });
 
@@ -271,9 +261,9 @@ const fetchSessions = async () => {
       sort_order: query.value.sort_order,
     };
 
-    console.log('[SessionList] Fetching with params:', params);
+    console.log("[SessionList] Fetching with params:", params);
     const result = await sessionsStore.fetchSessions(params);
-    console.log('[SessionList] API returned:', result);
+    console.log("[SessionList] API returned:", result);
   } catch (error) {
     console.error("Error fetching sessions:", error);
   }
@@ -309,12 +299,6 @@ const clearFilters = () => {
   resetFilters();
 };
 
-const viewSession = (session) => {
-  // Navigate to session detail page
-  router.push(`/sessions/${session.id}`);
-};
-
-
 const deleteModal = ref(null);
 const selectedForDeletion = ref({});
 
@@ -328,16 +312,16 @@ const handleSessionCreated = () => {
   fetchSessions(); // Refresh the list
 };
 
-
 // Watch for changes in query and filters
 watch(
   [query, filters],
   (newVals, oldVals) => {
     // Reset to page 1 when sort changes
-    if (oldVals[0] && (
-      newVals[0].sort_by !== oldVals[0].sort_by ||
-      newVals[0].sort_order !== oldVals[0].sort_order
-    )) {
+    if (
+      oldVals[0] &&
+      (newVals[0].sort_by !== oldVals[0].sort_by ||
+        newVals[0].sort_order !== oldVals[0].sort_order)
+    ) {
       query.value.page = 1;
     }
     fetchSessions();

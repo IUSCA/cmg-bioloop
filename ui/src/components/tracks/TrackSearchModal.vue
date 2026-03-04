@@ -85,9 +85,7 @@
 
     <template #footer>
       <div class="flex gap-2 justify-end">
-        <va-button preset="secondary" @click="resetForm">
-          Reset
-        </va-button>
+        <va-button preset="secondary" @click="resetForm"> Reset </va-button>
         <va-button preset="primary" @click="applyFilters">
           Apply Filters
         </va-button>
@@ -97,19 +95,19 @@
 </template>
 
 <script setup>
-import ProjectAsyncAutoComplete from '@/components/project/ProjectAsyncAutoComplete.vue';
-import DatasetSelectAutoComplete from '@/components/dataset/DatasetSelectAutoComplete.vue';
-import analysisTypeService from '@/services/analysisType';
-import constants from '@/constants';
+import ProjectAsyncAutoComplete from "@/components/project/ProjectAsyncAutoComplete.vue";
+import DatasetSelectAutoComplete from "@/components/dataset/DatasetSelectAutoComplete.vue";
+import analysisTypeService from "@/services/analysisType";
+import constants from "@/constants";
 
 const visible = ref(false);
 
 const defaultForm = () => ({
-  name: '',
+  name: "",
   project: null,
-  project_search_term: '',
+  project_search_term: "",
   dataset: null,
-  dataset_search_term: '',
+  dataset_search_term: "",
   file_type: null,
   genome_type: null,
   genome_value: null,
@@ -122,7 +120,7 @@ const analysisTypes = ref([]);
 const loadingFileTypes = ref(false);
 
 const fileTypeOptions = computed(() => {
-  const options = [{ label: 'All', value: null }];
+  const options = [{ label: "All", value: null }];
   analysisTypes.value.forEach((at) => {
     if (at.name) {
       options.push({ label: at.name, value: at.name });
@@ -133,7 +131,7 @@ const fileTypeOptions = computed(() => {
 
 // Genome type options from constants
 const genomeTypeOptions = computed(() => {
-  const options = [{ label: 'All', value: null }];
+  const options = [{ label: "All", value: null }];
   Object.entries(constants.GENOME_TYPES).forEach(([key, val]) => {
     options.push({ label: val.label || key, value: key });
   });
@@ -142,8 +140,11 @@ const genomeTypeOptions = computed(() => {
 
 // Genome value options based on selected genome type
 const genomeValueOptions = computed(() => {
-  const options = [{ label: 'All', value: null }];
-  if (form.value.genome_type && constants.GENOME_TYPES[form.value.genome_type]) {
+  const options = [{ label: "All", value: null }];
+  if (
+    form.value.genome_type &&
+    constants.GENOME_TYPES[form.value.genome_type]
+  ) {
     constants.GENOME_TYPES[form.value.genome_type].genomes.forEach((genome) => {
       options.push({ label: genome, value: genome });
     });
@@ -160,7 +161,7 @@ function onProjectSelected(project) {
   form.value.project = project;
   // Clear dataset when project changes
   form.value.dataset = null;
-  form.value.dataset_search_term = '';
+  form.value.dataset_search_term = "";
 }
 
 function onProjectCleared() {
@@ -183,7 +184,7 @@ async function loadAnalysisTypes() {
     const res = await analysisTypeService.getAll();
     analysisTypes.value = res.data || [];
   } catch (err) {
-    console.error('Failed to load analysis types', err);
+    console.error("Failed to load analysis types", err);
   } finally {
     loadingFileTypes.value = false;
   }
@@ -197,7 +198,7 @@ function onModalClose() {
   resetForm();
 }
 
-const emit = defineEmits(['search']);
+const emit = defineEmits(["search"]);
 
 function applyFilters() {
   const filters = {
@@ -214,7 +215,7 @@ function applyFilters() {
   };
 
   visible.value = false;
-  emit('search', filters);
+  emit("search", filters);
   resetForm();
 }
 

@@ -198,8 +198,13 @@ const columns = [
 const rows = computed(() => {
   return derivedDatasets.value.map((item) => ({
     ...item,
-    is_staging_pending: wfService.is_staging_workflow_active(item.dataset?.workflows),
-    is_archival_pending: wfService.is_step_pending('archive', item.dataset?.workflows),
+    is_staging_pending: wfService.is_staging_workflow_active(
+      item.dataset?.workflows,
+    ),
+    is_archival_pending: wfService.is_step_pending(
+      "archive",
+      item.dataset?.workflows,
+    ),
   }));
 });
 
@@ -243,8 +248,14 @@ async function fetchDerivedDatasets() {
 // Fetch and update a specific dataset in the list
 const fetchAndUpdateDataset = async (id) => {
   try {
-    const response = await DatasetService.getById({ id, include_projects: true, bundle: true });
-    const index = derivedDatasets.value.findIndex((item) => item.dataset?.id === id);
+    const response = await DatasetService.getById({
+      id,
+      include_projects: true,
+      bundle: true,
+    });
+    const index = derivedDatasets.value.findIndex(
+      (item) => item.dataset?.id === id,
+    );
     if (index !== -1) {
       derivedDatasets.value[index] = {
         ...derivedDatasets.value[index],

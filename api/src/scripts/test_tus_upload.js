@@ -1,7 +1,8 @@
 #!/usr/bin/env node
+/* eslint-disable no-console, no-unused-vars */
 /**
  * Test TUS Upload Script
- * 
+ *
  * Tests the TUS upload endpoint by uploading a small test file.
  * Run from within API container or workers container.
  */
@@ -40,9 +41,9 @@ console.log('');
 const fileStream = fs.createReadStream(testFilePath);
 const fileSize = fs.statSync(testFilePath).size;
 
-// Upload with TUS  
+// Upload with TUS
 const upload = new tus.Upload(fileStream, {
-  endpoint: `${API_URL}/uploads/files`,  // No /api prefix when calling directly
+  endpoint: `${API_URL}/uploads/files`, // No /api prefix when calling directly
   retryDelays: [0, 1000, 3000],
   uploadSize: fileSize,
   metadata: {
@@ -68,7 +69,7 @@ const upload = new tus.Upload(fileStream, {
     console.log('');
     console.log('✅ Upload successful!');
     console.log(`Upload ID: ${upload.url}`);
-    
+
     // Clean up
     fs.unlinkSync(testFilePath);
     console.log('Cleaned up test file.');

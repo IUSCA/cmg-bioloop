@@ -7,6 +7,7 @@ const { validate: validateUuid } = require('uuid');
 
 const asyncHandler = require('@/middleware/asyncHandler');
 const { accessControl } = require('@/middleware/auth');
+const logger = require('@/services/logger');
 const { validate } = require('@/middleware/validators');
 const projectService = require('@/services/project');
 const wfService = require('@/services/workflow');
@@ -121,8 +122,7 @@ router.get(
     // and user role is forbidden
     const { include_datasets } = req.query;
 
-    console.log('req.params.id', req.params.id);
-    console.log('include_datasets', include_datasets);
+    logger.info('GET /projects/:id', { id: req.params.id, include_datasets });
 
     // TODO: remove this once Database is being initialized via Prisma
     // temporary fix:  won't be needed once Database is being initialized via Prisma

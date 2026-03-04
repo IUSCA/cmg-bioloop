@@ -18,70 +18,65 @@
 
         <!-- Run Info -->
         <va-card class="flex flex-col min-w-0">
-            <va-card-title>
-              <span class="text-lg"> Run Info </span>
-            </va-card-title>
-            <va-card-content class="flex-1 flex flex-col min-w-0">
-              <div class="va-table-responsive min-w-0">
-                <table class="va-table">
-                  <tbody>
-                    <!-- Output Directory -->
-                    <tr v-if="conversionOutputDir">
-                      <td>Output Directory</td>
-                      <td>
-                        <CopyText
-                          :text="getConversionOutputDir(conversion)"
-                        />
-                      </td>
-                    </tr>
+          <va-card-title>
+            <span class="text-lg"> Run Info </span>
+          </va-card-title>
+          <va-card-content class="flex-1 flex flex-col min-w-0">
+            <div class="va-table-responsive min-w-0">
+              <table class="va-table">
+                <tbody>
+                  <!-- Output Directory -->
+                  <tr v-if="conversionOutputDir">
+                    <td>Output Directory</td>
+                    <td>
+                      <CopyText :text="getConversionOutputDir(conversion)" />
+                    </td>
+                  </tr>
 
-                    <!-- Reports -->
-                    <tr>
-                      <td>Reports</td>
-                      <td>
-                        <va-button
-                          preset="secondary"
-                          icon="open_in_new"
-                          size="small"
-                          @click="openReports"
+                  <!-- Reports -->
+                  <tr>
+                    <td>Reports</td>
+                    <td>
+                      <va-button
+                        preset="secondary"
+                        icon="open_in_new"
+                        size="small"
+                        @click="openReports"
+                      >
+                        View Reports
+                      </va-button>
+                    </td>
+                  </tr>
+
+                  <!-- Logs -->
+                  <tr v-if="logs.length > 0">
+                    <td>Logs</td>
+                    <td>
+                      <div class="flex items-start gap-2 min-w-0">
+                        <div
+                          class="bg-gray-100 dark:bg-gray-800 px-3 py-2 rounded text-sm overflow-x-auto overflow-y-auto min-w-0 flex-1"
+                          style="min-height: 150px; max-height: 400px"
                         >
-                          View Reports
-                        </va-button>
-                      </td>
-                    </tr>
-
-                    <!-- Logs -->
-                    <tr v-if="logs.length > 0">
-                      <td>Logs</td>
-                      <td>
-                        <div class="flex items-start gap-2 min-w-0">
-                          <div
-                            class="bg-gray-100 dark:bg-gray-800 px-3 py-2 rounded text-sm overflow-x-auto overflow-y-auto min-w-0 flex-1"
-                            style="min-height: 150px; max-height: 400px;"
-                          >
-                            <pre class="whitespace-pre">{{ formattedLogs }}</pre>
-                          </div>
-                          <div class="flex flex-col gap-1 flex-shrink-0">
-                            <CopyButton
-                              :text="formattedLogs"
-                              preset="plain"
-                            />
-                            <va-popover message="Expand" placement="top">
-                              <va-button
-                                preset="plain"
-                                icon="open_in_full"
-                                size="small"
-                                @click="openLogsModal"
-                              />
-                            </va-popover>
-                          </div>
+                          <pre class="whitespace-pre">{{ formattedLogs }}</pre>
                         </div>
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-            </va-card-content>
+                        <div class="flex flex-col gap-1 flex-shrink-0">
+                          <CopyButton :text="formattedLogs" preset="plain" />
+                          <va-popover message="Expand" placement="top">
+                            <va-button
+                              preset="plain"
+                              icon="open_in_full"
+                              size="small"
+                              @click="openLogsModal"
+                            />
+                          </va-popover>
+                        </div>
+                      </div>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </va-card-content>
         </va-card>
       </div>
 
@@ -100,7 +95,10 @@
       <!-- Workflows -->
       <div v-if="conversion?.workflow_id">
         <span class="flex text-xl my-2 font-bold">WORKFLOW</span>
-        <div v-if="workflow && Object.keys(workflow).length > 0" class="space-y-2">
+        <div
+          v-if="workflow && Object.keys(workflow).length > 0"
+          class="space-y-2"
+        >
           <Collapsible v-model="workflow.collapse_model">
             <template #header-content>
               <WorkflowCompact :workflow="workflow" />
@@ -119,9 +117,7 @@
           class="text-center bg-slate-200 dark:bg-slate-800 py-2 rounded shadow"
         >
           <i-mdi-card-remove-outline class="inline-block text-4xl pr-3" />
-          <span class="text-lg">
-            Loading workflow...
-          </span>
+          <span class="text-lg"> Loading workflow... </span>
         </div>
       </div>
     </div>
@@ -170,17 +166,21 @@ function openReports() {
   console.log("conversionId", conversionId);
 
   console.log("will call getReports");
-  conversionApiService.getReports(conversionId)
+  conversionApiService
+    .getReports(conversionId)
     .then((res) => {
       console.log("res", res);
       // index_url already has the token appended
       const indexUrlWithToken = res.data.index_url;
       console.log("indexUrlWithToken", indexUrlWithToken);
-      
+
       // Get secure_download base URL from environment variable
       const secureDownloadBaseUrl = import.meta.env.VITE_UPLOAD_API_BASE_PATH;
-      console.log("secureDownloadBaseUrl (from VITE_UPLOAD_API_BASE_PATH):", secureDownloadBaseUrl);
-      
+      console.log(
+        "secureDownloadBaseUrl (from VITE_UPLOAD_API_BASE_PATH):",
+        secureDownloadBaseUrl,
+      );
+
       // Construct full URL (token already in index_url)
       const fullUrl = `${secureDownloadBaseUrl}${indexUrlWithToken}`;
       console.log("Opening:", fullUrl);
@@ -210,7 +210,7 @@ function fetch_conversion(show_loading = false) {
     .then(([conversionRes, logsRes]) => {
       conversion.value = conversionRes.data;
       logs.value = logsRes.data;
-      
+
       // Fetch workflow if workflow_id exists
       if (conversion.value.workflow_id) {
         fetch_workflow(conversion.value.workflow_id);
@@ -228,11 +228,12 @@ function fetch_conversion(show_loading = false) {
 }
 
 function fetch_workflow(workflow_id) {
-  workflowService.getById(workflow_id, true, true)
+  workflowService
+    .getById(workflow_id, true, true)
     .then((res) => {
       const _workflow = res.data;
       // Keep collapse_model state if it exists
-      _workflow.collapse_model = 
+      _workflow.collapse_model =
         !workflowService.is_workflow_done(_workflow) ||
         workflow.value?.collapse_model ||
         false;
@@ -246,7 +247,6 @@ function fetch_workflow(workflow_id) {
 const formattedLogs = computed(() => {
   return logs.value.map((log) => `${log.message.trim()}`).join("\n");
 });
-
 
 const conversionOutputDir = computed(() => {
   return (
@@ -300,7 +300,7 @@ div.va-table-responsive {
     vertical-align: top;
     padding-top: 0.75rem;
   }
-  
+
   // second column takes remaining space
   td:last-child {
     overflow: hidden;

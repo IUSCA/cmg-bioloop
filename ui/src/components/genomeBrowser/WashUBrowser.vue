@@ -3,12 +3,12 @@
 </template>
 
 <script setup>
-import toast from '@/services/toast';
+import toast from "@/services/toast";
 // import '@/wuepgg/style.css';
-import stableStringify from 'json-stable-stringify';
-import { createElement } from 'react';
-import { createRoot } from 'react-dom/client';
-import { onBeforeUnmount, onMounted, ref } from 'vue';
+import stableStringify from "json-stable-stringify";
+import { createElement } from "react";
+import { createRoot } from "react-dom/client";
+import { onBeforeUnmount, onMounted, ref } from "vue";
 
 const props = defineProps({
   genomeName: {
@@ -32,26 +32,28 @@ let clearAllStoreCaches = null;
 onMounted(async () => {
   // 🧹 NUCLEAR: Purge any old WashU persisted state (one-time cleanup for zombie tracks)
   try {
-    const persistKeys = Object.keys(localStorage).filter((key) => key.startsWith('persist:'));
+    const persistKeys = Object.keys(localStorage).filter((key) =>
+      key.startsWith("persist:"),
+    );
     if (persistKeys.length > 0) {
-      console.log('[WashU] Clearing old persisted state:', persistKeys);
+      console.log("[WashU] Clearing old persisted state:", persistKeys);
       persistKeys.forEach((key) => localStorage.removeItem(key));
     }
   } catch (e) {
-    console.warn('[WashU] Failed to clear persisted state:', e);
+    console.warn("[WashU] Failed to clear persisted state:", e);
   }
 
   if (!washuContainer.value) return;
 
   try {
     // Import WashU GenomeViewer component (defensive import for both default and named exports)
-    const mod = await import('wuepgg');
-    console.log('wuepgg keys:', Object.keys(mod));
+    const mod = await import("wuepgg");
+    console.log("wuepgg keys:", Object.keys(mod));
 
     const GenomeHub = mod.default ?? mod.GenomeHub;
     clearAllStoreCaches = mod.clearAllStoreCaches ?? null;
-    console.log('GenomeHub is:', GenomeHub);
-    console.log('clearAllStoreCaches is:', clearAllStoreCaches);
+    console.log("GenomeHub is:", GenomeHub);
+    console.log("clearAllStoreCaches is:", clearAllStoreCaches);
 
     // Create React root (React 18 API)
     reactRoot = createRoot(washuContainer.value);
@@ -71,7 +73,7 @@ onMounted(async () => {
     // TODO: Uncomment this to use actual tracks from props
     const dataHubPlain = JSON.parse(JSON.stringify(props.dataHub));
 
-    console.log('[WashU] DataHub plain:');
+    console.log("[WashU] DataHub plain:");
     console.dir(dataHubPlain, { depth: null });
 
     // Generate unique store ID to prevent state rehydration from localStorage
@@ -83,7 +85,7 @@ onMounted(async () => {
         ...t,
         url: toAbsoluteUrl(t.url), // WashU uses Web Workers which require absolute URLs
       })), // array of track objects, unwrapped from Vue proxy
-      viewRegion: props.viewRegion ?? 'chr1:155000000-155050000', // no commas
+      viewRegion: props.viewRegion ?? "chr1:155000000-155050000", // no commas
 
       // Package mode props - render UI components
       showToolBar: true,
@@ -97,14 +99,14 @@ onMounted(async () => {
       },
     };
 
-    console.log('[WashU] Initializing with props:');
+    console.log("[WashU] Initializing with props:");
     console.dir(washuProps, { depth: null });
 
     // Force fresh store by using a unique key that changes whenever tracks change
     // This prevents WashU's global store manager from keeping old tracks cached
     const key = `washu:${props.genomeName}:${stableStringify(washuProps.tracks)}`;
-    console.log('[WashU] Using React key:', key);
-    console.log('[WashU] Using unique storeId:', uniqueStoreId);
+    console.log("[WashU] Using React key:", key);
+    console.log("[WashU] Using unique storeId:", uniqueStoreId);
 
     // Create React element using createElement
     const genomeViewerElement = createElement(GenomeHub, {
@@ -115,10 +117,10 @@ onMounted(async () => {
     // Render into container
     reactRoot.render(genomeViewerElement);
 
-    console.log('[WashU] Browser initialized successfully');
+    console.log("[WashU] Browser initialized successfully");
   } catch (error) {
-    console.error('[WashU] Failed to initialize:', error);
-    toast.error('Failed to load WashU browser');
+    console.error("[WashU] Failed to initialize:", error);
+    toast.error("Failed to load WashU browser");
   }
 });
 
@@ -137,10 +139,10 @@ onBeforeUnmount(() => {
   try {
     if (clearAllStoreCaches) {
       clearAllStoreCaches();
-      console.log('[WashU] Store caches cleared');
+      console.log("[WashU] Store caches cleared");
     }
   } catch (e) {
-    console.warn('[WashU] clearAllStoreCaches failed:', e);
+    console.warn("[WashU] clearAllStoreCaches failed:", e);
   }
 
   // Unmount React component
@@ -148,7 +150,7 @@ onBeforeUnmount(() => {
     reactRoot.unmount();
     reactRoot = null;
   }
-  console.log('[WashU] Browser unmounted');
+  console.log("[WashU] Browser unmounted");
 });
 </script>
 

@@ -147,10 +147,7 @@
       >
         <template #header-content>
           <div class="flex-[0_0_90%]">
-            <workflowCompact
-              :workflow="workflow"
-              :show_subject="true"
-            />
+            <workflowCompact :workflow="workflow" :show_subject="true" />
           </div>
         </template>
 

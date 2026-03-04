@@ -61,7 +61,7 @@
     </div>
 
     <!-- table -->
-        <!-- table -->
+    <!-- table -->
     <div class="overflow-x-auto" style="max-width: calc(100vw - 250px)">
       <va-data-table
         v-model="selectedIds"
@@ -77,7 +77,11 @@
         :select-mode="selectMode"
       >
         <template #cell(name)="{ rowData }">
-          <router-link v-if="auth.canOperate" :to="`/datasets/${rowData.id}`" class="va-link">
+          <router-link
+            v-if="auth.canOperate"
+            :to="`/datasets/${rowData.id}`"
+            class="va-link"
+          >
             {{ rowData.name }}
           </router-link>
           <span v-else>{{ rowData.name }}</span>
@@ -128,7 +132,9 @@
             <va-popover
               message="Archive"
               placement="left"
-              v-if="(rowData?.workflows?.length || 0) == 0 && !rowData.is_deleted"
+              v-if="
+                (rowData?.workflows?.length || 0) == 0 && !rowData.is_deleted
+              "
             >
               <va-button
                 class="flex-initial"
@@ -247,8 +253,6 @@
         selectedIds = [];
       "
     />
-
-    
   </div>
 </template>
 
@@ -276,12 +280,13 @@ const { filters, query, params, activeFilters } = storeToRefs(store);
 const auth = useAuthStore();
 
 const PAGE_SIZE_OPTIONS = [25, 50, 100];
-const MAX_DATASET_CONVERSIONS = 10000;
 
 // Determine selection mode based on config
 // If allow_multiple_dataset_conversions is false, use single selection mode
 const selectMode = computed(() => {
-  return config.conversion.allow_multiple_dataset_conversions ? "multiple" : "single";
+  return config.conversion.allow_multiple_dataset_conversions
+    ? "multiple"
+    : "single";
 });
 
 const datasets = ref([]);

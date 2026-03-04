@@ -272,7 +272,9 @@ const configureChartData = (data) => {
   // Check if the data is empty
   if (
     data.length === 0 ||
-    (totalBrowserCount === 0 && totalSlateScratchCount === 0 && totalSlateProjectCount === 0)
+    (totalBrowserCount === 0 &&
+      totalSlateScratchCount === 0 &&
+      totalSlateProjectCount === 0)
   ) {
     isNoData.value = true; // No data available
   } else {

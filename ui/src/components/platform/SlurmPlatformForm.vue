@@ -37,14 +37,14 @@
 </template>
 
 <script setup>
-import SlurmDirectivesForm from './SlurmDirectivesForm.vue';
+import SlurmDirectivesForm from "./SlurmDirectivesForm.vue";
 
 const metadata = defineModel("metadata");
 
 // Local reactive refs
 const files = ref([]);
 const directives = ref({});
-const slurmMode = ref('script'); // Default to script mode
+const slurmMode = ref("script"); // Default to script mode
 
 // Initialize metadata if needed
 onMounted(() => {
@@ -72,7 +72,7 @@ watch(
     metadata.value = {
       ...metadata.value,
       files: newFiles,
-      slurm_mode: 'script',
+      slurm_mode: "script",
     };
 
     console.log("Updated metadata.value:", metadata.value);
@@ -86,9 +86,9 @@ function onModeChange(mode) {
   slurmMode.value = mode;
 
   // Clear the opposite mode's data
-  if (mode === 'directives') {
+  if (mode === "directives") {
     files.value = [];
-  } else if (mode === 'script') {
+  } else if (mode === "script") {
     directives.value = {};
   }
 
@@ -111,10 +111,13 @@ watch(
     metadata.value = {
       ...metadata.value,
       execution_config: newDirectives,
-      slurm_mode: 'directives',
+      slurm_mode: "directives",
     };
 
-    console.log("Updated metadata.value with execution_config:", metadata.value);
+    console.log(
+      "Updated metadata.value with execution_config:",
+      metadata.value,
+    );
     console.log("-------------- SlurmPlatformForm ------------------");
   },
   { deep: true },

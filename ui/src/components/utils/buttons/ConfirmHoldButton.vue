@@ -4,32 +4,32 @@
       <Icon :icon="props.icon" class="mr-3 text-xl" />
 
       <span>
-        {{ (isHovered ? 'Hold to ' : '') + props.action }}
+        {{ (isHovered ? "Hold to " : "") + props.action }}
       </span>
     </va-button>
   </div>
 </template>
 
 <script setup>
-import { onLongPress, useElementHover } from '@vueuse/core';
+import { onLongPress, useElementHover } from "@vueuse/core";
 const props = defineProps({
   icon: String,
   action: String,
   color: String,
 });
 
-const emit = defineEmits(['click']);
+const emit = defineEmits(["click"]);
 
 // https://stackblitz.com/edit/vitejs-vite-zf2ma3?file=src%2FApp.vue
 const longBtn = ref(null);
 onLongPress(
   longBtn,
   () => {
-    emit('click');
+    emit("click");
   },
   {
     delay: 0,
-  }
+  },
 );
 const isHovered = useElementHover(longBtn);
 </script>
@@ -38,7 +38,11 @@ const isHovered = useElementHover(longBtn);
 /* https://stackoverflow.com/questions/17212094/fill-background-color-left-to-right-css */
 /* https://jsfiddle.net/75Umu/3/ */
 div.hold-btn {
-  background: linear-gradient(to right, rgba(175, 175, 175, 0.4) 50%, rgba(0, 0, 0, 0) 50%);
+  background: linear-gradient(
+    to right,
+    rgba(175, 175, 175, 0.4) 50%,
+    rgba(0, 0, 0, 0) 50%
+  );
   background-size: 200% 100%;
   background-position: right bottom;
   transition: all 3s ease;

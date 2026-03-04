@@ -1,6 +1,11 @@
 <template>
   <!--  <va-inner-loading :loading="loading" class="h-full">-->
-  <va-stepper v-model="step" :steps="steps" controlsHidden class="h-full import-stepper">
+  <va-stepper
+    v-model="step"
+    :steps="steps"
+    controlsHidden
+    class="h-full import-stepper"
+  >
     <!-- Step icons and labels -->
     <template
       v-for="(s, i) in steps"
@@ -60,8 +65,13 @@
           :text-by="importService._getLabel"
           :track-by="'id'"
           label="Import Source"
-          :disabled="submitAttempted || searchingFiles || validatingForm || importSources.length === 0"
-          :loading="loadingImportSources"
+          :disabled="
+            submitAttempted ||
+            searchingFiles ||
+            validatingForm ||
+            importSources.length === 0
+          "
+          :loading="loadingImportSources || loadingResources"
         />
 
         <div class="flex flex-col w-full">
@@ -145,9 +155,9 @@
           <va-popover>
             <template #body>
               <div class="w-96">
-                Associating a Data Product with a source Raw Data establishes a clear lineage
-                between the original data and its processed form. This linkage helps to trace the
-                origins of processed data
+                Associating a Data Product with a source Raw Data establishes a
+                clear lineage between the original data and its processed form.
+                This linkage helps to trace the origins of processed data
               </div>
             </template>
             <Icon icon="mdi:help-circle" class="ml-2 text-xl text-gray-500" />
@@ -186,8 +196,9 @@
           <va-popover>
             <template #body>
               <div class="w-96">
-                Associating a Data Product with a source Data Product establishes a clear lineage
-                between derived datasets. This helps track data provenance and processing history.
+                Associating a Data Product with a source Data Product
+                establishes a clear lineage between derived datasets. This helps
+                track data provenance and processing history.
               </div>
             </template>
             <Icon icon="mdi:information" class="ml-2 text-xl text-gray-500" />
@@ -232,11 +243,12 @@
           <va-popover>
             <template #body>
               <div class="w-96">
-                Assigning a dataset to a project establishes a connection between your data and a
-                specific research initiatives. This association helps organize and categorize
-                datasets within the context of your research projects, facilitating easier data
-                management, access control, and collaboration among team members working on the same
-                project.
+                Assigning a dataset to a project establishes a connection
+                between your data and a specific research initiatives. This
+                association helps organize and categorize datasets within the
+                context of your research projects, facilitating easier data
+                management, access control, and collaboration among team members
+                working on the same project.
               </div>
             </template>
             <Icon icon="mdi:help-circle" class="ml-2 text-xl text-gray-500" />
@@ -327,7 +339,9 @@
         <div class="flex items-center ml-2">
           <va-popover>
             <template #body>
-              <div class="w-96">Specific genome assembly version (e.g., hg38, mm10, etc.)</div>
+              <div class="w-96">
+                Specific genome assembly version (e.g., hg38, mm10, etc.)
+              </div>
             </template>
             <Icon icon="mdi:information" class="text-xl text-gray-500" />
           </va-popover>
@@ -355,7 +369,9 @@
         :source-raw-data="selectedRawData"
         :source-data-product="selectedSourceDataProduct"
         :source-instrument="selectedSourceInstrument"
-        :import-space="selectedImportSource?.label || selectedImportSource?.path || ''"
+        :import-space="
+          selectedImportSource?.label || selectedImportSource?.path || ''
+        "
         :dataset-name-error="!stepIsPristine && formErrors[STEP_KEYS.IMPORT]"
         :file-type="selectedFileType"
         :genome-type="selectedGenomeType?.value || selectedGenomeType"
@@ -414,7 +430,9 @@
         placeholder="e.g., .fastq.gz"
         :rules="[
           (value) => !!value || 'Extension is required',
-          (value) => !checkDuplicateFileType(newFileTypeName, value) || 'This file type already exists'
+          (value) =>
+            !checkDuplicateFileType(newFileTypeName, value) ||
+            'This file type already exists',
         ]"
       />
     </div>
@@ -422,27 +440,27 @@
 </template>
 
 <script setup>
-import config from '@/config';
-import Constants from '@/constants';
-import datasetService from '@/services/dataset';
-import fileSystemService from '@/services/fs';
-import importService from '@/services/import';
-import instrumentService from '@/services/instrument';
-import projectService from "@/services/projects"
-import analysisTypeService from '@/services/analysisType';
-import toast from '@/services/toast';
+import config from "@/config";
+import Constants from "@/constants";
+import datasetService from "@/services/dataset";
+import fileSystemService from "@/services/fs";
+import importService from "@/services/import";
+import instrumentService from "@/services/instrument";
+import projectService from "@/services/projects";
+import analysisTypeService from "@/services/analysisType";
+import toast from "@/services/toast";
 import { useAuthStore } from "@/stores/auth";
-import { Icon } from '@iconify/vue';
-import { watchDebounced } from '@vueuse/core';
-import { VaPopover } from 'vuestic-ui';
+import { Icon } from "@iconify/vue";
+import { watchDebounced } from "@vueuse/core";
+import { VaPopover } from "vuestic-ui";
 
 const auth = useAuthStore();
 
 const STEP_KEYS = {
-  SELECT_DIRECTORY: 'selectDirectory',
-  GENERAL_INFO: 'generalInfo',
-  GENOMIC_DETAILS: 'genomicDetails',
-  IMPORT: 'info',
+  SELECT_DIRECTORY: "selectDirectory",
+  GENERAL_INFO: "generalInfo",
+  GENOMIC_DETAILS: "genomicDetails",
+  IMPORT: "info",
 };
 
 // Various errors that may be shown to the user during the process of importing a dataset.
@@ -460,23 +478,23 @@ const importSources = ref([]);
 const steps = [
   {
     key: STEP_KEYS.SELECT_DIRECTORY,
-    label: 'Select Directory',
-    icon: 'material-symbols:folder',
+    label: "Select Directory",
+    icon: "material-symbols:folder",
   },
   {
     key: STEP_KEYS.GENERAL_INFO,
-    label: 'General Info',
-    icon: 'material-symbols:info',
+    label: "General Info",
+    icon: "material-symbols:info",
   },
   {
     key: STEP_KEYS.GENOMIC_DETAILS,
-    label: 'Genomic Details',
-    icon: 'mdi-dna',
+    label: "Genomic Details",
+    icon: "mdi-dna",
   },
   {
     key: STEP_KEYS.IMPORT,
-    label: 'Import',
-    icon: 'material-symbols:play-circle',
+    label: "Import",
+    icon: "material-symbols:play-circle",
   },
 ];
 
@@ -593,13 +611,13 @@ const selectedGenomeType = ref(null);
 const selectedGenomeValue = ref(null);
 
 // Any notes to associate with this Import. Optional.
-const importNotes = ref('');
+const importNotes = ref("");
 
 // Modal to create new Analysis Type in the system
 const showCreateFileTypeModal = ref(false);
 // Fields within the modal to create new Analysis Type in the system
-const newFileTypeName = ref('');
-const newFileTypeExtension = ref('');
+const newFileTypeName = ref("");
+const newFileTypeExtension = ref("");
 
 // Analysis Types available to select from
 const analysisTypes = ref([]);
@@ -610,10 +628,11 @@ const newlyCreatedFileType = ref(null);
 const shouldShowSourceDataProductField = computed(() => {
   // Show field only if:
   // 1. Dataset type is DATA_PRODUCT
-  const isDataProduct = selectedDatasetType.value?.value === config.dataset.types.DATA_PRODUCT.key;
+  const isDataProduct =
+    selectedDatasetType.value?.value === config.dataset.types.DATA_PRODUCT.key;
 
   // 2. File type is FASTQ
-  const isFastq = selectedFileType.value?.name?.toUpperCase() === 'FASTQ';
+  const isFastq = selectedFileType.value?.name?.toUpperCase() === "FASTQ";
 
   return isDataProduct && isFastq;
 });
@@ -624,7 +643,8 @@ const availableGenomeValues = computed(() => {
   }
 
   // Extract the actual genome type key from the object
-  const genomeTypeKey = selectedGenomeType.value.value || selectedGenomeType.value;
+  const genomeTypeKey =
+    selectedGenomeType.value.value || selectedGenomeType.value;
   const genomes = Constants.GENOME_TYPES[genomeTypeKey]?.genomes || [];
 
   return genomes;
@@ -644,14 +664,14 @@ const genomeTypeOptions = computed(() => {
   }));
 });
 
-
 // Form is invalid if fields are empty OR duplicate exists
 const isFileTypeFormInvalid = computed(() => {
-  return !newFileTypeName.value ||
+  return (
+    !newFileTypeName.value ||
     !newFileTypeExtension.value ||
-    checkDuplicateFileType(newFileTypeName.value, newFileTypeExtension.value);
+    checkDuplicateFileType(newFileTypeName.value, newFileTypeExtension.value)
+  );
 });
-
 
 // Determines whether the Dataset being imported is of type Raw Data or some other type.
 const willImportRawData = computed(() => {
@@ -699,7 +719,8 @@ const importFormData = computed(() => {
     ...(selectedRawData.value && {
       src_dataset_id: selectedRawData.value.id,
     }),
-    ...(projectSelected.value && !willCreateNewProject.value && { project_id: projectSelected.value.id }),
+    ...(projectSelected.value &&
+      !willCreateNewProject.value && { project_id: projectSelected.value.id }),
     ...(selectedSourceInstrument.value && {
       src_instrument_id: selectedSourceInstrument.value.id,
     }),
@@ -710,7 +731,8 @@ const importFormData = computed(() => {
     // Analysis Type
     file_type: selectedFileType.value || null,
     // Genomic details
-    genome_type: selectedGenomeType.value?.value || selectedGenomeType.value || null,
+    genome_type:
+      selectedGenomeType.value?.value || selectedGenomeType.value || null,
     genome_value: selectedGenomeValue.value || null,
     // Notes
     import_notes: importNotes.value || null,
@@ -749,10 +771,10 @@ const onProjectSearchClose = () => {
 
 const clearSelectedSourceDataProduct = () => {
   selectedSourceDataProduct.value = null;
-  sourceDataProductSearchText.value = '';
+  sourceDataProductSearchText.value = "";
 };
 
-const resetSourceDataProductSearch = (val) => {
+const resetSourceDataProductSearch = (_val) => {
   clearSelectedSourceDataProduct();
 };
 
@@ -762,7 +784,7 @@ const onSourceDataProductSearchOpen = () => {
 
 const onSourceDataProductSearchClose = () => {
   if (!selectedSourceDataProduct.value) {
-    sourceDataProductSearchText.value = '';
+    sourceDataProductSearchText.value = "";
   }
 };
 
@@ -772,19 +794,24 @@ const checkDuplicateFileType = (name, extension) => {
   if (!name || !extension) return false;
 
   // Normalize name the same way we do when creating (to match API format)
-  const normalizedName = name.trim().toUpperCase().replace(/\s+/g, '_').replace(/[^A-Z0-9_]/g, '');
+  const normalizedName = name
+    .trim()
+    .toUpperCase()
+    .replace(/\s+/g, "_")
+    .replace(/[^A-Z0-9_]/g, "");
   const normalizedExt = extension.trim().toLowerCase();
 
-  return analysisTypes.value.some(at =>
-    at.name.toUpperCase() === normalizedName &&
-    at.extension.toLowerCase() === normalizedExt
+  return analysisTypes.value.some(
+    (at) =>
+      at.name.toUpperCase() === normalizedName &&
+      at.extension.toLowerCase() === normalizedExt,
   );
 };
 
 // Open modal to create new Analysis Type and clear fields
 const openCreateFileTypeModal = () => {
-  newFileTypeName.value = '';
-  newFileTypeExtension.value = '';
+  newFileTypeName.value = "";
+  newFileTypeExtension.value = "";
   showCreateFileTypeModal.value = true;
 };
 
@@ -797,7 +824,9 @@ const handleCreateFileType = () => {
 
   // Remove the previously created file type if it exists
   if (newlyCreatedFileType.value) {
-    const index = analysisTypes.value.findIndex(at => at === newlyCreatedFileType.value);
+    const index = analysisTypes.value.findIndex(
+      (at) => at === newlyCreatedFileType.value,
+    );
     if (index !== -1) {
       analysisTypes.value.splice(index, 1);
     }
@@ -809,7 +838,11 @@ const handleCreateFileType = () => {
 
   // Create the new file type object (don't save to API yet)
   const newAnalysisType = {
-    name: newFileTypeName.value.trim().toUpperCase().replace(/\s+/g, '_').replace(/[^A-Z0-9_]/g, ''),
+    name: newFileTypeName.value
+      .trim()
+      .toUpperCase()
+      .replace(/\s+/g, "_")
+      .replace(/[^A-Z0-9_]/g, ""),
     extension: newFileTypeExtension.value.trim(),
   };
 
@@ -823,16 +856,16 @@ const handleCreateFileType = () => {
   newlyCreatedFileType.value = newAnalysisType;
 
   // Clear fields and close modal
-  newFileTypeName.value = '';
-  newFileTypeExtension.value = '';
+  newFileTypeName.value = "";
+  newFileTypeExtension.value = "";
   showCreateFileTypeModal.value = false;
 };
 
 // Handle canceling file type creation
 const handleCancelFileType = () => {
   // Clear fields and close modal
-  newFileTypeName.value = '';
-  newFileTypeExtension.value = '';
+  newFileTypeName.value = "";
+  newFileTypeExtension.value = "";
   showCreateFileTypeModal.value = false;
 };
 
@@ -889,8 +922,8 @@ const validateIfExists = (value) => {
         .then((res) => {
           resolve(res.data.exists);
         })
-        .catch((e) => {
-          // console.error(e);
+        .catch((_e) => {
+          // console.error(_e);
           reject();
         });
     }
@@ -992,10 +1025,10 @@ const fileList = ref([]);
 const selectedImportSource = ref(null);
 const isFileSearchAutocompleteOpen = ref(false);
 
-const importSourcePath = computed(() => selectedImportSource.value?.path ?? '');
+const importSourcePath = computed(() => selectedImportSource.value?.path ?? "");
 
 const _searchText = computed(() => {
-  if (!importSourcePath.value) return '';
+  if (!importSourcePath.value) return "";
   return (
     (importSourcePath.value.endsWith("/")
       ? importSourcePath.value
@@ -1026,7 +1059,7 @@ const searchFiles = async () => {
       if (err.response.status === 403 || err.response.status === 404) {
         setRetrievedFiles([]);
       } else {
-        toast.error('Error fetching files');
+        toast.error("Error fetching files");
       }
     })
     .finally(() => {
@@ -1037,7 +1070,6 @@ const searchFiles = async () => {
 const setRetrievedFiles = (files) => {
   fileList.value = files;
 };
-
 
 /**
  * ## Instrument checkbox and selection behavior
@@ -1288,7 +1320,7 @@ watch(selectedDatasetType, () => {
  */
 const willAssignSourceDataProduct = ref(false);
 const selectedSourceDataProduct = ref(null);
-const sourceDataProductSearchText = ref('');
+const sourceDataProductSearchText = ref("");
 
 // Todo: send notification to operator/admin on wf initiation errors
 
@@ -1388,7 +1420,7 @@ const loadImportSources = () => {
       }
     })
     .catch((err) => {
-      toast.error('Failed to load import sources');
+      toast.error("Failed to load import sources");
       console.error(err);
     })
     .finally(() => {
@@ -1404,7 +1436,7 @@ const loadAnalysisTypes = () => {
       analysisTypes.value = res.data;
     })
     .catch((err) => {
-      toast.error('Failed to load file types');
+      toast.error("Failed to load file types");
       console.error(err);
     });
 };
@@ -1475,11 +1507,14 @@ const onNextClick = (nextStep) => {
 // Set loading to true when FileListAutoComplete is either opened or typed into.
 // The actual search begins after a delay, but a loading indicator should be
 // shown before the search begins.
-watch([isFileSearchAutocompleteOpen, fileListSearchText, selectedFileType], () => {
-  if (isFileSearchAutocompleteOpen.value) {
-    searchingFiles.value = true;
-  }
-});
+watch(
+  [isFileSearchAutocompleteOpen, fileListSearchText, selectedFileType],
+  () => {
+    if (isFileSearchAutocompleteOpen.value) {
+      searchingFiles.value = true;
+    }
+  },
+);
 
 // Begin search once FileListAutoComplete is opened, or typed into, but
 // after a delay.
@@ -1532,7 +1567,7 @@ watch(
 
 // When creating new Analysis Type, auto-prepend dot to extension
 watch(newFileTypeExtension, (newVal) => {
-  if (newVal && !newVal.startsWith('.')) {
+  if (newVal && !newVal.startsWith(".")) {
     newFileTypeExtension.value = `.${newVal}`;
   }
 });
@@ -1550,7 +1585,7 @@ watch(selectedFileType, (newVal) => {
   }
 
   // Hide and clear source data product if file type is not FASTQ
-  if (newVal?.name?.toUpperCase() !== 'FASTQ') {
+  if (newVal?.name?.toUpperCase() !== "FASTQ") {
     willAssignSourceDataProduct.value = false;
     clearSelectedSourceDataProduct();
   }

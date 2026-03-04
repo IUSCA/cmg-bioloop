@@ -1,5 +1,9 @@
 <template>
-  <va-alert color="warning" icon="warning" v-if="!auth.isFeatureEnabled('import')">
+  <va-alert
+    color="warning"
+    icon="warning"
+    v-if="!auth.isFeatureEnabled('import')"
+  >
     This feature is currently disabled
   </va-alert>
 
@@ -37,8 +41,20 @@
     <!-- table -->
     <va-data-table :items="pastImports" :columns="columns" :loading="loading">
       <template #cell(status)="{ rowData }">
+        <!-- Legacy import: migrated from CMG, no workflow tracked -->
+        <div
+          v-if="rowData.metadata?.origin === 'legacy'"
+          class="flex justify-center"
+        >
+          <va-popover :message="'Registration completed successfully'">
+            <va-icon name="check_circle" color="success" />
+          </va-popover>
+        </div>
         <!-- Integrated workflow running -->
-        <div v-if="rowData.integrated_status === 'ACTIVE'" class="flex justify-center">
+        <div
+          v-else-if="rowData.integrated_status === 'ACTIVE'"
+          class="flex justify-center"
+        >
           <va-popover :message="'Registration in progress'">
             <half-circle-spinner
               class="flex-none"
@@ -49,13 +65,19 @@
           </va-popover>
         </div>
         <!-- Integrated workflow succeeded -->
-        <div v-else-if="rowData.integrated_status === 'SUCCESS'" class="flex justify-center">
+        <div
+          v-else-if="rowData.integrated_status === 'SUCCESS'"
+          class="flex justify-center"
+        >
           <va-popover :message="'Registration completed successfully'">
             <va-icon name="check_circle" color="success" />
           </va-popover>
         </div>
         <!-- Integrated workflow failed -->
-        <div v-else-if="rowData.integrated_status === 'FAILURE'" class="flex justify-center">
+        <div
+          v-else-if="rowData.integrated_status === 'FAILURE'"
+          class="flex justify-center"
+        >
           <va-popover :message="'Registration failed'">
             <va-icon name="warning" color="warning" />
           </va-popover>
@@ -66,13 +88,19 @@
         <div v-if="!auth.canOperate">
           {{ rowData.imported_dataset.name }}
         </div>
-        <router-link v-else :to="`/datasets/${rowData.imported_dataset.id}`" class="va-link">
+        <router-link
+          v-else
+          :to="`/datasets/${rowData.imported_dataset.id}`"
+          class="va-link"
+        >
           {{ rowData.imported_dataset.name }}
         </router-link>
       </template>
 
       <template #cell(imported_dataset_type)="{ value }">
-        <DatasetType v-if="value" :type="value" />
+        <va-chip size="small" outline v-if="value">
+          {{ value }}
+        </va-chip>
       </template>
 
       <template #cell(file_type)="{ value }">
@@ -82,8 +110,13 @@
       </template>
 
       <template #cell(genome)="{ rowData }">
-        <va-chip size="small" outline v-if="rowData.genome_type || rowData.genome_value">
-          {{ rowData.genome_type || '' }}{{ rowData.genome_value ? ` (${rowData.genome_value})` : '' }}
+        <va-chip
+          size="small"
+          outline
+          v-if="rowData.genome_type || rowData.genome_value"
+        >
+          {{ rowData.genome_type || ""
+          }}{{ rowData.genome_value ? ` (${rowData.genome_value})` : "" }}
         </va-chip>
       </template>
 
@@ -92,14 +125,20 @@
           <div v-if="!auth.canOperate">
             {{ rowData.source_dataset.name }}
           </div>
-          <router-link v-else :to="`/datasets/${rowData.source_dataset.id}`" class="va-link">
+          <router-link
+            v-else
+            :to="`/datasets/${rowData.source_dataset.id}`"
+            class="va-link"
+          >
             {{ rowData.source_dataset.name }}
           </router-link>
         </div>
       </template>
 
       <template #cell(user)="{ rowData }">
-        <span v-if="rowData.user">{{ rowData.user.name }} ({{ rowData.user.username }})</span>
+        <span v-if="rowData.user"
+          >{{ rowData.user.name }} ({{ rowData.user.username }})</span
+        >
       </template>
 
       <template #cell(initiated_at)="{ value }">
@@ -120,30 +159,30 @@
 </template>
 
 <script setup>
-import useSearchKeyShortcut from '@/composables/useSearchKeyShortcut';
-import datasetService from '@/services/dataset';
-import * as datetime from '@/services/datetime';
-import toast from '@/services/toast';
-import wfService from '@/services/workflow';
-import { useAuthStore } from '@/stores/auth';
-import { useNavStore } from '@/stores/nav';
-import config from '@/config';
-import { HalfCircleSpinner } from 'epic-spinners';
-import { useColors } from 'vuestic-ui';
-import _ from 'lodash';
+import useSearchKeyShortcut from "@/composables/useSearchKeyShortcut";
+import datasetService from "@/services/dataset";
+import * as datetime from "@/services/datetime";
+import toast from "@/services/toast";
+import wfService from "@/services/workflow";
+import { useAuthStore } from "@/stores/auth";
+import { useNavStore } from "@/stores/nav";
+import config from "@/config";
+import { HalfCircleSpinner } from "epic-spinners";
+import { useColors } from "vuestic-ui";
+import _ from "lodash";
 
 const { colors } = useColors();
 const nav = useNavStore();
 const router = useRouter();
 const auth = useAuthStore();
 
-nav.setNavItems([{ label: 'Dataset Imports' }]);
+nav.setNavItems([{ label: "Dataset Imports" }]);
 
 useSearchKeyShortcut();
 
 const PAGE_SIZE_OPTIONS = [10, 20, 50];
 
-const filterInput = ref('');
+const filterInput = ref("");
 const pastImports = ref([]);
 const _datasets = ref({}); // Mapping of dataset_id to dataset object for polling
 
@@ -173,66 +212,73 @@ const filter_query = computed(() => {
 
 const columns = [
   {
-    key: 'status',
-    label: 'Status',
-    width: '8%',
-    thAlign: 'center',
-    tdAlign: 'center',
+    key: "status",
+    label: "Status",
+    width: "8%",
+    thAlign: "center",
+    tdAlign: "center",
   },
   {
-    key: 'imported_dataset',
-    label: 'Imported Dataset',
-    thAlign: 'center',
-    tdAlign: 'center',
-    tdStyle: 'white-space: pre-wrap; word-wrap: break-word; word-break: break-word;',
-    thStyle: 'white-space: pre-wrap; word-wrap: break-word; word-break: break-word;',
+    key: "imported_dataset",
+    label: "Imported Dataset",
+    thAlign: "center",
+    tdAlign: "center",
+    tdStyle:
+      "white-space: pre-wrap; word-wrap: break-word; word-break: break-word;",
+    thStyle:
+      "white-space: pre-wrap; word-wrap: break-word; word-break: break-word;",
   },
   {
-    key: 'imported_dataset_type',
-    label: 'Dataset Type',
-    width: '12%',
-    thAlign: 'center',
-    tdAlign: 'center',
+    key: "imported_dataset_type",
+    label: "Dataset Type",
+    width: "12%",
+    thAlign: "center",
+    tdAlign: "center",
   },
   {
-    key: 'file_type',
-    label: 'File Type',
-    width: '10%',
-    thAlign: 'center',
-    tdAlign: 'center',
+    key: "file_type",
+    label: "File Type",
+    width: "10%",
+    thAlign: "center",
+    tdAlign: "center",
   },
   {
-    key: 'genome',
-    label: 'Genome',
-    width: '15%',
-    thAlign: 'center',
-    tdAlign: 'center',
+    key: "genome",
+    label: "Genome",
+    width: "15%",
+    thAlign: "center",
+    tdAlign: "center",
   },
   {
-    key: 'source_dataset',
-    label: 'Source Raw Data',
-    width: '15%',
-    thAlign: 'center',
-    tdAlign: 'center',
-    tdStyle: 'white-space: pre-wrap; word-wrap: break-word; word-break: break-word;',
-    thStyle: 'white-space: pre-wrap; word-wrap: break-word; word-break: break-word;',
+    key: "source_dataset",
+    label: "Source Raw Data",
+    width: "15%",
+    thAlign: "center",
+    tdAlign: "center",
+    tdStyle:
+      "white-space: pre-wrap; word-wrap: break-word; word-break: break-word;",
+    thStyle:
+      "white-space: pre-wrap; word-wrap: break-word; word-break: break-word;",
   },
   {
-    key: 'user',
-    label: 'Imported By',
-    width: '15%',
-    thAlign: 'center',
-    tdAlign: 'center',
-    tdStyle: 'white-space: pre-wrap; word-wrap: break-word; word-break: break-word;',
-    thStyle: 'white-space: pre-wrap; word-wrap: break-word; word-break: break-word;',
+    key: "user",
+    label: "Imported By",
+    width: "15%",
+    thAlign: "center",
+    tdAlign: "center",
+    tdStyle:
+      "white-space: pre-wrap; word-wrap: break-word; word-break: break-word;",
+    thStyle:
+      "white-space: pre-wrap; word-wrap: break-word; word-break: break-word;",
   },
   {
-    key: 'initiated_at',
-    label: 'Imported On',
-    width: '10%',
-    thAlign: 'right',
-    tdAlign: 'right',
-    thStyle: 'white-space: pre-wrap; word-wrap: break-word; word-break: break-word;',
+    key: "initiated_at",
+    label: "Imported On",
+    width: "10%",
+    thAlign: "right",
+    tdAlign: "right",
+    thStyle:
+      "white-space: pre-wrap; word-wrap: break-word; word-break: break-word;",
   },
 ];
 
@@ -243,7 +289,9 @@ const getImportLogs = async () => {
     .then((res) => {
       pastImports.value = res.data.imports.map((e) => {
         let imported_dataset = e.dataset;
-        const status = wfService.get_integrated_workflow_status(imported_dataset.workflows);
+        const status = wfService.get_integrated_workflow_status(
+          imported_dataset.workflows,
+        );
         const genomicDetails = imported_dataset.genomic_details;
         // Get user from create audit log (filtered by action='create', only one exists)
         const createAuditLog = imported_dataset.audit_logs?.[0];
@@ -266,8 +314,8 @@ const getImportLogs = async () => {
       total_results.value = res.data.metadata.count;
     })
     .catch((err) => {
-      toast.error('Could not retrieve past imports');
-      console.error('Error fetching import logs:', err);
+      toast.error("Could not retrieve past imports");
+      console.error("Error fetching import logs:", err);
     })
     .finally(() => {
       loading.value = false;
@@ -286,13 +334,13 @@ watch(
   },
   {
     immediate: true,
-  }
+  },
 );
 
 // Track datasets that have active integrated workflows
 const tracking = computed(() => {
   return pastImports.value
-    .filter((imp) => imp.integrated_status === 'ACTIVE')
+    .filter((imp) => imp.integrated_status === "ACTIVE")
     .map((imp) => imp.imported_dataset.id);
 });
 
@@ -304,17 +352,16 @@ function fetch_and_update_dataset(id) {
       _datasets.value[id] = res.data;
       // Update the corresponding import in pastImports
       const importIndex = pastImports.value.findIndex(
-        (imp) => imp.imported_dataset.id === id
+        (imp) => imp.imported_dataset.id === id,
       );
       if (importIndex !== -1) {
         pastImports.value[importIndex].imported_dataset = res.data;
-        pastImports.value[importIndex].integrated_status = wfService.get_integrated_workflow_status(
-          res.data.workflows
-        );
+        pastImports.value[importIndex].integrated_status =
+          wfService.get_integrated_workflow_status(res.data.workflows);
       }
     })
     .catch((err) => {
-      console.error('Unable to fetch dataset', id, err);
+      console.error("Unable to fetch dataset", id, err);
     });
 }
 
@@ -331,7 +378,7 @@ const poll = useIntervalFn(
   config.dataset_polling_interval,
   {
     immediate: false,
-  }
+  },
 );
 
 // Start/stop polling based on whether there are datasets to track

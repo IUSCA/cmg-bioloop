@@ -19,7 +19,7 @@ const prisma = require('@/db');
 
 const isPermittedTo = accessControl('datasets');
 
-console.log('============ LOADING datasets/uploads.js module ============');
+logger.info('Loading datasets/uploads.js module');
 
 const router = express.Router();
 
@@ -335,7 +335,7 @@ router.post(
       file_type, genome_type, genome_value,
     } = req.body;
 
-    logger.info(`[UPLOAD-CREATE] Starting dataset upload registration`, {
+    logger.info('[UPLOAD-CREATE] Starting dataset upload registration', {
       user: req.user?.username,
       user_id: req.user?.id,
       dataset_name: name,
@@ -367,7 +367,7 @@ router.post(
         const createdDataset = await datasetService.create({
           tx, data: datasetCreateQuery, project_id, requester_id: req.user.id,
         });
-        logger.info(`[UPLOAD-CREATE] Dataset created`, {
+        logger.info('[UPLOAD-CREATE] Dataset created', {
           dataset_id: createdDataset.id,
           dataset_name: createdDataset.name,
           dataset_type: createdDataset.type,
@@ -391,7 +391,7 @@ router.post(
           },
         });
 
-        logger.info(`[UPLOAD-CREATE] Origin path set`, {
+        logger.info('[UPLOAD-CREATE] Origin path set', {
           dataset_id: createdDataset.id,
           origin_path: datasetOriginPath,
         });
@@ -411,7 +411,7 @@ router.post(
           },
         });
 
-        logger.info(`[UPLOAD-CREATE] Upload log created`, {
+        logger.info('[UPLOAD-CREATE] Upload log created', {
           upload_log_id: created_dataset_upload_log.id,
           dataset_id: createdDataset.id,
           initial_status: CONSTANTS.UPLOAD_STATUSES.UPLOADING,
@@ -422,7 +422,7 @@ router.post(
           include: CONSTANTS.INCLUDE_DATASET_UPLOAD_LOG_RELATIONS,
         });
 
-        logger.info(`[UPLOAD-CREATE] Transaction complete, returning upload log`, {
+        logger.info('[UPLOAD-CREATE] Transaction complete, returning upload log', {
           upload_log_id: updated_dataset_upload_log.id,
           dataset_id: createdDataset.id,
         });
@@ -430,7 +430,7 @@ router.post(
         return updated_dataset_upload_log;
       });
 
-      logger.info(`[UPLOAD-CREATE] SUCCESS: Dataset upload registered`, {
+      logger.info('[UPLOAD-CREATE] SUCCESS: Dataset upload registered', {
         upload_log_id: dataset_upload_log.id,
         dataset_id: dataset_upload_log.dataset.id,
         dataset_name: dataset_upload_log.dataset.name,
@@ -439,7 +439,7 @@ router.post(
 
       res.json(dataset_upload_log);
     } catch (error) {
-      logger.error(`[UPLOAD-CREATE] FAILED: Error registering dataset upload`, {
+      logger.error('[UPLOAD-CREATE] FAILED: Error registering dataset upload', {
         user: req.user?.username,
         dataset_name: name,
         error: error.message,
@@ -483,7 +483,7 @@ router.post(
       process_id, selection_mode, directory_name, relative_path, metadata,
     } = req.body;
 
-    logger.info(`[UPLOAD-COMPLETE] Starting upload completion`, {
+    logger.info('[UPLOAD-COMPLETE] Starting upload completion', {
       dataset_id: datasetId,
       process_id,
       selection_mode,
@@ -505,7 +505,7 @@ router.post(
       });
 
       if (!uploadLog) {
-        logger.error(`[UPLOAD-COMPLETE] FAILED: No upload log found`, {
+        logger.error('[UPLOAD-COMPLETE] FAILED: No upload log found', {
           dataset_id: datasetId,
           process_id,
           user: req.user?.username,
@@ -513,7 +513,7 @@ router.post(
         return res.status(404).json({ error: 'Upload log not found' });
       }
 
-      logger.info(`[UPLOAD-COMPLETE] Upload log found`, {
+      logger.info('[UPLOAD-COMPLETE] Upload log found', {
         upload_log_id: uploadLog.id,
         dataset_id: datasetId,
         current_status: uploadLog.status,
@@ -522,7 +522,7 @@ router.post(
 
       // Idempotency: If already UPLOADED, return success immediately
       if (uploadLog.status === CONSTANTS.UPLOAD_STATUSES.UPLOADED) {
-        logger.info(`[UPLOAD-COMPLETE] Idempotent request - already completed`, {
+        logger.info('[UPLOAD-COMPLETE] Idempotent request - already completed', {
           dataset_id: datasetId,
           upload_log_id: uploadLog.id,
           process_id,
@@ -533,9 +533,7 @@ router.post(
         });
       }
 
-      // Get dataset type for proper path structure
-      const dataset = uploadLog.dataset;
-      const datasetType = dataset.type;
+      const { dataset } = uploadLog;
 
       // Get TUS upload info to verify completion and get file details
       const uploadPath = config.get('upload.path');
@@ -545,7 +543,7 @@ router.post(
 
       // Check if TUS files exist
       if (!fs.existsSync(tusFilePath)) {
-        logger.error(`[UPLOAD-COMPLETE] FAILED: TUS file not found`, {
+        logger.error('[UPLOAD-COMPLETE] FAILED: TUS file not found', {
           dataset_id: datasetId,
           process_id,
           expected_path: tusFilePath,
@@ -553,7 +551,7 @@ router.post(
         return res.status(404).json({ error: 'Upload file not found' });
       }
 
-      logger.info(`[UPLOAD-COMPLETE] TUS file found`, {
+      logger.info('[UPLOAD-COMPLETE] TUS file found', {
         dataset_id: datasetId,
         process_id,
         tus_file_path: tusFilePath,
@@ -569,14 +567,14 @@ router.post(
         tusMetadata = JSON.parse(infoContent);
         // TUS stores metadata in lowercase 'metadata' field
         originalFilename = tusMetadata.metadata?.filename || tusMetadata.metadata?.name || originalFilename;
-        logger.info(`[UPLOAD-COMPLETE] TUS metadata read`, {
+        logger.info('[UPLOAD-COMPLETE] TUS metadata read', {
           dataset_id: datasetId,
           process_id,
           filename: originalFilename,
           metadata: tusMetadata.metadata,
         });
       } else {
-        logger.warn(`[UPLOAD-COMPLETE] TUS info file not found (using defaults)`, {
+        logger.warn('[UPLOAD-COMPLETE] TUS info file not found (using defaults)', {
           dataset_id: datasetId,
           process_id,
           expected_path: tusInfoPath,
@@ -587,7 +585,7 @@ router.post(
       const stats = fs.statSync(tusFilePath);
       fileSize = stats.size;
 
-      logger.info(`[UPLOAD-COMPLETE] File size determined`, {
+      logger.info('[UPLOAD-COMPLETE] File size determined', {
         dataset_id: datasetId,
         process_id,
         file_size_bytes: fileSize,
@@ -606,7 +604,7 @@ router.post(
         const datasetUploadDir = path.join(baseOriginPath, directory_name || 'upload');
         finalPath = path.join(datasetUploadDir, relative_path);
 
-        logger.info(`[UPLOAD-COMPLETE] Directory upload mode`, {
+        logger.info('[UPLOAD-COMPLETE] Directory upload mode', {
           dataset_id: datasetId,
           process_id,
           directory_name,
@@ -618,7 +616,7 @@ router.post(
         // Create parent directory if needed
         const parentDir = path.dirname(finalPath);
         if (!fs.existsSync(parentDir)) {
-          logger.info(`[UPLOAD-COMPLETE] Creating parent directory`, {
+          logger.info('[UPLOAD-COMPLETE] Creating parent directory', {
             dataset_id: datasetId,
             parent_dir: parentDir,
           });
@@ -627,18 +625,18 @@ router.post(
 
         // Move file (idempotent: skip if already exists at destination)
         if (!fs.existsSync(finalPath)) {
-          logger.info(`[UPLOAD-COMPLETE] Moving file`, {
+          logger.info('[UPLOAD-COMPLETE] Moving file', {
             dataset_id: datasetId,
             source: tusFilePath,
             destination: finalPath,
           });
           fs.renameSync(tusFilePath, finalPath);
-          logger.info(`[UPLOAD-COMPLETE] File moved successfully`, {
+          logger.info('[UPLOAD-COMPLETE] File moved successfully', {
             dataset_id: datasetId,
             destination: finalPath,
           });
         } else {
-          logger.info(`[UPLOAD-COMPLETE] File already exists at destination (idempotent)`, {
+          logger.info('[UPLOAD-COMPLETE] File already exists at destination (idempotent)', {
             dataset_id: datasetId,
             destination: finalPath,
           });
@@ -647,7 +645,7 @@ router.post(
         // Single file upload: move to dataset's origin_path
         finalPath = path.join(baseOriginPath, originalFilename);
 
-        logger.info(`[UPLOAD-COMPLETE] Single file upload mode`, {
+        logger.info('[UPLOAD-COMPLETE] Single file upload mode', {
           dataset_id: datasetId,
           process_id,
           filename: originalFilename,
@@ -657,7 +655,7 @@ router.post(
 
         // Create dataset directory if needed
         if (!fs.existsSync(baseOriginPath)) {
-          logger.info(`[UPLOAD-COMPLETE] Creating dataset directory`, {
+          logger.info('[UPLOAD-COMPLETE] Creating dataset directory', {
             dataset_id: datasetId,
             directory: baseOriginPath,
           });
@@ -666,25 +664,25 @@ router.post(
 
         // Move file (idempotent: skip if already exists at destination)
         if (!fs.existsSync(finalPath)) {
-          logger.info(`[UPLOAD-COMPLETE] Moving file`, {
+          logger.info('[UPLOAD-COMPLETE] Moving file', {
             dataset_id: datasetId,
             source: tusFilePath,
             destination: finalPath,
           });
           fs.renameSync(tusFilePath, finalPath);
-          logger.info(`[UPLOAD-COMPLETE] File moved successfully`, {
+          logger.info('[UPLOAD-COMPLETE] File moved successfully', {
             dataset_id: datasetId,
             destination: finalPath,
           });
         } else {
-          logger.info(`[UPLOAD-COMPLETE] File already exists at destination (idempotent)`, {
+          logger.info('[UPLOAD-COMPLETE] File already exists at destination (idempotent)', {
             dataset_id: datasetId,
             destination: finalPath,
           });
         }
       }
 
-      logger.info(`[UPLOAD-COMPLETE] File is ready`, {
+      logger.info('[UPLOAD-COMPLETE] File is ready', {
         dataset_id: datasetId,
         final_path: finalPath,
         origin_path: baseOriginPath,
@@ -699,7 +697,7 @@ router.post(
 
       // Add metadata if provided (e.g., checksum from UI)
       if (metadata) {
-        logger.info(`[UPLOAD-COMPLETE] Merging metadata`, {
+        logger.info('[UPLOAD-COMPLETE] Merging metadata', {
           dataset_id: datasetId,
           existing_metadata: uploadLog.metadata,
           new_metadata: metadata,
@@ -711,7 +709,7 @@ router.post(
         };
       }
 
-      logger.info(`[UPLOAD-COMPLETE] Updating upload log`, {
+      logger.info('[UPLOAD-COMPLETE] Updating upload log', {
         dataset_id: datasetId,
         upload_log_id: uploadLog.id,
         new_status: CONSTANTS.UPLOAD_STATUSES.UPLOADED,
@@ -725,7 +723,7 @@ router.post(
         include: CONSTANTS.INCLUDE_DATASET_UPLOAD_LOG_RELATIONS,
       });
 
-      logger.info(`[UPLOAD-COMPLETE] SUCCESS: Upload completed`, {
+      logger.info('[UPLOAD-COMPLETE] SUCCESS: Upload completed', {
         dataset_id: datasetId,
         upload_log_id: updatedLog.id,
         dataset_name: updatedLog.dataset.name,
@@ -739,7 +737,7 @@ router.post(
         upload_log: updatedLog,
       });
     } catch (error) {
-      logger.error(`[UPLOAD-COMPLETE] FAILED: Error completing upload`, {
+      logger.error('[UPLOAD-COMPLETE] FAILED: Error completing upload', {
         dataset_id: datasetId,
         process_id,
         error: error.message,
@@ -749,7 +747,7 @@ router.post(
 
       // Try to update status to failed
       try {
-        logger.info(`[UPLOAD-COMPLETE] Attempting to mark upload as failed`, {
+        logger.info('[UPLOAD-COMPLETE] Attempting to mark upload as failed', {
           dataset_id: datasetId,
         });
 
@@ -774,11 +772,11 @@ router.post(
           },
         });
 
-        logger.info(`[UPLOAD-COMPLETE] Upload marked as PROCESSING_FAILED`, {
+        logger.info('[UPLOAD-COMPLETE] Upload marked as PROCESSING_FAILED', {
           dataset_id: datasetId,
         });
       } catch (updateError) {
-        logger.error(`[UPLOAD-COMPLETE] Failed to update upload log status`, {
+        logger.error('[UPLOAD-COMPLETE] Failed to update upload log status', {
           dataset_id: datasetId,
           error: updateError.message,
         });
@@ -895,7 +893,7 @@ router.patch(
     const datasetId = parseInt(req.params.id, 10);
     const { metadata, status, retry_count } = req.body;
 
-    logger.info(`[UPLOAD-LOG-UPDATE] Updating upload log`, {
+    logger.info('[UPLOAD-LOG-UPDATE] Updating upload log', {
       dataset_id: datasetId,
       has_metadata: !!metadata,
       new_status: status,
@@ -911,14 +909,14 @@ router.patch(
     });
 
     if (!uploadLog) {
-      logger.error(`[UPLOAD-LOG-UPDATE] FAILED: Upload log not found`, {
+      logger.error('[UPLOAD-LOG-UPDATE] FAILED: Upload log not found', {
         dataset_id: datasetId,
         user: req.user?.username,
       });
       return res.status(404).json({ error: 'Upload log not found' });
     }
 
-    logger.info(`[UPLOAD-LOG-UPDATE] Upload log found`, {
+    logger.info('[UPLOAD-LOG-UPDATE] Upload log found', {
       upload_log_id: uploadLog.id,
       dataset_id: datasetId,
       current_status: uploadLog.status,
@@ -932,7 +930,7 @@ router.patch(
     if (metadata) {
       const existingMetadata = uploadLog.metadata || {};
       updateData.metadata = { ...existingMetadata, ...metadata };
-      logger.info(`[UPLOAD-LOG-UPDATE] Merging metadata`, {
+      logger.info('[UPLOAD-LOG-UPDATE] Merging metadata', {
         dataset_id: datasetId,
         existing_metadata: existingMetadata,
         new_metadata: metadata,
@@ -943,7 +941,7 @@ router.patch(
     // Update status if provided
     if (status) {
       updateData.status = status;
-      logger.info(`[UPLOAD-LOG-UPDATE] Updating status`, {
+      logger.info('[UPLOAD-LOG-UPDATE] Updating status', {
         dataset_id: datasetId,
         old_status: uploadLog.status,
         new_status: status,
@@ -953,7 +951,7 @@ router.patch(
     // Update retry_count if provided
     if (retry_count !== undefined) {
       updateData.retry_count = retry_count;
-      logger.info(`[UPLOAD-LOG-UPDATE] Updating retry count`, {
+      logger.info('[UPLOAD-LOG-UPDATE] Updating retry count', {
         dataset_id: datasetId,
         old_retry_count: uploadLog.retry_count,
         new_retry_count: retry_count,
@@ -973,7 +971,7 @@ router.patch(
       },
     });
 
-    logger.info(`[UPLOAD-LOG-UPDATE] SUCCESS: Upload log updated`, {
+    logger.info('[UPLOAD-LOG-UPDATE] SUCCESS: Upload log updated', {
       upload_log_id: updated.id,
       dataset_id: datasetId,
       dataset_name: updated.dataset.name,

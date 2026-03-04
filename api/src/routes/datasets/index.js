@@ -10,8 +10,6 @@ const _ = require('lodash/fp');
 const config = require('config');
 const he = require('he');
 
-// const logger = require('@/services/logger');
-const path = require('path');
 const prisma = require('@/db');
 const asyncHandler = require('@/middleware/asyncHandler');
 const { accessControl } = require('@/middleware/auth');
@@ -23,7 +21,6 @@ const wfService = require('@/services/workflow');
 const legacyMigrationService = require('@/services/legacyMigration');
 const CONSTANTS = require('@/constants');
 const logger = require('@/services/logger');
-const utils = require('../../utils');
 
 const isPermittedTo = accessControl('datasets');
 const router = express.Router();
@@ -146,8 +143,10 @@ router.get(
               prev_task_runs: false,
               workflow_ids: dataset.workflows.map((wf) => wf.id),
             });
+            // eslint-disable-next-line no-param-reassign
             dataset.workflows = wf_res.data.results || [];
           } catch (error) {
+            // eslint-disable-next-line no-param-reassign
             dataset.workflows = [];
           }
         }
@@ -518,8 +517,10 @@ router.get(
               prev_task_runs: false,
               workflow_ids: dataset.workflows.map((wf) => wf.id),
             });
+            // eslint-disable-next-line no-param-reassign
             dataset.workflows = wf_res.data.results || [];
           } catch (error) {
+            // eslint-disable-next-line no-param-reassign
             dataset.workflows = [];
           }
         }

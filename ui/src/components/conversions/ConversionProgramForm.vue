@@ -25,14 +25,12 @@
       v-if="props.program.allow_additional_args"
       class="flex items-center gap-3 mt-5"
     >
-      <label class="">
-        <div class="flex flex-col w-[200px]">
-          <span class="font-semibold"> Additional Arguments </span>
-          <span class="text-sm text-gray-500 mt-[-3px] truncate">
-            Any additional arguments will be passed to the program as typed.
-          </span>
-        </div>
-      </label>
+      <div class="flex flex-col w-[200px]">
+        <span class="font-semibold"> Additional Arguments </span>
+        <span class="text-sm text-gray-500 mt-[-3px] truncate">
+          Any additional arguments will be passed to the program as typed.
+        </span>
+      </div>
 
       <div class="flex-1">
         <va-input

@@ -27,8 +27,8 @@
 </template>
 
 <script setup>
-import constants from '@/constants';
-import { ref, watch } from 'vue';
+import constants from "@/constants";
+import { ref, watch } from "vue";
 
 const {
   browserTypes: BROWSER_TYPES,
@@ -36,19 +36,19 @@ const {
   defaultBrowser: DEFAULT_BROWSER,
 } = constants.genomeBrowser;
 
-const emit = defineEmits(['browser-selected', 'close']);
+const emit = defineEmits(["browser-selected", "close"]);
 
 const showModal = defineModel({ type: Boolean, default: false });
 const selectedBrowser = ref(DEFAULT_BROWSER);
 
 const openBrowser = () => {
-  emit('browser-selected', selectedBrowser.value);
+  emit("browser-selected", selectedBrowser.value);
   showModal.value = false;
 };
 
 const closeModal = () => {
   showModal.value = false;
-  emit('close');
+  emit("close");
 };
 
 // Reset selection to default when modal is closed

@@ -2,7 +2,6 @@ const fs = require('fs');
 const path = require('path');
 const _ = require('lodash/fp');
 const { Prisma } = require('@prisma/client');
-const config = require('config');
 
 const logger = require('../services/logger');
 
@@ -317,7 +316,7 @@ async function transactionWithRetry(
     } catch (error) {
       if (error?.code === 'P2034') {
         // P2034: "Transaction failed due to a write conflict or a deadlock. Please retry your transaction"
-        console.warn(`Transaction failed with error code P2034. Retrying (${retries + 1}/${maxRetries})...`);
+        logger.warn(`Transaction failed with error code P2034. Retrying (${retries + 1}/${maxRetries})...`);
         retries += 1;
       } else {
         throw error;

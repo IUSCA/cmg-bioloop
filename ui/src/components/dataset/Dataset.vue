@@ -46,7 +46,12 @@
             </va-card-content>
           </va-card>
           <!-- Dataset Genomic Info Card -->
-          <va-card v-if="auth.isFeatureEnabled('genomeBrowser') && dataset.type === 'DATA_PRODUCT'">
+          <va-card
+            v-if="
+              auth.isFeatureEnabled('genomeBrowser') &&
+              dataset.type === 'DATA_PRODUCT'
+            "
+          >
             <va-card-title>
               <span class="text-lg">Genomic Info</span>
             </va-card-title>
@@ -136,7 +141,10 @@
                   <!-- Delete Action Button-->
                   <va-button
                     v-if="config.enable_delete_archive && dataset.archive_path"
-                    :disabled="is_delete_pending || legacyMigrationService.isLegacyDataset(dataset)"
+                    :disabled="
+                      is_delete_pending ||
+                      legacyMigrationService.isLegacyDataset(dataset)
+                    "
                     color="danger"
                     border-color="danger"
                     class="flex-initial"
@@ -374,9 +382,7 @@
     </template>
 
     <div class="flex flex-col gap-4">
-      <p>
-        This dataset will need to be staged before its files can be viewed.
-      </p>
+      <p>This dataset will need to be staged before its files can be viewed.</p>
       <p>Would you like to stage this dataset?</p>
     </div>
 
@@ -388,10 +394,7 @@
         >
           Cancel
         </va-button>
-        <va-button
-          color="primary"
-          @click="confirmStageAndBrowse"
-        >
+        <va-button color="primary" @click="confirmStageAndBrowse">
           Stage Dataset
         </va-button>
       </div>
@@ -567,7 +570,9 @@ async function handleBrowseFilesClick() {
   // If not staged, check if staging is already in progress
   if (legacyMigrationService.isLegacyDataset(dataset.value)) {
     try {
-      const inProgress = await legacyMigrationService.isMigrationInProgress(dataset.value.id);
+      const inProgress = await legacyMigrationService.isMigrationInProgress(
+        dataset.value.id,
+      );
       if (inProgress) {
         toast.info("Dataset is already being staged");
         return;
@@ -578,11 +583,13 @@ async function handleBrowseFilesClick() {
   } else {
     // For non-legacy datasets, check if Integrated workflow is running
     const integratedWorkflowActive = (dataset.value.workflows || [])
-      .filter(wf => wf.name === 'integrated')
-      .some(wf => !workflowService.is_workflow_done(wf));
-    
+      .filter((wf) => wf.name === "integrated")
+      .some((wf) => !workflowService.is_workflow_done(wf));
+
     if (integratedWorkflowActive) {
-      toast.info("This data is currently pending registration, and therefore cannot be staged");
+      toast.info(
+        "This data is currently pending registration, and therefore cannot be staged",
+      );
       return;
     }
   }
@@ -602,7 +609,7 @@ function navigateToFileBrowser() {
 function confirmStageAndBrowse() {
   browse_files_staging_modal.value = false;
   loading.value = true;
-  
+
   // Trigger the stage workflow (API will determine if stage_migrated is needed)
   DatasetService.stage_dataset(dataset.value.id)
     .then(() => {

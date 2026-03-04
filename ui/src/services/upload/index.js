@@ -4,7 +4,7 @@
  * Central service for upload-related utilities including TUS protocol helpers.
  */
 
-import config from '@/config';
+import config from "@/config";
 
 /**
  * Get the absolute upload service URL.

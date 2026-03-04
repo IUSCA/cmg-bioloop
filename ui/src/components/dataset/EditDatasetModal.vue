@@ -23,7 +23,8 @@
 
         <!-- Historical data notice -->
         <va-alert v-if="isHistoricalData" color="info" border="left">
-          This is historical data from CMG. Some fields are read-only to preserve data integrity.
+          This is historical data from CMG. Some fields are read-only to
+          preserve data integrity.
         </va-alert>
 
         <!-- Analysis Type field for DATA_PRODUCT datasets when genome browser is enabled -->
@@ -47,15 +48,18 @@
 </template>
 
 <script setup>
-import config from '@/config';
-import DatasetService from '@/services/dataset';
-import legacyMigrationService from '@/services/legacyMigration';
-import { formatAnalysisType, humanizeAnalysisType } from '@/services/sessionUtils';
-import toast from '@/services/toast';
-import { computed, ref, watch } from 'vue';
+import config from "@/config";
+import DatasetService from "@/services/dataset";
+import legacyMigrationService from "@/services/legacyMigration";
+import {
+  formatAnalysisType,
+  humanizeAnalysisType,
+} from "@/services/sessionUtils";
+import toast from "@/services/toast";
+import { computed, ref, watch } from "vue";
 
-const props = defineProps(['data']);
-const emit = defineEmits(['update']);
+const props = defineProps(["data"]);
+const emit = defineEmits(["update"]);
 
 // parent component can invoke these methods through the template ref
 defineExpose({
@@ -67,7 +71,9 @@ const visible = ref(false);
 const loading = ref(false);
 const description = ref(props.data.description);
 const analysisType = ref(props.data.metadata?.analysis_type || null);
-const analysisTypeInput = ref(humanizeAnalysisType(props.data.metadata?.analysis_type || ''));
+const analysisTypeInput = ref(
+  humanizeAnalysisType(props.data.metadata?.analysis_type || ""),
+);
 
 // Check if this is historical CMG data
 const isHistoricalData = computed(() => {
@@ -76,7 +82,9 @@ const isHistoricalData = computed(() => {
 
 // Show Analysis Type field only for DATA_PRODUCT datasets when genome browser is enabled
 const showAnalysisType = computed(() => {
-  return props.data?.type === 'DATA_PRODUCT' && config.enabledFeatures?.genomeBrowser;
+  return (
+    props.data?.type === "DATA_PRODUCT" && config.enabledFeatures?.genomeBrowser
+  );
 });
 
 // Format analysis type input when user finishes typing
@@ -126,11 +134,11 @@ function handleOk() {
     updated_data: updateData,
   })
     .then(() => {
-      emit('update');
+      emit("update");
     })
     .catch((err) => {
       console.error(err);
-      toast.error('Unable to update the dataset');
+      toast.error("Unable to update the dataset");
     })
     .finally(() => {
       hide();

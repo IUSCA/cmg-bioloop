@@ -15,8 +15,8 @@ const exports = {
   refreshTokenTMinusSeconds: {
     appToken: 300,
   },
-  analyticsId: 'G-FOO',
-  appTitle: 'CMG',
+  analyticsId: "G-FOO",
+  appTitle: "CMG",
   contact: {
     app_admin: "bioloop-ops-l@list.iu.edu",
   },
@@ -51,10 +51,10 @@ const exports = {
     DCWAN: "DCWAN", // Retired filesystem-space. Was retired while legacy CMG application was still in use.
   },
   metric_measurements: {
-    SDA: 'sda',
-    SLATE_SCRATCH: '/N/scratch',
-    SLATE_SCRATCH_FILES: '/N/scratch files',
-    SLATE_PROJECT: '/N/project',
+    SDA: "sda",
+    SLATE_SCRATCH: "/N/scratch",
+    SLATE_SCRATCH_FILES: "/N/scratch files",
+    SLATE_PROJECT: "/N/project",
   },
   auth_enabled: {
     google: true,
@@ -65,23 +65,23 @@ const exports = {
     active_tasks: {
       steps: [
         // Integrated workflow
-        'await stability',
-        'inspect',
-        'archive',
-        'stage',
-        'validate',
-        'setup_download',
-        'delete source',
+        "await stability",
+        "inspect",
+        "archive",
+        "stage",
+        "validate",
+        "setup_download",
+        "delete source",
         // Stage_migrated workflow (additional steps)
-        'begin_migration',
-        'retrieve_archive',
-        'populate_metadata',
-        'end_migration',
+        "begin_migration",
+        "retrieve_archive",
+        "populate_metadata",
+        "end_migration",
         // Genomic conversion workflow
-        'convert',
-        'generate qc',
-        'copy reports',
-        'derive data products',
+        "convert",
+        "generate qc",
+        "copy reports",
+        "derive data products",
       ],
       refresh_interval_ms: 10000,
     },
@@ -93,12 +93,12 @@ const exports = {
       enabledForRoles: [],
     },
     import: {
-      enabledForRoles: ['admin', 'operator'],
+      enabledForRoles: ["admin", "operator"],
     },
     downloads: true,
     signup: false,
     uploads: {
-      enabledForRoles: ['admin', 'operator'],
+      enabledForRoles: ["admin", "operator"],
     },
     auto_create_project_on_dataset_creation: {
       enabledForRoles: ["user"],
@@ -114,43 +114,44 @@ const exports = {
     maxDisplayCount: 1, // Maximum number of alerts to display at once
   },
   upload: {
-    scope_prefix: 'upload_file:',
+    scope_prefix: "upload_file:",
   },
   conversion: {
     allow_multiple_dataset_conversions: false, // Set to false by default to allow only single dataset conversions
   },
   genomic_conversion_programs: [
-    'bcl2fastq',
-    'bcl-convert',
-    'cellranger-v8.0.1',
-    'cellranger-v6.1.2',
-    'cellranger-v4.0.0',
-    'cellranger-arc',
-    'cellranger-arc-v2',
-    'cellranger-atac',
-    'spaceranger-v3.0.1',
-    'spaceranger-v1.3.1',
-    'spaceranger-v1.1.0',
+    "bcl2fastq",
+    "bcl-convert",
+    "cellranger-v8.0.1",
+    "cellranger-v6.1.2",
+    "cellranger-v4.0.0",
+    "cellranger-arc",
+    "cellranger-arc-v2",
+    "cellranger-atac",
+    "spaceranger-v3.0.1",
+    "spaceranger-v1.3.1",
+    "spaceranger-v1.1.0",
   ],
   genomeBrowserUrl:
-    import.meta.env.VITE_GENOME_BROWSER_URL || 'https://epigenomegateway.wustl.edu/browser',
+    import.meta.env.VITE_GENOME_BROWSER_URL ||
+    "https://epigenomegateway.wustl.edu/browser",
   legacy: {
     enabled: true,
   },
   trackFileTypes: [
-    { name: 'BAM', id: 'bam' },
-    { name: 'BigWig', id: 'bigwig' },
-    { name: 'VCF', id: 'vcf' },
-    { name: 'FASTQ', id: 'fastq' },
+    { name: "BAM", id: "bam" },
+    { name: "BigWig", id: "bigwig" },
+    { name: "VCF", id: "vcf" },
+    { name: "FASTQ", id: "fastq" },
   ],
   fileTypeOptions: [
-    { text: 'BAM', value: 'bam' },
-    { text: 'BigWig', value: 'bigwig' },
-    { text: 'VCF', value: 'vcf' },
-    { text: 'BED', value: 'bed' },
-    { text: 'GTF', value: 'gtf' },
-    { text: 'FASTQ', value: 'fastq' },
-    { text: 'FASTA', value: 'fasta' },
+    { text: "BAM", value: "bam" },
+    { text: "BigWig", value: "bigwig" },
+    { text: "VCF", value: "vcf" },
+    { text: "BED", value: "bed" },
+    { text: "GTF", value: "gtf" },
+    { text: "FASTQ", value: "fastq" },
+    { text: "FASTA", value: "fasta" },
   ],
 };
 

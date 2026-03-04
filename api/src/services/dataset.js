@@ -298,7 +298,6 @@ async function get_dataset({
   const dataset_workflows = dataset.workflows;
 
   if (workflows && dataset.workflows.length > 0) {
-    console.log('if workflows and dataset.workflows.length > 0');
     // include workflow objects with dataset
     try {
       const wf_res = await wfService.getAll({
@@ -307,7 +306,6 @@ async function get_dataset({
         prev_task_runs,
         workflow_ids: dataset.workflows.map((x) => x.id),
       });
-      console.log(wf_res.data.results);
       dataset.workflows = wf_res.data.results.map((wf) => {
         const dataset_wf = dataset_workflows.find((dw) => dw.id === wf.id);
         return {
@@ -321,8 +319,8 @@ async function get_dataset({
     }
   }
   dataset?.audit_logs?.forEach((log) => {
-    // eslint-disable-next-line no-param-reassign
     if (log.user) {
+      // eslint-disable-next-line no-param-reassign
       log.user = log.user ? userService.transformUser(log.user) : null;
     }
   });
@@ -997,7 +995,7 @@ async function create({
     },
   });
   if (existingDataset) {
-    console.log('dataset already exists', existingDataset.name, 'existingDataset_id', existingDataset.id);
+    logger.info('Dataset already exists', { name: existingDataset.name, id: existingDataset.id });
     return;
   }
 
@@ -1328,7 +1326,10 @@ const buildDatasetCreateQuery = async (data) => {
 
   // gather non-null data to create a new dataset
   const create_query = _.flow([
-    _.pick(['name', 'type', 'origin_path', 'du_size', 'size', 'bundle_size', 'metadata', 'description', 'create_method']),
+    _.pick([
+      'name', 'type', 'origin_path', 'du_size', 'size', 'bundle_size',
+      'metadata', 'description', 'create_method',
+    ]),
     _.omitBy(_.isNil),
   ])(data);
 
@@ -1466,6 +1467,7 @@ const buildDatasetCreateQuery = async (data) => {
       create: [{
         source_run: src_dataset_id ? String(src_dataset_id) : null,
         metadata: {
+          origin: 'bioloop',
           notes: import_notes || null,
         },
       }],

@@ -7,11 +7,11 @@
       >
         <!-- collapse icon -->
         <div class="flex-none mr-2">
-                  <va-icon
-          name="va-arrow-down"
-          :class="value ? '' : 'rotate-[-90deg]'"
-          v-bind="iconAttrs"
-        />
+          <va-icon
+            name="va-arrow-down"
+            :class="value ? '' : 'rotate-[-90deg]'"
+            v-bind="iconAttrs"
+          />
         </div>
 
         <!-- info -->

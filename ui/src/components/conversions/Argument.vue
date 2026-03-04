@@ -16,13 +16,16 @@
 
     <div class="flex-1">
       <!-- Selectable (from among multiple options) argument -->
-      <div v-if="props.argument.allowed_values.length > 0" class="flex items-center gap-3">
+      <div
+        v-if="props.argument.allowed_values.length > 0"
+        class="flex items-center gap-3"
+      >
         <!-- Checkbox to enable/disable the argument's dropdown -->
         <va-checkbox
           v-model="isSelectableArgumentEnabled"
           @update:modelValue="handleArgumentSelectionCheckboxChange"
         />
-        
+
         <!-- Dropdown (disabled when checkbox is unchecked) -->
         <va-select
           v-model="model"
@@ -36,16 +39,14 @@
       </div>
 
       <!-- Boolean argument (flags) -->
-      <va-checkbox
-        v-else-if="is_checkbox(props.argument)"
-        v-model="model"
-      />
+      <va-checkbox v-else-if="is_checkbox(props.argument)" v-model="model" />
 
       <!-- String or number argument -->
       <va-input
         v-else-if="
-          (props.argument.value_type === 'STRING' || props.argument.value_type === 'NUMBER')
-          && !is_textarea(props.argument)
+          (props.argument.value_type === 'STRING' ||
+            props.argument.value_type === 'NUMBER') &&
+          !is_textarea(props.argument)
         "
         v-model="model"
         preset="bordered"
@@ -59,8 +60,8 @@
         </template>
       </va-input>
 
-             <!-- Textarea for long text fields -->
-      <va-textarea      
+      <!-- Textarea for long text fields -->
+      <va-textarea
         v-else-if="is_textarea(props.argument)"
         v-model="model"
         preset="bordered"
@@ -157,7 +158,11 @@ function is_checkbox(argument) {
 }
 
 function is_textarea(argument) {
-  return argument.value_type === "STRING" && argument.max_length != null && argument.max_length >= 200;
+  return (
+    argument.value_type === "STRING" &&
+    argument.max_length != null &&
+    argument.max_length >= 200
+  );
 }
 
 function getArgumentTypedValue(value) {
@@ -171,7 +176,7 @@ function getArgumentTypedValue(value) {
 }
 
 function getArgumentAllowedValues(argument) {
-  return argument.allowed_values.map(value => getArgumentTypedValue(value));
+  return argument.allowed_values.map((value) => getArgumentTypedValue(value));
 }
 
 // For selectable (dropdown) arguments, track whether the argument is enabled

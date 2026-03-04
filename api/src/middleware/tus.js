@@ -44,20 +44,27 @@ function handleFailureSimulation(req, uploadId) {
   const currentFailCount = global.tusFailureSimulationCount.get(uploadId) || 0;
 
   if (currentFailCount < MAX_FAILURES) {
-    logger.warn(`[TUS] Marking upload ${uploadId} for mid-upload failure simulation (attempt ${currentFailCount + 1}/${MAX_FAILURES})`, {
-      uploadId,
-      method: req.method,
-      contentLength: req.headers['content-length'],
-      failuresRemaining: MAX_FAILURES - currentFailCount,
-    });
+    logger.warn(
+      `[TUS] Marking upload ${uploadId} for mid-upload failure simulation`
+      + ` (attempt ${currentFailCount + 1}/${MAX_FAILURES})`,
+      {
+        uploadId,
+        method: req.method,
+        contentLength: req.headers['content-length'],
+        failuresRemaining: MAX_FAILURES - currentFailCount,
+      },
+    );
 
     global.tusFailureSimulation.set(uploadId, true);
     global.tusFailureSimulationCount.set(uploadId, currentFailCount + 1);
   } else {
-    logger.info(`[TUS] Upload ${uploadId} has exhausted failure quota (${currentFailCount} failures), allowing retry to proceed`, {
-      uploadId,
-      maxFailures: MAX_FAILURES,
-    });
+    logger.info(
+      `[TUS] Upload ${uploadId} has exhausted failure quota (${currentFailCount} failures), allowing retry to proceed`,
+      {
+        uploadId,
+        maxFailures: MAX_FAILURES,
+      },
+    );
   }
 
   // Continue to TUS server - the FileStore will trigger the failure after writing data
@@ -129,12 +136,12 @@ function createTusMiddleware(tusServer) {
       const originalWriteHead = res.writeHead;
       let statusCode = 200;
 
-      res.writeHead = function (...args) {
-        statusCode = args[0];
+      res.writeHead = function writeHead(...args) {
+        [statusCode] = args;
         return originalWriteHead.apply(this, args);
       };
 
-      res.end = function (...args) {
+      res.end = function end(...args) {
         const isSuccess = statusCode >= 200 && statusCode < 300;
         const logLevel = isSuccess ? 'info' : 'error';
 

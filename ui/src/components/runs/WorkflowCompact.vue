@@ -122,7 +122,9 @@ const props = defineProps({
 
 // eslint-disable-next-line vue/no-dupe-keys
 const workflow = ref({});
-const subject = computed(() => workflowUtils.resolveWorkflowSubject(workflow.value));
+const subject = computed(() =>
+  workflowUtils.resolveWorkflowSubject(workflow.value),
+);
 const elapsed_time = computed(() => {
   if (!workflowService.is_workflow_done(workflow.value)) {
     const now = new Date();

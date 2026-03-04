@@ -23,7 +23,9 @@
       @update:model-value="removeFilter('project')"
     >
       Project: &nbsp;
-      <span class="font-semibold"> {{ filters.project.name || filters.project_id }} </span>
+      <span class="font-semibold">
+        {{ filters.project.name || filters.project_id }}
+      </span>
     </va-chip>
 
     <!-- dataset filter -->
@@ -36,7 +38,9 @@
       @update:model-value="removeFilter('dataset')"
     >
       Dataset: &nbsp;
-      <span class="font-semibold"> {{ filters.dataset.name || filters.dataset_id }} </span>
+      <span class="font-semibold">
+        {{ filters.dataset.name || filters.dataset_id }}
+      </span>
     </va-chip>
 
     <!-- file_type filter -->
@@ -92,7 +96,7 @@
 </template>
 
 <script setup>
-import { computed } from 'vue';
+import { computed } from "vue";
 
 const props = defineProps({
   filters: {
@@ -125,10 +129,10 @@ const hasActiveFilters = computed(() => {
 });
 
 function removeFilter(field) {
-  emit('remove-filter', field);
+  emit("remove-filter", field);
 }
 
 function clearAll() {
-  emit('clear-all');
+  emit("clear-all");
 }
 </script>

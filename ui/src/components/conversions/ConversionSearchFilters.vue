@@ -26,8 +26,6 @@
       <span class="font-semibold"> {{ filters.program_name }} </span>
     </va-chip>
 
-
-
     <!-- initiator filter -->
     <va-chip
       class="flex-none"

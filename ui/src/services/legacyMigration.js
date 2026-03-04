@@ -1,11 +1,11 @@
 /**
  * Legacy Migration Service (UI)
- * 
+ *
  * Handles legacy dataset and session migration status queries.
  * Specifically for CMG datasets migrated from MongoDB that need hydration.
  */
 
-import api from './api';
+import api from "./api";
 
 /**
  * Get migration status information for a dataset
@@ -17,7 +17,7 @@ export async function getDatasetMigrationStatus(datasetId) {
     const response = await api.get(`/legacy/migrations/datasets/${datasetId}`);
     return response.data;
   } catch (error) {
-    console.error('Error fetching dataset migration status:', error);
+    console.error("Error fetching dataset migration status:", error);
     throw error;
   }
 }
@@ -28,7 +28,7 @@ export async function getDatasetMigrationStatus(datasetId) {
  * @returns {boolean} - True if the dataset was created via the bigbang migration
  */
 export function isLegacyDataset(dataset) {
-  return dataset?.metadata?.origin === 'legacy';
+  return dataset?.metadata?.origin === "legacy";
 }
 
 /**
@@ -41,7 +41,7 @@ export async function needsHydration(datasetId) {
     const status = await getDatasetMigrationStatus(datasetId);
     return status.is_legacy && !status.is_hydrated;
   } catch (error) {
-    console.error('Error checking hydration status:', error);
+    console.error("Error checking hydration status:", error);
     return false;
   }
 }
@@ -56,7 +56,7 @@ export async function isMigrationInProgress(datasetId) {
     const status = await getDatasetMigrationStatus(datasetId);
     return status.is_migration_initiated && !status.is_migrated;
   } catch (error) {
-    console.error('Error checking migration progress:', error);
+    console.error("Error checking migration progress:", error);
     return false;
   }
 }
@@ -71,7 +71,7 @@ export async function getSessionMigrationStatus(sessionId) {
     const response = await api.get(`/legacy/migrations/sessions/${sessionId}`);
     return response.data;
   } catch (error) {
-    console.error('Error fetching session migration status:', error);
+    console.error("Error fetching session migration status:", error);
     throw error;
   }
 }
@@ -82,7 +82,7 @@ export async function getSessionMigrationStatus(sessionId) {
  * @returns {boolean} - True if the session was created via the bigbang migration
  */
 export function isLegacySession(session) {
-  return session?.metadata?.origin === 'legacy';
+  return session?.metadata?.origin === "legacy";
 }
 
 /**
@@ -91,7 +91,7 @@ export function isLegacySession(session) {
  * @returns {boolean} - True if the project was created via the bigbang migration
  */
 export function isLegacyProject(project) {
-  return project?.metadata?.origin === 'legacy';
+  return project?.metadata?.origin === "legacy";
 }
 
 /**
@@ -100,7 +100,7 @@ export function isLegacyProject(project) {
  * @returns {boolean} - True if the user was created via the bigbang migration
  */
 export function isLegacyUser(user) {
-  return user?.metadata?.origin === 'legacy';
+  return user?.metadata?.origin === "legacy";
 }
 
 /**
@@ -113,7 +113,7 @@ export async function isSessionHydrated(sessionId) {
     const status = await getSessionMigrationStatus(sessionId);
     return status.is_hydrated;
   } catch (error) {
-    console.error('Error checking session hydration status:', error);
+    console.error("Error checking session hydration status:", error);
     return false;
   }
 }
@@ -129,4 +129,3 @@ export default {
   isSessionHydrated,
   isMigrationInProgress,
 };
-

@@ -32,8 +32,12 @@
               <div class="flex justify-between">
                 <span class="font-medium">Genome</span>
                 <GenomeDisplay
-                  :genome-type="track.dataset_file?.dataset?.genomic_details?.genome_type"
-                  :genome-value="track.dataset_file?.dataset?.genomic_details?.genome_value"
+                  :genome-type="
+                    track.dataset_file?.dataset?.genomic_details?.genome_type
+                  "
+                  :genome-value="
+                    track.dataset_file?.dataset?.genomic_details?.genome_value
+                  "
                 />
               </div>
               <div class="flex justify-between">
@@ -68,7 +72,10 @@
               </div>
               <div class="flex justify-between">
                 <span class="font-medium">Dataset Type</span>
-                <DatasetType v-if="track.dataset_file.dataset.type" :type="track.dataset_file.dataset.type" />
+                <DatasetType
+                  v-if="track.dataset_file.dataset.type"
+                  :type="track.dataset_file.dataset.type"
+                />
               </div>
               <div class="flex justify-between">
                 <span class="font-medium">File Name</span>
@@ -119,7 +126,9 @@
               </div>
 
             </div>
-            <div v-else class="text-center py-4">No dataset information available</div>
+            <div v-else class="text-center py-4">
+              No dataset information available
+            </div>
           </va-card-content>
         </va-card>
       </div>
@@ -187,16 +196,31 @@
 
             <!-- Alert shown below buttons when any staging-related workflow is active -->
             <div
-              v-if="trackDatasetStagingStatus.is_staging_pending || trackDatasetStagingStatus.is_archival_pending"
+              v-if="
+                trackDatasetStagingStatus.is_staging_pending ||
+                trackDatasetStagingStatus.is_archival_pending
+              "
               class="flex items-center gap-3"
             >
-              <va-alert
-                dense
-                color="info"
-                outline
-                icon="info"
-                class="flex-1"
+              <va-popover
+                :message="
+                  trackDatasetStagingStatus.is_archival_pending
+                    ? 'Dataset is pending archival to SDA'
+                    : 'Dataset is being staged'
+                "
               >
+                <half-circle-spinner
+                  class="flex-none"
+                  :animation-duration="1000"
+                  :size="24"
+                  :color="
+                    trackDatasetStagingStatus.is_archival_pending
+                      ? colors.info
+                      : colors.warning
+                  "
+                />
+              </va-popover>
+              <va-alert dense color="info" outline icon="info" class="flex-1">
                 Actions are disabled while Dataset is being staged
               </va-alert>
             </div>
@@ -218,7 +242,10 @@
               disable-client-side-sorting
             >
               <template #cell(session_title)="{ rowData }">
-                <router-link :to="`/sessions/${rowData.id}`" class="va-link font-medium">
+                <router-link
+                  :to="`/sessions/${rowData.id}`"
+                  class="va-link font-medium"
+                >
                   {{ rowData.title }}
                 </router-link>
               </template>
@@ -243,10 +270,11 @@
               </template>
             </va-data-table>
           </div>
-          <div v-else class="text-center py-8">This track is not used in any sessions yet.</div>
+          <div v-else class="text-center py-8">
+            This track is not used in any sessions yet.
+          </div>
         </va-card-content>
       </va-card>
-
     </div>
   </div>
 
@@ -258,25 +286,28 @@
   />
 
   <!-- Download Dataset Modal -->
-  <DatasetDownloadModal ref="downloadDatasetModal" :dataset="track?.dataset_file?.dataset || {}" />
+  <DatasetDownloadModal
+    ref="downloadDatasetModal"
+    :dataset="track?.dataset_file?.dataset || {}"
+  />
 </template>
 
 <script setup>
-import GenomeDisplay from '@/components/genome/GenomeDisplay.vue';
-import DatasetType from '@/components/dataset/DatasetType.vue';
-import DatasetDownloadModal from '@/components/project/datasets/DatasetDownloadModal.vue';
-import StageDatasetModal from '@/components/project/datasets/StageDatasetModal.vue';
-import * as datetime from '@/services/datetime';
-import datasetService from '@/services/dataset';
-import toast from '@/services/toast';
-import trackService from '@/services/track';
-import { downloadFile, formatBytes } from '@/services/utils';
-import wfService from '@/services/workflow';
-import { HalfCircleSpinner } from 'epic-spinners';
-import { useColors } from 'vuestic-ui';
-import { useNavStore } from '@/stores/nav';
-import { useTracksStore } from '@/stores/tracks';
-import { useAuthStore } from '@/stores/auth';
+import DatasetType from "@/components/dataset/DatasetType.vue";
+import GenomeDisplay from "@/components/genome/GenomeDisplay.vue";
+import DatasetDownloadModal from "@/components/project/datasets/DatasetDownloadModal.vue";
+import StageDatasetModal from "@/components/project/datasets/StageDatasetModal.vue";
+import datasetService from "@/services/dataset";
+import * as datetime from "@/services/datetime";
+import toast from "@/services/toast";
+import trackService from "@/services/track";
+import { downloadFile, formatBytes } from "@/services/utils";
+import wfService from "@/services/workflow";
+import { useAuthStore } from "@/stores/auth";
+import { useNavStore } from "@/stores/nav";
+import { useTracksStore } from "@/stores/tracks";
+import { HalfCircleSpinner } from "epic-spinners";
+import { useColors } from "vuestic-ui";
 
 const route = useRoute();
 const tracksStore = useTracksStore();
@@ -286,36 +317,35 @@ const auth = useAuthStore();
 // Computed
 const track = computed(() => tracksStore.currentTrack);
 const loading = computed(() => tracksStore.loading);
-const error = computed(() => tracksStore.error);
 
 // Session table columns
 const sessionColumns = [
   {
-    key: 'session_title',
-    label: 'Session Title',
+    key: "session_title",
+    label: "Session Title",
     sortable: true,
-    width: '60%',
-    thAlign: 'left',
-    tdAlign: 'left',
+    width: "60%",
+    thAlign: "left",
+    tdAlign: "left",
   },
   {
-    key: 'created_by',
-    label: 'Created By',
+    key: "created_by",
+    label: "Created By",
     sortable: true,
-    width: '10%',
+    width: "10%",
   },
   {
-    key: 'genome',
-    label: 'Genome',
+    key: "genome",
+    label: "Genome",
     sortable: true,
-    width: '25%',
+    width: "25%",
   },
   {
-    key: 'created_at',
-    label: 'Created',
+    key: "created_at",
+    label: "Created",
     sortable: true,
-    thAlign: 'right',
-    tdAlign: 'right',
+    thAlign: "right",
+    tdAlign: "right",
   },
 ];
 
@@ -334,14 +364,14 @@ const trackDatasetStagingStatus = computed(() => {
   );
   return {
     is_staging_pending: wfService.is_staging_workflow_active(workflows),
-    is_archival_pending: wfService.is_step_pending('archive', workflows),
+    is_archival_pending: wfService.is_step_pending("archive", workflows),
     is_stage_or_migrated_active: isStageStageMigratedActive,
     is_integrated_active: isIntegratedActive,
   };
 });
 
 const formatFileSize = (bytes) => {
-  if (!bytes) return 'Unknown';
+  if (!bytes) return "Unknown";
   return formatBytes(bytes);
 };
 
@@ -374,14 +404,14 @@ async function downloadFile_() {
       file_id: datasetFile.id,
     });
     const url = new URL(res.data.url);
-    url.searchParams.set('token', res.data.bearer_token);
+    url.searchParams.set("token", res.data.bearer_token);
     downloadFile({
       url: url.toString(),
       filename: datasetFile.name,
     });
   } catch (err) {
     console.error(err);
-    toast.error('Unable to download file');
+    toast.error("Unable to download file");
   }
 }
 
@@ -394,8 +424,8 @@ onMounted(async () => {
     if (track.value) {
       nav.setNavItems([
         {
-          label: 'Tracks',
-          to: '/tracks',
+          label: "Tracks",
+          to: "/tracks",
         },
         {
           label: track.value.name,
@@ -403,8 +433,8 @@ onMounted(async () => {
       ]);
     }
   } catch (error) {
-    console.error('Failed to load track:', error);
-    toast.error('Failed to load track');
+    console.error("Failed to load track:", error);
+    toast.error("Failed to load track");
   }
 });
 </script>

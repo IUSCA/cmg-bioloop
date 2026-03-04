@@ -37,7 +37,11 @@
     <template #footer>
       <div class="flex w-full gap-5">
         <!-- cancel button -->
-        <va-button preset="secondary" class="flex-none" @click="visible = false">
+        <va-button
+          preset="secondary"
+          class="flex-none"
+          @click="visible = false"
+        >
           Cancel
         </va-button>
 
@@ -58,65 +62,68 @@
 </template>
 
 <script setup>
-import constants from '@/constants';
-import { computed, ref, watch } from 'vue';
+import constants from "@/constants";
+import { computed, ref, watch } from "vue";
 
 const props = defineProps({
   modelValue: { type: Boolean, required: true },
   filters: { type: Object, required: true },
 });
 
-const emit = defineEmits(['update:modelValue', 'apply', 'reset']);
+const emit = defineEmits(["update:modelValue", "apply", "reset"]);
 
 // Reactive state
 const visible = ref(false);
 const form = ref({
-  title: '',
-  genome: '',
-  genome_type: '',
+  title: "",
+  genome: "",
+  genome_type: "",
 });
 
 // Computed
 const genomeTypeOptions = computed(() => {
-  return Object.keys(constants.GENOME_TYPES).map(type => ({
+  return Object.keys(constants.GENOME_TYPES).map((type) => ({
     text: type.charAt(0).toUpperCase() + type.slice(1),
     value: type,
   }));
 });
 
 // Watchers
-watch(() => props.modelValue, (newValue) => {
-  visible.value = newValue;
-  if (newValue) {
-    initializeForm();
-  }
-});
+watch(
+  () => props.modelValue,
+  (newValue) => {
+    visible.value = newValue;
+    if (newValue) {
+      initializeForm();
+    }
+  },
+);
 
 watch(visible, (newValue) => {
-  emit('update:modelValue', newValue);
+  emit("update:modelValue", newValue);
 });
 
 // Methods
 const initializeForm = () => {
   form.value = {
-    title: props.filters.title || '',
-    genome: props.filters.genome || '',
-    genome_type: props.filters.genome_type || '',
+    title: props.filters.title || "",
+    genome: props.filters.genome || "",
+    genome_type: props.filters.genome_type || "",
   };
 };
 
 const handleApply = () => {
-  emit('apply', { ...form.value });
+  emit("apply", { ...form.value });
   visible.value = false;
 };
 
 const handleReset = () => {
   form.value = {
-    title: '',
-    genome: '',
-    genome_type: '',
+    title: "",
+    genome: "",
+    genome_type: "",
   };
-  emit('reset');
+  emit("reset");
   visible.value = false;
 };
-</script> 
+</script>

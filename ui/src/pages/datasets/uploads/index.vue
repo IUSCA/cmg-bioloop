@@ -51,7 +51,10 @@
 
       <template #cell(status)="{ rowData }">
         <!-- Upload still in progress -->
-        <div v-if="rowData.status === constants.UPLOAD_STATUSES.UPLOADING" class="flex justify-center">
+        <div
+          v-if="rowData.status === constants.UPLOAD_STATUSES.UPLOADING"
+          class="flex justify-center"
+        >
           <va-popover message="Upload in progress">
             <half-circle-spinner
               class="flex-none"
@@ -62,7 +65,10 @@
           </va-popover>
         </div>
         <!-- Upload complete, waiting for processing -->
-        <div v-else-if="rowData.status === constants.UPLOAD_STATUSES.UPLOADED" class="flex justify-center">
+        <div
+          v-else-if="rowData.status === constants.UPLOAD_STATUSES.UPLOADED"
+          class="flex justify-center"
+        >
           <va-popover message="Processing pending">
             <half-circle-spinner
               class="flex-none"
@@ -73,7 +79,10 @@
           </va-popover>
         </div>
         <!-- Upload verification in progress -->
-        <div v-else-if="rowData.status === constants.UPLOAD_STATUSES.VERIFYING" class="flex justify-center">
+        <div
+          v-else-if="rowData.status === constants.UPLOAD_STATUSES.VERIFYING"
+          class="flex justify-center"
+        >
           <va-popover message="Verifying upload">
             <half-circle-spinner
               class="flex-none"
@@ -84,13 +93,19 @@
           </va-popover>
         </div>
         <!-- Upload verified successfully -->
-        <div v-else-if="rowData.status === constants.UPLOAD_STATUSES.VERIFIED" class="flex justify-center">
+        <div
+          v-else-if="rowData.status === constants.UPLOAD_STATUSES.VERIFIED"
+          class="flex justify-center"
+        >
           <va-popover message="Upload verified">
             <va-icon name="check_circle_outline" color="success" />
           </va-popover>
         </div>
         <!-- Integrated workflow running -->
-        <div v-else-if="rowData.integrated_status === 'ACTIVE'" class="flex justify-center">
+        <div
+          v-else-if="rowData.integrated_status === 'ACTIVE'"
+          class="flex justify-center"
+        >
           <va-popover message="Registration in progress">
             <half-circle-spinner
               class="flex-none"
@@ -101,31 +116,50 @@
           </va-popover>
         </div>
         <!-- Integrated workflow succeeded -->
-        <div v-else-if="rowData.integrated_status === 'SUCCESS'" class="flex justify-center">
+        <div
+          v-else-if="rowData.integrated_status === 'SUCCESS'"
+          class="flex justify-center"
+        >
           <va-popover message="Registration completed successfully">
             <va-icon name="check_circle" color="success" />
           </va-popover>
         </div>
         <!-- Integrated workflow failed -->
-        <div v-else-if="rowData.integrated_status === 'FAILURE'" class="flex justify-center">
+        <div
+          v-else-if="rowData.integrated_status === 'FAILURE'"
+          class="flex justify-center"
+        >
           <va-popover message="Registration failed">
             <va-icon name="warning" color="warning" />
           </va-popover>
         </div>
         <!-- Upload verification failed -->
-        <div v-else-if="rowData.status === constants.UPLOAD_STATUSES.VERIFICATION_FAILED" class="flex justify-center">
+        <div
+          v-else-if="
+            rowData.status === constants.UPLOAD_STATUSES.VERIFICATION_FAILED
+          "
+          class="flex justify-center"
+        >
           <va-popover message="Upload verification failed">
             <va-icon name="error" color="danger" />
           </va-popover>
         </div>
         <!-- Processing failed -->
-        <div v-else-if="rowData.status === constants.UPLOAD_STATUSES.PROCESSING_FAILED" class="flex justify-center">
+        <div
+          v-else-if="
+            rowData.status === constants.UPLOAD_STATUSES.PROCESSING_FAILED
+          "
+          class="flex justify-center"
+        >
           <va-popover message="Processing failed">
             <va-icon name="error" color="danger" />
           </va-popover>
         </div>
         <!-- Processing (workflow triggered but not yet detected) -->
-        <div v-else-if="rowData.status === constants.UPLOAD_STATUSES.PROCESSING" class="flex justify-center">
+        <div
+          v-else-if="rowData.status === constants.UPLOAD_STATUSES.PROCESSING"
+          class="flex justify-center"
+        >
           <va-popover message="Processing">
             <half-circle-spinner
               class="flex-none"
@@ -136,13 +170,19 @@
           </va-popover>
         </div>
         <!-- Complete (upload finished, no integrated workflow found) -->
-        <div v-else-if="rowData.status === constants.UPLOAD_STATUSES.COMPLETE" class="flex justify-center">
+        <div
+          v-else-if="rowData.status === constants.UPLOAD_STATUSES.COMPLETE"
+          class="flex justify-center"
+        >
           <va-popover message="Upload complete">
             <va-icon name="check_circle" color="success" />
           </va-popover>
         </div>
         <!-- Upload failed -->
-        <div v-else-if="rowData.status === constants.UPLOAD_STATUSES.UPLOAD_FAILED" class="flex justify-center">
+        <div
+          v-else-if="rowData.status === constants.UPLOAD_STATUSES.UPLOAD_FAILED"
+          class="flex justify-center"
+        >
           <va-popover message="Upload failed">
             <va-icon name="error" color="danger" />
           </va-popover>
@@ -169,7 +209,9 @@
       </template>
 
       <template #cell(uploaded_dataset_type)="{ value }">
-        <DatasetType v-if="value" :type="value" />
+        <va-chip size="small" outline v-if="value">
+          {{ value }}
+        </va-chip>
       </template>
 
       <template #cell(file_type)="{ value }">
@@ -179,8 +221,13 @@
       </template>
 
       <template #cell(genome)="{ rowData }">
-        <va-chip size="small" outline v-if="rowData.genome_type || rowData.genome_value">
-          {{ rowData.genome_type || '' }}{{ rowData.genome_value ? ` (${rowData.genome_value})` : '' }}
+        <va-chip
+          size="small"
+          outline
+          v-if="rowData.genome_type || rowData.genome_value"
+        >
+          {{ rowData.genome_type || ""
+          }}{{ rowData.genome_value ? ` (${rowData.genome_value})` : "" }}
         </va-chip>
       </template>
 
@@ -233,7 +280,7 @@ import { HalfCircleSpinner } from "epic-spinners";
 import { useColors } from "vuestic-ui";
 import _ from "lodash";
 import constants from "@/constants";
-import { Icon } from '@iconify/vue';
+import { Icon } from "@iconify/vue";
 
 const { colors } = useColors();
 const nav = useNavStore();
@@ -374,7 +421,9 @@ const getUploadLogs = async () => {
     .then((res) => {
       pastUploads.value = res.data.uploads.map((e) => {
         let uploaded_dataset = e.dataset;
-        const status = wfService.get_integrated_workflow_status(uploaded_dataset.workflows);
+        const status = wfService.get_integrated_workflow_status(
+          uploaded_dataset.workflows,
+        );
         const genomicDetails = uploaded_dataset.genomic_details?.[0];
         // Get user from create audit log (filtered by action='create', only one exists)
         const createAuditLog = uploaded_dataset.audit_logs?.[0];
@@ -417,15 +466,16 @@ watch(
   },
   {
     immediate: true,
-  }
+  },
 );
 
 // Track uploads that need polling (active workflows or pending processing)
 const tracking = computed(() => {
   return pastUploads.value
-    .filter((upload) => 
-      upload.integrated_status === 'ACTIVE' ||
-      upload.status === constants.UPLOAD_STATUSES.UPLOADED
+    .filter(
+      (upload) =>
+        upload.integrated_status === "ACTIVE" ||
+        upload.status === constants.UPLOAD_STATUSES.UPLOADED,
     )
     .map((upload) => upload.uploaded_dataset.id);
 });
@@ -438,13 +488,12 @@ function fetch_and_update_dataset(id) {
       _datasets.value[id] = res.data;
       // Update the corresponding upload in pastUploads
       const uploadIndex = pastUploads.value.findIndex(
-        (upload) => upload.uploaded_dataset.id === id
+        (upload) => upload.uploaded_dataset.id === id,
       );
       if (uploadIndex !== -1) {
         pastUploads.value[uploadIndex].uploaded_dataset = res.data;
-        pastUploads.value[uploadIndex].integrated_status = wfService.get_integrated_workflow_status(
-          res.data.workflows
-        );
+        pastUploads.value[uploadIndex].integrated_status =
+          wfService.get_integrated_workflow_status(res.data.workflows);
       }
     })
     .catch((err) => {
@@ -465,7 +514,7 @@ const poll = useIntervalFn(
   config.dataset_polling_interval,
   {
     immediate: false,
-  }
+  },
 );
 
 // Start/stop polling based on whether there are datasets to track

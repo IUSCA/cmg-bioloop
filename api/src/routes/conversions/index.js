@@ -1,15 +1,17 @@
 const express = require('express');
 const path = require('path');
 const {
-  body, param, query, checkSchema,
+  body, param, query,
 } = require('express-validator');
 const createError = require('http-errors');
 const { PrismaClient, Prisma } = require('@prisma/client');
 const _ = require('lodash/fp');
 
-// const logger = require('../services/logger');
 const config = require('config');
 const { isFeatureEnabled } = require('@/services/features');
+const legacyMigrationService = require('@/services/legacyMigration');
+const logger = require('@/services/logger');
+const authService = require('../../services/auth');
 const { validate } = require('../../middleware/validators');
 const asyncHandler = require('../../middleware/asyncHandler');
 const { accessControl } = require('../../middleware/auth');
@@ -18,7 +20,6 @@ const { validateArgument, resolveDynamicArgumentValue } = require('../../utils/a
 const datasetService = require('../../services/dataset');
 const wfService = require('../../services/workflow');
 const conversionService = require('../../services/conversion');
-const legacyMigrationService = require('@/services/legacyMigration');
 
 const prisma = new PrismaClient();
 const isPermittedTo = accessControl('conversion');
@@ -440,8 +441,7 @@ router.post(
   asyncHandler(async (req, res, next) => {
     // #swagger.tags = ['Conversions']
 
-    console.log('req.user.id', req.user.id);
-    console.log('req.body', req.body);
+    logger.info('[CONVERSIONS] create conversion', { user_id: req.user.id, definition_id: req.body.definition_id });
 
     // validate if definition_id, dataset_id exists
     const conversionDefinition = await prisma.conversion_definition.findUnique({
@@ -558,7 +558,7 @@ router.post(
             ...(req.body.metadata || {}),
           },
         },
-    });
+      });
 
       // create Process Requests (optional field, only if provided and feature is enabled)
       const platformBasedExecutionEnabled = isFeatureEnabled({ key: 'platform_based_execution' });
@@ -567,9 +567,9 @@ router.post(
           logger.info('[SLURM-CONVERSION] Creating process request', {
             conversion_id: conversion.id,
             execution_platform: request.execution_platform,
-            execution_config: request.execution_config
+            execution_config: request.execution_config,
           });
-          
+
           const process_request = await tx.process_request.create({
             data: {
               conversion_id: conversion.id,
@@ -577,56 +577,56 @@ router.post(
               execution_config: request.execution_config || null,
             },
           });
-          
+
           logger.info('[SLURM-CONVERSION] Process request created', {
             process_request_id: process_request.id,
             conversion_id: conversion.id,
-            execution_platform: request.execution_platform
+            execution_platform: request.execution_platform,
           });
-          
+
           request.artifacts.forEach(async (artifact) => {
-          validateArtifact(artifact);
-          
-          logger.info('[SLURM-CONVERSION] Creating artifact', {
-            process_request_id: process_request.id,
-            artifact_type: artifact.artifact_type,
-            storage_type: artifact.storage_type,
-            content_size: artifact.content_inline?.length || 0
-          });
-          
-          await tx.process_artifact.create({
-            data: {
-              process_id: process_request.id,
+            validateArtifact(artifact);
+
+            logger.info('[SLURM-CONVERSION] Creating artifact', {
+              process_request_id: process_request.id,
               artifact_type: artifact.artifact_type,
               storage_type: artifact.storage_type,
-              content_inline: artifact.content_inline,
-            },
+              content_size: artifact.content_inline?.length || 0,
+            });
+
+            await tx.process_artifact.create({
+              data: {
+                process_id: process_request.id,
+                artifact_type: artifact.artifact_type,
+                storage_type: artifact.storage_type,
+                content_inline: artifact.content_inline,
+              },
+            });
+
+            logger.info('[SLURM-CONVERSION] Artifact created', {
+              process_request_id: process_request.id,
+              artifact_type: artifact.artifact_type,
+            });
           });
-          
-          logger.info('[SLURM-CONVERSION] Artifact created', {
-            process_request_id: process_request.id,
-            artifact_type: artifact.artifact_type
-          });
-        });
-      }));
+        }));
       }
 
-    const workflow_type = config.genomic_conversion_programs.includes(conversionDefinition.program.name)
-      ? 'genomic_conversion'
-      : 'conversion';
-    const wf_body = datasetService.get_wf_body(workflow_type);
-    // create the workflow
-    const wf = (await wfService.create({
-      ...wf_body,
-      args: [conversion.id],
-    })).data;
+      const workflow_type = config.genomic_conversion_programs.includes(conversionDefinition.program.name)
+        ? 'genomic_conversion'
+        : 'conversion';
+      const wf_body = datasetService.get_wf_body(workflow_type);
+      // create the workflow
+      const wf = (await wfService.create({
+        ...wf_body,
+        args: [conversion.id],
+      })).data;
 
       // add workflow association to the dataset
       await tx.workflow.create({
         data: {
           id: wf.workflow_id,
           dataset_id: dataset.id,
-          ...(initiator_id && { initiator_id }),
+          ...(req.user.id && { initiator_id: req.user.id }),
         },
       });
 
@@ -714,19 +714,21 @@ async function validateAndCreateConversion(
   // Handle SLURM directives if present in process_requests (only when feature is enabled)
   const platformBasedExecutionEnabled = isFeatureEnabled({ key: 'platform_based_execution' });
   const effectiveProcessRequests = platformBasedExecutionEnabled ? process_request : [];
-  const slurmProcessRequests = effectiveProcessRequests.filter(req => req.execution_platform === 'SLURM' && req.execution_config);
+  const slurmProcessRequests = effectiveProcessRequests.filter(
+    (req) => req.execution_platform === 'SLURM' && req.execution_config,
+  );
   if (slurmProcessRequests.length > 0) {
     // Get SLURM program and its arguments
     const slurmProgram = await prisma.cmd_line_program.findFirst({
       where: { name: 'slurm' },
-      include: { arguments: true }
+      include: { arguments: true },
     });
 
     if (slurmProgram) {
       // Add SLURM argument values to argVals
-      slurmProcessRequests.forEach(slurmRequest => {
+      slurmProcessRequests.forEach((slurmRequest) => {
         const directives = slurmRequest.execution_config;
-        slurmProgram.arguments.forEach(slurmArg => {
+        slurmProgram.arguments.forEach((slurmArg) => {
           const directiveKey = slurmArg.name.replace('--', '').replace('-', '');
           const directiveValue = directives[directiveKey];
 
@@ -845,8 +847,7 @@ router.post(
   asyncHandler(async (req, res, next) => {
     // #swagger.tags = ['Conversions']
 
-    console.log('req.user.id', req.user.id);
-    console.log('req.body', req.body);
+    logger.info('[CONVERSIONS] create conversion', { user_id: req.user.id, definition_id: req.body.definition_id });
 
     // validate if definition_id, dataset_id exists
     const conversionDefinition = await prisma.conversion_definition.findUnique({
@@ -1002,7 +1003,7 @@ router.get(
     // #swagger.summary = Get secure URLs for viewing conversion reports
 
     const conversionId = req.params.id;
-    console.log(`[CONVERSIONS] Generating secure URLs for conversion ${conversionId}`);
+    logger.info(`[CONVERSIONS] Generating secure URLs for conversion ${conversionId}`);
 
     // Look up conversion and dataset to determine path
     const conversion = await prisma.conversion.findUnique({
@@ -1013,11 +1014,11 @@ router.get(
     });
 
     if (!conversion) {
-      console.error(`[CONVERSIONS] Conversion ${conversionId} not found in database`);
+      logger.error(`[CONVERSIONS] Conversion ${conversionId} not found in database`);
       return next(createError.NotFound('Conversion not found'));
     }
 
-    console.log(`[CONVERSIONS] Found conversion:`, {
+    logger.info('[CONVERSIONS] Found conversion', {
       id: conversion.id,
       cmg_id: conversion.cmg_id,
       dataset_id: conversion.dataset_id,
@@ -1025,7 +1026,7 @@ router.get(
     });
 
     if (!conversion.dataset) {
-      console.error(`[CONVERSIONS] Dataset not found for conversion ${conversionId}`);
+      logger.error(`[CONVERSIONS] Dataset not found for conversion ${conversionId}`);
       return next(createError.NotFound('Dataset not found for conversion'));
     }
 
@@ -1039,35 +1040,34 @@ router.get(
 
     // Get CONVERSION_OUTPUT_DIR from environment
     const conversionOutputDir = process.env.CONVERSION_OUTPUT_DIR || config.get('conversion.output_dir');
-    
+
     // Construct absolute path: {CONVERSION_OUTPUT_DIR}/{conversion_id}/{dataset_name}/Reports
     const absoluteReportsPath = path.join(
       conversionOutputDir,
       conversionIdentifier,
       datasetName,
-      'Reports'
+      'Reports',
     );
 
-    console.log(`[CONVERSIONS] Absolute reports path: ${absoluteReportsPath}`);
+    logger.info(`[CONVERSIONS] Absolute reports path: ${absoluteReportsPath}`);
 
     // Issue token with download_file scope (reuse existing scope for now)
     // TODO: Create separate 'view_reports:' scope in future for better separation
     // Token scope uses the absolute path so secure_download doesn't need to extrapolate
-    const authService = require('../../services/auth');
     const token = await authService.get_download_token(absoluteReportsPath);
 
-    console.log(`[CONVERSIONS] Token issued for: ${absoluteReportsPath}`);
+    logger.info(`[CONVERSIONS] Token issued for: ${absoluteReportsPath}`);
 
     // Construct URLs with absolute paths after /reports/
     // secure_download will receive these absolute paths and use them directly
     const reportsUrl = `/reports/${absoluteReportsPath}`;
     const indexUrl = `/reports/${absoluteReportsPath}/html/index.html`;
-    
+
     // Append token as query parameter
     const reportsUrlWithToken = `${reportsUrl}?access_token=${token.accessToken}`;
     const indexUrlWithToken = `${indexUrl}?access_token=${token.accessToken}`;
 
-    console.log(`[CONVERSIONS] Returning URLs with absolute paths and token appended`);
+    logger.info('[CONVERSIONS] Returning URLs with absolute paths and token appended');
 
     return res.json({
       conversion_id: conversionIdentifier,

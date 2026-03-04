@@ -46,19 +46,28 @@
       :loading="data_loading"
     >
       <template #cell(name)="{ rowData }">
-        <router-link :to="`/tracks/${rowData.id}`" class="va-link">{{ rowData.name }}</router-link>
+        <router-link :to="`/tracks/${rowData.id}`" class="va-link">{{
+          rowData.name
+        }}</router-link>
       </template>
 
       <template #cell(file_type)="{ value }">
-        <va-chip v-if="value" size="small" :color="trackService._getTrackColor(value)">{{
-          value
-        }}</va-chip>
+        <va-chip
+          v-if="value"
+          size="small"
+          :color="trackService._getTrackColor(value)"
+          >{{ value }}</va-chip
+        >
       </template>
 
       <template #cell(genome)="{ rowData }">
         <GenomeDisplay
-          :genome-type="rowData.dataset_file?.dataset?.genomic_details?.genome_type"
-          :genome-value="rowData.dataset_file?.dataset?.genomic_details?.genome_value"
+          :genome-type="
+            rowData.dataset_file?.dataset?.genomic_details?.genome_type
+          "
+          :genome-value="
+            rowData.dataset_file?.dataset?.genomic_details?.genome_value
+          "
         />
       </template>
 
@@ -78,7 +87,10 @@
       </template>
 
       <template #cell(stage)="{ rowData }">
-        <span v-if="rowData.dataset_file?.dataset?.is_staged" class="flex justify-center">
+        <span
+          v-if="rowData.dataset_file?.dataset?.is_staged"
+          class="flex justify-center"
+        >
           <i-mdi-check-circle-outline class="text-green-700" />
         </span>
       </template>
@@ -86,7 +98,6 @@
       <template #cell(updated_at)="{ value }">
         <span>{{ datetime.fromNow(value) }}</span>
       </template>
-
     </va-data-table>
 
     <!-- pagination -->
@@ -104,14 +115,14 @@
 </template>
 
 <script setup>
-import useQueryPersistence from '@/composables/useQueryPersistence';
-import useSearchKeyShortcut from '@/composables/useSearchKeyShortcut';
-import GenomeDisplay from '@/components/genome/GenomeDisplay.vue';
-import * as datetime from '@/services/datetime';
-import toast from '@/services/toast';
-import trackService from '@/services/track';
-import { useTracksStore } from '@/stores/tracks';
-import { useAuthStore } from '@/stores/auth';
+import useQueryPersistence from "@/composables/useQueryPersistence";
+import useSearchKeyShortcut from "@/composables/useSearchKeyShortcut";
+import GenomeDisplay from "@/components/genome/GenomeDisplay.vue";
+import * as datetime from "@/services/datetime";
+import toast from "@/services/toast";
+import trackService from "@/services/track";
+import { useTracksStore } from "@/stores/tracks";
+import { useAuthStore } from "@/stores/auth";
 
 useSearchKeyShortcut();
 
@@ -129,8 +140,8 @@ const searchModal = ref(null);
 const query = ref({
   page: 1,
   page_size: 25,
-  sort_by: 'created_at',
-  sort_order: 'desc',
+  sort_by: "created_at",
+  sort_order: "desc",
 });
 
 // Filters
@@ -149,8 +160,8 @@ const filters = ref({
 const defaultParams = () => ({
   page: 1,
   page_size: 25,
-  sort_by: 'created_at',
-  sort_order: 'desc',
+  sort_by: "created_at",
+  sort_order: "desc",
 });
 
 const defaultFilters = () => ({
@@ -167,13 +178,14 @@ const defaultFilters = () => ({
 // Active filters computed
 const activeFilters = computed(() => {
   const active = [];
-  const { name, project, dataset, file_type, genome_type, genome_value } = filters.value;
-  if (name) active.push({ key: 'name', value: name });
-  if (project) active.push({ key: 'project', value: project });
-  if (dataset) active.push({ key: 'dataset', value: dataset });
-  if (file_type) active.push({ key: 'file_type', value: file_type });
-  if (genome_type) active.push({ key: 'genome_type', value: genome_type });
-  if (genome_value) active.push({ key: 'genome_value', value: genome_value });
+  const { name, project, dataset, file_type, genome_type, genome_value } =
+    filters.value;
+  if (name) active.push({ key: "name", value: name });
+  if (project) active.push({ key: "project", value: project });
+  if (dataset) active.push({ key: "dataset", value: dataset });
+  if (file_type) active.push({ key: "file_type", value: file_type });
+  if (genome_type) active.push({ key: "genome_type", value: genome_type });
+  if (genome_value) active.push({ key: "genome_value", value: genome_value });
   return active;
 });
 
@@ -184,67 +196,73 @@ const offset = computed(() => (query.value.page - 1) * query.value.page_size);
 useQueryPersistence({
   refObject: query,
   defaultValueFn: defaultParams,
-  key: 'q',
+  key: "q",
   history_push: true,
 });
 
 const columns = [
   {
-    key: 'name',
+    key: "name",
     sortable: true,
-    width: '22%',
-    thAlign: 'left',
-    tdAlign: 'left',
-    tdStyle: 'white-space: pre-wrap; word-wrap: break-word; word-break: break-word;',
-    thStyle: 'white-space: pre-wrap; word-wrap: break-word; word-break: break-word;',
+    width: "22%",
+    thAlign: "left",
+    tdAlign: "left",
+    tdStyle:
+      "white-space: pre-wrap; word-wrap: break-word; word-break: break-word;",
+    thStyle:
+      "white-space: pre-wrap; word-wrap: break-word; word-break: break-word;",
   },
   {
-    key: 'file_type',
-    label: 'File Type',
+    key: "file_type",
+    label: "File Type",
     sortable: true,
-    width: '10%',
-    thAlign: 'center',
-    tdAlign: 'center',
+    width: "10%",
+    thAlign: "center",
+    tdAlign: "center",
   },
   {
-    key: 'genome',
-    label: 'Genome',
-    width: '15%',
-    thAlign: 'center',
-    tdAlign: 'center',
+    key: "genome",
+    label: "Genome",
+    width: "15%",
+    thAlign: "center",
+    tdAlign: "center",
   },
   {
-    key: 'dataset',
-    label: 'Dataset',
-    thAlign: 'center',
-    tdAlign: 'center',
-    tdStyle: 'white-space: pre-wrap; word-wrap: break-word; word-break: break-word;',
-    thStyle: 'white-space: pre-wrap; word-wrap: break-word; word-break: break-word;',
+    key: "dataset",
+    label: "Dataset",
+    thAlign: "center",
+    tdAlign: "center",
+    tdStyle:
+      "white-space: pre-wrap; word-wrap: break-word; word-break: break-word;",
+    thStyle:
+      "white-space: pre-wrap; word-wrap: break-word; word-break: break-word;",
   },
   {
-    key: 'stage',
-    label: 'staged',
-    width: '7%',
-    thAlign: 'center',
-    tdAlign: 'center',
+    key: "stage",
+    label: "staged",
+    width: "7%",
+    thAlign: "center",
+    tdAlign: "center",
   },
   {
-    key: 'created_at',
-    label: 'Created',
+    key: "created_at",
+    label: "Created",
     sortable: true,
-    width: '8%',
-    thAlign: 'center',
-    tdAlign: 'center',
-    thStyle: 'white-space: pre-wrap; word-wrap: break-word; word-break: break-word;',
+    width: "8%",
+    thAlign: "center",
+    tdAlign: "center",
+    thStyle:
+      "white-space: pre-wrap; word-wrap: break-word; word-break: break-word;",
   },
   {
-    key: 'updated_at',
-    label: 'Updated',
+    key: "updated_at",
+    label: "Updated",
     sortable: true,
-    width: '7%',
-    thAlign: 'center',
-    tdAlign: 'center',
-    thStyle: 'white-space: pre-wrap; word-wrap: break-word; word-break: break-word;',
+    width: "7%",
+    thAlign: "center",
+    tdAlign: "center",
+    thStyle:
+      "white-space: pre-wrap; word-wrap: break-word; word-break: break-word;",
   },
 ];
 
@@ -252,16 +270,25 @@ async function fetch_items() {
   data_loading.value = true;
 
   try {
-    const { name, project_id, dataset_id, file_type, genome_type, genome_value } = filters.value;
+    const {
+      name,
+      project_id,
+      dataset_id,
+      file_type,
+      genome_type,
+      genome_value,
+    } = filters.value;
 
     // If dataset_id is set, omit project_id (dataset is more specific)
     const apiParams = {
       ...(name ? { name } : {}),
-      ...(dataset_id ? { dataset_id } : (project_id ? { project_id } : {})),
+      ...(dataset_id ? { dataset_id } : project_id ? { project_id } : {}),
       ...(file_type ? { file_type } : {}),
       ...(genome_type ? { genome_type } : {}),
       ...(genome_value ? { genome_value } : {}),
-      ...(query.value.inclusive_query ? { name: query.value.inclusive_query } : {}),
+      ...(query.value.inclusive_query
+        ? { name: query.value.inclusive_query }
+        : {}),
       limit: query.value.page_size,
       offset: offset.value,
       sort_by: query.value.sort_by,
@@ -272,8 +299,8 @@ async function fetch_items() {
     tracks.value = response.tracks;
     total_results.value = response.metadata.count;
   } catch (error) {
-    console.error('Error fetching tracks:', error);
-    toast.error('Failed to fetch tracks');
+    console.error("Error fetching tracks:", error);
+    toast.error("Failed to fetch tracks");
   } finally {
     data_loading.value = false;
   }
@@ -290,10 +317,10 @@ function handleSearch(searchFilters) {
 }
 
 function removeFilter(key) {
-  if (key === 'project') {
+  if (key === "project") {
     filters.value.project = null;
     filters.value.project_id = null;
-  } else if (key === 'dataset') {
+  } else if (key === "dataset") {
     filters.value.dataset = null;
     filters.value.dataset_id = null;
   } else {
@@ -313,12 +340,11 @@ watch(
   () => {
     fetch_items();
   },
-  { deep: true }
+  { deep: true },
 );
 
 // Initial load
 onMounted(() => {
   fetch_items();
 });
-
 </script>

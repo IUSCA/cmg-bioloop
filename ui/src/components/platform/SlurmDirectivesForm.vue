@@ -33,7 +33,7 @@
                 {{ directive.description }}
               </span>
             </div>
-            
+
             <div class="flex-1">
               <!-- Number input -->
               <va-input
@@ -42,21 +42,25 @@
                 type="number"
                 :min="directive.min"
                 :max="directive.max"
-                :placeholder="directive.placeholder || directive.default?.toString()"
+                :placeholder="
+                  directive.placeholder || directive.default?.toString()
+                "
                 preset="bordered"
                 class="w-full"
               />
-              
+
               <!-- String input -->
               <va-input
-                v-else-if="directive.type === 'string' || directive.type === 'email'"
+                v-else-if="
+                  directive.type === 'string' || directive.type === 'email'
+                "
                 v-model="directiveValues[key]"
                 :type="directive.type === 'email' ? 'email' : 'text'"
                 :placeholder="directive.placeholder"
                 preset="bordered"
                 class="w-full"
               />
-              
+
               <!-- Select dropdown -->
               <va-select
                 v-else-if="directive.type === 'select'"
@@ -68,7 +72,7 @@
                 class="w-full"
                 clearable
               />
-              
+
               <!-- Multi-select -->
               <va-select
                 v-else-if="directive.type === 'multiselect'"
@@ -84,7 +88,7 @@
             </div>
           </div>
         </div>
-        
+
         <!-- No directives message -->
         <div v-else class="text-center text-gray-500 py-4">
           <i-mdi-information-outline class="inline-block text-2xl mr-2" />
@@ -96,25 +100,28 @@
 </template>
 
 <script setup>
-import { getSlurmDirectives, validateSlurmDirective } from '@/config/slurmDirectives';
+import {
+  getSlurmDirectives,
+  validateSlurmDirective,
+} from "@/config/slurmDirectives";
 
 const directives = defineModel("directives");
 
 // Reactive data
-const selectedCommand = ref('sbatch');
+const selectedCommand = ref("sbatch");
 const currentDirectives = ref(null);
 const directiveValues = ref({});
 
 // Command options
 const commandOptions = [
-  { value: 'sbatch', label: 'sbatch (Batch Job)' },
-  { value: 'srun', label: 'srun (Interactive Job)' },
+  { value: "sbatch", label: "sbatch (Batch Job)" },
+  { value: "srun", label: "srun (Interactive Job)" },
 ];
 
 // Initialize directives based on selected command
 function initializeDirectives() {
   currentDirectives.value = getSlurmDirectives(selectedCommand.value);
-  
+
   // Initialize directive values with defaults
   const newDirectives = {};
   Object.entries(currentDirectives.value).forEach(([key, directive]) => {
@@ -122,7 +129,7 @@ function initializeDirectives() {
       newDirectives[key] = directive.default;
     }
   });
-  
+
   directiveValues.value = newDirectives;
   updateParentDirectives();
 }
@@ -138,7 +145,7 @@ function updateParentDirectives() {
   // Filter out empty values for cleaner data
   const filteredDirectives = {};
   Object.entries(directiveValues.value).forEach(([key, value]) => {
-    if (value !== null && value !== undefined && value !== '') {
+    if (value !== null && value !== undefined && value !== "") {
       if (Array.isArray(value) && value.length > 0) {
         filteredDirectives[key] = value;
       } else if (!Array.isArray(value)) {
@@ -146,43 +153,54 @@ function updateParentDirectives() {
       }
     }
   });
-  
+
   directives.value = filteredDirectives;
 }
 
 // Watch for changes in directive values and validate
-watch(directiveValues, (newValue) => {
-  // Validate all directive values
-  const validationErrors = {};
-  let hasErrors = false;
-  
-  Object.entries(newValue).forEach(([key, value]) => {
-    if (currentDirectives.value && currentDirectives.value[key]) {
-      const validation = validateSlurmDirective(currentDirectives.value[key], value);
-      if (!validation.valid) {
-        validationErrors[key] = validation.error;
-        hasErrors = true;
-      }
-    }
-  });
-  
-  // Update parent with validated directives
-  if (!hasErrors) {
-    updateParentDirectives();
-  }
-}, { deep: true });
+watch(
+  directiveValues,
+  (newValue) => {
+    // Validate all directive values
+    const validationErrors = {};
+    let hasErrors = false;
 
-// Watch for changes from parent
-watch(directives, (newValue) => {
-  if (newValue && typeof newValue === 'object') {
-    // Update local directive values with values from parent
     Object.entries(newValue).forEach(([key, value]) => {
       if (currentDirectives.value && currentDirectives.value[key]) {
-        directiveValues.value[key] = value;
+        const validation = validateSlurmDirective(
+          currentDirectives.value[key],
+          value,
+        );
+        if (!validation.valid) {
+          validationErrors[key] = validation.error;
+          hasErrors = true;
+        }
       }
     });
-  }
-}, { deep: true });
+
+    // Update parent with validated directives
+    if (!hasErrors) {
+      updateParentDirectives();
+    }
+  },
+  { deep: true },
+);
+
+// Watch for changes from parent
+watch(
+  directives,
+  (newValue) => {
+    if (newValue && typeof newValue === "object") {
+      // Update local directive values with values from parent
+      Object.entries(newValue).forEach(([key, value]) => {
+        if (currentDirectives.value && currentDirectives.value[key]) {
+          directiveValues.value[key] = value;
+        }
+      });
+    }
+  },
+  { deep: true },
+);
 
 // Initialize on mount
 onMounted(() => {

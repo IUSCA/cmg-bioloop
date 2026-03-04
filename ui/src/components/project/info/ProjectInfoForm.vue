@@ -2,7 +2,8 @@
   <va-form class="flex flex-col gap-6 w-full justify-start" ref="formRef">
     <!-- Historical data notice -->
     <va-alert v-if="isHistoricalData" color="info" border="left">
-      This is historical data from CMG. Some fields are read-only to preserve data integrity.
+      This is historical data from CMG. Some fields are read-only to preserve
+      data integrity.
     </va-alert>
 
     <div class="flex-none">
@@ -40,10 +41,10 @@
       resize
     />
 
-    <va-input 
-      class="flex-none" 
-      label="Funding" 
-      v-model="funding" 
+    <va-input
+      class="flex-none"
+      label="Funding"
+      v-model="funding"
       :readonly="isHistoricalData"
     />
 
@@ -73,7 +74,7 @@ const props = defineProps({
 });
 
 const projectFormStore = useProjectFormStore();
-const { name, description, browser_enabled, funding, cmg_id, metadata } =
+const { name, description, browser_enabled, funding, metadata } =
   storeToRefs(projectFormStore);
 
 // Check if this is historical CMG data

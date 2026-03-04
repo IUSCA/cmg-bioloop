@@ -47,7 +47,7 @@ function authenticateWithQueryToken(req, res, next) {
     if (!authHeader.startsWith('Bearer ')) {
       return next(invalid_token_err);
     }
-    token = authHeader.split(' ')[1];
+    [, token] = authHeader.split(' ');
   }
 
   // Validate the token

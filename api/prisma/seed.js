@@ -1,3 +1,4 @@
+/* eslint-disable no-console */
 require('module-alias/register');
 const path = require('path');
 
@@ -362,7 +363,8 @@ async function main() {
     'spaceranger-v1.3.1', 'spaceranger-v1.1.0',
   ];
 
-  const conversionProgramsSharedArgs = argumentData.filter((arg) => ['--no-lane-splitting', '--delete-undetermined', '--filter-single-index'].includes(arg.name));
+  const sharedArgNames = ['--no-lane-splitting', '--delete-undetermined', '--filter-single-index'];
+  const conversionProgramsSharedArgs = argumentData.filter((arg) => sharedArgNames.includes(arg.name));
 
   otherProgramNames.forEach((programName) => {
     const programId = programMap[programName];
@@ -418,6 +420,7 @@ async function main() {
 
   // Create tracks and sessions for testing
   console.log('\n=== Creating Tracks and Sessions ===');
+  // eslint-disable-next-line global-require
   const { main: createTracksAndSessions } = require('../src/scripts/insert_mock_tracks');
   await createTracksAndSessions();
 }

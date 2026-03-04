@@ -7,6 +7,7 @@ const compression = require('compression');
 const swaggerUi = require('swagger-ui-express');
 const config = require('config');
 
+const createTusMiddleware = require('@/middleware/tus');
 const indexRouter = require('./routes/index');
 const {
   notFound,
@@ -16,7 +17,6 @@ const {
   axiosErrorHandler,
   prismaConstraintFailedHandler,
 } = require('./middleware/error');
-const { authenticate } = require('./middleware/auth');
 
 // Register application
 const app = express();
@@ -33,7 +33,6 @@ const tusServer = uploadService.getServer();
 const logger = require('./services/logger');
 
 // Mount TUS middleware BEFORE all other middleware
-const createTusMiddleware = require('@/middleware/tus');
 app.use(createTusMiddleware(tusServer));
 
 logger.info('TUS server mounted at /uploads/files');
