@@ -172,4 +172,49 @@ Secure download mechanism that enforces access control and provides audit loggin
 
 ---
 
-**Last Updated:** 2026-02-11 21:15 UTC
+### 2026-03-03 - Import Sources: DB-Driven Import Entry Points
+
+**Feature:** Replaced hardcoded filesystem "search spaces" (slateScratch/slateProject) with a DB-managed `import_source` table, providing configurable, labeled import entry points shown directly in the UI.
+
+**Design Decisions:**
+
+- **Terminology:** "Import Source" chosen over "entry point" or "search space" as a more descriptive, industry-standard term. DB table: `import_source`. UI label: "Import Source".
+- **DB-first:** Import sources are stored in the `import_source` table (`id`, `path`, `label`, `description`, `owner_id`), not in env vars or config. This avoids per-entry-point env vars proliferating as instances grow.
+- **UX:** The UI step-0 dropdown now lists human-friendly import source labels (or paths as fallback) loaded from `GET /import-sources`. No knowledge of filesystem "spaces" required.
+- **Path containment (allowlist):** The `/fs` route validates that any requested path starts with the selected import source's path. Path traversal attempts (`/../`) are rejected at the API level. This replaces the old `restricted_import_dirs` concept, which was a denylist.
+- **Mount translation preserved:** `FILESYSTEM_BASE_DIR_*` / `FILESYSTEM_MOUNT_DIR_*` env vars and config remain for docker volume-mount path translation. These are infrastructure-level and bounded by the number of mounted filesystems, not by import source count.
+- **No role-based filtering (for now):** All authenticated users see all configured import sources. TODO: implement per-user or per-role filtering of import sources.
+- **Dataset creation validation:** `origin_path` on dataset create is validated against all configured import sources in the DB (allowlist). The old `import_space` + `restricted_import_dirs` config-based check is removed.
+- **`import_space` removed:** The `import_space` field previously sent from UI and stored in import log metadata is removed. The `origin_path` on the dataset already encodes which source it came from.
+
+**Population Strategy:**
+- Non-prod: `prisma/seed.js` seeds two sources at `/opt/sca/data/imports/entrypoint` and `/opt/sca/data/project/entrypoint`.
+- Production: `api/src/scripts/init_prod_import_sources.js` seeds `/N/project/yunliu-general/SCA_incoming` and `/N/project/CMG-SCA`.
+
+**Removed:**
+- `FILESYSTEM_SEARCH_SPACES`, `SCRATCH_IMPORT_RESTRICTED_DIRS`, `PROJECT_IMPORT_RESTRICTED_DIRS` env vars (API)
+- `VITE_SCRATCH_BASE_DIR`, `VITE_SCRATCH_MOUNT_DIR`, `VITE_PROJECT_BASE_DIR`, `VITE_PROJECT_MOUNT_DIR`, `VITE_SCRATCH_IMPORT_RESTRICTED_DIRS`, `VITE_PROJECT_IMPORT_RESTRICTED_DIRS`, `VITE_FILESYSTEM_SEARCH_SPACES` env vars (UI)
+- `filesystem_search_spaces` and `restricted_import_dirs` keys from UI `config.js`
+- `filesystem.search_spaces` and `restricted_import_dirs` from API `default.json` / `custom-environment-variables.json`
+
+**Files Modified:**
+- `api/prisma/schema.prisma` — added `import_source` model; added `owned_import_sources` relation to `user`
+- `api/prisma/migrations/20260303_add_import_sources/migration.sql` — new migration
+- `api/prisma/seed.js` — seeds two import sources for non-prod
+- `api/src/scripts/init_prod_import_sources.js` — new prod init script
+- `api/src/routes/importSources.js` — new `GET /import-sources` route
+- `api/src/routes/index.js` — registered `/import-sources` route
+- `api/src/routes/fs.js` — refactored to load import source from DB by `import_source_id`, validate path containment, infer mount mapping
+- `api/src/routes/datasets/index.js` — replaced `import_space`/`restricted_import_dirs` check with DB-based import source path validation
+- `api/src/services/dataset.js` — removed `import_space` from import log metadata
+- `api/src/services/accesscontrols.js` — added `import_sources: read:any` to all roles
+- `api/config/custom-environment-variables.json` — removed obsolete keys
+- `api/config/default.json` — removed obsolete keys
+- `api/.env.default` — removed obsolete vars
+- `ui/src/services/importSource.js` — new service
+- `ui/src/services/fs.js` — renamed `search_space` param to `import_source_id`
+- `ui/src/components/dataset/import/ImportStepper.vue` — loads import sources from API; replaces search space dropdown; removes client-side restricted-path check; removes picomatch dependency
+- `ui/src/config.js` — removed `filesystem_search_spaces` and `restricted_import_dirs`
+- `ui/.env.default` — removed all filesystem-search-space env vars
+
+**Last Updated:** 2026-03-03

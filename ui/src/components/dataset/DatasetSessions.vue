@@ -36,6 +36,7 @@
 <script setup>
 import * as datetime from "@/services/datetime";
 import sessionService from "@/services/session";
+import { useAuthStore } from "@/stores/auth";
 import toast from "@/services/toast";
 
 const props = defineProps({
@@ -44,6 +45,8 @@ const props = defineProps({
     required: true,
   },
 });
+
+const auth = useAuthStore();
 
 const PAGE_SIZE_OPTIONS = [5, 10, 20, 50];
 
@@ -85,14 +88,20 @@ const columns = [
 function fetchSessions() {
   if (!props.datasetId) return;
   loading.value = true;
-  sessionService
-    .getAll({
-      dataset_id: props.datasetId,
-      limit: page_size.value,
-      offset: offset.value,
-      sort_by: sort_by.value,
-      sort_order: sort_order.value,
-    })
+
+  const params = {
+    dataset_id: props.datasetId,
+    limit: page_size.value,
+    offset: offset.value,
+    sort_by: sort_by.value,
+    sort_order: sort_order.value,
+  };
+
+  const request = auth.canOperate
+    ? sessionService.getAll(params)
+    : sessionService.getByUsername(auth.user?.username, params);
+
+  request
     .then((res) => {
       sessions.value = res.data?.sessions || [];
       total_results.value = res.data?.metadata?.count || 0;

@@ -1,4 +1,5 @@
 import sessionService from '@/services/session';
+import { useAuthStore } from '@/stores/auth';
 import { defineStore } from 'pinia';
 import { computed, ref } from 'vue';
 
@@ -28,8 +29,12 @@ export const useSessionsStore = defineStore('sessions', () => {
     loading.value = true;
     error.value = null;
 
+    const authStore = useAuthStore();
+
     try {
-      const response = await sessionService.getAll(params);
+      const response = authStore.canOperate
+        ? await sessionService.getAll(params)
+        : await sessionService.getByUsername(authStore.user?.username, params);
       sessions.value = response.data.sessions;
       metadata.value = response.data.metadata;
       return response.data;

@@ -392,6 +392,28 @@ async function main() {
     data: argumentDataWithPrograms,
   });
 
+  // Seed import sources for non-production environments
+  const importSources = [
+    {
+      path: '/opt/sca/data/imports/entrypoint',
+      label: 'Imports',
+      description: 'Default import source for docker/dev environment',
+    },
+    {
+      path: '/opt/sca/data/project/entrypoint',
+      label: 'Project',
+      description: 'Project filesystem import source for docker/dev environment',
+    },
+  ];
+  await Promise.all(
+    importSources.map((source) => prisma.import_source.upsert({
+      where: { path: source.path },
+      create: source,
+      update: { label: source.label, description: source.description },
+    })),
+  );
+  console.log(`seeded ${importSources.length} import sources`);
+
   // Create tracks and sessions for testing
   console.log('\n=== Creating Tracks and Sessions ===');
   const { main: createTracksAndSessions } = require('../src/scripts/insert_mock_tracks');

@@ -26,6 +26,20 @@ const exports = {
           },
         ],
       },
+      {
+        feature_key: 'genome_browser',
+        icon: 'mdi-chart-gantt',
+        title: 'Tracks',
+        path: '/tracks',
+        test_id: 'sidebar-tracks',
+      },
+      {
+        feature_key: 'genome_browser',
+        icon: 'mdi-eye',
+        title: 'Sessions',
+        path: '/sessions',
+        test_id: 'sidebar-sessions',
+      },
     ],
     operator_items: [
       {
@@ -61,18 +75,6 @@ const exports = {
         title: 'Data Products',
         path: '/dataproducts',
         test_id: 'sidebar-data-products',
-      },
-      {
-        icon: 'mdi-chart-gantt',
-        title: 'Tracks',
-        path: '/tracks',
-        test_id: 'sidebar-tracks',
-      },
-      {
-        icon: 'mdi-eye',
-        title: 'Sessions',
-        path: '/sessions',
-        test_id: 'sidebar-sessions',
       },
       {
         icon: 'mdi-table-account',

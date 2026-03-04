@@ -1,4 +1,5 @@
 import trackService from '@/services/track';
+import { useAuthStore } from '@/stores/auth';
 import { defineStore } from 'pinia';
 import { computed, ref } from 'vue';
 
@@ -28,8 +29,12 @@ export const useTracksStore = defineStore('tracks', () => {
     loading.value = true;
     error.value = null;
 
+    const authStore = useAuthStore();
+
     try {
-      const response = await trackService.getAll(params);
+      const response = authStore.canOperate
+        ? await trackService.getAll(params)
+        : await trackService.getByUsername(authStore.user?.username, params);
       tracks.value = response.data.tracks;
       metadata.value = response.data.metadata;
       return response.data;

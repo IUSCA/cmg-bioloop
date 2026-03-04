@@ -105,6 +105,9 @@ const grantsObject = {
       'update:any': ['*'],
       'delete:any': ['*'],
     },
+    import_sources: {
+      'read:any': ['*'],
+    },
   },
 
   // user role permissions
@@ -149,7 +152,10 @@ const grantsObject = {
       'read:own': ['*'],
     },
     sessions: {
+      'create:any': ['*'],
       'read:own': ['*'],
+      'update:own': ['*'],
+      'delete:own': ['*'],
     },
     upload: {
       'create:any': ['*'],
@@ -158,6 +164,9 @@ const grantsObject = {
       'read:any': ['*'],
     },
     alerts: {
+      'read:any': ['*'],
+    },
+    import_sources: {
       'read:any': ['*'],
     },
   },
@@ -254,6 +263,9 @@ const grantsObject = {
       'create:any': ['*'],
       'read:any': ['*'],
       'update:any': ['*'],
+    },
+    import_sources: {
+      'read:any': ['*'],
     },
   },
 };

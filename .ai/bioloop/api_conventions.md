@@ -355,102 +355,131 @@ logger.error('[WashU] Failed to initialize:', error);
 
 ## Access Control Pattern
 
-**CRITICAL:** Use `isPermittedTo` middleware for authorization. Never manually check ownership or roles in route handlers.
+### How the `accesscontrol` library works (CRITICAL — read before writing any access control code)
 
-### Standard Pattern
+The `accesscontrol` library (`api/src/services/accesscontrols.js`) is **grant-based only**. It does three things:
+
+1. Records which roles have which grants on which resources (e.g., `user` has `read:own` on `tracks`).
+2. When queried (`ac.can(roles).readOwn('tracks')`), returns `permission.granted = true/false` based purely on the grants table in memory.
+3. **Does absolutely nothing else.** It does NOT fetch resources from the database. It does NOT verify that the resource actually belongs to the requester. It does NOT enforce possession in any way.
+
+The library's own documentation states: **"Note that `own` requires you to also check for the actual possession."**
+
+This means: `read:own` in the grants table only declares *intent* ("this role is allowed to read their own resources"). Whether a given request is actually for the requester's own resource is entirely the application's responsibility to verify.
+
+### The `own` vs `any` possession distinction
+
+| Grant | Meaning in the library | What the application must do |
+|-------|------------------------|------------------------------|
+| `read:any` | Role may read ANY resource of this type | Nothing extra — all resources accessible |
+| `read:own` | Role may only read resources they OWN | Application must verify possession |
+
+**NEVER grant `:any` when the intent is `:own`.** Granting `read:any` to user role means `readAny()` returns `granted: true` for every request from that role, with no filtering possible via the middleware layer.
+
+### How the middleware uses these grants (`api/src/middleware/auth.js`)
 
 ```javascript
-const { accessControl } = require('@/middleware/auth');
+const permission = (checkOwnership && requester === resourceOwner)
+  ? acQuery[actions.own](resource)   // readOwn / updateOwn / etc.
+  : acQuery[actions.any](resource);  // readAny / updateAny / etc.
+```
 
-const router = express.Router();
-const isPermittedTo = accessControl('resource_name');
+- Without `checkOwnership: true`: always calls `readAny`. A role with only `read:own` will get `granted: false` → 403.
+- With `checkOwnership: true`: calls `readOwn` when `req.user.username === req.params.username`, otherwise `readAny`. This only works on routes that have a `:username` path parameter.
+- `resourceOwnerFn`: optional async function that resolves the resource owner's username from the DB. Used on `/:id` routes where the owner must be looked up. Adds one DB query per request.
 
-// ✅ CORRECT - Middleware handles authorization
-router.post(
-  '/:id/action',
-  isPermittedTo('update'), // Allows: owner, admin, operator
+### Three patterns for user-role access to a resource
+
+**Pattern 1 — Collection endpoint (`/:username/all`)**
+
+Used for: listing a user's own resources.
+
+```javascript
+router.get(
+  '/:username/all',
+  isPermittedTo('read', { checkOwnership: true }),  // readOwn when username matches
   asyncHandler(async (req, res) => {
-    const resource = await prisma.resource.findUnique({
-      where: { id: req.params.id }
-    });
-    
-    if (!resource) {
-      return res.status(404).json({ error: 'Not found' });
-    }
-    
-    // Proceed with action - authorization already verified
-    // ...
-  })
-);
-
-// ❌ WRONG - Manual ownership check
-router.post(
-  '/:id/action',
-  isPermittedTo('update'),
-  asyncHandler(async (req, res) => {
-    const resource = await prisma.resource.findUnique({
-      where: { id: req.params.id }
-    });
-    
-    // Don't do this - middleware already handles it!
-    if (resource.user_id !== req.user.id) {
-      return res.status(403).json({ error: 'Not authorized' });
-    }
-    
-    // ...
+    // Handler filters data to req.params.username's resources
+    // For user role: confirmed by middleware (readOwn granted)
+    // For admin/operator: readAny granted regardless
   })
 );
 ```
 
-### How `isPermittedTo` Works
+Grant needed: `read:own` for user role.
 
-The middleware grants access if:
-1. **User owns the resource** (e.g., `session.user_id === req.user.id`)
-2. **User has 'admin' role** (full access to everything)
-3. **User has 'operator' role** (full access to everything)
+**Pattern 2 — Item endpoint (`/:id`) with a dedicated access-check middleware**
 
-For specific resources (datasets, sessions, etc.), the middleware:
-- Fetches the resource from the database
-- Checks ownership or role-based permissions
-- Sets `req.permission.granted = true/false`
-- Returns 403 if access denied
+Used for: accessing a single resource by ID. There is no `:username` in the path, so `checkOwnership: true` alone cannot verify possession.
 
-### When to Use Manual Checks
+The established pattern is a dedicated `*_access_check` middleware, exactly like `datasetService.dataset_access_check`:
 
-**Only use manual authorization checks when:**
-- Complex business logic requires it (e.g., project ACLs, team permissions)
-- The middleware doesn't support your use case
-- You need to check permissions on multiple resources
-
-**Example of acceptable manual check:**
 ```javascript
-// Checking if user has access to ALL required resources
-router.post('/complex-action', isPermittedTo('create'), asyncHandler(async (req, res) => {
-  const { dataset_ids } = req.body;
-  
-  // Check user has access to all datasets
-  for (const datasetId of dataset_ids) {
-    const dataset = await prisma.dataset.findUnique({ where: { id: datasetId } });
-    
-    // Manual check needed because isPermittedTo can't check multiple resources
-    const hasAccess = dataset.user_id === req.user.id || 
-                      req.user.roles.some(r => ['admin', 'operator'].includes(r.role.name));
-    
-    if (!hasAccess) {
-      return res.status(403).json({ error: `No access to dataset ${datasetId}` });
-    }
-  }
-  
-  // Proceed with action
-}));
+const resource_access_check = asyncHandler(async (req, res, next) => {
+  // Admin/operator: pass immediately
+  if (userCanAccessAll(req.user)) return next();
+
+  // User role: verify possession via DB
+  const accessible = await prisma.resource.findFirst({
+    where: {
+      id: parseInt(req.params.id),
+      // ... filter chain verifying user's project membership or direct ownership
+    },
+    select: { id: true },
+  });
+  if (!accessible) return next(createError.Forbidden());
+  next();
+});
+
+// Route uses the dedicated middleware, NOT isPermittedTo
+router.get('/:id', resource_access_check, asyncHandler(async (req, res) => { ... }));
 ```
 
-### Key Points
+See `datasetService.dataset_access_check` and `track_access_check` in `tracks.js` as reference implementations.
 
-1. **Trust the middleware** - If `isPermittedTo` passes, user is authorized
-2. **Don't duplicate checks** - Manual checks make code harder to maintain
-3. **Log access attempts** - Use `logger` for audit trail, not manual 403s
-4. **Consistent errors** - Let middleware provide standard error responses
+**Pattern 3 — Mutation endpoint (`/:id`) with `resourceOwnerFn`**
+
+Used for: update/delete on a resource the user may own, when you want to keep `isPermittedTo` in place (so the ACL layer still gates by role) and have the middleware resolve ownership from the DB.
+
+```javascript
+const sessionOwnerFn = async (req) => {
+  const session = await prisma.genome_browser_session.findUnique({
+    where: { id: parseInt(req.params.id) },
+    select: { user: { select: { username: true } } },
+  });
+  return session?.user?.username;
+};
+
+router.patch(
+  '/:id',
+  isPermittedTo('update', { checkOwnership: true }, sessionOwnerFn),
+  asyncHandler(async (req, res) => {
+    // If user role: middleware called readOwn (if owner) → granted
+    //              or readAny (if not owner) → not granted → 403
+    // If admin/operator: readAny → granted regardless
+  })
+);
+```
+
+Grant needed: `update:own` for user role. Note: `resourceOwnerFn` adds one DB query per request.
+
+### When to use each pattern
+
+| Scenario | Pattern |
+|----------|---------|
+| List endpoint (`/:username/all`) | Pattern 1 — `checkOwnership: true` |
+| Read single item (`GET /:id`) for user role with indirect ownership (via project) | Pattern 2 — dedicated `*_access_check` |
+| Read single item (`GET /:id`) for user role with direct ownership (`user_id` field) | Pattern 3 — `resourceOwnerFn` or Pattern 2 |
+| Mutate item (`PATCH/DELETE /:id`) with direct `user_id` ownership | Pattern 3 — `resourceOwnerFn` |
+| Create endpoint (`POST /`) | `isPermittedTo('create')`, user role needs `create:any` (no `:username` in POST path) |
+
+### Existing reference implementations
+
+| Resource | Collection | Item |
+|----------|------------|------|
+| Datasets | `GET /datasets/:username/all` — Pattern 1 | `GET /datasets/:id` — `dataset_access_check` (Pattern 2) |
+| Tracks | `GET /tracks/:username/all` — Pattern 1 | `GET /tracks/:id` — `track_access_check` (Pattern 2) |
+| Sessions | `GET /sessions/:username/all` — Pattern 1 | `GET /sessions/:id` — `sessionOwnerFn` (Pattern 3) |
 
 ---
 

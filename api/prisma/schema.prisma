@@ -227,6 +227,7 @@ model user {
   genome_browser_sessions     genome_browser_session[]
   conversion_definitions      conversion_definition[]
   conversions                 conversion[]
+  owned_import_sources        import_source[]
 }
 
 model user_password {
@@ -701,6 +702,17 @@ enum argument_value_type {
   STRING
   NUMBER
   BOOLEAN
+}
+
+model import_source {
+  id          Int       @id @default(autoincrement())
+  path        String    @unique
+  label       String?
+  description String?
+  owner_id    Int?
+  owner       user?     @relation(fields: [owner_id], references: [id], onDelete: SetNull)
+  created_at  DateTime  @default(now()) @db.Timestamp(6)
+  updated_at  DateTime  @default(now()) @updatedAt @db.Timestamp(6)
 }
 
 // --- CMG-Bioloop database-synchronization BEGIN ---

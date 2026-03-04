@@ -1466,7 +1466,6 @@ const buildDatasetCreateQuery = async (data) => {
       create: [{
         source_run: src_dataset_id ? String(src_dataset_id) : null,
         metadata: {
-          import_space: data.import_space || null,
           notes: import_notes || null,
         },
       }],

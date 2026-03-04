@@ -257,7 +257,7 @@ const columns = [
 // Methods
 
 const canDeleteSession = (session) => {
-  return session.user_id === auth.user?.id;
+  return auth.canOperate || session.user_id === auth.user?.id;
 };
 
 const fetchSessions = async () => {

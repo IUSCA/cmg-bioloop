@@ -25,6 +25,39 @@ This document catalogs frequent mistakes and anti-patterns in the Bioloop platfo
 4. **❌ Using `auth.hasRole()` directly instead of `auth.canAdmin`/`auth.canOperate`**
    - Use semantic helper methods for clarity and maintainability
 
+5. **❌ Granting `read:any` (or `:any` for other actions) to user role when `:own` is intended**
+
+   The `accesscontrol` library does **not** verify possession. `read:own` only declares that the role is *allowed* to read their own resources — the application is responsible for verifying what "own" means. The library's own docs state this explicitly.
+
+   Granting `read:any` to user role means `readAny()` returns `granted: true` for all requests from that role. The `:any` grant is semantically wrong and makes filtering impossible via the middleware layer.
+
+   **Wrong:**
+   ```javascript
+   // accesscontrols.js
+   user: {
+     tracks: { 'read:any': ['*'] },  // ❌ user can now read ALL tracks
+   }
+   ```
+
+   **Correct:**
+   ```javascript
+   user: {
+     tracks: { 'read:own': ['*'] },  // ✅ declared intent; app enforces possession
+   }
+   ```
+
+   Possession verification uses one of two patterns depending on route type — see the **Access Control Pattern** section in `api_conventions.md`.
+
+6. **❌ Assuming `isPermittedTo` verifies resource ownership in the database**
+
+   `isPermittedTo` (and the underlying `accesscontrol` middleware) only queries the in-memory grants table. It does NOT fetch anything from the database, does NOT check `user_id` fields, and does NOT verify project membership. The only "ownership" it checks is `req.user.username === req.params.username` when `checkOwnership: true` is passed — which only works on routes that have a `:username` path parameter.
+
+   For `/:id` routes where possession must be verified against the DB, use a dedicated `*_access_check` middleware (see `datasetService.dataset_access_check` and `track_access_check` as reference).
+
+7. **❌ Using `req.permission.granted` to distinguish admin/operator from user role**
+
+   After granting `read:any` (or any `:any` action) to user role, `req.permission.granted` is `true` for all roles. It can no longer be used as a discriminator between privileged (admin/operator) and unprivileged (user) access. Use `userCanAccessAll(req.user)` (or equivalent role check) explicitly instead.
+
 ---
 
 ## UI Components (Vuestic)
@@ -85,5 +118,5 @@ This document catalogs frequent mistakes and anti-patterns in the Bioloop platfo
 
 ---
 
-**Last Updated:** 2026-01-17
+**Last Updated:** 2026-03-03
 

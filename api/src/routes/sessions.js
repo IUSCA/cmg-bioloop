@@ -29,6 +29,20 @@ const BROWSER_TYPES = {
 // Middleware to check permissions
 const isPermittedTo = accessControl('sessions');
 
+/**
+ * Returns true if the authenticated user has admin or operator role.
+ * Used to distinguish privileged access (all data) from user-level access (own data).
+ */
+const userCanAccessAll = (user) => (user?.roles || []).some((r) => ['admin', 'operator'].includes(r));
+
+const sessionOwnerFn = async (req) => {
+  const session = await prisma.genome_browser_session.findUnique({
+    where: { id: parseInt(req.params.id) },
+    select: { user: { select: { username: true } } },
+  });
+  return session?.user?.username;
+};
+
 // Helper function to get analysis type from dataset metadata
 const getAnalysisType = (dataset) => dataset?.metadata?.analysis_type || null;
 
@@ -317,19 +331,12 @@ router.get(
       sort_order = 'desc',
     } = req.query;
 
-    // Build filter query - admin/operator can see all sessions
+    // Build filter query - admin/operator see all; user role sees only their own sessions
     let filter_query;
-    if (req.permission.granted) {
-      // Admin/operator can see all sessions
+    if (userCanAccessAll(req.user)) {
       filter_query = {};
     } else {
-      // Regular users can only see their own sessions and public ones
-      filter_query = {
-        OR: [
-          { user_id: req.user.id }, // User's own sessions
-          { is_public: true }, // Public sessions
-        ],
-      };
+      filter_query = { user_id: req.user.id };
     }
 
     if (title) {
@@ -404,12 +411,13 @@ router.get(
 // GET /sessions/:username/all - Get sessions for a specific user (if accessible)
 router.get(
   '/:username/all',
-  isPermittedTo('read'),
+  isPermittedTo('read', { checkOwnership: true }),
   [
     param('username').isString().trim(),
     query('title').trim().optional(),
     query('genome').trim().optional(),
     query('genome_type').trim().optional(),
+    query('dataset_id').optional().isInt({ min: 1 }).toInt(),
     query('limit').isInt({ min: 1, max: 100 }).optional().toInt(),
     query('offset').isInt({ min: 0 }).optional().toInt(),
     query('sort_by').isIn(['title', 'genome', 'created_at', 'updated_at']).optional(),
@@ -421,6 +429,7 @@ router.get(
       title,
       genome,
       genome_type,
+      dataset_id,
       limit = 25,
       offset = 0,
       sort_by = 'created_at',
@@ -436,23 +445,8 @@ router.get(
       return res.status(404).json({ error: 'User not found' });
     }
 
-    // Build filter query - admin/operator can see all sessions
-    let filter_query;
-    if (req.permission.granted) {
-      // Admin/operator can see all sessions for any user
-      filter_query = {
-        user_id: targetUser.id,
-      };
-    } else {
-      // Regular users can only see their own sessions and public ones
-      filter_query = {
-        user_id: targetUser.id,
-        OR: [
-          { user_id: req.user.id }, // User's own sessions
-          { is_public: true }, // Public sessions
-        ],
-      };
-    }
+    // Build filter query scoped to the target user
+    const filter_query = { user_id: targetUser.id };
 
     if (title) {
       filter_query.title = { contains: title, mode: 'insensitive' };
@@ -462,6 +456,17 @@ router.get(
     }
     if (genome_type) {
       filter_query.genome_type = { contains: genome_type, mode: 'insensitive' };
+    }
+    if (dataset_id) {
+      filter_query.session_tracks = {
+        some: {
+          track: {
+            dataset_file: {
+              dataset_id,
+            },
+          },
+        },
+      };
     }
 
     // Get sessions with related data
@@ -561,11 +566,24 @@ router.post(
       is_public = false,
     } = req.body;
 
-    // Fetch the specified tracks
+    // Fetch the specified tracks, filtering by project membership for non-privileged users
+    const trackWhere = { id: { in: track_ids } };
+    if (!userCanAccessAll(req.user)) {
+      trackWhere.dataset_file = {
+        dataset: {
+          projects: {
+            some: {
+              project: {
+                users: { some: { user_id: req.user.id } },
+              },
+            },
+          },
+        },
+      };
+    }
+
     const tracks = await prisma.track.findMany({
-      where: {
-        id: { in: track_ids },
-      },
+      where: trackWhere,
       include: {
         dataset_file: {
           include: {
@@ -644,7 +662,7 @@ router.post(
 // GET /sessions/:id - Get a specific session
 router.get(
   '/:id',
-  isPermittedTo('read'),
+  isPermittedTo('read', { checkOwnership: true }, sessionOwnerFn),
   [param('id').isInt().toInt()],
   asyncHandler(async (req, res) => {
     const { id } = req.params;
@@ -698,16 +716,6 @@ router.get(
 
     if (!session) {
       return res.status(404).json({ error: 'Session not found' });
-    }
-
-    // If user has admin/operator role, they can see any session
-    // Otherwise, check access permissions
-    const canAccess = req.permission.granted
-      || session.user_id === req.user.id
-      || session.is_public;
-
-    if (!canAccess) {
-      return res.status(403).json({ error: 'Access denied' });
     }
 
     // Increment access count
@@ -777,7 +785,7 @@ router.get(
 // PATCH /sessions/:id - Update a session
 router.patch(
   '/:id',
-  isPermittedTo('update'),
+  isPermittedTo('update', { checkOwnership: true }, sessionOwnerFn),
   [
     param('id').isInt().toInt(),
     body('title').isString().optional().trim(),
@@ -818,15 +826,13 @@ router.patch(
     if (track_ids && track_ids.length > 0) {
       let tracks;
 
-      // If user has admin/operator role, they can access all tracks
-      if (req.permission.granted) {
+      if (userCanAccessAll(req.user)) {
+        // Admin/operator can access all tracks
         tracks = await prisma.track.findMany({
-          where: {
-            id: { in: track_ids },
-          },
+          where: { id: { in: track_ids } },
         });
       } else {
-        // Regular users can only access tracks from projects they're part of
+        // User role can only access tracks from projects they are a member of
         tracks = await prisma.track.findMany({
           where: {
             id: { in: track_ids },
@@ -835,9 +841,7 @@ router.patch(
                 projects: {
                   some: {
                     project: {
-                      users: {
-                        some: { user_id: req.user.id },
-                      },
+                      users: { some: { user_id: req.user.id } },
                     },
                   },
                 },
@@ -922,24 +926,18 @@ router.patch(
 // DELETE /sessions/:id - Delete a session
 router.delete(
   '/:id',
+  isPermittedTo('delete', { checkOwnership: true }, sessionOwnerFn),
   [param('id').isInt().toInt()],
   asyncHandler(async (req, res) => {
     const { id } = req.params;
 
-    // Check if session exists and user has access
     const existingSession = await prisma.genome_browser_session.findUnique({
       where: { id },
-      include: {
-        user: true,
-      },
+      select: { id: true, user_id: true },
     });
 
     if (!existingSession) {
       return res.status(404).json({ error: 'Session not found' });
-    }
-
-    if (existingSession.user_id !== req.user.id) {
-      return res.status(403).json({ error: 'Access denied' });
     }
 
     // Delete session (cascade will handle related records)
@@ -955,7 +953,7 @@ router.delete(
 // Called by frontend before initializing genome browser (IGV or WashU)
 router.post(
   '/:id/set-file-cookie',
-  isPermittedTo('read'),
+  isPermittedTo('read', { checkOwnership: true }, sessionOwnerFn),
   [param('id').isInt().toInt()],
   asyncHandler(async (req, res) => {
     const sessionId = req.params.id;
@@ -963,7 +961,7 @@ router.post(
     // Verify session exists and user has access
     const session = await prisma.genome_browser_session.findUnique({
       where: { id: sessionId },
-      select: { id: true },
+      select: { id: true, user_id: true },
     });
 
     if (!session) {
@@ -996,7 +994,7 @@ router.post(
 // Returns track configurations with relative URLs for same-origin file access
 router.get(
   '/:id/datahub',
-  isPermittedTo('read'),
+  isPermittedTo('read', { checkOwnership: true }, sessionOwnerFn),
   [
     param('id').isInt().toInt(),
     query('browser')
@@ -1012,7 +1010,10 @@ router.get(
 
     const session = await prisma.genome_browser_session.findUnique({
       where: { id: sessionId },
-      include: {
+      select: {
+        id: true,
+        user_id: true,
+        genome: true,
         session_tracks: {
           include: {
             track: {
@@ -1178,8 +1179,8 @@ fileExposureRouter.get(
       trackCount: session.session_tracks.length,
     }, { depth: null });
 
-    // Check if user owns the session or has access
-    if (session.user_id !== req.user.id && !req.user.roles?.includes('admin')) {
+    // Check if user owns the session or has admin/operator access
+    if (!userCanAccessAll(req.user) && session.user_id !== req.user.id) {
       logger.warn('[FILE EXPOSE] Access denied', {
         sessionId,
         sessionUserId: session.user_id,
@@ -1429,7 +1430,7 @@ fileExposureRouter.get(
 // For legacy sessions, uses metadata.datasets (CMG dataproduct IDs) to find associated datasets
 router.get(
   '/:id/datasets',
-  isPermittedTo('read'),
+  isPermittedTo('read', { checkOwnership: true }, sessionOwnerFn),
   [
     param('id').isInt().toInt(),
     query('staged').optional().isBoolean().toBoolean(),
@@ -1576,7 +1577,7 @@ router.get(
 // GET /sessions/:id/projects - Get projects associated with a session
 router.get(
   '/:id/projects',
-  isPermittedTo('read'),
+  isPermittedTo('read', { checkOwnership: true }, sessionOwnerFn),
   [
     param('id').isInt().toInt(),
     query('limit').isInt({ min: 1, max: 100 }).optional().toInt(),
@@ -1597,18 +1598,10 @@ router.get(
 
     // First, get the session to verify it exists and user has access
     let sessionWhere;
-    if (req.permission.granted) {
-      // Admin/operator can see any session
+    if (userCanAccessAll(req.user)) {
       sessionWhere = { id };
     } else {
-      // Regular users can only see their own sessions and public ones
-      sessionWhere = {
-        id,
-        OR: [
-          { user_id: req.user.id }, // User's own sessions
-          { is_public: true }, // Public sessions
-        ],
-      };
+      sessionWhere = { id, user_id: req.user.id };
     }
 
     const session = await prisma.genome_browser_session.findFirst({
@@ -1757,6 +1750,7 @@ const validateTracksForSession = (tracks) => {
 
 router.get(
   '/:id/tracks',
+  isPermittedTo('read', { checkOwnership: true }, sessionOwnerFn),
   [param('id').isInt().toInt()],
   asyncHandler(async (req, res) => {
     const sessionId = req.params.id;
@@ -1778,6 +1772,10 @@ router.get(
         },
       },
     });
+
+    if (!session) {
+      return res.status(404).json({ error: 'Session not found' });
+    }
 
     const tracks = session.session_tracks.map((st) => {
       const { track } = st;
@@ -1808,7 +1806,7 @@ router.get(
 //  Launch a workflow on the session - UI
 router.post(
   '/:id/workflows/:wf',
-  isPermittedTo('update'),
+  isPermittedTo('update', { checkOwnership: true }, sessionOwnerFn),
   validate([
     param('id').isInt().toInt(),
     param('wf').isIn([CONSTANTS.WORKFLOWS.HYDRATE_SESSION]),
@@ -1817,9 +1815,9 @@ router.post(
     const sessionId = req.params.id;
     const wfName = req.params.wf;
 
-    // Get the session (existence check only - authorization handled by isPermittedTo middleware)
     const session = await prisma.genome_browser_session.findUnique({
       where: { id: sessionId },
+      select: { id: true, user_id: true },
     });
 
     if (!session) {

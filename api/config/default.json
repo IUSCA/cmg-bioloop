@@ -337,9 +337,7 @@
       }
     }
   },
-  "filesystem_search_spaces": "",
   "filesystem": {
-    "search_spaces": "",
     "base_dir": {
       "slateScratch": "",
       "slateProject": ""
@@ -348,10 +346,6 @@
       "slateScratch": "",
       "slateProject": ""
     }
-  },
-  "restricted_import_dirs": {
-    "slateScratch": "",
-    "slateProject": ""
   },
   "enabled_features": {
     "import": true,

@@ -1,8 +1,8 @@
 import api from './api';
 
 class FileSystemService {
-  getPathFiles({ path, dirs_only, search_space, extension }) {
-    return api.get('/fs', { params: { path, dirs_only, search_space, extension } });
+  getPathFiles({ path, dirs_only, extension }) {
+    return api.get('/fs', { params: { path, dirs_only, extension } });
   }
 }
 

@@ -648,11 +648,11 @@ watch(hasActiveSessionWorkflows, (newVal) => {
 });
 
 const canEditSession = computed(() => {
-  return session.value?.user_id === auth.user?.id;
+  return auth.canOperate || session.value?.user_id === auth.user?.id;
 });
 
 const canDeleteSession = computed(() => {
-  return session.value?.user_id === auth.user?.id;
+  return auth.canOperate || session.value?.user_id === auth.user?.id;
 });
 
 const _hasUnstagedTracks = computed(() => {
@@ -1360,5 +1360,4 @@ onUnmounted(() => {
 <route lang="yaml">
 meta:
   title: Session Details
-  requiresRoles: ['operator', 'admin']
 </route>

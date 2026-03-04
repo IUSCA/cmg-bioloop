@@ -402,6 +402,29 @@ const derivedDatasets = await prisma.dataset_hierarchy.findMany({
 - `data_sync/src/bigbang_sync.js`
 - `ui/src/components/dataset/AssocDatasetList.vue`
 
+## 2026-03-03
+
+### Access Control Audit (pre-emptive — user role not yet granted conversion access)
+
+**Context:** During the sessions/tracks access-control overhaul, the Conversions feature was audited for the same class of issues. User role currently has **zero grants** on the `conversion` resource, so every API route returns 403 and every UI page is guarded with `requiresRoles: ["operator", "admin"]`. No active vulnerabilities exist.
+
+**Latent issues — must be resolved before granting any conversion grants to user role:**
+
+- **Issue A — `GET /conversions` collection endpoint has no user scoping.** The `where` clause is built entirely from request params (`dataset_id`, `definition_name`, `initiator`, etc.). There is no code path that enforces `initiator_id = req.user.id` when the requester is user role. A user with `read:own` would see every conversion in the DB unless they pass their own `initiator` filter (which is not enforced server-side).
+
+- **Issue B — `GET /conversions/:id` has no `conversion_access_check` middleware.** Calls `prisma.conversion.findUniqueOrThrow({ where: { id } })` with no ownership verification. Identical in structure to the gap fixed in tracks/sessions during this overhaul. Needs a `conversion_access_check` middleware (mirroring `datasetService.dataset_access_check`) that verifies the conversion's source dataset is in one of the requesting user's projects.
+
+- **Issue C — `GET /conversions/:id/logs`, `/:id/reports`, `/:id/derived_datasets` share the same gap as Issue B.** All three route directly to `req.params.id` without ownership verification.
+
+- **Issue D — `POST /conversions` has a TODO but no implementation.** An existing comment reads: `// TODO: users should be able to create conversions if they have access to the dataset`. When this is implemented, the route must verify the `dataset_id` in the request body is accessible to the requesting user via project membership (same check as `datasetService.dataset_access_check`).
+
+**Correct implementation pattern when user access is added** (see `api_conventions.md` Access Control Pattern section):
+- Grant `read:own`, `create:own` (not `:any`) to user role
+- `GET /conversions/:username/all` — add this route with `isPermittedTo('read', { checkOwnership: true })`, filtering by `initiator_id = targetUser.id`
+- `GET /conversions/:id` — replace `isPermittedTo('read')` with `conversion_access_check` middleware
+- `POST /conversions` — add dataset ownership check (use `has_dataset_assoc` or equivalent)
+- UI stores/components — route to `/:username/all` for user role, general endpoint for admin/operator
+
 ## Future Entries
 
 Add entries here as decisions are made, changes are implemented, or issues are resolved.

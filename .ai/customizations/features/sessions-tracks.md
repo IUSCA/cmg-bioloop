@@ -117,6 +117,52 @@
 - Change: Removed the "Delete Track" feature entirely. The `DELETE /tracks/:id` API route has been removed. The `DeleteTrackModal.vue` component has been deleted. All delete UI (button in `TrackList.vue` actions column, Actions card in `pages/tracks/[id].vue`), the `deleteTrack` store action, and the `delete()` service method have been removed. Tracks are no longer deletable from the DB through the UI or API.
 - Constraint: Tracks can still be associated with or disassociated from sessions (session creation flow is unchanged). Only the concept of permanently deleting a track record from the database has been removed.
 
+## 2026-03-03
+
+- Decision: Sessions and Tracks features are now accessible to the `user` role, not only `operator`/`admin`.
+- Decision: Access control for user role is enforced at the DB query level in route handlers, not via the ACL layer alone. ACL layer grants `read:any`, `create:any`, `update:any`, `delete:any` to user role for sessions and tracks; route handlers use `userCanAccessAll(req.user)` (checks if `admin` or `operator` role) to decide between full access vs. user-scoped access.
+- Constraint: User role can only access Sessions they own (`user_id === req.user.id`). Admin/operator can access all sessions.
+- Constraint: User role can only access Tracks from datasets in projects they are a member of. Admin/operator see all tracks.
+- Constraint: Track selection when creating or updating a session is filtered by project membership for user role.
+- Constraint: `session_tracks` in `GET /tracks/:id` response is filtered to sessions owned by the requesting user when the user has user role.
+- Constraint: `GET /sessions?dataset_id=X` (used by DatasetSessions component) returns only the user's own sessions for user role, so the Associated Sessions table in `/datasets/:id` is automatically user-scoped.
+- Change: `req.permission.granted` replaced by explicit `userCanAccessAll(req.user)` helper throughout `sessions.js` and `tracks.js` to correctly distinguish admin/operator from user role (previously user role got 403 from middleware and the `req.permission.granted` else-branch was dead code).
+- Change: Added `isPermittedTo('delete')` middleware to `DELETE /sessions/:id` (was unguarded before).
+- Change: Added `isPermittedTo('read')` middleware and ownership check to `GET /sessions/:id/tracks` (was unguarded before).
+- Change: Sessions and Tracks sidebar items moved from `operator_items` to `user_items` in `ui/src/constants.js`, gated on `feature_key: 'genome_browser'`.
+- Change: `requiresRoles: ['operator', 'admin']` removed from route metadata in all Sessions and Tracks pages (`sessions/index.vue`, `sessions/new.vue`, `sessions/[id].vue`, `tracks/index.vue`, `tracks/[id].vue`).
+- Change: `canEditSession` and `canDeleteSession` in `sessions/[id].vue` now also allow admin/operator in addition to session owner.
+- Change: `canDeleteSession` in `SessionList.vue` now also allows admin/operator.
+- Change: `userCanAccessAll` helper added at top of both `sessions.js` and `tracks.js` route files for reuse.
+
+## 2026-03-03 (tracks ACL correction — read:own + track_access_check)
+
+- Fix: Changed tracks user ACL from `read:any` to `read:own`. This correctly models "user can read their own tracks" where ownership is defined by project membership (user → project → dataset → dataset_file → track), matching the same indirect relationship that `datasets: read:own` uses.
+- Added `track_access_check` middleware to `tracks.js`, mirroring `datasetService.dataset_access_check` exactly: admin/operator pass immediately; user role is checked against project membership via a Prisma query through the track → dataset_file → dataset → project → user chain; 403 if no access.
+- `GET /tracks/:id` now uses `track_access_check` instead of `isPermittedTo('read')`. This matches the `GET /datasets/:id` pattern (no `isPermittedTo` — dedicated access-check middleware handles both role and possession checks).
+- `GET /tracks` (general list): `isPermittedTo('read')` → `readAny` → user with `read:own` → 403. User role must use `GET /tracks/:username/all` (already uses `checkOwnership: true`). ✓
+- UI: `useTracksStore.fetchTracks()` now routes to `GET /tracks/:username/all` for user role and `GET /tracks` for admin/operator, same pattern as sessions store.
+- Design note: `read:own` for tracks is semantically correct because the library states "own requires you to also check for the actual possession" — ownership verification is done by `track_access_check` (item) and by handler-level project-membership filtering (`/:username/all`), not by the library itself.
+
+## 2026-03-03 (ACL semantic correction)
+
+- Fix: Replaced `:any` grants for sessions user role with semantically correct `:own` grants (`read:own`, `update:own`, `delete:own`; `create:any` kept because `POST /sessions` has no `:username` path param, matching the same pattern used for `datasets: create:any`).
+- Fix: Removed `create:any` and `update:any` for tracks from user role entirely — user role should only READ tracks, not create/update them (operator/admin responsibility).
+- Added `sessionOwnerFn` to `sessions.js` that resolves a session's owning username from the DB, used as the `resourceOwnerFn` argument to `isPermittedTo` on all `/:id` routes.
+- Updated all session `/:id` routes to use `isPermittedTo('read'/'update'/'delete', { checkOwnership: true }, sessionOwnerFn)` — ownership enforcement is now in the middleware layer, consistent with the dataset/tracks pattern.
+- Updated `GET /sessions/:username/all` to use `isPermittedTo('read', { checkOwnership: true })` — matches the `GET /tracks/:username/all` and `GET /datasets/:username/all` pattern exactly.
+- Removed all manual `if (!userCanAccessAll && session.user_id !== req.user.id) return 403` ownership checks from handlers — they were redundant once the middleware enforces ownership.
+- Added `dataset_id` query param support to `GET /sessions/:username/all` (mirroring `GET /sessions`) so that `DatasetSessions.vue` can filter by dataset when calling the user-scoped endpoint.
+- UI: `useSessionsStore.fetchSessions()` now routes to `GET /sessions/:username/all` for user role and `GET /sessions` for admin/operator.
+- UI: `DatasetSessions.vue` applies the same routing logic for its dataset-scoped session fetch.
+
+## 2026-03-03 (security audit follow-up)
+
+- Fix: `POST /tracks` — `if (!req.permission.granted)` replaced with `if (!userCanAccessAll(req.user))`. The project membership check was being silently bypassed for user role because granting `create:any` made `req.permission.granted` always `true`. User role can now only create tracks for dataset files in projects they are a member of.
+- Fix: `GET /tracks/:username/all` — added ownership guard (`if (!userCanAccessAll(req.user) && user.id !== req.user.id) → 403`). With user role having `read:any`, the `checkOwnership: true` middleware was no longer effective (it calls `readAny` when requester ≠ resourceOwner, which now passes). Without the guard, user role could call `/tracks/other_user/all` and see that user's project-scoped tracks.
+- Clarification: `GET /sessions/:username/all` was correctly protected in the initial change (manual ownership guard already added). `GET /tracks/:username/all` missed the equivalent guard, now fixed.
+- Clarification: Both `sessionService.getByUsername()` and `trackService.getByUsername()` exist in the UI service layer but are dead code — no UI component calls them. The UI always uses the general `GET /sessions` and `GET /tracks` endpoints, which are now correctly server-side filtered by user role. The `/:username/all` endpoints remain available for future use and are now properly secured.
+
 ## Future Entries
 
 Add entries here as decisions are made, changes are implemented, or issues are resolved.

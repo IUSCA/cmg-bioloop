@@ -1,5 +1,7 @@
 .env
 
+ai_agent_bypass_folder/
+
 *node_modules*
 
 *nginx.crt
@@ -53,6 +55,7 @@ workers/.env
 workers/core*
 workers/test_logs/
 workers/tests/fixtures/temp_uploads/
+workers/tests/watch/fixtures/
 
 data_sync/core*
 

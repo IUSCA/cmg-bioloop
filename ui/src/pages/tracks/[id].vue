@@ -237,5 +237,4 @@ onMounted(async () => {
 <route lang="yaml">
 meta:
   title: Track Details
-  requiresRoles: ['operator', 'admin']
 </route>

@@ -514,6 +514,5 @@ onMounted(() => {
 <route lang="yaml">
 meta:
   title: Create Session
-  requiresRoles: ['operator', 'admin']
   nav: [{ label: 'Sessions', to: '/sessions' }, { label: 'Create Session' }]
 </route>

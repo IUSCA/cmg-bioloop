@@ -1,4 +1,5 @@
 const express = require('express');
+const createError = require('http-errors');
 const { query, param, body } = require('express-validator');
 const config = require('config');
 const { Prisma } = require('@prisma/client');
@@ -49,6 +50,49 @@ const attachDatasetAnalysisType = (track) => {
 // Middleware to check permissions
 const isPermittedTo = accessControl('tracks');
 
+/**
+ * Returns true if the authenticated user has admin or operator role.
+ * Used to distinguish privileged access (all data) from user-level access (own data).
+ */
+const userCanAccessAll = (user) => (user?.roles || []).some((r) => ['admin', 'operator'].includes(r));
+
+/**
+ * Middleware to check if the authenticated user has access to a specific track.
+ *
+ * - Admin/operator roles pass through immediately.
+ * - User role is checked against
+ *  project membership (user -> project -> dataset -> dataset_file -> track).
+ *
+ */
+const track_access_check = asyncHandler(async (req, res, next) => {
+  if (userCanAccessAll(req.user)) {
+    return next();
+  }
+  const accessible = await prisma.track.findFirst({
+    where: {
+      id: parseInt(req.params.id),
+      dataset_file: {
+        dataset: {
+          projects: {
+            some: {
+              project: {
+                users: {
+                  some: { user_id: req.user.id },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+    select: { id: true },
+  });
+  if (!accessible) {
+    return next(createError.Forbidden());
+  }
+  next();
+});
+
 router.get(
   '/',
   isPermittedTo('read'),
@@ -76,10 +120,10 @@ router.get(
 
       };
 
-      // If user has admin/operator role, they can see all tracks.
-      // Otherwise, filter by user's project membership through datasets
-      if (!req.permission.granted) {
-        // Get user's project memberships
+      // - Admin/operator can see all tracks
+      // - User role can only see tracks from Datasets that
+      //  are associated with Projects that the user is a member of
+      if (!userCanAccessAll(req.user)) {
         const userProjects = await prisma.project_user.findMany({
           where: { user_id: req.user.id },
           select: { project_id: true },
@@ -87,7 +131,6 @@ router.get(
 
         const projectIds = userProjects.map((p) => p.project_id);
 
-        // Filter tracks by datasets that belong to user's projects
         filter_query.dataset_file = {
           dataset: {
             projects: {
@@ -142,7 +185,7 @@ router.get(
         const nameFilter = typeof normalizedFileTypeFilter === 'object' && normalizedFileTypeFilter.in
           ? { in: normalizedFileTypeFilter.in, mode: 'insensitive' }
           : { equals: normalizedFileTypeFilter, mode: 'insensitive' };
-        
+
         mergeDatasetFilter(filter_query, {
           analysis_type: {
             name: nameFilter,
@@ -261,9 +304,10 @@ router.post(
         return res.status(404).json({ error: 'Dataset file not found' });
       }
 
-      // Check if User has access to the Dataset whose File the Track being
-      // created is associated with.
-      if (!req.permission.granted) {
+      // - Admin/operator can see all tracks
+      // - User role sees only tracks from Datasets that
+      //  are associated with Projects that the user is a member of
+      if (!userCanAccessAll(req.user)) {
         const hasAccess = await has_project_assoc({
           projectId: datasetFile.dataset.projects[0]?.project_id,
           userId: req.user.id,
@@ -317,7 +361,7 @@ router.post(
           // Find or create analysis_type with the given name (case-insensitive)
           const formattedName = file_type.toUpperCase().replace(/\s+/g, '_').replace(/[^A-Z0-9_]/g, '');
           const formattedExtension = `.${file_type.toLowerCase()}`;
-          
+
           let analysisType = await prisma.analysis_type.findFirst({
             where: {
               AND: [
@@ -336,7 +380,7 @@ router.post(
               ],
             },
           });
-          
+
           if (!analysisType) {
             analysisType = await prisma.analysis_type.create({
               data: {
@@ -354,7 +398,7 @@ router.post(
               },
             },
           });
-          
+
           if (track.dataset_file?.dataset) {
             track.dataset_file.dataset.analysis_type = analysisType;
           }
@@ -374,13 +418,15 @@ router.post(
 // GET /tracks/:id - Get a specific track
 router.get(
   '/:id',
-  isPermittedTo('read'),
+  track_access_check,
   [
     param('id').isInt().toInt(),
     query('include_dataset').isBoolean().toBoolean().optional(),
   ],
   asyncHandler(async (req, res) => {
     const { id } = req.params;
+
+    const canAll = userCanAccessAll(req.user);
 
     const include = {
       dataset_file: {
@@ -403,6 +449,8 @@ router.get(
         },
       },
       session_tracks: {
+        // User role only sees sessions they created; admin/operator sees all
+        where: canAll ? {} : { session: { user_id: req.user.id } },
         include: {
           session: {
             include: {
@@ -422,18 +470,16 @@ router.get(
       },
     };
 
-    // If user has admin/operator role, they can see all tracks
-    // Otherwise, filter by user's project membership through datasets
     let track;
 
-    if (req.permission.granted) {
+    if (canAll) {
       // Admin/operator can see any track
       track = await prisma.track.findFirst({
         where: { id },
         include,
       });
     } else {
-      // Regular users can only see tracks from datasets they have access to
+      // User role can only see tracks from datasets in their projects
       track = await prisma.track.findFirst({
         where: {
           id,
@@ -505,8 +551,8 @@ router.patch(
         return res.status(404).json({ error: 'Track not found' });
       }
 
-      // Check access control
-      if (!req.permission.granted) {
+      // User role can only update tracks from datasets in their projects
+      if (!userCanAccessAll(req.user)) {
         const hasAccess = existingTrack.dataset_file.dataset.projects.some((pt) => has_project_assoc({
           projectId: pt.project_id,
           userId: req.user.id,
@@ -561,7 +607,7 @@ router.patch(
           // Find or create analysis_type with the given name (case-insensitive)
           const formattedName = file_type.toUpperCase().replace(/\s+/g, '_').replace(/[^A-Z0-9_]/g, '');
           const formattedExtension = `.${file_type.toLowerCase()}`;
-          
+
           let analysisType = await prisma.analysis_type.findFirst({
             where: {
               AND: [
@@ -580,7 +626,7 @@ router.patch(
               ],
             },
           });
-          
+
           if (!analysisType) {
             analysisType = await prisma.analysis_type.create({
               data: {
@@ -598,7 +644,7 @@ router.patch(
               },
             },
           });
-          
+
           if (track.dataset_file?.dataset) {
             track.dataset_file.dataset.analysis_type = analysisType;
           }
@@ -645,6 +691,11 @@ router.get(
       });
       if (!user) {
         return res.status(404).json({ error: 'User not found' });
+      }
+
+      // User role can only access their own tracks via this endpoint
+      if (!userCanAccessAll(req.user) && user.id !== req.user.id) {
+        return res.status(403).json({ error: 'Access denied' });
       }
 
       const filter_query = {};
@@ -704,7 +755,7 @@ router.get(
         const nameFilter = typeof userFileTypeFilter === 'object' && userFileTypeFilter.in
           ? { in: userFileTypeFilter.in, mode: 'insensitive' }
           : { equals: userFileTypeFilter, mode: 'insensitive' };
-        
+
         mergeDatasetFilter(filter_query, {
           analysis_type: {
             name: nameFilter,

@@ -8,7 +8,6 @@ const {
 const multer = require('multer');
 const _ = require('lodash/fp');
 const config = require('config');
-const pm = require('picomatch');
 const he = require('he');
 
 // const logger = require('@/services/logger');
@@ -563,7 +562,7 @@ router.get(
  * @param {string} req.user.id - The ID of the authenticated user.
  * @param {string[]} req.user.roles - The roles of the authenticated user.
  * @returns {Promise<Object>} The created dataset object.
- * @throws {Error} If dataset creation fails or if the origin path is restricted.
+ * @throws {Error} If dataset creation fails or if the origin path is outside any configured import source.
  */
 router.post(
   '/',
@@ -602,7 +601,7 @@ router.post(
       /* eslint-enable */
 
     const {
-      import_space, create_method, project_id, src_instrument_id, src_dataset_id, source_data_product_id,
+      create_method, project_id, src_instrument_id, src_dataset_id, source_data_product_id,
       name, type, origin_path, du_size, size, bundle_size, workflow_id, state, metadata,
       description, file_type, genome_type, genome_value, import_notes,
     } = req.body;
@@ -610,17 +609,16 @@ router.post(
     // remove any HTML entities inserted by browser because of URL encoding
     const decoded_origin_path = he.decode(origin_path);
 
-    if (import_space) {
-      // if dataset's origin_path is a restricted for dataset creation, throw error
-      const restricted_import_dirs = config.restricted_import_dirs[import_space].split(',');
-      const is_origin_path_restricted = restricted_import_dirs.some((glob) => {
-        const isMatch = pm(glob);
-        const matches = isMatch(decoded_origin_path, glob);
-        return matches.isMatch;
+    if (create_method === CONSTANTS.DATASET_CREATE_METHODS.IMPORT && decoded_origin_path) {
+      // Validate origin_path is within one of the configured import sources (allowlist)
+      const importSources = await prisma.import_source.findMany();
+      const isWithinImportSource = importSources.some((source) => {
+        const sourcePathWithSlash = source.path.endsWith('/') ? source.path : `${source.path}/`;
+        return decoded_origin_path === source.path || decoded_origin_path.startsWith(sourcePathWithSlash);
       });
-      if (is_origin_path_restricted) {
+      if (!isWithinImportSource) {
         return next(createError.Forbidden({
-          message: `Import space ${import_space} is restricted for dataset creation`,
+          message: 'Dataset origin path is not within any configured import source',
         }));
       }
     }

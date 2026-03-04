@@ -54,13 +54,14 @@
       <div class="flex">
         <va-select
           class="mr-2"
-          v-model="searchSpace"
+          v-model="selectedImportSource"
           @update:modelValue="resetSearch"
-          :options="FILESYSTEM_SEARCH_SPACES"
-          :text-by="'label'"
-          :track-by="'key'"
-          label="Search space"
-          :disabled="submitAttempted || searchingFiles || validatingForm"
+          :options="importSources"
+          :text-by="importService._getLabel"
+          :track-by="'id'"
+          label="Import Source"
+          :disabled="submitAttempted || searchingFiles || validatingForm || importSources.length === 0"
+          :loading="loadingImportSources"
         />
 
         <div class="flex flex-col w-full">
@@ -69,7 +70,7 @@
             v-model:selected="selectedFile"
             @update:selected="fileList = []"
             :disabled="submitAttempted"
-            :base-path="searchSpaceBasePath"
+            :base-path="importSourcePath"
             :loading="searchingFiles"
             :validating="validatingForm"
             @clear="resetSearch"
@@ -354,7 +355,7 @@
         :source-raw-data="selectedRawData"
         :source-data-product="selectedSourceDataProduct"
         :source-instrument="selectedSourceInstrument"
-        :import-space="searchSpace.label"
+        :import-space="selectedImportSource?.label || selectedImportSource?.path || ''"
         :dataset-name-error="!stepIsPristine && formErrors[STEP_KEYS.IMPORT]"
         :file-type="selectedFileType"
         :genome-type="selectedGenomeType?.value || selectedGenomeType"
@@ -425,6 +426,7 @@ import config from '@/config';
 import Constants from '@/constants';
 import datasetService from '@/services/dataset';
 import fileSystemService from '@/services/fs';
+import importService from '@/services/import';
 import instrumentService from '@/services/instrument';
 import projectService from "@/services/projects"
 import analysisTypeService from '@/services/analysisType';
@@ -432,7 +434,6 @@ import toast from '@/services/toast';
 import { useAuthStore } from "@/stores/auth";
 import { Icon } from '@iconify/vue';
 import { watchDebounced } from '@vueuse/core';
-import pm from 'picomatch';
 import { VaPopover } from 'vuestic-ui';
 
 const auth = useAuthStore();
@@ -451,13 +452,9 @@ const DATASET_NAME_HAS_SPACES_ERROR = "Dataset name cannot contain spaces";
 const DATASET_NAME_MIN_LENGTH_ERROR =
   "Dataset name must have 3 or more characters.";
 const NO_FILE_SELECTED_ERROR = "A file must be selected for import";
-const IMPORT_NOT_ALLOWED_ERROR =
-  "Selected file cannot be imported as a dataset";
 
-// The list of filesystem spaces that the user can select datasets to import from.
-const FILESYSTEM_SEARCH_SPACES = (config.filesystem_search_spaces || []).map(
-  (space) => space[Object.keys(space)[0]],
-);
+// Import sources loaded from the API
+const importSources = ref([]);
 
 // The various steps that the user will taken through during the process of importing a dataset.
 const steps = [
@@ -540,6 +537,7 @@ const stepIsPristine = computed(() => {
 });
 
 const loadingResources = ref(false); // determines if the initial resources needed for the stepper are being fetched
+const loadingImportSources = ref(false);
 const searchingFiles = ref(false);
 const validatingForm = ref(false);
 const loading = computed(() => {
@@ -706,7 +704,6 @@ const importFormData = computed(() => {
       src_instrument_id: selectedSourceInstrument.value.id,
     }),
     origin_path: selectedFile.value.path,
-    import_space: searchSpace.value.key,
     create_method: Constants.DATASET_CREATE_METHODS.IMPORT,
     // Data Product to be assigned as 'source' of the Data Product being imported
     source_data_product_id: selectedSourceDataProduct.value?.id,
@@ -959,23 +956,7 @@ const setFormErrors = async () => {
       formErrors.value[STEP_KEYS.SELECT_DIRECTORY] = NO_FILE_SELECTED_ERROR;
       return;
     }
-    // check if the selected file is allowed to be imported as a dataset
-    const restricted_dataset_paths = getRestrictedImportPaths();
-    const origin_path_is_restricted = selectedFile.value
-      ? restricted_dataset_paths.some((pattern) => {
-        const _path = selectedFile.value.path;
-        let isMatch = pm(pattern);
-        const matches = isMatch(_path, pattern);
-        return matches.isMatch;
-      })
-      : false;
-    if (origin_path_is_restricted) {
-      formErrors.value[STEP_KEYS.SELECT_DIRECTORY] =
-        IMPORT_NOT_ALLOWED_ERROR;
-      return;
-    } else {
-      formErrors.value[STEP_KEYS.SELECT_DIRECTORY] = null;
-    }
+    formErrors.value[STEP_KEYS.SELECT_DIRECTORY] = null;
   }
 
   if (step.value === 1) {
@@ -1008,32 +989,33 @@ const setFormErrors = async () => {
 const fileListSearchText = ref("");
 const fileList = ref([]);
 
-const searchSpace = ref(
-  FILESYSTEM_SEARCH_SPACES instanceof Array &&
-  FILESYSTEM_SEARCH_SPACES.length > 0
-    ? FILESYSTEM_SEARCH_SPACES[0]
-    : "",
-);
+const selectedImportSource = ref(null);
 const isFileSearchAutocompleteOpen = ref(false);
 
-const searchSpaceBasePath = computed(() => searchSpace.value.base_path);
+const importSourcePath = computed(() => selectedImportSource.value?.path ?? '');
 
 const _searchText = computed(() => {
+  if (!importSourcePath.value) return '';
   return (
-    (searchSpace.value.base_path.endsWith("/")
-      ? searchSpace.value.base_path
-      : searchSpace.value.base_path + "/") + fileListSearchText.value
+    (importSourcePath.value.endsWith("/")
+      ? importSourcePath.value
+      : importSourcePath.value + "/") + fileListSearchText.value
   );
 });
 
 const searchFiles = async () => {
+  if (!selectedImportSource.value) {
+    setRetrievedFiles([]);
+    searchingFiles.value = false;
+    return;
+  }
+
   const extension = selectedFileType.value?.extension || null;
 
   fileSystemService
     .getPathFiles({
       path: _searchText.value,
       dirs_only: true,
-      search_space: searchSpace.value.key,
       extension: extension,
     })
     .then((response) => {
@@ -1056,11 +1038,6 @@ const setRetrievedFiles = (files) => {
   fileList.value = files;
 };
 
-const getRestrictedImportPaths = () => {
-  return config.restricted_import_dirs[searchSpace.value.key].paths.split(
-    ",",
-  );
-};
 
 /**
  * ## Instrument checkbox and selection behavior
@@ -1398,6 +1375,27 @@ const fetchAssociatedProjectDetails = async () => {
   }
 };
 
+// Load import sources from API
+const loadImportSources = () => {
+  loadingImportSources.value = true;
+  return importService
+    .getSources()
+    .then((res) => {
+      importSources.value = res.data;
+      // Default to the first configured source
+      if (importSources.value.length > 0 && !selectedImportSource.value) {
+        selectedImportSource.value = importSources.value[0];
+      }
+    })
+    .catch((err) => {
+      toast.error('Failed to load import sources');
+      console.error(err);
+    })
+    .finally(() => {
+      loadingImportSources.value = false;
+    });
+};
+
 // Load Analysis Types from API
 const loadAnalysisTypes = () => {
   return analysisTypeService
@@ -1512,7 +1510,7 @@ watch(
     selectedFile,
     fileListSearchText,
     isFileSearchAutocompleteOpen,
-    searchSpace,
+    selectedImportSource,
     selectedFileType,
     selectedGenomeType,
     selectedGenomeValue,
@@ -1597,6 +1595,8 @@ onMounted(async () => {
 
     // get a list of Analysis-Types created in the system
     await loadAnalysisTypes();
+    // load configured import sources
+    await loadImportSources();
   } catch (error) {
     // console.error("Error loading resources:", error);
     toast.error("An error occurred. Please refresh the page to try again.");
