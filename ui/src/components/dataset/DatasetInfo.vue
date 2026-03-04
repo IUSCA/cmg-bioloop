@@ -81,30 +81,32 @@
 </template>
 
 <script setup>
-import config from '@/config';
-import * as datetime from '@/services/datetime';
-import { humanizeAnalysisType } from '@/services/sessionUtils';
-import { formatBytes } from '@/services/utils';
-import { useAuthStore } from '@/stores/auth';
-import { computed } from 'vue';
+import config from "@/config";
+import * as datetime from "@/services/datetime";
+import { humanizeAnalysisType } from "@/services/sessionUtils";
+import { formatBytes } from "@/services/utils";
+import { computed } from "vue";
 
 const props = defineProps({ dataset: Object });
 
-const auth = useAuthStore();
-
 // Show Analysis Type only for DATA_PRODUCT datasets when genome browser is enabled
 const showAnalysisType = computed(() => {
-  return props.dataset?.type === 'DATA_PRODUCT' && config.enabledFeatures?.genomeBrowser;
+  return (
+    props.dataset?.type === "DATA_PRODUCT" &&
+    config.enabledFeatures?.genomeBrowser
+  );
 });
 
 // Format analysis type with extension
 const formattedAnalysisType = computed(() => {
   const analysisType = props.dataset?.analysis_type;
   if (!analysisType?.name) {
-    return '';
+    return "";
   }
   const humanized = humanizeAnalysisType(analysisType.name);
-  return analysisType.extension ? `${humanized} (${analysisType.extension})` : humanized;
+  return analysisType.extension
+    ? `${humanized} (${analysisType.extension})`
+    : humanized;
 });
 
 // const datasetCreateLog = computed(() => {

@@ -122,7 +122,7 @@ function validateArgument(argument, val) {
  * @throws Will throw an error if the dynamic variable name is not supported.
  */
 async function resolveDynamicArgumentValue(arg, datasetId) {
-  const dataset = await datasetService.get_dataset({
+  await datasetService.get_dataset({
     id: datasetId,
   });
 

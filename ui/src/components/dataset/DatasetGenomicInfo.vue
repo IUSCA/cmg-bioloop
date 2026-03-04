@@ -20,7 +20,7 @@
 </template>
 
 <script setup>
-import { computed } from 'vue';
+import { computed } from "vue";
 
 const props = defineProps({
   dataset: Object,
@@ -29,15 +29,15 @@ const props = defineProps({
 // Format genome type and value
 const formattedGenome = computed(() => {
   const genomicDetails = props.dataset?.genomic_details;
-  if (!genomicDetails) return '';
-  
-  const type = genomicDetails.genome_type || '';
-  const value = genomicDetails.genome_value || '';
-  
-  if (!type && !value) return '';
+  if (!genomicDetails) return "";
+
+  const type = genomicDetails.genome_type || "";
+  const value = genomicDetails.genome_value || "";
+
+  if (!type && !value) return "";
   if (!value) return type;
   if (!type) return value;
-  
+
   return `${type} (${value})`;
 });
 </script>

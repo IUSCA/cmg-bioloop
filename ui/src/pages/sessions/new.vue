@@ -45,13 +45,18 @@
               <h3 class="text-lg font-medium mb-4">Select Tracks</h3>
 
               <p class="text-sm mb-4">
-                Select tracks from Data Products. Genome fields are auto-populated if all selected
-                tracks have consistent genome information.
+                Select tracks from Data Products. Genome fields are
+                auto-populated if all selected tracks have consistent genome
+                information.
               </p>
 
               <va-form-field
                 :model-value="selectedTracks"
-                :rules="[() => selectedTracks.length > 0 || 'At least one track must be selected']"
+                :rules="[
+                  () =>
+                    selectedTracks.length > 0 ||
+                    'At least one track must be selected',
+                ]"
               >
                 <TracksAsyncAutoComplete
                   v-model:search-term="trackSearch"
@@ -66,7 +71,9 @@
               <div v-if="selectedTracks.length > 0" class="space-y-3 mt-4">
                 <div class="flex items-center justify-between">
                   <div>
-                    {{ selectedTracks.length }} track{{ selectedTracks.length !== 1 ? 's' : '' }}
+                    {{ selectedTracks.length }} track{{
+                      selectedTracks.length !== 1 ? "s" : ""
+                    }}
                     selected
                   </div>
                 </div>
@@ -92,8 +99,17 @@
                     </template>
 
                     <template #cell(genome)="{ rowData }">
-                      <va-chip v-if="rowData.genome_type || rowData.genome_value" size="small" outline>
-                        {{ rowData.genome_type || '' }}{{ rowData.genome_value ? ` (${rowData.genome_value})` : '' }}
+                      <va-chip
+                        v-if="rowData.genome_type || rowData.genome_value"
+                        size="small"
+                        outline
+                      >
+                        {{ rowData.genome_type || ""
+                        }}{{
+                          rowData.genome_value
+                            ? ` (${rowData.genome_value})`
+                            : ""
+                        }}
                       </va-chip>
                     </template>
 
@@ -105,9 +121,9 @@
                           target="_blank"
                           class="text-primary hover:underline"
                         >
-                          {{ rowData.dataset.name || '' }}
+                          {{ rowData.dataset.name || "" }}
                         </router-link>
-                        <span v-else>{{ rowData.dataset?.name || '' }}</span>
+                        <span v-else>{{ rowData.dataset?.name || "" }}</span>
                       </div>
                     </template>
 
@@ -118,7 +134,12 @@
                     </template>
 
                     <template #cell(actions)="{ rowData }">
-                      <va-button size="small" plain color="danger" @click="removeTrack(rowData.id)">
+                      <va-button
+                        size="small"
+                        plain
+                        color="danger"
+                        @click="removeTrack(rowData.id)"
+                      >
                         <va-icon name="delete" />
                       </va-button>
                     </template>
@@ -128,7 +149,11 @@
                 <!-- Track Validation Alert -->
                 <div v-if="trackValidationAlert.show" class="mt-4">
                   <va-alert
-                    :color="trackValidationAlert.type === 'error' ? 'danger' : 'warning'"
+                    :color="
+                      trackValidationAlert.type === 'error'
+                        ? 'danger'
+                        : 'warning'
+                    "
                     class="mb-4"
                   >
                     <template #title>
@@ -147,9 +172,16 @@
 
             <!-- Form Actions -->
             <div class="flex justify-end gap-3 pt-6 border-t">
-              <va-button preset="secondary" @click="router.push('/sessions')"> Cancel </va-button>
+              <va-button preset="secondary" @click="router.push('/sessions')">
+                Cancel
+              </va-button>
 
-              <va-button type="submit" preset="primary" :loading="loading" :disabled="!canSubmit">
+              <va-button
+                type="submit"
+                preset="primary"
+                :loading="loading"
+                :disabled="!canSubmit"
+              >
                 Create Session
               </va-button>
             </div>
@@ -161,15 +193,15 @@
 </template>
 
 <script setup>
-import TracksAsyncAutoComplete from '@/components/tracks/TracksAsyncAutoComplete.vue';
-import constants from '@/constants';
-import sessionService from '@/services/session';
-import toast from '@/services/toast';
-import { formatBytes } from '@/services/utils';
-import { useSessionsStore } from '@/stores/sessions';
-import _ from 'lodash';
-import { computed, onMounted, ref, watch } from 'vue';
-import { useRouter } from 'vue-router';
+import TracksAsyncAutoComplete from "@/components/tracks/TracksAsyncAutoComplete.vue";
+import constants from "@/constants";
+import sessionService from "@/services/session";
+import toast from "@/services/toast";
+import { formatBytes } from "@/services/utils";
+import { useSessionsStore } from "@/stores/sessions";
+import _ from "lodash";
+import { computed, onMounted, ref, watch } from "vue";
+import { useRouter } from "vue-router";
 
 const router = useRouter();
 const sessionsStore = useSessionsStore();
@@ -177,56 +209,58 @@ const sessionsStore = useSessionsStore();
 // Reactive state
 const loading = ref(false);
 const form = ref({
-  session_name: '',
-  genome_type: '',
-  genome: '',
+  session_name: "",
+  genome_type: "",
+  genome: "",
 });
 const errors = ref({});
-const trackSearch = ref('');
+const trackSearch = ref("");
 const selectedTrack = ref(null);
 const selectedTracks = ref([]);
-const trackValidationAlert = ref({ show: false, message: '', type: 'error' });
+const trackValidationAlert = ref({ show: false, message: "", type: "error" });
 
 // Table columns for selected files
 const selectedTracksColumns = [
   {
-    key: 'name',
-    label: 'Track Name',
+    key: "name",
+    label: "Track Name",
     sortable: true,
-    width: '30%',
+    width: "30%",
   },
   {
-    key: 'genome',
-    label: 'Genome',
+    key: "genome",
+    label: "Genome",
     sortable: true,
-    width: '25%',
+    width: "25%",
   },
   {
-    key: 'dataset',
-    label: 'Dataset',
+    key: "dataset",
+    label: "Dataset",
     sortable: true,
-    width: '25%',
+    width: "25%",
   },
   {
-    key: 'size',
-    label: 'Size',
+    key: "size",
+    label: "Size",
     sortable: true,
-    width: '10%',
+    width: "10%",
   },
   {
-    key: 'actions',
-    label: 'Actions',
+    key: "actions",
+    label: "Actions",
     sortable: false,
-    width: '10%',
+    width: "10%",
   },
 ];
 
 const selectedTracksTableData = computed(() => {
   return selectedTracks.value.map((track) => ({
     ...track,
-    name: track.name || '',
-    genome_type: track.dataset_file?.dataset?.genomic_details?.genome_type || null,
-    genome_value: track.dataset_file?.dataset?.genomic_details?.genome_value || null,
+    name: track.name || "",
+    genome_type:
+      track.dataset_file?.dataset?.genomic_details?.genome_type || null,
+    genome_value:
+      track.dataset_file?.dataset?.genomic_details?.genome_value || null,
     dataset: track.dataset_file?.dataset || null,
     size: track.dataset_file?.size || null,
   }));
@@ -246,13 +280,18 @@ const genomeTypeOptions = computed(() => {
 
 // Available assemblies based on selected genome type
 const availableAssemblies = computed(() => {
-  if (!form.value.genome_type || !constants.GENOME_TYPES[form.value.genome_type]) {
+  if (
+    !form.value.genome_type ||
+    !constants.GENOME_TYPES[form.value.genome_type]
+  ) {
     return [];
   }
-  return constants.GENOME_TYPES[form.value.genome_type].genomes.map((assembly) => ({
-    value: assembly,
-    text: assembly,
-  }));
+  return constants.GENOME_TYPES[form.value.genome_type].genomes.map(
+    (assembly) => ({
+      value: assembly,
+      text: assembly,
+    }),
+  );
 });
 
 // Watch genome type changes to clear assembly if it's not valid for the new type
@@ -261,13 +300,14 @@ watch(
   (newGenomeType, oldGenomeType) => {
     // Only clear assembly if genome type actually changed
     if (newGenomeType !== oldGenomeType && form.value.genome) {
-      const availableGenomes = constants.GENOME_TYPES[newGenomeType]?.genomes || [];
+      const availableGenomes =
+        constants.GENOME_TYPES[newGenomeType]?.genomes || [];
       // Clear assembly if it's not available for the new genome type
       if (!availableGenomes.includes(form.value.genome)) {
-        form.value.genome = '';
+        form.value.genome = "";
       }
     }
-  }
+  },
 );
 
 // Async validation for session name uniqueness
@@ -278,11 +318,11 @@ const validateSessionNameUnique = async (value) => {
   try {
     const response = await sessionService.checkName(value);
     if (response.data.exists) {
-      return 'A session with this name already exists';
+      return "A session with this name already exists";
     }
     return true;
   } catch (error) {
-    console.error('Error checking session name:', error);
+    console.error("Error checking session name:", error);
     return true; // Don't block form submission on API errors
   }
 };
@@ -294,7 +334,9 @@ const debouncedValidateSessionName = _.debounce(validateSessionNameUnique, 500);
 
 const addTrack = (track) => {
   // Check if track is already selected
-  const existingIndex = selectedTracks.value.findIndex((t) => t.id === track.id);
+  const existingIndex = selectedTracks.value.findIndex(
+    (t) => t.id === track.id,
+  );
   if (existingIndex === -1) {
     // Note: We allow tracks without genome information - they can still be added to sessions
 
@@ -307,19 +349,19 @@ const addTrack = (track) => {
       // Clear the selected track for next selection
       selectedTrack.value = null;
       // Clear search term
-      trackSearch.value = '';
+      trackSearch.value = "";
 
       // Auto-populate genome fields based on candidate datasets logic
       updateGenomeFields();
 
       // Clear any previous validation alerts
-      trackValidationAlert.value = { show: false, message: '', type: 'error' };
+      trackValidationAlert.value = { show: false, message: "", type: "error" };
     } else {
       // Show validation alert instead of toast
       trackValidationAlert.value = {
         show: true,
         message: validationResult.error,
-        type: 'error',
+        type: "error",
       };
     }
   }
@@ -333,7 +375,8 @@ const validateTrackForSession = (track) => {
   // Validation 1: Check genome type consistency (MANDATORY)
   if (selectedTracks.value.length > 0) {
     const firstTrack = selectedTracks.value[0];
-    const firstGenomeDetails = firstTrack.dataset_file?.dataset?.genomic_details;
+    const firstGenomeDetails =
+      firstTrack.dataset_file?.dataset?.genomic_details;
 
     // Only validate if both tracks have genome_type defined
     if (
@@ -351,7 +394,8 @@ const validateTrackForSession = (track) => {
   // Validation 2: Check genome value consistency
   if (selectedTracks.value.length > 0) {
     const firstTrack = selectedTracks.value[0];
-    const firstGenomeDetails = firstTrack.dataset_file?.dataset?.genomic_details;
+    const firstGenomeDetails =
+      firstTrack.dataset_file?.dataset?.genomic_details;
 
     // Only validate if both tracks have genome_value defined
     if (
@@ -371,7 +415,7 @@ const validateTrackForSession = (track) => {
 
 const validateAllTracks = () => {
   if (selectedTracks.value.length === 0) {
-    return { isValid: false, error: 'No tracks selected' };
+    return { isValid: false, error: "No tracks selected" };
   }
 
   // Check if all tracks have the same genome type and value
@@ -398,7 +442,7 @@ const validateAllTracks = () => {
     return {
       isValid: false,
       error:
-        'All tracks must have the same genome type and assembly. Cannot mix different organisms or genome builds in one session.',
+        "All tracks must have the same genome type and assembly. Cannot mix different organisms or genome builds in one session.",
     };
   }
 
@@ -432,7 +476,7 @@ const updateGenomeFields = () => {
 
   // If exactly one unique genome pair, auto-populate (only if fields are empty)
   if (genomes.size === 1) {
-    const [genome_type, genome_value] = Array.from(genomes)[0].split('|');
+    const [genome_type, genome_value] = Array.from(genomes)[0].split("|");
     form.value.genome_type = genome_type;
     form.value.genome = genome_value;
   }
@@ -448,7 +492,7 @@ const removeTrack = (trackId) => {
     updateGenomeFields();
 
     // Clear validation alerts when tracks are removed
-    trackValidationAlert.value = { show: false, message: '', type: 'error' };
+    trackValidationAlert.value = { show: false, message: "", type: "error" };
   }
 };
 
@@ -465,7 +509,7 @@ const validateForm = () => {
 
   // Clear validation alerts if form is valid
   if (Object.keys(errors.value).length === 0) {
-    trackValidationAlert.value = { show: false, message: '', type: 'error' };
+    trackValidationAlert.value = { show: false, message: "", type: "error" };
   }
 
   return Object.keys(errors.value).length === 0;
@@ -487,10 +531,10 @@ const handleSubmit = async () => {
     };
 
     const session = await sessionsStore.createSession(sessionData);
-    toast.success('Session created successfully!');
+    toast.success("Session created successfully!");
     router.push(`/sessions/${session.id}`);
   } catch (error) {
-    console.error('Failed to create session:', error);
+    console.error("Failed to create session:", error);
 
     // Provide more specific error messages
     if (error.response?.data?.error) {
@@ -498,7 +542,7 @@ const handleSubmit = async () => {
     } else if (error.message) {
       toast.error(`Failed to create session: ${error.message}`);
     } else {
-      toast.error('Failed to create session. Please try again.');
+      toast.error("Failed to create session. Please try again.");
     }
   } finally {
     loading.value = false;
@@ -514,5 +558,5 @@ onMounted(() => {
 <route lang="yaml">
 meta:
   title: Create Session
-  nav: [{ label: 'Sessions', to: '/sessions' }, { label: 'Create Session' }]
+  nav: [{ label: "Sessions", to: "/sessions" }, { label: "Create Session" }]
 </route>

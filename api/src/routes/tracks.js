@@ -4,10 +4,10 @@ const { query, param, body } = require('express-validator');
 const config = require('config');
 const { Prisma } = require('@prisma/client');
 const prisma = require('@/db');
+const wfService = require('@/services/workflow');
 const asyncHandler = require('../middleware/asyncHandler');
 const { accessControl } = require('../middleware/auth');
 const { has_project_assoc } = require('../services/project');
-const wfService = require('@/services/workflow');
 
 const router = express.Router();
 
@@ -31,6 +31,7 @@ const normalizeFileTypeFilter = (fileTypeParam) => {
 };
 
 const mergeDatasetFilter = (filterQuery, datasetCondition) => {
+  // eslint-disable-next-line no-param-reassign
   filterQuery.dataset_file = {
     ...(filterQuery.dataset_file || {}),
     dataset: {
@@ -43,6 +44,7 @@ const mergeDatasetFilter = (filterQuery, datasetCondition) => {
 const attachDatasetAnalysisType = (track) => {
   if (track) {
     const analysisType = track.dataset_file?.dataset?.analysis_type?.name ?? null;
+    // eslint-disable-next-line no-param-reassign
     track.analysis_type = analysisType;
   }
   return track;
@@ -71,7 +73,7 @@ const track_access_check = asyncHandler(async (req, res, next) => {
   }
   const accessible = await prisma.track.findFirst({
     where: {
-      id: parseInt(req.params.id),
+      id: parseInt(req.params.id, 10),
       dataset_file: {
         dataset: {
           projects: {
@@ -113,7 +115,8 @@ router.get(
   ],
   asyncHandler(async (req, res) => {
     const {
-      project_id, dataset_id, dataset_file_id, name, file_type, genome_type, genome_value, limit, offset, sort_by, sort_order,
+      project_id, dataset_id, dataset_file_id, name, file_type,
+      genome_type, genome_value, limit, offset, sort_by, sort_order,
     } = req.query;
 
     try {
@@ -261,10 +264,11 @@ router.post(
   [
     body('name').isString().notEmpty().trim(),
     body('dataset_file_id').isInt().toInt(),
+    body('file_type').optional().isString().trim(),
   ],
   asyncHandler(async (req, res) => {
     const {
-      name, dataset_file_id,
+      name, dataset_file_id, file_type,
     } = req.body;
 
     try {
@@ -517,11 +521,12 @@ router.patch(
   [
     param('id').isInt().toInt(),
     body('name').isString().optional().trim(),
+    body('file_type').optional().isString().trim(),
   ],
   asyncHandler(async (req, res) => {
     const { id } = req.params;
     const {
-      name,
+      name, file_type,
     } = req.body;
 
     try {
@@ -681,9 +686,9 @@ router.get(
   asyncHandler(async (req, res) => {
     const { username } = req.params;
     const {
-      project_id, dataset_id, name, file_type, genome_type, genome_value, limit, offset, sort_by, sort_order,
+      project_id, dataset_id, name, file_type, genome_type, genome_value,
+      limit, offset, sort_by, sort_order,
     } = req.query;
-    const { browser_compatible } = req.query;
 
     try {
       const user = await prisma.user.findUnique({

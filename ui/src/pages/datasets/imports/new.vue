@@ -1,5 +1,9 @@
 <template>
-  <va-alert color="warning" icon="warning" v-if="!auth.isFeatureEnabled('import')">
+  <va-alert
+    color="warning"
+    icon="warning"
+    v-if="!auth.isFeatureEnabled('import')"
+  >
     This feature is currently disabled
   </va-alert>
 
@@ -13,20 +17,20 @@
 </template>
 
 <script setup>
-import ImportStepper from '@/components/dataset/import/ImportStepper.vue';
-import { useAuthStore } from '@/stores/auth';
-import { useNavStore } from '@/stores/nav';
+import ImportStepper from "@/components/dataset/import/ImportStepper.vue";
+import { useAuthStore } from "@/stores/auth";
+import { useNavStore } from "@/stores/nav";
 
 const nav = useNavStore();
 const auth = useAuthStore();
 
 nav.setNavItems([
   {
-    label: 'Dataset Imports',
-    to: '/datasets/imports',
+    label: "Dataset Imports",
+    to: "/datasets/imports",
   },
   {
-    label: 'Import New',
+    label: "Import New",
   },
 ]);
 </script>

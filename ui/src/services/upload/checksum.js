@@ -5,7 +5,7 @@
  * Uses hash-wasm for browser-compatible BLAKE3 hashing.
  */
 
-import config from '@/config';
+import config from "@/config";
 
 let blake3Fn = null;
 
@@ -20,13 +20,13 @@ async function _loadBlake3() {
 
   try {
     // Dynamic import to avoid loading WASM until needed
-    const hashWasm = await import('hash-wasm');
+    const hashWasm = await import("hash-wasm");
     // Use createBLAKE3 for streaming (not blake3 which loads entire file)
     blake3Fn = hashWasm.createBLAKE3;
-    console.log('[checksum.js] ✓ BLAKE3 (streaming) loaded');
+    console.log("[checksum.js] ✓ BLAKE3 (streaming) loaded");
     return blake3Fn;
   } catch (error) {
-    console.error('Failed to load hash-wasm module:', error);
+    console.error("Failed to load hash-wasm module:", error);
     throw error;
   }
 }
@@ -39,7 +39,7 @@ async function _loadBlake3() {
  */
 function _normalizePath(path) {
   // Use forward slashes, remove leading ./
-  return path.replace(/\\/g, '/').replace(/^\.\//, '');
+  return path.replace(/\\/g, "/").replace(/^\.\//, "");
 }
 
 /**
@@ -66,32 +66,36 @@ function _normalizePath(path) {
 async function _hashFile(file, createBlake3, onProgress = null) {
   const CHUNK_SIZE = 64 * 1024 * 1024; // 64 MB chunks
   const hasher = await createBlake3();
-  
-  console.log(`[checksum.js] _hashFile: Hashing ${file.name} in chunks (${CHUNK_SIZE / 1024 / 1024} MB each)`);
-  
+
+  console.log(
+    `[checksum.js] _hashFile: Hashing ${file.name} in chunks (${CHUNK_SIZE / 1024 / 1024} MB each)`,
+  );
+
   let offset = 0;
   const fileSize = file.size;
-  
+
   while (offset < fileSize) {
     const chunk = file.slice(offset, offset + CHUNK_SIZE);
     const arrayBuffer = await chunk.arrayBuffer();
     hasher.update(new Uint8Array(arrayBuffer));
-    
+
     offset += CHUNK_SIZE;
-    
+
     // Report progress if callback provided
     if (onProgress) {
       const progress = Math.min(100, Math.round((offset / fileSize) * 100));
       onProgress(progress);
     }
-    
+
     // Yield to event loop every chunk to avoid freezing the browser
     // This allows UI updates, user interactions, etc.
-    await new Promise(resolve => setTimeout(resolve, 0));
+    await new Promise((resolve) => setTimeout(resolve, 0));
   }
-  
-  const hash = hasher.digest('hex');
-  console.log(`[checksum.js] _hashFile: Complete for ${file.name} - hash: ${hash}`);
+
+  const hash = hasher.digest("hex");
+  console.log(
+    `[checksum.js] _hashFile: Complete for ${file.name} - hash: ${hash}`,
+  );
   return hash;
 }
 
@@ -106,23 +110,23 @@ async function _hashFile(file, createBlake3, onProgress = null) {
  * @returns {Promise<Object|null>} Manifest hash object or null if feature disabled/no files
  */
 export async function _computeManifestHash(files, progressCallback = null) {
-  console.log('[checksum.js] _computeManifestHash called');
-  console.log('[checksum.js]   files:', files?.length || 0);
-  console.log('[checksum.js]   progressCallback:', typeof progressCallback);
+  console.log("[checksum.js] _computeManifestHash called");
+  console.log("[checksum.js]   files:", files?.length || 0);
+  console.log("[checksum.js]   progressCallback:", typeof progressCallback);
 
   // Check feature flag
   if (!config.enabledFeatures.upload_verify_checksums) {
-    console.log('[checksum.js] Feature disabled via config');
+    console.log("[checksum.js] Feature disabled via config");
     return null; // Feature disabled
   }
 
   if (!files || files.length === 0) {
-    console.log('[checksum.js] No files to hash');
+    console.log("[checksum.js] No files to hash");
     return null;
   }
 
   try {
-    console.log('[checksum.js] Loading BLAKE3 (streaming)...');
+    console.log("[checksum.js] Loading BLAKE3 (streaming)...");
     const createBlake3 = await _loadBlake3();
 
     const manifest = [];
@@ -131,24 +135,28 @@ export async function _computeManifestHash(files, progressCallback = null) {
     let processedBytes = 0;
 
     // Hash each file with streaming
-    console.log(`[checksum.js] Starting to hash ${totalFiles} file(s)... (total: ${(totalBytes / 1024 / 1024 / 1024).toFixed(2)} GB)`);
+    console.log(
+      `[checksum.js] Starting to hash ${totalFiles} file(s)... (total: ${(totalBytes / 1024 / 1024 / 1024).toFixed(2)} GB)`,
+    );
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
       console.log(
-        `[checksum.js] Hashing file ${i + 1}/${totalFiles}: ${file.name} (${(file.size / 1024 / 1024).toFixed(2)} MB)`
+        `[checksum.js] Hashing file ${i + 1}/${totalFiles}: ${file.name} (${(file.size / 1024 / 1024).toFixed(2)} MB)`,
       );
 
       // Hash file with per-file progress
       const fileHash = await _hashFile(file, createBlake3, (fileProgress) => {
         // Calculate overall progress based on bytes processed across all files
         const currentFileBytes = (fileProgress / 100) * file.size;
-        const overallProgress = Math.round(((processedBytes + currentFileBytes) / totalBytes) * 100);
-        
+        const overallProgress = Math.round(
+          ((processedBytes + currentFileBytes) / totalBytes) * 100,
+        );
+
         if (progressCallback) {
           progressCallback(overallProgress);
         }
       });
-      
+
       processedBytes += file.size;
       console.log(`[checksum.js]   ✓ Hash: ${fileHash}`);
 
@@ -167,39 +175,39 @@ export async function _computeManifestHash(files, progressCallback = null) {
     }
 
     // Sort by path for deterministic order
-    console.log('[checksum.js] Sorting manifest...');
+    console.log("[checksum.js] Sorting manifest...");
     manifest.sort((a, b) => a.path.localeCompare(b.path));
 
     // Create canonical manifest string
-    console.log('[checksum.js] Creating manifest string...');
+    console.log("[checksum.js] Creating manifest string...");
     const manifestStr = [
-      'blake3-manifest-v1',
+      "blake3-manifest-v1",
       ...manifest.map((f) => `${f.path}\t${f.size}\t${f.hash}`),
-    ].join('\n');
-    console.log('[checksum.js] Manifest string length:', manifestStr.length);
+    ].join("\n");
+    console.log("[checksum.js] Manifest string length:", manifestStr.length);
 
     // Hash the manifest itself (small, so we can do it directly)
-    console.log('[checksum.js] Hashing manifest itself...');
+    console.log("[checksum.js] Hashing manifest itself...");
     const manifestBytes = new TextEncoder().encode(manifestStr);
     const manifestHasher = await createBlake3();
     manifestHasher.update(manifestBytes);
-    const manifestHash = manifestHasher.digest('hex');
-    console.log('[checksum.js] ✓ Manifest hash:', manifestHash);
+    const manifestHash = manifestHasher.digest("hex");
+    console.log("[checksum.js] ✓ Manifest hash:", manifestHash);
 
     const result = {
-      algorithm: 'blake3',
-      mode: files.length === 1 ? 'single' : 'manifest-v1',
+      algorithm: "blake3",
+      mode: files.length === 1 ? "single" : "manifest-v1",
       manifest_hash: manifestHash,
       file_count: files.length,
       total_size: manifest.reduce((sum, f) => sum + f.size, 0),
       computed_at: new Date().toISOString(),
     };
 
-    console.log('[checksum.js] ✓ Returning manifest hash object:', result);
+    console.log("[checksum.js] ✓ Returning manifest hash object:", result);
     return result;
   } catch (error) {
-    console.error('[checksum.js] ✗ Failed to compute manifest hash:', error);
-    console.error('[checksum.js] Error stack:', error.stack);
+    console.error("[checksum.js] ✗ Failed to compute manifest hash:", error);
+    console.error("[checksum.js] Error stack:", error.stack);
     // Don't fail upload if checksum computation fails
     return null;
   }

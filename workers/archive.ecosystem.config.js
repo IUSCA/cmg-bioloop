@@ -5,29 +5,29 @@
 module.exports = {
   apps: [
     {
-      name: "celery_worker",
-      script: "python",
+      name: 'celery_worker',
+      script: 'python',
       args: "-m celery -A workers.celery_app worker --loglevel INFO -O fair --pidfile celery_worker.pid --hostname 'cmg-bioloop-archive-w1@%h' --autoscale=1,1 --queues 'cmg-bioloop-archive.cmg-test.sca.iu.edu.q'",
       watch: false,
-      interpreter: "",
-      log_date_format: "YYYY-MM-DD HH:mm Z",
-      error_file: "../logs/workers/celery_worker.err",
-      out_file: "../logs/workers/celery_worker.log",
-      kill_timeout: "10000",
+      interpreter: '',
+      log_date_format: 'YYYY-MM-DD HH:mm Z',
+      error_file: '../logs/workers/celery_worker.err',
+      out_file: '../logs/workers/celery_worker.log',
+      kill_timeout: '10000',
       exp_backoff_restart_delay: 100,
       max_restarts: 3,
     },
     {
-      name: "watch",
-      script: "python",
-      args: "-u -m workers.scripts.watch",
+      name: 'watch',
+      script: 'python',
+      args: '-u -m workers.scripts.watch',
       watch: false,
-      interpreter: "",
-      log_date_format: "YYYY-MM-DD HH:mm Z",
-      error_file: "../logs/workers/watch.err",
-      out_file: "../logs/workers/watch.log",
+      interpreter: '',
+      log_date_format: 'YYYY-MM-DD HH:mm Z',
+      error_file: '../logs/workers/watch.err',
+      out_file: '../logs/workers/watch.log',
       exp_backoff_restart_delay: 100,
       max_restarts: 3,
-    }
-  ]
-}
+    },
+  ],
+};

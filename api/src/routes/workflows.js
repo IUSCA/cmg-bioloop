@@ -190,7 +190,7 @@ function sanitize_timestamp(t) {
 }
 
 const log_process_schema = {
-  workflow_id: { optional: true },  // Optional for non-workflow processes (e.g., upload verification)
+  workflow_id: { optional: true }, // Optional for non-workflow processes (e.g., upload verification)
   pid: { notEmpty: true, isInt: true, toInt: true },
   task_id: { notEmpty: true },
   step: { notEmpty: true },

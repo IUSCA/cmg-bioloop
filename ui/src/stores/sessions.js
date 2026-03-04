@@ -1,9 +1,9 @@
-import sessionService from '@/services/session';
-import { useAuthStore } from '@/stores/auth';
-import { defineStore } from 'pinia';
-import { computed, ref } from 'vue';
+import sessionService from "@/services/session";
+import { useAuthStore } from "@/stores/auth";
+import { defineStore } from "pinia";
+import { computed, ref } from "vue";
 
-export const useSessionsStore = defineStore('sessions', () => {
+export const useSessionsStore = defineStore("sessions", () => {
   // State
   const sessions = ref([]);
   const currentSession = ref(null);
@@ -13,8 +13,8 @@ export const useSessionsStore = defineStore('sessions', () => {
     count: 0,
     limit: 25,
     offset: 0,
-    sort_by: 'created_at',
-    sort_order: 'desc',
+    sort_by: "created_at",
+    sort_order: "desc",
   });
 
   // Getters
@@ -39,7 +39,7 @@ export const useSessionsStore = defineStore('sessions', () => {
       metadata.value = response.data.metadata;
       return response.data;
     } catch (err) {
-      error.value = err.response?.data?.error || 'Failed to fetch sessions';
+      error.value = err.response?.data?.error || "Failed to fetch sessions";
       throw err;
     } finally {
       loading.value = false;
@@ -55,7 +55,7 @@ export const useSessionsStore = defineStore('sessions', () => {
       currentSession.value = response.data;
       return response.data;
     } catch (err) {
-      error.value = err.response?.data?.error || 'Failed to fetch session';
+      error.value = err.response?.data?.error || "Failed to fetch session";
       throw err;
     } finally {
       loading.value = false;
@@ -76,7 +76,7 @@ export const useSessionsStore = defineStore('sessions', () => {
 
       return newSession;
     } catch (err) {
-      error.value = err.response?.data?.error || 'Failed to create session';
+      error.value = err.response?.data?.error || "Failed to create session";
       throw err;
     } finally {
       loading.value = false;
@@ -104,7 +104,7 @@ export const useSessionsStore = defineStore('sessions', () => {
 
       return updatedSession;
     } catch (err) {
-      error.value = err.response?.data?.error || 'Failed to update session';
+      error.value = err.response?.data?.error || "Failed to update session";
       throw err;
     } finally {
       loading.value = false;
@@ -130,7 +130,7 @@ export const useSessionsStore = defineStore('sessions', () => {
         currentSession.value = null;
       }
     } catch (err) {
-      error.value = err.response?.data?.error || 'Failed to delete session';
+      error.value = err.response?.data?.error || "Failed to delete session";
       throw err;
     } finally {
       loading.value = false;
@@ -145,7 +145,7 @@ export const useSessionsStore = defineStore('sessions', () => {
       const response = await sessionService.stage(sessionId, stagingData);
       return response.data;
     } catch (err) {
-      error.value = err.response?.data?.error || 'Failed to request staging';
+      error.value = err.response?.data?.error || "Failed to request staging";
       throw err;
     } finally {
       loading.value = false;

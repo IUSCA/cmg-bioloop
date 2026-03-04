@@ -1,17 +1,18 @@
 #!/usr/bin/env node
+/* eslint-disable no-console, no-unused-vars, no-return-assign, no-promise-executor-return, global-require */
 /**
  * End-to-End Upload Test Script
- * 
+ *
  * Tests the complete upload flow:
  * 1. Create a dataset
  * 2. Upload a file via TUS
  * 3. Call /complete endpoint
  * 4. Verify upload log status
  * 5. Verify workflow was triggered
- * 
+ *
  * Usage:
  *   node test_upload_e2e.js [--checksum]
- * 
+ *
  * Options:
  *   --checksum    Test with checksum verification enabled
  */
@@ -51,14 +52,14 @@ function apiRequest(method, endpoint, data = null) {
       port: url.port,
       path: url.pathname + url.search,
       headers: {
-        'Authorization': `Bearer ${TOKEN}`,
+        Authorization: `Bearer ${TOKEN}`,
         'Content-Type': 'application/json',
       },
     };
 
     const req = http.request(options, (res) => {
       let body = '';
-      res.on('data', chunk => body += chunk);
+      res.on('data', (chunk) => body += chunk);
       res.on('end', () => {
         try {
           const json = body ? JSON.parse(body) : {};
@@ -84,30 +85,30 @@ function apiRequest(method, endpoint, data = null) {
 
 // Sleep helper
 function sleep(ms) {
-  return new Promise(resolve => setTimeout(resolve, ms));
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 // Main test
 async function runTest() {
   const timestamp = Date.now();
   const testName = `test-upload-${timestamp}`;
-  
+
   console.log('Step 1: Creating dataset...');
   console.log(`  Dataset name: ${testName}`);
-  
+
   // Create dataset via upload endpoint
   const createResponse = await apiRequest('POST', '/datasets/uploads', {
     name: testName,
     type: 'DATA_PRODUCT',
   });
-  
+
   const datasetId = createResponse.audit_log?.dataset?.id;
   const uploadLogId = createResponse.id;
-  
+
   if (!datasetId) {
-    throw new Error('Failed to create dataset: ' + JSON.stringify(createResponse));
+    throw new Error(`Failed to create dataset: ${JSON.stringify(createResponse)}`);
   }
-  
+
   console.log(`  Dataset ID: ${datasetId}`);
   console.log(`  Upload Log ID: ${uploadLogId}`);
   console.log(`  Origin Path: ${createResponse.audit_log?.dataset?.origin_path}`);
@@ -132,10 +133,10 @@ Content for checksum testing: ${Math.random().toString(36)}
   console.log('Step 3: Uploading file via TUS...');
   const tusEndpoint = `${API_URL}/uploads/files`;
   console.log(`  TUS Endpoint: ${tusEndpoint}`);
-  
+
   const uploadUrl = await new Promise((resolve, reject) => {
     const fileStream = fs.createReadStream(testFilePath);
-    
+
     const upload = new tus.Upload(fileStream, {
       endpoint: tusEndpoint,
       retryDelays: [0, 1000, 3000],
@@ -166,10 +167,10 @@ Content for checksum testing: ${Math.random().toString(36)}
         resolve(upload.url);
       },
     });
-    
+
     upload.start();
   });
-  
+
   // Extract process_id from URL
   const processId = uploadUrl.split('/').pop();
   console.log(`  Process ID: ${processId}`);
@@ -183,7 +184,7 @@ Content for checksum testing: ${Math.random().toString(36)}
     directory_name: '',
     relative_path: 'test-upload-e2e.txt',
   });
-  
+
   console.log(`  Response: ${JSON.stringify(completeResponse.success)}`);
   console.log(`  Status: ${completeResponse.upload_log?.status}`);
   console.log('');
@@ -191,27 +192,27 @@ Content for checksum testing: ${Math.random().toString(36)}
   // Add checksum metadata if testing with checksum
   if (TEST_WITH_CHECKSUM) {
     console.log('Step 4b: Computing BLAKE3 checksum...');
-    
+
     // Compute BLAKE3 manifest hash (matches worker algorithm exactly)
     // Manifest format: "blake3-manifest-v1\nrelative_path\tsize\tfile_hash"
     const { blake3 } = require('hash-wasm');
-    
+
     const fileContent = fs.readFileSync(testFilePath);
     const fileHash = await blake3(fileContent);
-    
+
     // Build manifest matching worker format
     // Use the actual filename (same as what UI would use via file.name)
     const relativePath = 'test-upload-e2e.txt';
     const manifestLines = [
       'blake3-manifest-v1',
-      `${relativePath}\t${fileSize}\t${fileHash}`
+      `${relativePath}\t${fileSize}\t${fileHash}`,
     ];
     const manifestStr = manifestLines.join('\n');
     const manifestHash = await blake3(manifestStr);
-    
+
     console.log(`  File hash: ${fileHash.substring(0, 32)}...`);
     console.log(`  Manifest hash: ${manifestHash.substring(0, 32)}...`);
-    
+
     const checksumData = {
       algorithm: 'blake3',
       mode: 'single',
@@ -220,18 +221,18 @@ Content for checksum testing: ${Math.random().toString(36)}
       total_size: fileSize,
       computed_at: new Date().toISOString(),
     };
-    
+
     await apiRequest('PATCH', `/datasets/uploads/${datasetId}/upload-log`, {
       metadata: { checksum: checksumData },
     });
-    console.log(`  Checksum stored in DB`);
+    console.log('  Checksum stored in DB');
     console.log('');
   }
 
   // Clean up test file
   fs.unlinkSync(testFilePath);
   console.log('Cleaned up test file.');
-  
+
   // Final result
   console.log('');
   console.log('='.repeat(60));
@@ -239,7 +240,7 @@ Content for checksum testing: ${Math.random().toString(36)}
   console.log('='.repeat(60));
   console.log(`Dataset ID: ${datasetId}`);
   console.log(`Process ID: ${processId}`);
-  console.log(`Status: UPLOADED`);
+  console.log('Status: UPLOADED');
   console.log('');
   console.log('SUCCESS: Upload completed!');
   console.log('');
@@ -250,7 +251,7 @@ Content for checksum testing: ${Math.random().toString(36)}
   console.log('');
   console.log('To manually trigger the polling job:');
   console.log('  docker compose exec celery_worker python -m workers.scripts.manage_upload_workflows --dry-run=False');
-  
+
   return true;
 }
 

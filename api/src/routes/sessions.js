@@ -5,6 +5,7 @@ const fs = require('fs');
 const path = require('path');
 const createError = require('http-errors');
 const CONSTANTS = require('@/constants');
+
 const { DONE_STATUSES, DATA_REQUEST_STATUS, WORKFLOWS } = CONSTANTS;
 const prisma = require('@/db');
 const logger = require('@/services/logger');
@@ -37,7 +38,7 @@ const userCanAccessAll = (user) => (user?.roles || []).some((r) => ['admin', 'op
 
 const sessionOwnerFn = async (req) => {
   const session = await prisma.genome_browser_session.findUnique({
-    where: { id: parseInt(req.params.id) },
+    where: { id: parseInt(req.params.id, 10) },
     select: { user: { select: { username: true } } },
   });
   return session?.user?.username;
@@ -736,9 +737,11 @@ router.get(
     });
 
     // Fetch enriched workflow data from Rhythm for each dataset
+    // eslint-disable-next-line no-restricted-syntax
     for (const [datasetId, dataset] of datasetMap) {
       if (dataset.workflows && dataset.workflows.length > 0) {
         try {
+          // eslint-disable-next-line no-await-in-loop
           const wf_res = await wfService.getAll({
             workflow_ids: dataset.workflows.map((x) => x.id),
           });
@@ -765,7 +768,9 @@ router.get(
           if (enrichedWf) {
             return { ...enrichedWf, initiator: sw.initiator };
           }
-          return { id: sw.workflow_id, created_at: sw.created_at, status: null, name: null, initiator: sw.initiator };
+          return {
+            id: sw.workflow_id, created_at: sw.created_at, status: null, name: null, initiator: sw.initiator,
+          };
         });
       } catch (error) {
         logger.warn(`Failed to fetch workflow status for session ${id}`, error);
@@ -1130,14 +1135,13 @@ fileExposureRouter.get(
     const sessionId = req.params.id;
     const requestedPath = req.params[0] || ''; // Everything after /files/expose/
 
-    logger.info('[FILE EXPOSE] Request received');
-    console.dir({
+    logger.info('[FILE EXPOSE] Request received', {
       sessionId,
       requestedPath,
       user: req.user?.username,
       userId: req.user?.id,
       rangeHeader: req.headers.range || 'none',
-    }, { depth: null });
+    });
 
     // Verify user has access to this session
     const session = await prisma.genome_browser_session.findUnique({
@@ -1173,12 +1177,11 @@ fileExposureRouter.get(
       return next(createError.NotFound('Session not found'));
     }
 
-    logger.info('[FILE EXPOSE] Session found');
-    console.dir({
+    logger.info('[FILE EXPOSE] Session found', {
       sessionId,
       sessionUserId: session.user_id,
       trackCount: session.session_tracks.length,
-    }, { depth: null });
+    });
 
     // Check if user owns the session or has admin/operator access
     if (!userCanAccessAll(req.user) && session.user_id !== req.user.id) {
@@ -1192,8 +1195,7 @@ fileExposureRouter.get(
 
     // Verify the requested file belongs to this session's tracks
     const cleanedRequestedPath = requestedPath.replace(/^\/+/, '');
-    logger.info('[FILE EXPOSE] Cleaned requested path');
-    console.dir({ cleanedRequestedPath }, { depth: null });
+    logger.info('[FILE EXPOSE] Cleaned requested path', { cleanedRequestedPath });
 
     const matchedTrack = session.session_tracks.find((st) => {
       const { dataset } = st.track.dataset_file;
@@ -1219,38 +1221,30 @@ fileExposureRouter.get(
     const matchedFile = matchedTrack.track.dataset_file;
     const matchedDataset = matchedTrack.track.dataset_file.dataset;
 
-    logger.info('[FILE EXPOSE] File matched in session');
-    console.dir({
+    logger.info('[FILE EXPOSE] File matched in session', {
       sessionId,
       trackId: matchedTrack.track.id,
       datasetId: matchedDataset.id,
       fileId: matchedFile.id,
       fileName: matchedFile.name,
-    }, { depth: null });
+    });
 
     // Construct full file path using pathResolver service
     const relativePath = pathResolver.getRelativeFilePath({
       dataset: matchedDataset,
       datasetFile: matchedFile,
     });
-    logger.info('[FILE EXPOSE] Relative path with dataset_type');
-    console.dir({ relativePath }, { depth: null });
+    logger.info('[FILE EXPOSE] Relative path with dataset_type', { relativePath });
 
     // Resolve to absolute path accessible by the container
     const resolvedFull = pathResolver.resolveToAbsolutePath(relativePath);
-    logger.info('[FILE EXPOSE] Full absolute path constructed');
-    console.dir({ resolvedFull }, { depth: null });
+    logger.info('[FILE EXPOSE] Full absolute path constructed', { resolvedFull });
 
     // Security: Verify path starts with access root to prevent path traversal
     const accessRoot = pathResolver.getFileAccessRoot();
     const resolvedRoot = path.resolve(accessRoot);
     if (!resolvedFull.startsWith(resolvedRoot)) {
-      logger.error('[FILE EXPOSE] Path traversal attempt detected');
-      console.dir({
-        resolvedFull,
-        resolvedRoot,
-        accessRoot,
-      }, { depth: null });
+      logger.error('[FILE EXPOSE] Path traversal attempt detected', { resolvedFull, resolvedRoot, accessRoot });
       return next(createError.BadRequest('Invalid file path'));
     }
 
@@ -1259,19 +1253,17 @@ fileExposureRouter.get(
 
     // Get file stats
     const fileStats = await fs.promises.stat(resolvedFull);
-    logger.info('[FILE EXPOSE] File exists and accessible');
-    console.dir({
+    logger.info('[FILE EXPOSE] File exists and accessible', {
       resolvedFull,
       fileSize: fileStats.size,
       fileSizeFormatted: `${(fileStats.size / 1024 / 1024).toFixed(2)} MB`,
       isFile: fileStats.isFile(),
       isDirectory: fileStats.isDirectory(),
-    }, { depth: null });
+    });
 
     // Set headers
     const ext = path.extname(resolvedFull).toLowerCase();
-    logger.info('[FILE EXPOSE] File extension extracted');
-    console.dir({ ext }, { depth: null });
+    logger.info('[FILE EXPOSE] File extension extracted', { ext });
 
     const mimeTypes = {
       '.bam': 'application/octet-stream',
@@ -1286,8 +1278,7 @@ fileExposureRouter.get(
       '.gtf': 'text/plain',
     };
     const contentType = mimeTypes[ext] || 'application/octet-stream';
-    logger.info('[FILE EXPOSE] Content type determined');
-    console.dir({ contentType }, { depth: null });
+    logger.info('[FILE EXPOSE] Content type determined', { contentType });
 
     res.set('Content-Type', contentType);
     res.set('Accept-Ranges', 'bytes');
@@ -1313,36 +1304,28 @@ fileExposureRouter.get(
     // Handle Range requests (required for IGV)
     const { range } = req.headers;
     if (range) {
-      logger.info('[FILE EXPOSE] Range header detected');
-      console.dir({ range }, { depth: null });
+      logger.info('[FILE EXPOSE] Range header detected', { range });
 
       const stats = await fs.promises.stat(resolvedFull);
       const fileSize = stats.size;
-      logger.info('[FILE EXPOSE] File size from stats');
-      console.dir({ fileSize }, { depth: null });
+      logger.info('[FILE EXPOSE] File size from stats', { fileSize });
 
       const parts = range.replace(/bytes=/, '').split('-');
-      logger.info('[FILE EXPOSE] Range parts parsed');
-      console.dir({ parts }, { depth: null });
+      logger.info('[FILE EXPOSE] Range parts parsed', { parts });
 
       const start = parseInt(parts[0], 10);
-      logger.info('[FILE EXPOSE] Range start position');
-      console.dir({ start }, { depth: null });
+      logger.info('[FILE EXPOSE] Range start position', { start });
 
       const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
-      logger.info('[FILE EXPOSE] Range end position');
-      console.dir({ end }, { depth: null });
+      logger.info('[FILE EXPOSE] Range end position', { end });
 
       const chunksize = (end - start) + 1;
-      logger.info('[FILE EXPOSE] Chunk size calculated');
-      console.dir({ chunksize }, { depth: null });
+      logger.info('[FILE EXPOSE] Chunk size calculated', { chunksize });
 
       const percentOfFile = ((chunksize / fileSize) * 100).toFixed(2);
-      logger.info('[FILE EXPOSE] Percent of file calculated');
-      console.dir({ percentOfFile }, { depth: null });
+      logger.info('[FILE EXPOSE] Percent of file calculated', { percentOfFile });
 
-      logger.info('[FILE EXPOSE] Streaming range request');
-      console.dir({
+      logger.info('[FILE EXPOSE] Streaming range request', {
         resolvedFull,
         rangeHeader: range,
         start,
@@ -1350,19 +1333,17 @@ fileExposureRouter.get(
         chunksize,
         fileSize,
         percentOfFile: `${percentOfFile}%`,
-      }, { depth: null });
+      });
 
       res.status(206); // Partial Content
       res.set('Content-Range', `bytes ${start}-${end}/${fileSize}`);
       res.set('Content-Length', chunksize);
 
       const fileStream = fs.createReadStream(resolvedFull, { start, end });
-      logger.info('[FILE EXPOSE] File stream created (range)');
-      console.dir({ streamOptions: { start, end } }, { depth: null });
+      logger.info('[FILE EXPOSE] File stream created (range)', { streamOptions: { start, end } });
 
       fileStream.on('open', () => {
-        logger.info('[FILE EXPOSE] Stream opened (range)');
-        console.dir({ start, end }, { depth: null });
+        logger.info('[FILE EXPOSE] Stream opened (range)', { start, end });
       });
 
       fileStream.on('error', (err) => {
@@ -1378,27 +1359,24 @@ fileExposureRouter.get(
       });
 
       fileStream.on('end', () => {
-        logger.info('[FILE EXPOSE] Stream completed (range)');
-        console.dir({
+        logger.info('[FILE EXPOSE] Stream completed (range)', {
           resolvedFull,
           start,
           end,
           bytesStreamed: chunksize,
-        }, { depth: null });
+        });
       });
 
       fileStream.pipe(res);
     } else {
       // Stream full file
-      logger.info('[FILE EXPOSE] Streaming full file');
-      console.dir({
+      logger.info('[FILE EXPOSE] Streaming full file', {
         resolvedFull,
         fileSize: fileStats.size,
-      }, { depth: null });
+      });
 
       const fileStream = fs.createReadStream(resolvedFull);
-      logger.info('[FILE EXPOSE] File stream created (full)');
-      console.dir({ resolvedFull }, { depth: null });
+      logger.info('[FILE EXPOSE] File stream created (full)', { resolvedFull });
 
       fileStream.on('open', () => {
         logger.info('[FILE EXPOSE] Stream opened (full file)');
@@ -1415,11 +1393,10 @@ fileExposureRouter.get(
       });
 
       fileStream.on('end', () => {
-        logger.info('[FILE EXPOSE] Stream completed (full file)');
-        console.dir({
+        logger.info('[FILE EXPOSE] Stream completed (full file)', {
           resolvedFull,
           bytesStreamed: fileStats.size,
-        }, { depth: null });
+        });
       });
 
       fileStream.pipe(res);
@@ -1492,7 +1469,7 @@ router.get(
 
         // Find the hydrate_session workflow by NAME (not by UUID workflow_id)
         const hydrationWorkflow = wf_res.data.results.find(
-          (wf) => wf.name === WORKFLOWS.HYDRATE_SESSION
+          (wf) => wf.name === WORKFLOWS.HYDRATE_SESSION,
         );
 
         if (!hydrationWorkflow) {
@@ -1514,13 +1491,15 @@ router.get(
     // If legacy AND not hydrated: fetch from BOTH sources
     if (isLegacy && needsHydration && session.metadata?.datasets && Array.isArray(session.metadata.datasets)) {
       logger.info(
-        `[SESSIONS] Legacy session ${sessionId} not hydrated - ` +
-        `fetching from BOTH metadata.datasets and session_tracks`
+        `[SESSIONS] Legacy session ${sessionId} not hydrated - `
+        + 'fetching from BOTH metadata.datasets and session_tracks',
       );
 
       // SOURCE 1: metadata.datasets (legacy datasets from CMG)
       const cmgDataproductIds = session.metadata.datasets;
+      // eslint-disable-next-line no-restricted-syntax
       for (const cmgId of cmgDataproductIds) {
+        // eslint-disable-next-line no-await-in-loop
         const dataset = await prisma.dataset.findFirst({
           where: { cmg_id: cmgId },
           include: {
@@ -1532,7 +1511,9 @@ router.get(
         });
 
         if (dataset) {
+          // eslint-disable-next-line no-await-in-loop
           const migrationStatus = await legacyMigrationService.getDatasetMigrationStatus(dataset.id);
+          // eslint-disable-next-line no-param-reassign
           dataset.migration_status = migrationStatus;
 
           if (stagedFilter === undefined || dataset.is_staged === stagedFilter) {
@@ -1581,8 +1562,10 @@ router.get(
               prev_task_runs: false,
               workflow_ids: ds.workflows.map((x) => x.id),
             });
+            // eslint-disable-next-line no-param-reassign
             ds.workflows = wf_res.data.results || [];
           } catch (error) {
+            // eslint-disable-next-line no-param-reassign
             ds.workflows = [];
           }
         }

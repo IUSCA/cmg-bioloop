@@ -1,9 +1,9 @@
-import trackService from '@/services/track';
-import { useAuthStore } from '@/stores/auth';
-import { defineStore } from 'pinia';
-import { computed, ref } from 'vue';
+import trackService from "@/services/track";
+import { useAuthStore } from "@/stores/auth";
+import { defineStore } from "pinia";
+import { computed, ref } from "vue";
 
-export const useTracksStore = defineStore('tracks', () => {
+export const useTracksStore = defineStore("tracks", () => {
   // State
   const tracks = ref([]);
   const currentTrack = ref(null);
@@ -13,8 +13,8 @@ export const useTracksStore = defineStore('tracks', () => {
     count: 0,
     limit: 25,
     offset: 0,
-    sort_by: 'created_at',
-    sort_order: 'desc',
+    sort_by: "created_at",
+    sort_order: "desc",
   });
 
   // Getters
@@ -39,7 +39,7 @@ export const useTracksStore = defineStore('tracks', () => {
       metadata.value = response.data.metadata;
       return response.data;
     } catch (err) {
-      error.value = err.response?.data?.error || 'Failed to fetch tracks';
+      error.value = err.response?.data?.error || "Failed to fetch tracks";
       throw err;
     } finally {
       loading.value = false;
@@ -55,7 +55,7 @@ export const useTracksStore = defineStore('tracks', () => {
       currentTrack.value = response.data;
       return response.data;
     } catch (err) {
-      error.value = err.response?.data?.error || 'Failed to fetch track';
+      error.value = err.response?.data?.error || "Failed to fetch track";
       throw err;
     } finally {
       loading.value = false;
@@ -76,7 +76,7 @@ export const useTracksStore = defineStore('tracks', () => {
 
       return newTrack;
     } catch (err) {
-      error.value = err.response?.data?.error || 'Failed to create track';
+      error.value = err.response?.data?.error || "Failed to create track";
       throw err;
     } finally {
       loading.value = false;
@@ -104,7 +104,7 @@ export const useTracksStore = defineStore('tracks', () => {
 
       return updatedTrack;
     } catch (err) {
-      error.value = err.response?.data?.error || 'Failed to update track';
+      error.value = err.response?.data?.error || "Failed to update track";
       throw err;
     } finally {
       loading.value = false;

@@ -44,3 +44,6 @@ operators.json
 users.json
 
 /notebooks
+
+# Auto-generated PM2 ecosystem config files (not tracked in git)
+workers/*.ecosystem.config.js

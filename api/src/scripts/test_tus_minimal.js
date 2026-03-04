@@ -1,3 +1,4 @@
+/* eslint-disable no-console */
 /**
  * Minimal TUS server test - no handlers, no middleware
  */

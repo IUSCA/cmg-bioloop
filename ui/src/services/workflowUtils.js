@@ -1,4 +1,4 @@
-import constants from '@/constants';
+import constants from "@/constants";
 
 /**
  * Resolves the subject of a workflow — i.e. the entity the workflow ran on —

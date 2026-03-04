@@ -11,17 +11,19 @@
     @cancel="hide"
   >
     <va-inner-loading :loading="loading">
-      <div>Are you sure you want to delete the session "{{ props.data.title }}"?</div>
+      <div>
+        Are you sure you want to delete the session "{{ props.data.title }}"?
+      </div>
     </va-inner-loading>
   </va-modal>
 </template>
 
 <script setup>
-import { useSessionsStore } from '@/stores/sessions';
-import toast from '@/services/toast';
+import { useSessionsStore } from "@/stores/sessions";
+import toast from "@/services/toast";
 
-const props = defineProps(['data']);
-const emit = defineEmits(['update']);
+const props = defineProps(["data"]);
+const emit = defineEmits(["update"]);
 
 const store = useSessionsStore();
 
@@ -47,11 +49,11 @@ async function handleOk() {
   loading.value = true;
   try {
     await store.deleteSession(props.data.id);
-    toast.success('Session deleted successfully');
-    emit('update');
+    toast.success("Session deleted successfully");
+    emit("update");
   } catch (error) {
-    console.error('Failed to delete session:', error);
-    toast.error('Failed to delete session');
+    console.error("Failed to delete session:", error);
+    toast.error("Failed to delete session");
   } finally {
     loading.value = false;
     hide();

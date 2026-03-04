@@ -188,9 +188,11 @@ const props = defineProps({
 });
 
 const formatFileType = (fileType) => {
-  if (!fileType) return '';
+  if (!fileType) return "";
   // fileType is an object with name and extension
-  return fileType.extension ? `${fileType.name} (${fileType.extension})` : fileType.name;
+  return fileType.extension
+    ? `${fileType.name} (${fileType.extension})`
+    : fileType.name;
 };
 
 const emit = defineEmits(["update:populatedDatasetName"]);

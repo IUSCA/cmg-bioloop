@@ -145,8 +145,14 @@
       <va-inner-loading :loading="modal_loading">
         <va-form class="flex flex-wrap gap-2 gap-y-4" ref="modifyFormRef">
           <!-- Historical data notice -->
-          <va-alert v-if="isHistoricalUser" color="info" border="left" class="w-full">
-            This is historical user data from CMG. Identity fields (username, email, CAS ID) are read-only to preserve data integrity.
+          <va-alert
+            v-if="isHistoricalUser"
+            color="info"
+            border="left"
+            class="w-full"
+          >
+            This is historical user data from CMG. Identity fields (username,
+            email, CAS ID) are read-only to preserve data integrity.
           </va-alert>
 
           <!-- name -->
@@ -216,7 +222,13 @@
             </div>
 
             <!-- Delete User Text and Trash Bin Button -->
-            <div v-if="auth.canAdmin && !legacyMigrationService.isLegacyUser(editedUser)" class="flex items-center gap-2 ml-auto">
+            <div
+              v-if="
+                auth.canAdmin &&
+                !legacyMigrationService.isLegacyUser(editedUser)
+              "
+              class="flex items-center gap-2 ml-auto"
+            >
               <span class="trash-can-button-text"> DELETE USER </span>
               <va-button
                 color="danger"

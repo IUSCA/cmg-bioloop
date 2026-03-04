@@ -24,7 +24,9 @@
             </template>
 
             <template #cell(type)="{ rowData }">
-              <DatasetType v-if="rowData.type" :type="rowData.type" />
+              <va-chip size="small">
+                {{ rowData.type }}
+              </va-chip>
             </template>
 
             <template #cell(stage)="{ rowData }">
@@ -93,7 +95,7 @@
             </template>
 
             <template #cell(du_size)="{ source }">
-              <span>{{ source != null ? formatBytes(source) : '' }}</span>
+              <span>{{ source != null ? formatBytes(source) : "" }}</span>
             </template>
           </va-data-table>
 
@@ -126,21 +128,20 @@
 </template>
 
 <script setup>
-import { useIntervalFn } from '@vueuse/core';
-import { computed, ref, watch } from 'vue';
-import * as datetime from '@/services/datetime';
-import sessionService from '@/services/session';
-import datasetService from '@/services/dataset';
-import wfService from '@/services/workflow';
-import { formatBytes } from '@/services/utils';
-import config from '@/config';
-import Pagination from '@/components/utils/Pagination.vue';
-import DatasetDownloadModal from '@/components/project/datasets/DatasetDownloadModal.vue';
-import StageDatasetModal from '@/components/project/datasets/StageDatasetModal.vue';
-import DatasetType from '@/components/dataset/DatasetType.vue';
-import { useAuthStore } from '@/stores/auth';
-import { HalfCircleSpinner } from 'epic-spinners';
-import { useColors } from 'vuestic-ui';
+import { useIntervalFn } from "@vueuse/core";
+import { computed, ref, watch } from "vue";
+import * as datetime from "@/services/datetime";
+import sessionService from "@/services/session";
+import datasetService from "@/services/dataset";
+import wfService from "@/services/workflow";
+import { formatBytes } from "@/services/utils";
+import config from "@/config";
+import Pagination from "@/components/utils/Pagination.vue";
+import DatasetDownloadModal from "@/components/project/datasets/DatasetDownloadModal.vue";
+import StageDatasetModal from "@/components/project/datasets/StageDatasetModal.vue";
+import { useAuthStore } from "@/stores/auth";
+import { HalfCircleSpinner } from "epic-spinners";
+import { useColors } from "vuestic-ui";
 
 const { colors } = useColors();
 const auth = useAuthStore();
@@ -157,7 +158,7 @@ const props = defineProps({
   },
 });
 
-const emit = defineEmits(['datasets-updated']);
+const emit = defineEmits(["datasets-updated"]);
 
 const loading = ref(false);
 const datasets = ref([]);
@@ -167,33 +168,33 @@ const PAGE_SIZE_OPTIONS = [25, 50, 100];
 
 const columns = [
   {
-    key: 'name',
+    key: "name",
     sortable: true,
   },
-  { key: 'stage', width: '7%', thAlign: 'center', tdAlign: 'center' },
-  { key: 'download', width: '8%', thAlign: 'center', tdAlign: 'center' },
+  { key: "stage", width: "7%", thAlign: "center", tdAlign: "center" },
+  { key: "download", width: "8%", thAlign: "center", tdAlign: "center" },
   {
-    key: 'type',
+    key: "type",
     sortable: true,
-    width: '12%',
+    width: "12%",
   },
   {
-    key: 'updated_at',
-    label: 'last updated',
+    key: "updated_at",
+    label: "last updated",
     sortable: true,
-    width: '12%',
+    width: "12%",
   },
   {
-    key: 'metadata',
-    label: 'data files',
+    key: "metadata",
+    label: "data files",
     sortable: false,
-    width: '10%',
+    width: "10%",
   },
   {
-    key: 'du_size',
-    label: 'size',
+    key: "du_size",
+    label: "size",
     sortable: true,
-    width: '10%',
+    width: "10%",
   },
 ];
 
@@ -202,7 +203,7 @@ const rows = computed(() => {
   return datasets.value.map((ds) => ({
     ...ds,
     is_staging_pending: wfService.is_staging_workflow_active(ds.workflows),
-    is_archival_pending: wfService.is_step_pending('archive', ds.workflows),
+    is_archival_pending: wfService.is_step_pending("archive", ds.workflows),
   }));
 });
 
@@ -215,9 +216,7 @@ const paginatedRows = computed(() => {
 
 // Track datasets that are being staged
 const tracking = computed(() => {
-  return rows.value
-    .filter((ds) => ds.is_staging_pending)
-    .map((ds) => ds.id);
+  return rows.value.filter((ds) => ds.is_staging_pending).map((ds) => ds.id);
 });
 
 // Load datasets
@@ -231,9 +230,9 @@ const loadDatasets = async () => {
   try {
     const response = await sessionService.getDatasets(props.sessionId);
     datasets.value = response.data.datasets || [];
-    emit('datasets-updated', datasets.value);
+    emit("datasets-updated", datasets.value);
   } catch (error) {
-    console.error('Failed to load session datasets:', error);
+    console.error("Failed to load session datasets:", error);
     datasets.value = [];
   } finally {
     loading.value = false;
@@ -243,7 +242,11 @@ const loadDatasets = async () => {
 // Fetch and update individual dataset
 const fetchAndUpdateDataset = async (id) => {
   try {
-    const response = await datasetService.getById({ id, include_projects: true, bundle: true });
+    const response = await datasetService.getById({
+      id,
+      include_projects: true,
+      bundle: true,
+    });
     const index = datasets.value.findIndex((ds) => ds.id === id);
     if (index !== -1) {
       datasets.value[index] = response.data;
@@ -270,20 +273,27 @@ const poll = useIntervalFn(
 );
 
 // Watch tracking to start/stop polling
-watch(tracking, (newTracking) => {
-  if (newTracking.length > 0) {
-    poll.resume();
-  } else {
-    poll.pause();
-  }
-}, { immediate: true });
+watch(
+  tracking,
+  (newTracking) => {
+    if (newTracking.length > 0) {
+      poll.resume();
+    } else {
+      poll.pause();
+    }
+  },
+  { immediate: true },
+);
 
 // Watch data_requested to reload when staging is initiated
-watch(() => props.dataRequested, (newVal) => {
-  if (newVal) {
-    loadDatasets();
-  }
-});
+watch(
+  () => props.dataRequested,
+  (newVal) => {
+    if (newVal) {
+      loadDatasets();
+    }
+  },
+);
 
 // Load datasets on mount
 watch(
@@ -293,7 +303,7 @@ watch(
       loadDatasets();
     }
   },
-  { immediate: true }
+  { immediate: true },
 );
 
 // Download modal

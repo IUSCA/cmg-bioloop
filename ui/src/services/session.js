@@ -1,4 +1,4 @@
-import api from './api';
+import api from "./api";
 
 class SessionService {
   /**
@@ -14,7 +14,7 @@ class SessionService {
    * @returns {Promise<Object>} Sessions and metadata
    */
   getAll(params = {}) {
-    return api.get('/sessions', { params });
+    return api.get("/sessions", { params });
   }
 
   /**
@@ -46,7 +46,7 @@ class SessionService {
    * @returns {Promise<Object>} Created session
    */
   create(sessionData) {
-    return api.post('/sessions', sessionData);
+    return api.post("/sessions", sessionData);
   }
 
   /**
@@ -83,7 +83,7 @@ class SessionService {
    * @param {string} browser - Browser type ('igv' or 'washu'), defaults to 'igv'
    * @returns {Promise<Object>} Datahub configuration
    */
-  getDatahub(id, browser = 'igv') {
+  getDatahub(id, browser = "igv") {
     return api.get(`/sessions/${id}/datahub`, { params: { browser } });
   }
 
@@ -150,7 +150,7 @@ class SessionService {
    * @returns {boolean} - True if session was created via the bigbang migration
    */
   _isLegacySession(session) {
-    return session?.metadata?.origin === 'legacy';
+    return session?.metadata?.origin === "legacy";
   }
 
   /**
@@ -167,14 +167,16 @@ class SessionService {
 
     // Find the hydrate_session workflow by NAME (workflow_id is a UUID, not the workflow name!)
     // The backend enriches session_workflows with workflow details from Rhythm
-    const hydrationWorkflow = sessionWorkflows.find((sw) => sw.name === 'hydrate_session');
+    const hydrationWorkflow = sessionWorkflows.find(
+      (sw) => sw.name === "hydrate_session",
+    );
 
     if (!hydrationWorkflow) {
       return false;
     }
 
     // Check if workflow status is SUCCESS
-    return hydrationWorkflow.status === 'SUCCESS';
+    return hydrationWorkflow.status === "SUCCESS";
   }
 
   /**

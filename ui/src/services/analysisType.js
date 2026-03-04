@@ -1,4 +1,4 @@
-import api from './api';
+import api from "./api";
 
 export default {
   /**
@@ -6,7 +6,7 @@ export default {
    * @returns {Promise} Axios response with list of analysis types
    */
   getAll() {
-    return api.get('/analysis-types');
+    return api.get("/analysis-types");
   },
 
   /**
@@ -17,6 +17,6 @@ export default {
    * @returns {Promise} Axios response with created analysis type
    */
   create(data) {
-    return api.post('/analysis-types', data);
+    return api.post("/analysis-types", data);
   },
 };

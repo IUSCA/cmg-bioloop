@@ -12,8 +12,8 @@
       <div class="space-y-4">
         <div v-if="!loading && internalDatasets.length > 0">
           <p class="mb-4">
-            The following datasets need to be staged before they can be viewed in the genome
-            browser. Would you like to stage all of them?
+            The following datasets need to be staged before they can be viewed
+            in the genome browser. Would you like to stage all of them?
           </p>
 
           <va-data-table
@@ -39,12 +39,21 @@
             </template>
 
             <template #cell(genome)="{ rowData }">
-              <va-chip 
-                v-if="rowData.genomic_details && (rowData.genomic_details.genome_type || rowData.genomic_details.genome_value)" 
+              <va-chip
+                v-if="
+                  rowData.genomic_details &&
+                  (rowData.genomic_details.genome_type ||
+                    rowData.genomic_details.genome_value)
+                "
                 size="small"
                 outline
               >
-                {{ rowData.genomic_details.genome_type || '' }}{{ rowData.genomic_details.genome_value ? ` (${rowData.genomic_details.genome_value})` : '' }}
+                {{ rowData.genomic_details.genome_type || ""
+                }}{{
+                  rowData.genomic_details.genome_value
+                    ? ` (${rowData.genomic_details.genome_value})`
+                    : ""
+                }}
               </va-chip>
               <span v-else>—</span>
             </template>
@@ -73,7 +82,11 @@
                 />
                 <span class="flex-1">
                   {{ result.dataset_name }}:
-                  {{ result.success ? 'Staging workflow started' : `Failed: ${result.error}` }}
+                  {{
+                    result.success
+                      ? "Staging workflow started"
+                      : `Failed: ${result.error}`
+                  }}
                 </span>
               </div>
             </div>
@@ -89,10 +102,10 @@
 </template>
 
 <script setup>
-import datasetService from '@/services/dataset';
-import * as datetime from '@/services/datetime';
-import toast from '@/services/toast';
-import { ref, watch } from 'vue';
+import datasetService from "@/services/dataset";
+import * as datetime from "@/services/datetime";
+import toast from "@/services/toast";
+import { ref, watch } from "vue";
 
 const props = defineProps({
   sessionId: {
@@ -105,7 +118,7 @@ const props = defineProps({
   },
 });
 
-const emit = defineEmits(['close', 'staging-requested']);
+const emit = defineEmits(["close", "staging-requested"]);
 
 const showModal = defineModel({ type: Boolean, default: false });
 const loading = ref(false);
@@ -115,32 +128,32 @@ const stagingResults = ref([]);
 
 const columns = [
   {
-    key: 'name',
-    label: 'Dataset Name',
+    key: "name",
+    label: "Dataset Name",
     sortable: true,
-    width: '35%',
-    thAlign: 'left',
-    tdAlign: 'left',
+    width: "35%",
+    thAlign: "left",
+    tdAlign: "left",
   },
   {
-    key: 'type',
-    label: 'Type',
+    key: "type",
+    label: "Type",
     sortable: true,
-    width: '15%',
+    width: "15%",
   },
   {
-    key: 'genome',
-    label: 'Genome',
+    key: "genome",
+    label: "Genome",
     sortable: false,
-    width: '25%',
+    width: "25%",
   },
   {
-    key: 'created_at',
-    label: 'Created',
+    key: "created_at",
+    label: "Created",
     sortable: true,
-    width: '15%',
-    thAlign: 'right',
-    tdAlign: 'right',
+    width: "15%",
+    thAlign: "right",
+    tdAlign: "right",
   },
 ];
 
@@ -168,10 +181,10 @@ const handleStageAll = async () => {
       try {
         // Determine which workflow to use
         // Use stage_migrated for legacy datasets that need migration, stage for others
-        const workflow = dataset.needs_migration ? 'stage_migrated' : 'stage';
-        
+        const workflow = dataset.needs_migration ? "stage_migrated" : "stage";
+
         await datasetService.stage_dataset(dataset.id, workflow);
-        
+
         stagingResults.value.push({
           dataset_id: dataset.id,
           dataset_name: dataset.name,
@@ -184,7 +197,7 @@ const handleStageAll = async () => {
           dataset_id: dataset.id,
           dataset_name: dataset.name,
           success: false,
-          error: error.message || 'Unknown error',
+          error: error.message || "Unknown error",
         });
       }
     }
@@ -195,15 +208,17 @@ const handleStageAll = async () => {
     if (failCount === 0) {
       toast.success(`Staging requested for ${successCount} dataset(s)`);
       setTimeout(() => {
-        emit('staging-requested');
+        emit("staging-requested");
         handleCancel();
       }, 2000);
     } else {
-      toast.warning(`Staging requested for ${successCount} dataset(s), ${failCount} failed`);
+      toast.warning(
+        `Staging requested for ${successCount} dataset(s), ${failCount} failed`,
+      );
     }
   } catch (error) {
-    console.error('Failed to stage datasets:', error);
-    toast.error('Failed to stage datasets');
+    console.error("Failed to stage datasets:", error);
+    toast.error("Failed to stage datasets");
   } finally {
     stagingInProgress.value = false;
   }
@@ -212,14 +227,18 @@ const handleStageAll = async () => {
 const handleCancel = () => {
   showModal.value = false;
   stagingResults.value = [];
-  emit('close');
+  emit("close");
 };
 
 // Load datasets when modal opens or datasets prop changes
-watch([showModal, () => props.datasets], ([isOpen]) => {
-  if (isOpen) {
-    stagingResults.value = [];
-    loadDatasets();
-  }
-}, { deep: true });
+watch(
+  [showModal, () => props.datasets],
+  ([isOpen]) => {
+    if (isOpen) {
+      stagingResults.value = [];
+      loadDatasets();
+    }
+  },
+  { deep: true },
+);
 </script>

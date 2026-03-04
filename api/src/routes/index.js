@@ -53,6 +53,7 @@ router.use('/process_requests', require('./process_requests') /* #swagger.securi
 router.use('/legacy', require('./legacy') /* #swagger.security = [{"BearerAuth": []}] */);
 
 if (featureService.isFeatureEnabled({ key: 'fs' })) {
+  // eslint-disable-next-line global-require
   router.use('/fs', require('./fs') /* #swagger.security = [{"BearerAuth": []}] */);
 }
 

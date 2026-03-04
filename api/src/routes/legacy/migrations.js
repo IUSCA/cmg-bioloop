@@ -22,7 +22,7 @@ const legacyMigrationService = require('@/services/legacyMigration');
  */
 router.get('/datasets/by-cmg-id/:cmgId', auth.authenticate, async (req, res) => {
   try {
-    const cmgId = req.params.cmgId;
+    const { cmgId } = req.params;
 
     const dataset = await prisma.dataset.findFirst({
       where: {
@@ -72,7 +72,7 @@ router.get('/datasets/:id', auth.authenticate, async (req, res) => {
   try {
     const datasetId = parseInt(req.params.id, 10);
 
-    if (isNaN(datasetId)) {
+    if (Number.isNaN(datasetId)) {
       return res.status(400).json({
         error: 'Invalid dataset ID',
         message: 'Dataset ID must be a number',
@@ -116,7 +116,7 @@ router.get('/sessions/:id', auth.authenticate, async (req, res) => {
   try {
     const sessionId = parseInt(req.params.id, 10);
 
-    if (isNaN(sessionId)) {
+    if (Number.isNaN(sessionId)) {
       return res.status(400).json({
         error: 'Invalid session ID',
         message: 'Session ID must be a number',

@@ -122,19 +122,21 @@ const queryDatasets = ({ queryIndex = null, query = null } = {}) => {
 
   if (props.projectId) {
     // Fetch datasets scoped to the specified project (uses role-aware endpoint via projectService)
-    request = projectService.getDatasets({
-      id: props.projectId,
-      params: {
-        ...query,
-        ...(props.datasetType && { type: props.datasetType }),
-      },
-    }).then((res) => ({
-      data: {
-        datasets: res.data.datasets,
-        metadata: res.data.metadata,
-      },
-      ...(queryIndex && { queryIndex }),
-    }));
+    request = projectService
+      .getDatasets({
+        id: props.projectId,
+        params: {
+          ...query,
+          ...(props.datasetType && { type: props.datasetType }),
+        },
+      })
+      .then((res) => ({
+        data: {
+          datasets: res.data.datasets,
+          metadata: res.data.metadata,
+        },
+        ...(queryIndex && { queryIndex }),
+      }));
   } else {
     request = datasetService.getAll(query).then((res) => {
       return { data: res.data, ...(queryIndex && { queryIndex }) };
@@ -149,11 +151,19 @@ const searchDatasets = ({
   appendToCurrentResults = false,
   logQuery = false,
 } = {}) => {
-  if (_.isEqual(latestQuery.value, { query: fetchQuery.value, projectId: props.projectId })) {
+  if (
+    _.isEqual(latestQuery.value, {
+      query: fetchQuery.value,
+      projectId: props.projectId,
+    })
+  ) {
     resolveSearch(searchIndex);
   } else {
     if (logQuery) {
-      latestQuery.value = { query: fetchQuery.value, projectId: props.projectId };
+      latestQuery.value = {
+        query: fetchQuery.value,
+        projectId: props.projectId,
+      };
     }
 
     return queryDatasets({
@@ -163,7 +173,7 @@ const searchDatasets = ({
       .then((res) => {
         datasets.value = appendToCurrentResults
           ? datasets.value.concat(res.data.datasets)
-          : (res.data.datasets || []);
+          : res.data.datasets || [];
         totalResultsCount.value = res.data?.metadata?.count || 0;
         resolveSearch(res.queryIndex);
       })

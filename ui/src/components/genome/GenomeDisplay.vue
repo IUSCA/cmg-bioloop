@@ -1,11 +1,11 @@
 <template>
   <va-chip v-if="genomeType || genomeValue" size="small" outline>
-    {{ genomeType || '' }}{{ genomeValue ? ` (${genomeValue})` : '' }}
+    {{ genomeType || "" }}{{ genomeValue ? ` (${genomeValue})` : "" }}
   </va-chip>
 </template>
 
 <script setup>
-const props = defineProps({
+defineProps({
   genomeType: {
     type: String,
     default: null,

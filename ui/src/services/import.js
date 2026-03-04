@@ -1,4 +1,4 @@
-import api from './api';
+import api from "./api";
 
 export default {
   /**
@@ -6,7 +6,7 @@ export default {
    * @returns {Promise} Axios response with list of import_source records
    */
   getSources() {
-    return api.get('/datasets/imports/sources');
+    return api.get("/datasets/imports/sources");
   },
 
   /**
@@ -15,6 +15,6 @@ export default {
    * @returns {string}
    */
   _getLabel(source) {
-    return source?.label || source?.path || '';
+    return source?.label || source?.path || "";
   },
 };

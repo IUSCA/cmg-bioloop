@@ -22,8 +22,6 @@
           placeholder="Enter a term that matches any part of the program name"
         />
 
-
-
         <!-- initiator filter -->
         <va-input
           label="Initiator"
@@ -38,8 +36,6 @@
           placeholder="filter by initiated date range"
           label="Initiated At"
         />
-
-
       </va-form>
     </div>
 

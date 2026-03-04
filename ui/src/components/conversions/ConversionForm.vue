@@ -69,7 +69,8 @@
       <div v-else>
         <div class="flex flex-col justify-center items-center h-40">
           <span class="text-gray-500">
-            Select a conversion definition to see associated program and arguments.
+            Select a conversion definition to see associated program and
+            arguments.
           </span>
         </div>
       </div>
@@ -79,7 +80,10 @@
     <template v-if="isPlatformBasedExecutionEnabled" #step-content-1>
       <div class="space-y-4">
         <div class="flex items-center gap-3">
-          <va-checkbox v-model="usePlatform" label="Use external platform for execution (SLURM, K8s, etc.)" />
+          <va-checkbox
+            v-model="usePlatform"
+            label="Use external platform for execution (SLURM, K8s, etc.)"
+          />
         </div>
 
         <!-- Execution Platform Form -->
@@ -101,7 +105,7 @@
 </template>
 
 <script setup>
-import { useAuthStore } from '@/stores/auth';
+import { useAuthStore } from "@/stores/auth";
 
 const auth = useAuthStore();
 
@@ -113,21 +117,21 @@ const currentStep = ref(0);
 const usePlatform = ref(false);
 
 const isPlatformBasedExecutionEnabled = computed(() =>
-  auth.isFeatureEnabled('platformBasedExecution'),
+  auth.isFeatureEnabled("platformBasedExecution"),
 );
 
 // Stepper configuration — Step 2 included only when the feature is enabled
 const steps = computed(() => {
   const allSteps = [
     {
-      label: 'Pipeline & Arguments',
-      icon: 'settings',
+      label: "Pipeline & Arguments",
+      icon: "settings",
     },
   ];
   if (isPlatformBasedExecutionEnabled.value) {
     allSteps.push({
-      label: 'Execution Platform',
-      icon: 'cloud',
+      label: "Execution Platform",
+      icon: "cloud",
     });
   }
   return allSteps;

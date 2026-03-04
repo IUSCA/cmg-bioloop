@@ -19,7 +19,11 @@
       </div>
 
       <!-- Filter button -->
-      <va-button @click="showSearchModal = true" preset="primary" class="flex-none">
+      <va-button
+        @click="showSearchModal = true"
+        preset="primary"
+        class="flex-none"
+      >
         <i-mdi-filter />
         <span> Filters </span>
       </va-button>
@@ -35,7 +39,12 @@
 
       <!-- Create Session button -->
       <div class="flex-none">
-        <va-button icon="add" class="px-1" color="success" @click="router.push('/sessions/new')">
+        <va-button
+          icon="add"
+          class="px-1"
+          color="success"
+          @click="router.push('/sessions/new')"
+        >
           Create Session
         </va-button>
       </div>
@@ -56,8 +65,13 @@
       </template>
 
       <template #cell(genome)="{ rowData }">
-        <va-chip v-if="rowData.genome_type || rowData.genome" size="small" outline>
-          {{ rowData.genome_type || '' }}{{ rowData.genome ? ` (${rowData.genome})` : '' }}
+        <va-chip
+          v-if="rowData.genome_type || rowData.genome"
+          size="small"
+          outline
+        >
+          {{ rowData.genome_type || ""
+          }}{{ rowData.genome ? ` (${rowData.genome})` : "" }}
         </va-chip>
       </template>
 
@@ -112,21 +126,25 @@
     />
 
     <!-- Delete Modal -->
-    <DeleteSessionModal ref="deleteModal" :data="selectedForDeletion" @update="fetchSessions" />
+    <DeleteSessionModal
+      ref="deleteModal"
+      :data="selectedForDeletion"
+      @update="fetchSessions"
+    />
   </div>
 </template>
 
 <script setup>
-import DeleteSessionModal from '@/components/sessions/DeleteSessionModal.vue';
-import SessionSearchFilters from '@/components/sessions/SessionSearchFilters.vue';
-import SessionSearchModal from '@/components/sessions/SessionSearchModal.vue';
-import Pagination from '@/components/utils/Pagination.vue';
-import { date } from '@/services/datetime';
-import { useAuthStore } from '@/stores/auth';
-import { useSessionsStore } from '@/stores/sessions';
-import { useDebounceFn } from '@vueuse/core';
-import { computed, onMounted, ref, watch } from 'vue';
-import { useRouter } from 'vue-router';
+import DeleteSessionModal from "@/components/sessions/DeleteSessionModal.vue";
+import SessionSearchFilters from "@/components/sessions/SessionSearchFilters.vue";
+import SessionSearchModal from "@/components/sessions/SessionSearchModal.vue";
+import Pagination from "@/components/utils/Pagination.vue";
+import { date } from "@/services/datetime";
+import { useAuthStore } from "@/stores/auth";
+import { useSessionsStore } from "@/stores/sessions";
+import { useDebounceFn } from "@vueuse/core";
+import { computed, onMounted, ref, watch } from "vue";
+import { useRouter } from "vue-router";
 
 const router = useRouter();
 const sessionsStore = useSessionsStore();
@@ -136,35 +154,27 @@ const PAGE_SIZE_OPTIONS = [25, 50, 100];
 
 // Reactive state
 const showSearchModal = ref(false);
-const inclusive_query = ref('');
+const inclusive_query = ref("");
 
 // Query parameters
 const query = ref({
   page: 1,
   page_size: 25,
-  sort_by: 'created_at',
-  sort_order: 'desc',
+  sort_by: "created_at",
+  sort_order: "desc",
 });
 
 // Filters
 const filters = ref({
-  title: '',
-  genome: '',
-  genome_type: '',
-});
-
-// Default values function for query persistence
-const defaultParams = () => ({
-  page: 1,
-  page_size: 25,
-  sort_by: 'created_at',
-  sort_order: 'desc',
+  title: "",
+  genome: "",
+  genome_type: "",
 });
 
 const defaultFilters = () => ({
-  title: '',
-  genome: '',
-  genome_type: '',
+  title: "",
+  genome: "",
+  genome_type: "",
 });
 
 // Computed
@@ -172,12 +182,12 @@ const sessions = computed(() => sessionsStore.sessions);
 const loading = computed(() => sessionsStore.loading);
 const metadata = computed(() => sessionsStore.metadata);
 
-console.log('sessions', sessions.value);
+console.log("sessions", sessions.value);
 
 const activeFilters = computed(() => {
   const active = [];
   Object.entries(filters.value).forEach(([key, value]) => {
-    if (value && value.trim() !== '') {
+    if (value && value.trim() !== "") {
       active.push({ key, value });
     }
   });
@@ -187,51 +197,59 @@ const activeFilters = computed(() => {
 // Table columns configuration
 const columns = [
   {
-    key: 'title',
-    label: 'Title',
+    key: "title",
+    label: "Title",
     sortable: true,
-    width: '29%',
-    thStyle: 'white-space: pre-wrap; word-wrap: break-word; word-break: break-word;',
-    tdStyle: 'white-space: pre-wrap; word-wrap: break-word; word-break: break-word;',
-    align: 'left',
+    width: "29%",
+    thStyle:
+      "white-space: pre-wrap; word-wrap: break-word; word-break: break-word;",
+    tdStyle:
+      "white-space: pre-wrap; word-wrap: break-word; word-break: break-word;",
+    align: "left",
   },
   {
-    key: 'genome',
-    label: 'Genome',
+    key: "genome",
+    label: "Genome",
     sortable: true,
-    width: '20%',
+    width: "20%",
   },
   {
-    key: 'tracks_count',
-    label: 'Tracks',
+    key: "tracks_count",
+    label: "Tracks",
     sortable: false,
-    width: '10%',
-    thStyle: 'white-space: pre-wrap; word-wrap: break-word; word-break: break-word;',
-    tdStyle: 'white-space: pre-wrap; word-wrap: break-word; word-break: break-word;',
+    width: "10%",
+    thStyle:
+      "white-space: pre-wrap; word-wrap: break-word; word-break: break-word;",
+    tdStyle:
+      "white-space: pre-wrap; word-wrap: break-word; word-break: break-word;",
   },
   {
-    key: 'user',
-    label: 'Created By',
+    key: "user",
+    label: "Created By",
     sortable: false,
-    width: '15%',
-    thStyle: 'white-space: pre-wrap; word-wrap: break-word; word-break: break-word;',
-    tdStyle: 'white-space: pre-wrap; word-wrap: break-word; word-break: break-word;',
+    width: "15%",
+    thStyle:
+      "white-space: pre-wrap; word-wrap: break-word; word-break: break-word;",
+    tdStyle:
+      "white-space: pre-wrap; word-wrap: break-word; word-break: break-word;",
   },
   {
-    key: 'created_at',
-    label: 'Created',
+    key: "created_at",
+    label: "Created",
     sortable: true,
-    width: '10%',
-    thStyle: 'white-space: pre-wrap; word-wrap: break-word; word-break: break-word;',
-    tdStyle: 'white-space: pre-wrap; word-wrap: break-word; word-break: break-word;',
+    width: "10%",
+    thStyle:
+      "white-space: pre-wrap; word-wrap: break-word; word-break: break-word;",
+    tdStyle:
+      "white-space: pre-wrap; word-wrap: break-word; word-break: break-word;",
   },
   {
-    key: 'actions',
-    label: 'Actions',
+    key: "actions",
+    label: "Actions",
     sortable: false,
-    thAlign: 'right',
-    tdAlign: 'right',
-    width: '6%',
+    thAlign: "right",
+    tdAlign: "right",
+    width: "6%",
   },
 ];
 
@@ -253,19 +271,14 @@ const fetchSessions = async () => {
     };
 
     await sessionsStore.fetchSessions(params);
-    console.log('sessions', sessions.value);
+    console.log("sessions", sessions.value);
   } catch (error) {
-    console.error('Error fetching sessions:', error);
+    console.error("Error fetching sessions:", error);
   }
 };
 
 const handleMainFilter = useDebounceFn((value) => {
   inclusive_query.value = value;
-  query.value.page = 1; // Reset to first page when searching
-  fetchSessions();
-}, 300);
-
-const handleSearch = useDebounceFn(() => {
   query.value.page = 1; // Reset to first page when searching
   fetchSessions();
 }, 300);
@@ -278,26 +291,21 @@ const applyFilters = (newFilters) => {
 
 const resetFilters = () => {
   filters.value = { ...defaultFilters() };
-  inclusive_query.value = '';
+  inclusive_query.value = "";
   query.value.page = 1; // Reset to first page when resetting
   showSearchModal.value = false;
 };
 
 const removeFilter = (key) => {
-  filters.value[key] = '';
-  if (key === 'title') {
-    inclusive_query.value = '';
+  filters.value[key] = "";
+  if (key === "title") {
+    inclusive_query.value = "";
   }
   query.value.page = 1; // Reset to first page when removing filter
 };
 
 const clearFilters = () => {
   resetFilters();
-};
-
-const viewSession = (session) => {
-  // Navigate to session detail page
-  router.push(`/sessions/${session.id}`);
 };
 
 const deleteModal = ref(null);
@@ -313,15 +321,16 @@ watch(
   [query, filters],
   (newVals, oldVals) => {
     // Reset to page 1 when sort changes
-    if (oldVals[0] && (
-      newVals[0].sort_by !== oldVals[0].sort_by ||
-      newVals[0].sort_order !== oldVals[0].sort_order
-    )) {
+    if (
+      oldVals[0] &&
+      (newVals[0].sort_by !== oldVals[0].sort_by ||
+        newVals[0].sort_order !== oldVals[0].sort_order)
+    ) {
       query.value.page = 1;
     }
     fetchSessions();
   },
-  { deep: true }
+  { deep: true },
 );
 
 // Initial load
@@ -333,5 +342,5 @@ onMounted(() => {
 <route lang="yaml">
 meta:
   title: Sessions
-  nav: [{ label: 'Sessions' }]
+  nav: [{ label: "Sessions" }]
 </route>

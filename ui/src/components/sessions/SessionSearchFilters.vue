@@ -53,16 +53,16 @@
 </template>
 
 <script setup>
-import { computed } from 'vue';
+import { computed } from "vue";
 
 const props = defineProps({
   filters: {
     type: Object,
     required: true,
     default: () => ({
-      title: '',
-      genome: '',
-      genome_type: '',
+      title: "",
+      genome: "",
+      genome_type: "",
     }),
   },
 });
@@ -71,15 +71,15 @@ const emit = defineEmits(["search", "open", "remove-filter", "clear-all"]);
 
 // Computed
 const hasActiveFilters = computed(() => {
-  return Object.values(props.filters).some(value => value && value !== '');
+  return Object.values(props.filters).some((value) => value && value !== "");
 });
 
 // Methods
 function removeFilter(field) {
-  emit('remove-filter', field);
+  emit("remove-filter", field);
 }
 
 function clearAll() {
-  emit('clear-all');
+  emit("clear-all");
 }
-</script> 
+</script>

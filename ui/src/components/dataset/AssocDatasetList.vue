@@ -8,14 +8,14 @@
       disable-client-side-sorting
     >
       <template #cell(name)="{ rowData }">
-        <router-link v-if="auth.canOperate" :to="`/datasets/${rowData.id}`" class="va-link">
+        <router-link
+          v-if="auth.canOperate"
+          :to="`/datasets/${rowData.id}`"
+          class="va-link"
+        >
           {{ rowData.name }}
         </router-link>
         <span v-else>{{ rowData.name }}</span>
-      </template>
-
-      <template #cell(type)="{ rowData }">
-        <DatasetType v-if="rowData.type" :type="rowData.type" />
       </template>
 
       <template #cell(derivation_method)="{ rowData }">
@@ -142,17 +142,7 @@ import * as datetime from "@/services/datetime";
 import toast from "@/services/toast";
 import { formatBytes, snakeCaseToTitleCase } from "@/services/utils";
 import wfService from "@/services/workflow";
-import { useAuthStore } from "@/stores/auth";
-import DatasetDownloadModal from "@/components/project/datasets/DatasetDownloadModal.vue";
-import StageDatasetModal from "@/components/project/datasets/StageDatasetModal.vue";
-import DatasetType from "@/components/dataset/DatasetType.vue";
-import { HalfCircleSpinner } from "epic-spinners";
-import { useColors } from "vuestic-ui";
-import { useIntervalFn } from "@vueuse/core";
 import config from "@/config";
-
-const { colors } = useColors();
-const auth = useAuthStore();
 
 const props = defineProps({
   datasets_meta: {
@@ -167,8 +157,8 @@ const props = defineProps({
   // 'source' = show parent datasets (use source_id from dataset_hierarchy)
   relationship_type: {
     type: String,
-    default: 'derived',
-    validator: (value) => ['derived', 'source'].includes(value),
+    default: "derived",
+    validator: (value) => ["derived", "source"].includes(value),
   },
 });
 
@@ -178,11 +168,11 @@ const data_loading = ref(false);
 // Extract dataset IDs based on relationship type
 const dataset_ids = computed(() =>
   props.datasets_meta.map((meta) => {
-    if (props.relationship_type === 'source') {
+    if (props.relationship_type === "source") {
       return meta.source_id;
     }
     return meta.derived_id;
-  })
+  }),
 );
 
 // pagination
@@ -201,7 +191,7 @@ const rows = computed(() => {
   return datasets.value.map((ds) => ({
     ...ds,
     is_staging_pending: wfService.is_staging_workflow_active(ds.workflows),
-    is_archival_pending: wfService.is_step_pending('archive', ds.workflows),
+    is_archival_pending: wfService.is_step_pending("archive", ds.workflows),
   }));
 });
 
@@ -306,7 +296,11 @@ function fetchDatasets() {
 // Fetch and update individual dataset after staging
 const fetchAndUpdateDataset = async (id) => {
   try {
-    const response = await DatasetService.getById({ id, include_projects: true, bundle: true });
+    const response = await DatasetService.getById({
+      id,
+      include_projects: true,
+      bundle: true,
+    });
     const index = datasets.value.findIndex((ds) => ds.id === id);
     if (index !== -1) {
       datasets.value[index] = response.data;
