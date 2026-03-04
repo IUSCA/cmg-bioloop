@@ -84,6 +84,39 @@
                   <CopyText :text="track.dataset_file.path" />
                 </div>
               </div>
+              <div class="flex justify-between items-center">
+                <span class="font-medium">Staged</span>
+                <va-popover
+                  v-if="trackDatasetStagingStatus.is_stage_or_migrated_active"
+                  message="Dataset is being staged"
+                >
+                  <half-circle-spinner
+                    :animation-duration="1000"
+                    :size="24"
+                    :color="colors.warning"
+                  />
+                </va-popover>
+                <va-popover
+                  v-else-if="trackDatasetStagingStatus.is_integrated_active"
+                  message="Dataset is being integrated (will be staged on completion)"
+                >
+                  <half-circle-spinner
+                    :animation-duration="1000"
+                    :size="24"
+                    :color="colors.info"
+                  />
+                </va-popover>
+                <va-icon
+                  v-else-if="track.dataset_file.dataset.is_staged"
+                  name="check_circle"
+                  color="success"
+                />
+                <va-icon
+                  v-else
+                  name="cancel"
+                  color="danger"
+                />
+              </div>
 
             </div>
             <div v-else class="text-center py-4">No dataset information available</div>
@@ -152,21 +185,11 @@
               </va-button>
             </div>
 
-            <!-- Staging status row (shown below buttons when pending) -->
+            <!-- Alert shown below buttons when any staging-related workflow is active -->
             <div
               v-if="trackDatasetStagingStatus.is_staging_pending || trackDatasetStagingStatus.is_archival_pending"
               class="flex items-center gap-3"
             >
-              <va-popover
-                :message="trackDatasetStagingStatus.is_archival_pending ? 'Dataset is pending archival to SDA' : 'Dataset is being staged'"
-              >
-                <half-circle-spinner
-                  class="flex-none"
-                  :animation-duration="1000"
-                  :size="24"
-                  :color="trackDatasetStagingStatus.is_archival_pending ? colors.info : colors.warning"
-                />
-              </va-popover>
               <va-alert
                 dense
                 color="info"
@@ -302,9 +325,18 @@ const associatedSessions = computed(() => {
 
 const trackDatasetStagingStatus = computed(() => {
   const workflows = track.value?.dataset_file?.dataset?.workflows;
+  const stageNames = ['stage', 'stage_migrated'];
+  const isStageStageMigratedActive = (workflows || []).some(
+    (wf) => stageNames.includes(wf.name) && !wfService.is_workflow_done(wf),
+  );
+  const isIntegratedActive = (workflows || []).some(
+    (wf) => wf.name === 'integrated' && !wfService.is_workflow_done(wf),
+  );
   return {
     is_staging_pending: wfService.is_staging_workflow_active(workflows),
     is_archival_pending: wfService.is_step_pending('archive', workflows),
+    is_stage_or_migrated_active: isStageStageMigratedActive,
+    is_integrated_active: isIntegratedActive,
   };
 });
 
