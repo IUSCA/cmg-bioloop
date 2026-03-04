@@ -22,9 +22,7 @@
             </template>
 
             <template #cell(type)="{ rowData }">
-              <va-chip size="small">
-                {{ rowData.type }}
-              </va-chip>
+              <DatasetType v-if="rowData.type" :type="rowData.type" />
             </template>
 
             <template #cell(genome)="{ rowData }">

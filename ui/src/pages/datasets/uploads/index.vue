@@ -169,9 +169,7 @@
       </template>
 
       <template #cell(uploaded_dataset_type)="{ value }">
-        <va-chip size="small" outline v-if="value">
-          {{ value }}
-        </va-chip>
+        <DatasetType v-if="value" :type="value" />
       </template>
 
       <template #cell(file_type)="{ value }">

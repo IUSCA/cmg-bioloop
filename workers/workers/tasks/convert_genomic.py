@@ -165,7 +165,8 @@ def run_conversion(celery_task, conversion_id, **kwargs):
     print("args (joined): " + " ".join(str(a) for a in args))
 
     # Execute locally or via platform
-    if process_request is None:
+    platform_based_execution_enabled = config.get('enabled_features', {}).get('platform_based_execution', False)
+    if process_request is None or not platform_based_execution_enabled:
         # Run locally
         print("No process requests - running locally")
         logger.info(f"[SLURM-CONVERSION] Executing locally (no platform specified)")

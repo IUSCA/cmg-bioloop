@@ -49,6 +49,7 @@
 </template>
 
 <script setup>
+import { snakeCaseToTitleCase } from "@/services/utils";
 import workflowService from "@/services/workflow";
 
 const search_by = defineModel("search_by", { type: String, required: true });
@@ -99,15 +100,6 @@ function onDatasetSearchClose() {
   }
 }
 
-function toTitleCase(text) {
-  return text
-    .replace(/_/g, " ")
-    .split(" ")
-    .filter((segment) => segment.length > 0)
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
-    .join(" ");
-}
-
 // clear search text when user selects a new search by option
 watch(search_by, () => {
   // clear search-field's search text
@@ -124,7 +116,7 @@ onMounted(() => {
       workflow_names.value = res.data.map((wf_name) => {
         return {
           key: wf_name,
-          label: toTitleCase(wf_name),
+          label: snakeCaseToTitleCase(wf_name),
         };
       });
     })

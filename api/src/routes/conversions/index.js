@@ -9,6 +9,7 @@ const _ = require('lodash/fp');
 
 // const logger = require('../services/logger');
 const config = require('config');
+const { isFeatureEnabled } = require('@/services/features');
 const { validate } = require('../../middleware/validators');
 const asyncHandler = require('../../middleware/asyncHandler');
 const { accessControl } = require('../../middleware/auth');
@@ -543,8 +544,9 @@ router.post(
         },
     });
 
-      // create Process Requests (optional field, only if provided)
-      if (req.body.process_requests && req.body.process_requests.length > 0) {
+      // create Process Requests (optional field, only if provided and feature is enabled)
+      const platformBasedExecutionEnabled = isFeatureEnabled({ key: 'platform_based_execution' });
+      if (platformBasedExecutionEnabled && req.body.process_requests && req.body.process_requests.length > 0) {
         await Promise.all(req.body.process_requests.map(async (request) => {
           logger.info('[SLURM-CONVERSION] Creating process request', {
             conversion_id: conversion.id,
@@ -693,8 +695,10 @@ async function validateAndCreateConversion(
     });
   await Promise.all(promises);
 
-  // Handle SLURM directives if present in process_requests
-  const slurmProcessRequests = process_request.filter(req => req.execution_platform === 'SLURM' && req.execution_config);
+  // Handle SLURM directives if present in process_requests (only when feature is enabled)
+  const platformBasedExecutionEnabled = isFeatureEnabled({ key: 'platform_based_execution' });
+  const effectiveProcessRequests = platformBasedExecutionEnabled ? process_request : [];
+  const slurmProcessRequests = effectiveProcessRequests.filter(req => req.execution_platform === 'SLURM' && req.execution_config);
   if (slurmProcessRequests.length > 0) {
     // Get SLURM program and its arguments
     const slurmProgram = await prisma.cmd_line_program.findFirst({
@@ -757,7 +761,7 @@ async function validateAndCreateConversion(
     });
 
     // create Process Request and Artifact records
-    await Promise.all(process_request.map(async (request) => {
+    await Promise.all(effectiveProcessRequests.map(async (request) => {
       const conversion_process_request = await tx.process_request.create({
         data: {
           conversion_id: conversion.id,

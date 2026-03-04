@@ -394,5 +394,8 @@ config = {
     'legacy_application_active': True,
     'upload': {
       'verify_checksums': True,  # Enable BLAKE3 manifest-based checksum verification
+    },
+    'enabled_features': {
+        'platform_based_execution': False,
     }
 }

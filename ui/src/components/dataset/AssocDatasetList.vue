@@ -13,13 +13,17 @@
         </router-link>
       </template>
 
+      <template #cell(type)="{ rowData }">
+        <DatasetType v-if="rowData.type" :type="rowData.type" />
+      </template>
+
       <template #cell(derivation_method)="{ rowData }">
         <va-chip
           v-if="rowData.create_method"
           :color="rowData.create_method === 'CONVERSION' ? 'info' : 'secondary'"
           size="small"
         >
-          {{ rowData.create_method === 'CONVERSION' ? 'Conversion' : 'Manual Assignment' }}
+          {{ snakeCaseToTitleCase(rowData.create_method) }}
         </va-chip>
       </template>
 
@@ -68,7 +72,7 @@
 import DatasetService from "@/services/dataset";
 import * as datetime from "@/services/datetime";
 import toast from "@/services/toast";
-import { formatBytes } from "@/services/utils";
+import { formatBytes, snakeCaseToTitleCase } from "@/services/utils";
 
 const props = defineProps({
   datasets_meta: {

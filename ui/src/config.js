@@ -105,6 +105,7 @@ const exports = {
     },
     alerts: true,
     upload_verify_checksums: true, // Enable BLAKE3 manifest-based checksum verification for uploads
+    platformBasedExecution: false,
   },
   notifications: {
     pollingInterval: 5000, // milliseconds

@@ -425,6 +425,33 @@ const derivedDatasets = await prisma.dataset_hierarchy.findMany({
 - `POST /conversions` — add dataset ownership check (use `has_dataset_assoc` or equivalent)
 - UI stores/components — route to `/:username/all` for user role, general endpoint for admin/operator
 
+## 2026-03-04
+
+### Platform-Based Execution Feature Flag
+
+**Decision:** The platform-based execution feature (SLURM/external cluster submission for conversions) is now gated behind a feature flag, disabled by default.
+
+**Feature flag keys:**
+- API (`api/config/default.json`): `enabled_features.platform_based_execution` (boolean, default `false`)
+- UI (`ui/src/config.js`): `enabledFeatures.platformBasedExecution` (boolean, default `false`)
+- Workers (`workers/workers/config/common.py`): `enabled_features.platform_based_execution` (boolean, default `False`)
+
+**Behavior when disabled:**
+- UI: Step 2 ("Execution Platform") is hidden from the `ConversionForm` stepper; `executionMetadata` is always reset to `{}`
+- API: `process_requests` in `POST /conversions` and `POST /conversions/bulk` are silently ignored; no `process_request` or `process_artifact` DB records are created
+- Workers: `convert_genomic` task always runs the conversion locally, ignoring any `process_request` records already present on the conversion
+
+**Behavior when enabled:**
+- Identical to prior behavior: Step 2 visible, `process_requests` processed by API, worker dispatches to SLURM if a `process_request` is found
+
+**Files changed:**
+- `api/config/default.json`
+- `api/src/routes/conversions/index.js`
+- `ui/src/config.js`
+- `ui/src/components/conversions/ConversionForm.vue`
+- `workers/workers/config/common.py`
+- `workers/workers/tasks/convert_genomic.py`
+
 ## Future Entries
 
 Add entries here as decisions are made, changes are implemented, or issues are resolved.

@@ -356,7 +356,8 @@
     "signup": false,
     "auto_create_project_on_dataset_creation": true,
     "genome_browser": true,
-    "conversion": true
+    "conversion": true,
+    "platform_based_execution": false
   },
   "institution_types": [
     "Commercial",

@@ -76,7 +76,7 @@
     </template>
 
     <!-- Step 2: Execution Platform -->
-    <template #step-content-1>
+    <template v-if="isPlatformBasedExecutionEnabled" #step-content-1>
       <div class="space-y-4">
         <div class="flex items-center gap-3">
           <va-checkbox v-model="usePlatform" label="Use external platform for execution (SLURM, K8s, etc.)" />
@@ -101,6 +101,10 @@
 </template>
 
 <script setup>
+import { useAuthStore } from '@/stores/auth';
+
+const auth = useAuthStore();
+
 const definition = defineModel("definition");
 const argValues = defineModel("argValues");
 const executionMetadata = defineModel("executionMetadata");
@@ -108,17 +112,26 @@ const executionMetadata = defineModel("executionMetadata");
 const currentStep = ref(0);
 const usePlatform = ref(false);
 
-// Stepper configuration
-const steps = ref([
-  {
-    label: 'Pipeline & Arguments',
-    icon: 'settings',
-  },
-  {
-    label: 'Execution Platform',
-    icon: 'cloud',
-  },
-]);
+const isPlatformBasedExecutionEnabled = computed(() =>
+  auth.isFeatureEnabled('platformBasedExecution'),
+);
+
+// Stepper configuration — Step 2 included only when the feature is enabled
+const steps = computed(() => {
+  const allSteps = [
+    {
+      label: 'Pipeline & Arguments',
+      icon: 'settings',
+    },
+  ];
+  if (isPlatformBasedExecutionEnabled.value) {
+    allSteps.push({
+      label: 'Execution Platform',
+      icon: 'cloud',
+    });
+  }
+  return allSteps;
+});
 
 // Computed property for nested v-model binding
 const platform = computed({
@@ -157,6 +170,14 @@ watch(usePlatform, (newValue) => {
   console.log("usePlatform WATCH, new value:", newValue);
   executionMetadata.value = {};
   console.log("-------------- ConversionForm ------------------");
+});
+
+watch(isPlatformBasedExecutionEnabled, (enabled) => {
+  if (!enabled) {
+    usePlatform.value = false;
+    executionMetadata.value = {};
+    currentStep.value = 0;
+  }
 });
 
 onMounted(() => {

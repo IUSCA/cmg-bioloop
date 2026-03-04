@@ -112,17 +112,18 @@ const argumentData = [
     program_id: null, // Will be set during seeding - links to bcl2fastq only
   },
   {
-    name: '--uses-bases-mask',
-    value_type: 'BOOLEAN',
+    name: '--use-bases-mask',
+    value_type: 'STRING',
     allowed_values: [],
     is_required: false,
     default_value: null,
-    is_flag: true,
-    description: 'Uses bases mask',
+    is_flag: false,
+    description: 'Override the bases mask string for the run',
     min_value: null,
     max_value: null,
     min_length: null,
     max_length: null,
+    position: null,
     dynamic_variable_name: null,
     program_id: null, // Will be set during seeding - links to bcl2fastq only
   },
