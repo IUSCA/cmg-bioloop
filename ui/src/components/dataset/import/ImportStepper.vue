@@ -71,7 +71,7 @@
             validatingForm ||
             importSources.length === 0
           "
-          :loading="loadingImportSources"
+          :loading="loadingImportSources || loadingResources"
         />
 
         <div class="flex flex-col w-full">
