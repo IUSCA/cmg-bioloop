@@ -23,9 +23,9 @@ const searchText = ref("");
 const filterFn = (text) => (user) => {
   const _text = text.toLowerCase();
   return (
-    user.name.toLowerCase().includes(_text) ||
-    user.username.toLowerCase().includes(_text) ||
-    user.email.toLowerCase().includes(_text)
+    user.name?.toLowerCase().includes(_text) ||
+    user.username?.toLowerCase().includes(_text) ||
+    user.email?.toLowerCase().includes(_text)
   );
 };
 

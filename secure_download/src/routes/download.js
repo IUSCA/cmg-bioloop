@@ -1,11 +1,9 @@
 const express = require('express');
 const createError = require('http-errors');
 const config = require('config');
-const { param } = require('express-validator');
 const path = require('path');
 const fs = require('fs');
 
-const { validate } = require('../middleware/validators');
 const asyncHandler = require('../middleware/asyncHandler');
 const logger = require('../services/logger');
 
@@ -33,14 +31,16 @@ function getFileStream(filePath) {
   return stream;
 }
 
-// The trailing * ensures that this route can accept a file's path as a string after
-// the dataset's bundle name, in case a specific file is being requested for download.
+// The wildcard route accepts a file path with any number of segments, e.g.:
+// /download/<stage_alias>/<filename> (when nginx decodes %2F before proxying)
+// /download/<stage_alias>%2F<filename> (when nginx preserves %2F)
+// Both are handled because the logic below reads req.path and calls decodeURIComponent.
 router.get(
-  '/:file_path',
-  validate([
-    param('file_path').escape().notEmpty(),
-  ]),
+  '/*',
   asyncHandler(async (req, res, next) => {
+    if (!req.path || req.path === '/') {
+      return next(createError.BadRequest('File path is required'));
+    }
     logger.info('inside /download/:bundle_name');
     const SCOPE_PREFIX = config.get('scope_prefix');
 

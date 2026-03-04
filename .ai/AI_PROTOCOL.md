@@ -78,6 +78,11 @@ Then you MUST:
 
 **REQUIRED:**
 - Update feature changelogs in `.ai/features/<feature>.md` for design decisions (see above)
+- Document **bugs fixed** in the feature changelog, including:
+  - Root cause (not just symptoms)
+  - Which files/endpoints were affected
+  - What condition triggered the bug
+  - This is critical input for writing future e2e tests — each bug is a test scenario
 
 **ALLOWED:**
 - Update existing user-facing documentation (e.g., usage guides, READMEs) when helpful
@@ -137,6 +142,7 @@ Then you MUST:
 - Decision: Conversions do not create WashU sessions directly.
 - Constraint: Conversion pipeline must remain stateless.
 - Clarification: Sessions are created only after data products exist.
+- Fix: [Short description]. Root cause: [what caused it]. Affected: [files/endpoints]. Trigger: [what condition exposed it].
 ```
 
 ### Forbidden entry content

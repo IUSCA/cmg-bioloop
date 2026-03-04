@@ -452,6 +452,20 @@ const derivedDatasets = await prisma.dataset_hierarchy.findMany({
 - `workers/workers/config/common.py`
 - `workers/workers/tasks/convert_genomic.py`
 
+## 2026-03-04 (Status Column)
+
+### Status Column Added to Conversions List View
+
+**Change:** A Status column was added to the `/conversions` list view (`ConversionList.vue`), consistent with the pattern used in Dataset Uploads and Dataset Imports history tables.
+
+**Implementation:**
+- `GET /conversions` now called with `include_workflow_status=true`, which fetches the live `workflow_status` (raw Rhythm status) for each conversion's `convert_genomic` workflow via the existing API support.
+- `workflow_status` is normalized to display states: `ACTIVE` (PENDING/STARTED), `SUCCESS`, or `FAILURE` (all other terminal states).
+- Icons: animated spinner (warning color) for active, `check_circle` (success) for completed, `warning` (warning color) for failed — each wrapped in a `va-popover` tooltip.
+- Polling: `useIntervalFn` (interval from `config.dataset_polling_interval`) re-fetches the list while any conversion on the current page has an active workflow status; pauses automatically when none are active.
+- Column layout adjusted: `status` (8%), `dataset` (flexible/no width), `program` (20%), `initiated on` (15%), `initiator` (15%).
+- Legacy conversions (`conversion.metadata.origin === 'legacy'`) always show the success icon regardless of `workflow_status`, since they were completed in the legacy CMG system before Bioloop workflow tracking existed.
+
 ## Future Entries
 
 Add entries here as decisions are made, changes are implemented, or issues are resolved.

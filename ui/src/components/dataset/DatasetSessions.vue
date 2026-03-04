@@ -13,6 +13,13 @@
         </router-link>
       </template>
 
+      <template #cell(genome)="{ rowData }">
+        <GenomeDisplay
+          :genome-type="rowData.genome_type"
+          :genome-value="rowData.genome"
+        />
+      </template>
+
       <template #cell(owner)="{ rowData }">
         <span>{{ rowData.user?.username }}</span>
       </template>
@@ -38,6 +45,7 @@ import * as datetime from "@/services/datetime";
 import sessionService from "@/services/session";
 import { useAuthStore } from "@/stores/auth";
 import toast from "@/services/toast";
+import GenomeDisplay from "@/components/genome/GenomeDisplay.vue";
 
 const props = defineProps({
   datasetId: {

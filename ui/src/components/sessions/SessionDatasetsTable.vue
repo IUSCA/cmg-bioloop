@@ -5,61 +5,95 @@
     </va-card-title>
     <va-card-content>
       <va-inner-loading :loading="loading">
-        <div v-if="datasets.length > 0" class="space-y-4">
+        <div v-if="rows.length > 0" class="space-y-4">
           <va-data-table
-            :items="paginatedDatasets"
+            :items="paginatedRows"
             :columns="columns"
             :loading="loading"
             disable-client-side-sorting
           >
             <template #cell(name)="{ rowData }">
               <router-link
+                v-if="auth.canOperate"
                 :to="`/datasets/${rowData.id}`"
                 class="va-link font-medium"
               >
                 {{ rowData.name }}
               </router-link>
+              <span v-else>{{ rowData.name }}</span>
             </template>
 
             <template #cell(type)="{ rowData }">
               <DatasetType v-if="rowData.type" :type="rowData.type" />
             </template>
 
-            <template #cell(genome)="{ rowData }">
-              <va-chip 
-                v-if="rowData.genomic_details && (rowData.genomic_details.genome_type || rowData.genomic_details.genome_value)" 
-                size="small"
-                outline
-              >
-                {{ rowData.genomic_details.genome_type || '' }}{{ rowData.genomic_details.genome_value ? ` (${rowData.genomic_details.genome_value})` : '' }}
-              </va-chip>
-              <span v-else>—</span>
-            </template>
-
-            <template #cell(is_staged)="{ rowData }">
-              <div class="flex justify-center">
-                <!-- Dataset is staged -->
-                <div v-if="rowData.is_staged">
-                  <va-icon name="check_circle" color="success" />
-                </div>
-                <!-- Dataset is being staged -->
+            <template #cell(stage)="{ rowData }">
+              <div v-if="rowData.is_staged">
+                <va-button
+                  class="shadow"
+                  preset="primary"
+                  color="info"
+                  icon="cloud_sync"
+                  disabled
+                />
+              </div>
+              <div v-else class="flex justify-center">
                 <va-popover
-                  v-else-if="rowData.is_staging_pending"
-                  message="Dataset is being staged"
+                  v-if="rowData.is_archival_pending"
+                  :message="'Dataset is pending archival to SDA'"
                 >
                   <half-circle-spinner
+                    class="flex-none"
                     :animation-duration="1000"
                     :size="24"
-                    color="#ffc107"
+                    :color="colors.info"
                   />
                 </va-popover>
-                <!-- Dataset is not staged -->
-                <va-icon v-else name="cancel" color="danger" />
+                <va-popover
+                  v-else-if="rowData.is_staging_pending"
+                  :message="'Dataset is being staged'"
+                >
+                  <half-circle-spinner
+                    class="flex-none"
+                    :animation-duration="1000"
+                    :size="24"
+                    :color="colors.warning"
+                  />
+                </va-popover>
+                <va-button
+                  v-else
+                  class="shadow flex-none"
+                  preset="primary"
+                  color="info"
+                  icon="cloud_sync"
+                  @click="openStageModal(rowData)"
+                />
               </div>
             </template>
 
-            <template #cell(created_at)="{ rowData }">
-              <span>{{ datetime.fromNow(rowData.created_at) }}</span>
+            <template #cell(download)="{ rowData }">
+              <div class="">
+                <va-button
+                  class="shadow"
+                  preset="primary"
+                  color="info"
+                  icon="cloud_download"
+                  @click="openDownloadModal(rowData)"
+                  :disabled="!rowData.is_staged"
+                />
+              </div>
+            </template>
+
+            <template #cell(updated_at)="{ value }">
+              <span>{{ datetime.date(value) }}</span>
+            </template>
+
+            <template #cell(metadata)="{ rowData }">
+              <maybe :data="rowData?.metadata?.num_genome_files" />
+            </template>
+
+            <template #cell(du_size)="{ source }">
+              <span>{{ source != null ? formatBytes(source) : '' }}</span>
             </template>
           </va-data-table>
 
@@ -68,7 +102,7 @@
             v-model:page="currentPage"
             v-model:page_size="pageSize"
             :total_results="datasets.length"
-            :curr_items="paginatedDatasets.length"
+            :curr_items="paginatedRows.length"
             :page_size_options="PAGE_SIZE_OPTIONS"
           />
         </div>
@@ -79,18 +113,37 @@
       </va-inner-loading>
     </va-card-content>
   </va-card>
+
+  <!-- Download Modal -->
+  <DatasetDownloadModal ref="downloadModal" :dataset="datasetToDownload" />
+
+  <!-- Stage Modal -->
+  <StageDatasetModal
+    ref="stageModal"
+    :dataset="datasetToStage"
+    @update="fetchAndUpdateDataset"
+  />
 </template>
 
 <script setup>
-import { HalfCircleSpinner } from 'epic-spinners';
 import { useIntervalFn } from '@vueuse/core';
 import { computed, ref, watch } from 'vue';
 import * as datetime from '@/services/datetime';
 import sessionService from '@/services/session';
 import datasetService from '@/services/dataset';
 import wfService from '@/services/workflow';
+import { formatBytes } from '@/services/utils';
 import config from '@/config';
 import Pagination from '@/components/utils/Pagination.vue';
+import DatasetDownloadModal from '@/components/project/datasets/DatasetDownloadModal.vue';
+import StageDatasetModal from '@/components/project/datasets/StageDatasetModal.vue';
+import DatasetType from '@/components/dataset/DatasetType.vue';
+import { useAuthStore } from '@/stores/auth';
+import { HalfCircleSpinner } from 'epic-spinners';
+import { useColors } from 'vuestic-ui';
+
+const { colors } = useColors();
+const auth = useAuthStore();
 
 const props = defineProps({
   sessionId: {
@@ -115,59 +168,54 @@ const PAGE_SIZE_OPTIONS = [25, 50, 100];
 const columns = [
   {
     key: 'name',
-    label: 'Dataset Name',
     sortable: true,
-    width: '30%',
-    thAlign: 'left',
-    tdAlign: 'left',
   },
+  { key: 'stage', width: '7%', thAlign: 'center', tdAlign: 'center' },
+  { key: 'download', width: '8%', thAlign: 'center', tdAlign: 'center' },
   {
     key: 'type',
-    label: 'Type',
     sortable: true,
-    width: '15%',
+    width: '12%',
   },
   {
-    key: 'genome',
-    label: 'Genome',
+    key: 'updated_at',
+    label: 'last updated',
+    sortable: true,
+    width: '12%',
+  },
+  {
+    key: 'metadata',
+    label: 'data files',
     sortable: false,
-    // Width auto-fills remaining space (30% + 15% + 10% + 15% = 70%, this takes 30%)
-  },
-  {
-    key: 'is_staged',
-    label: 'Staged',
-    sortable: true,
     width: '10%',
   },
   {
-    key: 'created_at',
-    label: 'Created',
+    key: 'du_size',
+    label: 'size',
     sortable: true,
-    width: '15%',
-    thAlign: 'right',
-    tdAlign: 'right',
+    width: '10%',
   },
 ];
 
 // Compute rows with workflow status
-const datasetsWithStatus = computed(() => {
+const rows = computed(() => {
   return datasets.value.map((ds) => ({
     ...ds,
     is_staging_pending: wfService.is_staging_workflow_active(ds.workflows),
+    is_archival_pending: wfService.is_step_pending('archive', ds.workflows),
   }));
 });
 
 // Pagination
 const startIndex = computed(() => (currentPage.value - 1) * pageSize.value);
-const endIndex = computed(() => Math.min(startIndex.value + pageSize.value, datasets.value.length));
 
-const paginatedDatasets = computed(() => {
-  return datasetsWithStatus.value.slice(startIndex.value, endIndex.value);
+const paginatedRows = computed(() => {
+  return rows.value.slice(startIndex.value, startIndex.value + pageSize.value);
 });
 
 // Track datasets that are being staged
 const tracking = computed(() => {
-  return datasetsWithStatus.value
+  return rows.value
     .filter((ds) => ds.is_staging_pending)
     .map((ds) => ds.id);
 });
@@ -247,5 +295,22 @@ watch(
   },
   { immediate: true }
 );
-</script>
 
+// Download modal
+const downloadModal = ref(null);
+const datasetToDownload = ref({});
+
+function openDownloadModal(dataset) {
+  datasetToDownload.value = dataset;
+  downloadModal.value.show();
+}
+
+// Stage modal
+const stageModal = ref(null);
+const datasetToStage = ref({});
+
+function openStageModal(dataset) {
+  datasetToStage.value = dataset;
+  stageModal.value.show();
+}
+</script>

@@ -13,17 +13,30 @@
       <span class="font-semibold"> {{ filters.name }} </span>
     </va-chip>
 
-    <!-- project_id filter -->
+    <!-- project filter -->
     <va-chip
       class="flex-none"
       closeable
       outline
-      v-if="filters.project_id"
+      v-if="filters.project"
       @click="emit('open')"
-      @update:model-value="removeFilter('project_id')"
+      @update:model-value="removeFilter('project')"
     >
-      Project ID: &nbsp;
-      <span class="font-semibold"> {{ filters.project_id }} </span>
+      Project: &nbsp;
+      <span class="font-semibold"> {{ filters.project.name || filters.project_id }} </span>
+    </va-chip>
+
+    <!-- dataset filter -->
+    <va-chip
+      class="flex-none"
+      closeable
+      outline
+      v-if="filters.dataset"
+      @click="emit('open')"
+      @update:model-value="removeFilter('dataset')"
+    >
+      Dataset: &nbsp;
+      <span class="font-semibold"> {{ filters.dataset.name || filters.dataset_id }} </span>
     </va-chip>
 
     <!-- file_type filter -->
@@ -86,8 +99,11 @@ const props = defineProps({
     type: Object,
     required: true,
     default: () => ({
-      name: '',
-      project_id: '',
+      name: null,
+      project_id: null,
+      project: null,
+      dataset_id: null,
+      dataset: null,
       file_type: null,
       genome_type: null,
       genome_value: null,
@@ -97,12 +113,17 @@ const props = defineProps({
 
 const emit = defineEmits(["search", "open", "remove-filter", "clear-all"]);
 
-// Computed
 const hasActiveFilters = computed(() => {
-  return Object.values(props.filters).some(value => value && value !== '');
+  return (
+    !!props.filters.name ||
+    !!props.filters.project ||
+    !!props.filters.dataset ||
+    !!props.filters.file_type ||
+    !!props.filters.genome_type ||
+    !!props.filters.genome_value
+  );
 });
 
-// Methods
 function removeFilter(field) {
   emit('remove-filter', field);
 }
@@ -110,4 +131,4 @@ function removeFilter(field) {
 function clearAll() {
   emit('clear-all');
 }
-</script> 
+</script>

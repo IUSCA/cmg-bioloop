@@ -4,10 +4,6 @@
       <va-progress-circle indeterminate />
     </div>
 
-    <!-- <div v-else-if="error" class="text-center text-red-600">
-      {{ error }}
-    </div> -->
-
     <div v-else-if="track" class="space-y-6">
       <!-- Track & Dataset Information Grid -->
       <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -35,9 +31,10 @@
               </div>
               <div class="flex justify-between">
                 <span class="font-medium">Genome</span>
-                <va-chip v-if="track.genomeType || track.genomeValue" size="small" outline>
-                  {{ track.genomeType || '' }}{{ track.genomeValue ? ` (${track.genomeValue})` : '' }}
-                </va-chip>
+                <GenomeDisplay
+                  :genome-type="track.dataset_file?.dataset?.genomic_details?.genome_type"
+                  :genome-value="track.dataset_file?.dataset?.genomic_details?.genome_value"
+                />
               </div>
               <div class="flex justify-between">
                 <span class="font-medium">Created</span>
@@ -60,15 +57,18 @@
             <div v-if="track.dataset_file?.dataset" class="space-y-4">
               <div class="flex justify-between">
                 <span class="font-medium">Dataset Name</span>
-                <router-link :to="`/datasets/${track.dataset_file.dataset.id}`" class="va-link">
+                <router-link
+                  v-if="auth.canOperate"
+                  :to="`/datasets/${track.dataset_file.dataset.id}`"
+                  class="va-link"
+                >
                   {{ track.dataset_file.dataset.name }}
                 </router-link>
+                <span v-else>{{ track.dataset_file.dataset.name }}</span>
               </div>
               <div class="flex justify-between">
                 <span class="font-medium">Dataset Type</span>
-                <va-chip v-if="track.dataset_file.dataset.type" size="small" outline>
-                  {{ formatDatasetType(track.dataset_file.dataset.type) }}
-                </va-chip>
+                <DatasetType v-if="track.dataset_file.dataset.type" :type="track.dataset_file.dataset.type" />
               </div>
               <div class="flex justify-between">
                 <span class="font-medium">File Name</span>
@@ -84,20 +84,102 @@
                   <CopyText :text="track.dataset_file.path" />
                 </div>
               </div>
-              <div class="flex justify-between">
-                <span class="font-medium">Staged</span>
-                <div v-if="track.dataset_file.dataset.is_staged">
-                  <va-icon name="check_circle" color="success" />
-                </div>
-                <div v-else>
-                  <va-icon name="cancel" color="danger" />
-                </div>
-              </div>
+
             </div>
             <div v-else class="text-center py-4">No dataset information available</div>
           </va-card-content>
         </va-card>
       </div>
+
+      <!-- Actions Card -->
+      <va-card v-if="track.dataset_file?.dataset">
+        <va-card-title>
+          <span class="text-lg">Actions</span>
+        </va-card-title>
+        <va-card-content>
+          <div class="flex flex-col gap-3">
+            <!-- Buttons row -->
+            <div class="flex flex-wrap gap-3 items-center">
+              <!-- Stage Dataset -->
+              <va-button
+                :disabled="
+                  track.dataset_file.dataset.is_staged ||
+                  trackDatasetStagingStatus.is_staging_pending ||
+                  trackDatasetStagingStatus.is_archival_pending
+                "
+                color="primary"
+                border-color="primary"
+                preset="secondary"
+                class="flex-initial"
+                @click="stageModal.show()"
+              >
+                <i-mdi-cloud-sync class="pr-2 text-2xl" />
+                Stage Dataset
+              </va-button>
+
+              <!-- Download Dataset -->
+              <va-button
+                :disabled="
+                  !track.dataset_file.dataset.is_staged ||
+                  trackDatasetStagingStatus.is_staging_pending ||
+                  trackDatasetStagingStatus.is_archival_pending
+                "
+                color="primary"
+                border-color="primary"
+                preset="secondary"
+                class="flex-initial"
+                @click="openDownloadDatasetModal"
+              >
+                <i-mdi-download class="pr-2 text-2xl" />
+                Download Dataset
+              </va-button>
+
+              <!-- Download File -->
+              <va-button
+                :disabled="
+                  !track.dataset_file.dataset.is_staged ||
+                  trackDatasetStagingStatus.is_staging_pending ||
+                  trackDatasetStagingStatus.is_archival_pending
+                "
+                color="primary"
+                border-color="primary"
+                preset="secondary"
+                class="flex-initial"
+                @click="downloadFile_"
+              >
+                <i-mdi-file-download class="pr-2 text-2xl" />
+                Download File
+              </va-button>
+            </div>
+
+            <!-- Staging status row (shown below buttons when pending) -->
+            <div
+              v-if="trackDatasetStagingStatus.is_staging_pending || trackDatasetStagingStatus.is_archival_pending"
+              class="flex items-center gap-3"
+            >
+              <va-popover
+                :message="trackDatasetStagingStatus.is_archival_pending ? 'Dataset is pending archival to SDA' : 'Dataset is being staged'"
+              >
+                <half-circle-spinner
+                  class="flex-none"
+                  :animation-duration="1000"
+                  :size="24"
+                  :color="trackDatasetStagingStatus.is_archival_pending ? colors.info : colors.warning"
+                />
+              </va-popover>
+              <va-alert
+                dense
+                color="info"
+                outline
+                icon="info"
+                class="flex-1"
+              >
+                Actions are disabled while Dataset is being staged
+              </va-alert>
+            </div>
+          </div>
+        </va-card-content>
+      </va-card>
 
       <!-- Associated Sessions -->
       <va-card>
@@ -119,9 +201,10 @@
               </template>
 
               <template #cell(genome)="{ rowData }">
-                <va-chip v-if="rowData.genome_type || rowData.genome" size="small" outline>
-                  {{ rowData.genome_type || '' }}{{ rowData.genome ? ` (${rowData.genome})` : '' }}
-                </va-chip>
+                <GenomeDisplay
+                  :genome-type="rowData.genome_type"
+                  :genome-value="rowData.genome"
+                />
               </template>
 
               <template #cell(created_by)="{ rowData }">
@@ -143,19 +226,39 @@
 
     </div>
   </div>
+
+  <!-- Stage Dataset Modal -->
+  <StageDatasetModal
+    ref="stageModal"
+    :dataset="track?.dataset_file?.dataset || {}"
+    @update="onStageUpdate"
+  />
+
+  <!-- Download Dataset Modal -->
+  <DatasetDownloadModal ref="downloadDatasetModal" :dataset="track?.dataset_file?.dataset || {}" />
 </template>
 
 <script setup>
+import GenomeDisplay from '@/components/genome/GenomeDisplay.vue';
+import DatasetType from '@/components/dataset/DatasetType.vue';
+import DatasetDownloadModal from '@/components/project/datasets/DatasetDownloadModal.vue';
+import StageDatasetModal from '@/components/project/datasets/StageDatasetModal.vue';
 import * as datetime from '@/services/datetime';
-import { formatDatasetType } from '@/services/sessionUtils';
+import datasetService from '@/services/dataset';
 import toast from '@/services/toast';
 import trackService from '@/services/track';
+import { downloadFile, formatBytes } from '@/services/utils';
+import wfService from '@/services/workflow';
+import { HalfCircleSpinner } from 'epic-spinners';
+import { useColors } from 'vuestic-ui';
 import { useNavStore } from '@/stores/nav';
 import { useTracksStore } from '@/stores/tracks';
+import { useAuthStore } from '@/stores/auth';
 
 const route = useRoute();
 const tracksStore = useTracksStore();
 const nav = useNavStore();
+const auth = useAuthStore();
 
 // Computed
 const track = computed(() => tracksStore.currentTrack);
@@ -191,24 +294,64 @@ const sessionColumns = [
     thAlign: 'right',
     tdAlign: 'right',
   },
-  // {
-  //   key: "color",
-  //   label: "Color",
-  //   sortable: false,
-  //   width: "15%",
-  // },
 ];
 
 const associatedSessions = computed(() => {
   return track.value.session_tracks.map((st) => st.session);
 });
 
+const trackDatasetStagingStatus = computed(() => {
+  const workflows = track.value?.dataset_file?.dataset?.workflows;
+  return {
+    is_staging_pending: wfService.is_staging_workflow_active(workflows),
+    is_archival_pending: wfService.is_step_pending('archive', workflows),
+  };
+});
+
 const formatFileSize = (bytes) => {
   if (!bytes) return 'Unknown';
-  const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
-  const i = Math.floor(Math.log(bytes) / Math.log(1024));
-  return Math.round((bytes / Math.pow(1024, i)) * 100) / 100 + ' ' + sizes[i];
+  return formatBytes(bytes);
 };
+
+const { colors } = useColors();
+
+// Stage modal
+const stageModal = ref(null);
+
+async function onStageUpdate() {
+  await tracksStore.fetchTrack(route.params.id);
+}
+
+// Download Dataset modal
+const downloadDatasetModal = ref(null);
+
+function openDownloadDatasetModal() {
+  downloadDatasetModal.value.show();
+}
+
+// Download individual file
+async function downloadFile_() {
+  const datasetFile = track.value?.dataset_file;
+  if (!datasetFile) return;
+  const datasetId = datasetFile.dataset?.id;
+  if (!datasetId) return;
+
+  try {
+    const res = await datasetService.get_file_download_data({
+      dataset_id: datasetId,
+      file_id: datasetFile.id,
+    });
+    const url = new URL(res.data.url);
+    url.searchParams.set('token', res.data.bearer_token);
+    downloadFile({
+      url: url.toString(),
+      filename: datasetFile.name,
+    });
+  } catch (err) {
+    console.error(err);
+    toast.error('Unable to download file');
+  }
+}
 
 // Load track data
 onMounted(async () => {

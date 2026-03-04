@@ -189,7 +189,7 @@ Secure download mechanism that enforces access control and provides audit loggin
 
 **Population Strategy:**
 - Non-prod: `prisma/seed.js` seeds two sources at `/opt/sca/data/imports/entrypoint` and `/opt/sca/data/project/entrypoint`.
-- Production: `api/src/scripts/init_prod_import_sources.js` seeds `/N/project/yunliu-general/SCA_incoming` and `/N/project/CMG-SCA`.
+- Production: `data_sync/src/sync/bigbang/seed_constants.js` `seedImportSources()` seeds four `/N/...` paths as part of the bigbang process.
 
 **Removed:**
 - `FILESYSTEM_SEARCH_SPACES`, `SCRATCH_IMPORT_RESTRICTED_DIRS`, `PROJECT_IMPORT_RESTRICTED_DIRS` env vars (API)
@@ -201,7 +201,6 @@ Secure download mechanism that enforces access control and provides audit loggin
 - `api/prisma/schema.prisma` — added `import_source` model; added `owned_import_sources` relation to `user`
 - `api/prisma/migrations/20260303_add_import_sources/migration.sql` — new migration
 - `api/prisma/seed.js` — seeds two import sources for non-prod
-- `api/src/scripts/init_prod_import_sources.js` — new prod init script
 - `api/src/routes/importSources.js` — new `GET /import-sources` route
 - `api/src/routes/index.js` — registered `/import-sources` route
 - `api/src/routes/fs.js` — refactored to load import source from DB by `import_source_id`, validate path containment, infer mount mapping

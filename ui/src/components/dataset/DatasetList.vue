@@ -77,9 +77,10 @@
         :select-mode="selectMode"
       >
         <template #cell(name)="{ rowData }">
-          <router-link :to="`/datasets/${rowData.id}`" class="va-link">{{
-            rowData.name
-          }}</router-link>
+          <router-link v-if="auth.canOperate" :to="`/datasets/${rowData.id}`" class="va-link">
+            {{ rowData.name }}
+          </router-link>
+          <span v-else>{{ rowData.name }}</span>
         </template>
 
         <template #cell(created_at)="{ value }">

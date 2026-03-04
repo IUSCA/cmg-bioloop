@@ -331,15 +331,10 @@ router.get(
     // Build include object
     const includeObject = {
       derived_dataset: {
-        select: {
-          id: true,
-          name: true,
-          type: true,
-          du_size: true,
-          num_files: true,
-          num_directories: true,
-          created_at: true,
-          updated_at: true,
+        include: {
+          workflows: true,
+          bundle: true,
+          analysis_type: true,
         },
       },
     };
@@ -357,8 +352,29 @@ router.get(
       }),
     ]);
 
+    // Enrich workflows for each derived dataset with Rhythm data
+    const enrichedHierarchies = await Promise.all(
+      hierarchies.map(async (h) => {
+        const dataset = h.derived_dataset;
+        if (dataset && dataset.workflows && dataset.workflows.length > 0) {
+          try {
+            const wf_res = await wfService.getAll({
+              only_active: true,
+              last_task_run: false,
+              prev_task_runs: false,
+              workflow_ids: dataset.workflows.map((x) => x.id),
+            });
+            dataset.workflows = wf_res.data.results || [];
+          } catch (error) {
+            dataset.workflows = [];
+          }
+        }
+        return h;
+      }),
+    );
+
     // Transform to match previous response format
-    const derived_datasets = hierarchies.map((h) => ({
+    const derived_datasets = enrichedHierarchies.map((h) => ({
       source_id: h.source_id,
       derived_id: h.derived_id,
       created_at: h.assigned_at,

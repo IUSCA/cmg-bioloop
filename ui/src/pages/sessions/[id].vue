@@ -202,19 +202,87 @@
                   </template>
 
                   <template #cell(genome)="{ rowData }">
-                    <va-chip v-if="rowData.genomeType || rowData.genomeValue" size="small" outline>
-                      {{ rowData.genomeType || ''
-                      }}{{ rowData.genomeValue ? ` (${rowData.genomeValue})` : '' }}
-                    </va-chip>
+                    <GenomeDisplay
+                      :genome-type="rowData.dataset_file?.dataset?.genomic_details?.genome_type"
+                      :genome-value="rowData.dataset_file?.dataset?.genomic_details?.genome_value"
+                    />
                   </template>
 
                   <template #cell(dataset_name)="{ rowData }">
                     <router-link
-                      :to="`/datasets/${rowData.dataset_file.dataset.id}`"
+                      v-if="auth.canOperate"
+                      :to="`/datasets/${rowData.dataset_file?.dataset?.id}`"
                       class="va-link font-medium"
                     >
-                      {{ rowData.dataset_file.dataset.name }}
+                      {{ rowData.dataset_file?.dataset?.name }}
                     </router-link>
+                    <span v-else>{{ rowData.dataset_file?.dataset?.name }}</span>
+                  </template>
+
+                  <template #cell(stage)="{ rowData }">
+                    <div v-if="rowData.dataset_file?.dataset?.is_staged">
+                      <va-button
+                        class="shadow"
+                        preset="primary"
+                        color="info"
+                        icon="cloud_sync"
+                        disabled
+                      />
+                    </div>
+                    <div v-else class="flex justify-center">
+                      <va-popover
+                        v-if="getTrackDatasetStagingStatus(rowData).is_archival_pending"
+                        :message="'Dataset is pending archival to SDA'"
+                      >
+                        <half-circle-spinner
+                          class="flex-none"
+                          :animation-duration="1000"
+                          :size="24"
+                          :color="colors.info"
+                        />
+                      </va-popover>
+                      <va-popover
+                        v-else-if="getTrackDatasetStagingStatus(rowData).is_staging_pending"
+                        :message="'Dataset is being staged'"
+                      >
+                        <half-circle-spinner
+                          class="flex-none"
+                          :animation-duration="1000"
+                          :size="24"
+                          :color="colors.warning"
+                        />
+                      </va-popover>
+                      <va-button
+                        v-else
+                        class="shadow flex-none"
+                        preset="primary"
+                        color="info"
+                        icon="cloud_sync"
+                        @click="openTrackDatasetStageModal(rowData)"
+                      />
+                    </div>
+                  </template>
+
+                  <template #cell(download_dataset)="{ rowData }">
+                    <va-button
+                      class="shadow"
+                      preset="primary"
+                      color="info"
+                      icon="cloud_download"
+                      @click="openTrackDatasetDownloadModal(rowData)"
+                      :disabled="!rowData.dataset_file?.dataset?.is_staged"
+                    />
+                  </template>
+
+                  <template #cell(download_file)="{ rowData }">
+                    <va-button
+                      class="shadow"
+                      preset="primary"
+                      color="info"
+                      icon="download"
+                      @click="downloadTrackFile(rowData)"
+                      :disabled="!rowData.dataset_file?.dataset?.is_staged"
+                    />
                   </template>
 
                   <template #cell(created_at)="{ rowData }">
@@ -424,10 +492,10 @@
               </template>
 
               <template #cell(genome)="{ rowData }">
-                <va-chip v-if="rowData.genome_type || rowData.genome_value" size="small" outline>
-                  {{ rowData.genome_type || ''
-                  }}{{ rowData.genome_value ? ` (${rowData.genome_value})` : '' }}
-                </va-chip>
+                <GenomeDisplay
+                  :genome-type="rowData.genome_type"
+                  :genome-value="rowData.genome_value"
+                />
               </template>
 
               <template #cell(dataset)="{ rowData }">
@@ -473,6 +541,16 @@
       ref="sessionDeleteModal"
       :data="session"
       @update="router.push('/sessions')"
+    />
+
+    <!-- Track Dataset Download Modal -->
+    <DatasetDownloadModal ref="trackDatasetDownloadModal" :dataset="trackDatasetToDownload" />
+
+    <!-- Track Dataset Stage Modal -->
+    <StageDatasetModal
+      ref="trackDatasetStageModal"
+      :dataset="trackDatasetToStage"
+      @update="loadSession"
     />
 
     <!-- Unstaged Datasets Modal -->
@@ -551,29 +629,37 @@ import BrowserSelectionModal from '@/components/genomeBrowser/BrowserSelectionMo
 import WashUBrowser from '@/components/genomeBrowser/WashUBrowser.vue';
 import DeleteSessionModal from '@/components/sessions/DeleteSessionModal.vue';
 import SessionDatasetsTable from '@/components/sessions/SessionDatasetsTable.vue';
+import GenomeDisplay from '@/components/genome/GenomeDisplay.vue';
 import UnstagedDatasetsModal from '@/components/sessions/UnstagedDatasetsModal.vue';
 import TracksAsyncAutoComplete from '@/components/tracks/TracksAsyncAutoComplete.vue';
 import AddEditButton from '@/components/utils/buttons/AddEditButton.vue';
 import Pagination from '@/components/utils/Pagination.vue';
+import DatasetDownloadModal from '@/components/project/datasets/DatasetDownloadModal.vue';
+import StageDatasetModal from '@/components/project/datasets/StageDatasetModal.vue';
 import constants from '@/constants';
 import * as datetime from '@/services/datetime';
 import legacyMigrationService from '@/services/legacyMigration';
 import sessionService from '@/services/session';
+import datasetService from '@/services/dataset';
 import toast from '@/services/toast';
 import trackService from '@/services/track';
-import { formatBytes } from '@/services/utils';
+import { downloadFile, formatBytes } from '@/services/utils';
 import workflowService from '@/services/workflow';
+import wfService from '@/services/workflow';
 import { useAuthStore } from '@/stores/auth';
 import { useNavStore } from '@/stores/nav';
 import { useSessionsStore } from '@/stores/sessions';
 import config from '@/config';
 import { nextTick } from 'vue';
+import { HalfCircleSpinner } from 'epic-spinners';
+import { useColors } from 'vuestic-ui';
 
 const route = useRoute();
 const router = useRouter();
 const sessionsStore = useSessionsStore();
 const auth = useAuthStore();
 const nav = useNavStore();
+const { colors } = useColors();
 
 // Reactive state
 const _editModal = ref();
@@ -769,7 +855,7 @@ const trackColumns = [
     key: 'name',
     label: 'Name',
     sortable: true,
-    width: '25%',
+    width: '20%',
     thAlign: 'left',
     tdAlign: 'left',
   },
@@ -777,37 +863,45 @@ const trackColumns = [
     key: 'analysis_type',
     label: 'Analysis Type',
     sortable: true,
-    width: '15%',
+    width: '12%',
   },
   {
     key: 'genome',
     label: 'Genome',
     sortable: true,
-    width: '20%',
+    width: '12%',
   },
   {
     key: 'dataset_name',
-    label: 'Dataset Name',
+    label: 'Dataset',
     sortable: true,
-    // Width auto-fills remaining space (25% + 15% + 12% + 13% + 15% = 80%, this takes 20%)
   },
-  // {
-  //   key: "is_staged",
-  //   label: "Staged",
-  //   sortable: true,
-  //   width: "25%",
-  // },
-  // {
-  //   key: "created_by",
-  //   label: "Created By",
-  //   sortable: true,
-  //   width: "25%",
-  // },
+  {
+    key: 'stage',
+    label: 'Stage',
+    width: '7%',
+    thAlign: 'center',
+    tdAlign: 'center',
+  },
+  {
+    key: 'download_dataset',
+    label: 'Download Dataset',
+    width: '12%',
+    thAlign: 'center',
+    tdAlign: 'center',
+  },
+  {
+    key: 'download_file',
+    label: 'Download File',
+    width: '10%',
+    thAlign: 'center',
+    tdAlign: 'center',
+  },
   {
     key: 'created_at',
     label: 'Created',
     sortable: true,
-    width: '15%',
+    width: '10%',
     thAlign: 'right',
     tdAlign: 'right',
   },
@@ -834,6 +928,53 @@ const _projectColumns = [
     width: '20%',
   },
 ];
+
+// Track dataset stage/download modals
+const trackDatasetDownloadModal = ref(null);
+const trackDatasetToDownload = ref({});
+const trackDatasetStageModal = ref(null);
+const trackDatasetToStage = ref({});
+
+function openTrackDatasetDownloadModal(track) {
+  trackDatasetToDownload.value = track.dataset_file?.dataset || {};
+  trackDatasetDownloadModal.value.show();
+}
+
+function openTrackDatasetStageModal(track) {
+  trackDatasetToStage.value = track.dataset_file?.dataset || {};
+  trackDatasetStageModal.value.show();
+}
+
+function getTrackDatasetStagingStatus(track) {
+  const workflows = track.dataset_file?.dataset?.workflows;
+  return {
+    is_staging_pending: wfService.is_staging_workflow_active(workflows),
+    is_archival_pending: wfService.is_step_pending('archive', workflows),
+  };
+}
+
+async function downloadTrackFile(track) {
+  const datasetFile = track.dataset_file;
+  if (!datasetFile) return;
+  const datasetId = datasetFile.dataset?.id;
+  if (!datasetId) return;
+
+  try {
+    const res = await datasetService.get_file_download_data({
+      dataset_id: datasetId,
+      file_id: datasetFile.id,
+    });
+    const url = new URL(res.data.url);
+    url.searchParams.set('token', res.data.bearer_token);
+    downloadFile({
+      url: url.toString(),
+      filename: datasetFile.name,
+    });
+  } catch (err) {
+    console.error(err);
+    toast.error('Unable to download file');
+  }
+}
 
 // Methods
 const sessionDeleteModal = ref(null);

@@ -22,10 +22,10 @@
 
 <script setup>
 import datasetService from "@/services/dataset";
+import projectService from "@/services/projects";
 import toast from "@/services/toast";
 import _ from "lodash";
 
-// const NAME_TRIM_THRESHOLD = 35;
 const PAGE_SIZE = 10;
 
 const props = defineProps({
@@ -38,6 +38,10 @@ const props = defineProps({
   },
   datasetType: {
     type: String,
+  },
+  projectId: {
+    type: [String, Number],
+    default: null,
   },
   disabled: {
     type: Boolean,
@@ -91,24 +95,9 @@ const onSelect = (item) => {
 };
 
 const loadNextPage = () => {
-  page.value += 1; // increase page value for offset recalculation
+  page.value += 1;
   return searchDatasets({ appendToCurrentResults: true });
 };
-
-const filterQuery = computed(() => {
-  let query;
-  if (props.datasetType) {
-    query = {
-      type: props.datasetType,
-    };
-  } else {
-    query = {
-      type: undefined,
-    };
-  }
-
-  return { ...query, deleted: props.fetchInactive };
-});
 
 const batchingQuery = computed(() => {
   return {
@@ -118,17 +107,41 @@ const batchingQuery = computed(() => {
 });
 
 const fetchQuery = computed(() => {
-  return {
+  const base = {
     ...(searchTerm.value && { name: searchTerm.value }),
-    ...filterQuery.value,
     ...batchingQuery.value,
   };
+  if (!props.projectId && props.datasetType) {
+    base.type = props.datasetType;
+  }
+  return base;
 });
 
 const queryDatasets = ({ queryIndex = null, query = null } = {}) => {
-  return datasetService.getAll(query).then((res) => {
-    return { data: res.data, ...(queryIndex && { queryIndex }) };
-  });
+  let request;
+
+  if (props.projectId) {
+    // Fetch datasets scoped to the specified project (uses role-aware endpoint via projectService)
+    request = projectService.getDatasets({
+      id: props.projectId,
+      params: {
+        ...query,
+        ...(props.datasetType && { type: props.datasetType }),
+      },
+    }).then((res) => ({
+      data: {
+        datasets: res.data.datasets,
+        metadata: res.data.metadata,
+      },
+      ...(queryIndex && { queryIndex }),
+    }));
+  } else {
+    request = datasetService.getAll(query).then((res) => {
+      return { data: res.data, ...(queryIndex && { queryIndex }) };
+    });
+  }
+
+  return request;
 };
 
 const searchDatasets = ({
@@ -136,14 +149,11 @@ const searchDatasets = ({
   appendToCurrentResults = false,
   logQuery = false,
 } = {}) => {
-  // Ensure that the same query is not being run a second time (which
-  // is possible due to debounced searches). If it is, the search
-  // can be resolved immediately.
-  if (_.isEqual(latestQuery.value, fetchQuery.value)) {
+  if (_.isEqual(latestQuery.value, { query: fetchQuery.value, projectId: props.projectId })) {
     resolveSearch(searchIndex);
   } else {
     if (logQuery) {
-      latestQuery.value = fetchQuery.value;
+      latestQuery.value = { query: fetchQuery.value, projectId: props.projectId };
     }
 
     return queryDatasets({
@@ -153,8 +163,8 @@ const searchDatasets = ({
       .then((res) => {
         datasets.value = appendToCurrentResults
           ? datasets.value.concat(res.data.datasets)
-          : res.data.datasets;
-        totalResultsCount.value = res.data?.metadata?.count;
+          : (res.data.datasets || []);
+        totalResultsCount.value = res.data?.metadata?.count || 0;
         resolveSearch(res.queryIndex);
       })
       .catch((e) => {
@@ -172,9 +182,7 @@ const resolveSearch = (searchIndex) => {
 };
 
 const performSearch = (searchIndex) => {
-  // reset page value
   page.value = 1;
-  // load search results
   searchDatasets({
     searchIndex,
     appendToCurrentResults: false,
@@ -194,7 +202,7 @@ const onClear = () => {
   emit("clear");
 };
 
-watch([searchTerm, filterQuery], () => {
+watch([searchTerm, () => props.projectId, () => props.datasetType], () => {
   searchIndex.value += 1;
   searches.value.push(searchIndex.value);
 

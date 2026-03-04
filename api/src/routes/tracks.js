@@ -7,6 +7,7 @@ const prisma = require('@/db');
 const asyncHandler = require('../middleware/asyncHandler');
 const { accessControl } = require('../middleware/auth');
 const { has_project_assoc } = require('../services/project');
+const wfService = require('@/services/workflow');
 
 const router = express.Router();
 
@@ -98,6 +99,7 @@ router.get(
   isPermittedTo('read'),
   [
     query('project_id').trim().optional(),
+    query('dataset_id').isInt().toInt().optional(),
     query('dataset_file_id').isInt().toInt().optional(),
     query('name').trim().optional(),
     query('file_type').trim().optional(),
@@ -111,40 +113,17 @@ router.get(
   ],
   asyncHandler(async (req, res) => {
     const {
-      project_id, dataset_file_id, name, file_type, genome_type, genome_value, limit, offset, sort_by, sort_order,
+      project_id, dataset_id, dataset_file_id, name, file_type, genome_type, genome_value, limit, offset, sort_by, sort_order,
     } = req.query;
 
     try {
-      // Build filter query based on user's project access
-      const filter_query = {
+      const filter_query = {};
 
-      };
-
-      // - Admin/operator can see all tracks
-      // - User role can only see tracks from Datasets that
-      //  are associated with Projects that the user is a member of
-      if (!userCanAccessAll(req.user)) {
-        const userProjects = await prisma.project_user.findMany({
-          where: { user_id: req.user.id },
-          select: { project_id: true },
-        });
-
-        const projectIds = userProjects.map((p) => p.project_id);
-
-        filter_query.dataset_file = {
-          dataset: {
-            projects: {
-              some: {
-                project_id: { in: projectIds },
-              },
-            },
-          },
-        };
-      }
-
-      // If asking for a specific project, verify that user has access to it
-      if (project_id) {
-        // Verify user has access to this project
+      // dataset_id takes precedence over project_id (more specific filter)
+      if (dataset_id) {
+        mergeDatasetFilter(filter_query, { id: dataset_id });
+      } else if (project_id) {
+        // If asking for a specific project, verify that user has access to it
         if (!req.permission.granted) {
           const hasAccess = await has_project_assoc({
             projectId: project_id,
@@ -232,6 +211,7 @@ router.get(
                     id: true,
                     name: true,
                     type: true,
+                    is_staged: true,
                     metadata: true,
                     genomic_details: true,
                     analysis_type: true,
@@ -444,6 +424,9 @@ router.get(
                   },
                 },
               },
+              workflows: true,
+              bundle: true,
+              genomic_details: true,
             },
           },
         },
@@ -506,6 +489,22 @@ router.get(
     }
 
     attachDatasetAnalysisType(track);
+
+    // Enrich nested dataset workflows with Rhythm data for accurate staging status
+    const datasetWorkflows = track.dataset_file?.dataset?.workflows;
+    if (datasetWorkflows && datasetWorkflows.length > 0) {
+      try {
+        const wf_res = await wfService.getAll({
+          only_active: true,
+          last_task_run: false,
+          prev_task_runs: false,
+          workflow_ids: datasetWorkflows.map((x) => x.id),
+        });
+        track.dataset_file.dataset.workflows = wf_res.data.results || [];
+      } catch (error) {
+        track.dataset_file.dataset.workflows = [];
+      }
+    }
 
     res.json(track);
   }),
@@ -668,6 +667,7 @@ router.get(
   [
     param('username').isString().notEmpty(),
     query('project_id').isString().optional(),
+    query('dataset_id').isInt().toInt().optional(),
     query('name').trim().optional(),
     query('file_type').trim().optional(),
     query('browser_compatible').isBoolean().toBoolean().optional(),
@@ -681,7 +681,7 @@ router.get(
   asyncHandler(async (req, res) => {
     const { username } = req.params;
     const {
-      project_id, name, file_type, genome_type, genome_value, limit, offset, sort_by, sort_order,
+      project_id, dataset_id, name, file_type, genome_type, genome_value, limit, offset, sort_by, sort_order,
     } = req.query;
     const { browser_compatible } = req.query;
 
@@ -693,14 +693,52 @@ router.get(
         return res.status(404).json({ error: 'User not found' });
       }
 
-      // User role can only access their own tracks via this endpoint
-      if (!userCanAccessAll(req.user) && user.id !== req.user.id) {
-        return res.status(403).json({ error: 'Access denied' });
-      }
-
       const filter_query = {};
 
-      if (project_id) {
+      // dataset_id takes precedence over project_id (more specific filter)
+      if (dataset_id) {
+        // Verify user has access to this dataset via project membership
+        const accessible = await prisma.dataset.findFirst({
+          where: {
+            id: dataset_id,
+            projects: {
+              some: {
+                project: {
+                  users: {
+                    some: { user_id: user.id },
+                  },
+                },
+              },
+            },
+          },
+          select: { id: true },
+        });
+
+        if (!accessible) {
+          return res.status(403).json({ error: 'Access denied to specified dataset' });
+        }
+
+        mergeDatasetFilter(filter_query, { id: dataset_id });
+
+        // Also restrict to user's project membership within that dataset
+        const userProjects = await prisma.project_user.findMany({
+          where: { user_id: user.id },
+          select: { project_id: true },
+        });
+        const projectIds = userProjects.map((p) => p.project_id);
+        filter_query.dataset_file = {
+          ...(filter_query.dataset_file || {}),
+          dataset: {
+            ...(filter_query.dataset_file?.dataset || {}),
+            id: dataset_id,
+            projects: {
+              some: {
+                project_id: { in: projectIds },
+              },
+            },
+          },
+        };
+      } else if (project_id) {
         // Check if the User is part of the specified Project
         const isAssociatedToProject = await has_project_assoc({
           projectId: project_id,
@@ -802,6 +840,7 @@ router.get(
                     id: true,
                     name: true,
                     type: true,
+                    is_staged: true,
                     metadata: true,
                     genomic_details: true,
                     analysis_type: true,

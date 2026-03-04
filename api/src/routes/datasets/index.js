@@ -126,12 +126,33 @@ router.get(
       take: req.query.limit ?? Prisma.skip,
       ...filterQuery,
       orderBy,
+      include: {
+        ...CONSTANTS.INCLUDE_WORKFLOWS,
+      },
     };
 
     const [datasets, count] = await prisma.$transaction([
       prisma.dataset.findMany({ ...datasetRetrievalQuery }),
       prisma.dataset.count({ ...filterQuery }),
     ]);
+
+    await Promise.all(
+      datasets.map(async (dataset) => {
+        if (dataset.workflows?.length) {
+          try {
+            const wf_res = await wfService.getAll({
+              only_active: true,
+              last_task_run: false,
+              prev_task_runs: false,
+              workflow_ids: dataset.workflows.map((wf) => wf.id),
+            });
+            dataset.workflows = wf_res.data.results || [];
+          } catch (error) {
+            dataset.workflows = [];
+          }
+        }
+      }),
+    );
 
     res.json({
       metadata: { count },
@@ -486,6 +507,24 @@ router.get(
       prisma.dataset.findMany({ ...datasetRetrievalQuery }),
       prisma.dataset.count({ ...filterQuery }),
     ]);
+
+    await Promise.all(
+      datasets.map(async (dataset) => {
+        if (dataset.workflows?.length) {
+          try {
+            const wf_res = await wfService.getAll({
+              only_active: true,
+              last_task_run: false,
+              prev_task_runs: false,
+              workflow_ids: dataset.workflows.map((wf) => wf.id),
+            });
+            dataset.workflows = wf_res.data.results || [];
+          } catch (error) {
+            dataset.workflows = [];
+          }
+        }
+      }),
+    );
 
     res.json({
       metadata: { count },

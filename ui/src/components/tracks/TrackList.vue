@@ -56,19 +56,31 @@
       </template>
 
       <template #cell(genome)="{ rowData }">
-        <va-chip v-if="rowData.genomeType || rowData.genomeValue" size="small" outline>
-          {{ rowData.genomeType || '' }}{{ rowData.genomeValue ? ` (${rowData.genomeValue})` : '' }}
-        </va-chip>
+        <GenomeDisplay
+          :genome-type="rowData.dataset_file?.dataset?.genomic_details?.genome_type"
+          :genome-value="rowData.dataset_file?.dataset?.genomic_details?.genome_value"
+        />
       </template>
 
       <template #cell(dataset)="{ rowData }">
-        <router-link :to="`/datasets/${rowData.dataset_file?.dataset?.id}`" class="va-link">
+        <router-link
+          v-if="auth.canOperate"
+          :to="`/datasets/${rowData.dataset_file?.dataset?.id}`"
+          class="va-link"
+        >
           {{ rowData.dataset_file?.dataset?.name }}
         </router-link>
+        <span v-else>{{ rowData.dataset_file?.dataset?.name }}</span>
       </template>
 
       <template #cell(created_at)="{ value }">
         <span>{{ datetime.date(value) }}</span>
+      </template>
+
+      <template #cell(stage)="{ rowData }">
+        <span v-if="rowData.dataset_file?.dataset?.is_staged" class="flex justify-center">
+          <i-mdi-check-circle-outline class="text-green-700" />
+        </span>
       </template>
 
       <template #cell(updated_at)="{ value }">
@@ -94,14 +106,17 @@
 <script setup>
 import useQueryPersistence from '@/composables/useQueryPersistence';
 import useSearchKeyShortcut from '@/composables/useSearchKeyShortcut';
+import GenomeDisplay from '@/components/genome/GenomeDisplay.vue';
 import * as datetime from '@/services/datetime';
 import toast from '@/services/toast';
 import trackService from '@/services/track';
 import { useTracksStore } from '@/stores/tracks';
+import { useAuthStore } from '@/stores/auth';
 
 useSearchKeyShortcut();
 
 const store = useTracksStore();
+const auth = useAuthStore();
 
 const PAGE_SIZE_OPTIONS = [25, 50, 100];
 
@@ -120,11 +135,14 @@ const query = ref({
 
 // Filters
 const filters = ref({
+  name: null,
   project_id: null,
+  project: null,
+  dataset_id: null,
+  dataset: null,
   file_type: null,
   genome_type: null,
   genome_value: null,
-  name: null,
 });
 
 // Default values function for query persistence
@@ -136,21 +154,26 @@ const defaultParams = () => ({
 });
 
 const defaultFilters = () => ({
+  name: null,
   project_id: null,
+  project: null,
+  dataset_id: null,
+  dataset: null,
   file_type: null,
   genome_type: null,
   genome_value: null,
-  name: null,
 });
 
 // Active filters computed
 const activeFilters = computed(() => {
   const active = [];
-  Object.entries(filters.value).forEach(([key, value]) => {
-    if (value && value !== '') {
-      active.push({ key, value });
-    }
-  });
+  const { name, project, dataset, file_type, genome_type, genome_value } = filters.value;
+  if (name) active.push({ key: 'name', value: name });
+  if (project) active.push({ key: 'project', value: project });
+  if (dataset) active.push({ key: 'dataset', value: dataset });
+  if (file_type) active.push({ key: 'file_type', value: file_type });
+  if (genome_type) active.push({ key: 'genome_type', value: genome_type });
+  if (genome_value) active.push({ key: 'genome_value', value: genome_value });
   return active;
 });
 
@@ -169,7 +192,7 @@ const columns = [
   {
     key: 'name',
     sortable: true,
-    width: '25%',
+    width: '22%',
     thAlign: 'left',
     tdAlign: 'left',
     tdStyle: 'white-space: pre-wrap; word-wrap: break-word; word-break: break-word;',
@@ -193,11 +216,17 @@ const columns = [
   {
     key: 'dataset',
     label: 'Dataset',
-    width: '20%',
     thAlign: 'center',
     tdAlign: 'center',
     tdStyle: 'white-space: pre-wrap; word-wrap: break-word; word-break: break-word;',
     thStyle: 'white-space: pre-wrap; word-wrap: break-word; word-break: break-word;',
+  },
+  {
+    key: 'stage',
+    label: 'staged',
+    width: '7%',
+    thAlign: 'center',
+    tdAlign: 'center',
   },
   {
     key: 'created_at',
@@ -223,8 +252,15 @@ async function fetch_items() {
   data_loading.value = true;
 
   try {
-    const params = {
-      ...filters.value,
+    const { name, project_id, dataset_id, file_type, genome_type, genome_value } = filters.value;
+
+    // If dataset_id is set, omit project_id (dataset is more specific)
+    const apiParams = {
+      ...(name ? { name } : {}),
+      ...(dataset_id ? { dataset_id } : (project_id ? { project_id } : {})),
+      ...(file_type ? { file_type } : {}),
+      ...(genome_type ? { genome_type } : {}),
+      ...(genome_value ? { genome_value } : {}),
       ...(query.value.inclusive_query ? { name: query.value.inclusive_query } : {}),
       limit: query.value.page_size,
       offset: offset.value,
@@ -232,7 +268,7 @@ async function fetch_items() {
       sort_order: query.value.sort_order,
     };
 
-    const response = await store.fetchTracks(params);
+    const response = await store.fetchTracks(apiParams);
     tracks.value = response.tracks;
     total_results.value = response.metadata.count;
   } catch (error) {
@@ -249,24 +285,26 @@ function handleMainFilter(value) {
 }
 
 function handleSearch(searchFilters) {
-  filters.value = { ...searchFilters };
-  query.value.page = 1; // Reset to first page when filtering
+  filters.value = { ...defaultFilters(), ...searchFilters };
+  query.value.page = 1;
 }
 
 function removeFilter(key) {
-  filters.value[key] = '';
-  query.value.page = 1; // Reset to first page when removing filter
+  if (key === 'project') {
+    filters.value.project = null;
+    filters.value.project_id = null;
+  } else if (key === 'dataset') {
+    filters.value.dataset = null;
+    filters.value.dataset_id = null;
+  } else {
+    filters.value[key] = null;
+  }
+  query.value.page = 1;
 }
 
 function clearFilters() {
-  filters.value = {
-    project_id: null,
-    file_type: null,
-    genome_type: null,
-    genome_value: null,
-    name: null,
-  };
-  query.value.page = 1; // Reset to first page when clearing filters
+  filters.value = defaultFilters();
+  query.value.page = 1;
 }
 
 // Watch for changes in query and filters
@@ -282,4 +320,5 @@ watch(
 onMounted(() => {
   fetch_items();
 });
+
 </script>

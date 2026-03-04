@@ -36,19 +36,20 @@
  * 2. Create CMG system user
  * 3. Populate pipeline definitions (cmd_line_programs, conversion_definitions, arguments)
  * 4. Seed analysis types (file types from CMG)
- * 5. Populate Bioloop users (from api/*.json files)
- * 6. Convert CMG users (skip if already exists as Bioloop user)
- * 7. Convert datasets (RAW_DATA and DATA_PRODUCT)
- * 8. Convert dataset audit logs (from events)
- * 9. Convert stage/download logs (data_access_log, stage_request_log, dataset_state)
- * 10. Convert events collection (Download Copy events -> data_access_log)
- * 11. Convert dataset import logs (CMG upload history)
- * 12. Convert dataset hierarchies
- * 13. Convert projects
- * 14. Convert conversions
- * 15. Convert conversion logs (from filesystem - production only)
- * 16. Convert sessions (optional - many will be skipped)
- * 17. Initialize cursors for pollers
+ * 5. Seed import sources (production /N/... paths)
+ * 6. Populate Bioloop users (from api/*.json files)
+ * 7. Convert CMG users (skip if already exists as Bioloop user)
+ * 8. Convert datasets (RAW_DATA and DATA_PRODUCT)
+ * 9. Convert dataset audit logs (from events)
+ * 10. Convert stage/download logs (data_access_log, stage_request_log, dataset_state)
+ * 11. Convert events collection (Download Copy events -> data_access_log)
+ * 12. Convert dataset import logs (CMG upload history)
+ * 13. Convert conversions
+ * 14. Convert projects
+ * 15. Convert dataset hierarchies
+ * 16. Convert conversion logs (from filesystem - production only)
+ * 17. Convert sessions (optional - many will be skipped)
+ * 18. Initialize cursors for pollers
  */
 
 require('module-alias/register');
@@ -71,7 +72,7 @@ const logger = {};
 });
 
 // Bigbang modules
-const { createRoles, createCMGUser, populatePipelineDefinitions, seedAnalysisTypes } = require('./sync/bigbang/seed_constants');
+const { createRoles, createCMGUser, populatePipelineDefinitions, seedAnalysisTypes, seedImportSources } = require('./sync/bigbang/seed_constants');
 const { populateBioloopUsers } = require('./sync/bigbang/populate_bioloop_users');
 const { syncUsers } = require('./sync/bigbang/sync_users');
 const { syncAllDatasets } = require('./sync/bigbang/sync_datasets');
@@ -415,67 +416,71 @@ async function main() {
     await populatePipelineDefinitions(prisma, cmgUserId);
 
     // 4. Seed analysis types
-    logger.info('[4/15] Seeding analysis types...');
+    logger.info('[4/16] Seeding analysis types...');
     await seedAnalysisTypes(prisma);
 
-    // 5. Populate Bioloop users (from JSON files)
-    logger.info('[5/15] Populating Bioloop users from JSON files...');
+    // 5. Seed import sources
+    logger.info('[5/16] Seeding import sources...');
+    await seedImportSources(prisma);
+
+    // 6. Populate Bioloop users (from JSON files)
+    logger.info('[6/16] Populating Bioloop users from JSON files...');
     await populateBioloopUsers(prisma);
 
-    // 6. Convert CMG users
-    logger.info('[6/15] Converting CMG users...');
+    // 7. Convert CMG users
+    logger.info('[7/16] Converting CMG users...');
     await syncUsers(prisma, cmgDb);
 
-    // 7. Convert datasets
-    logger.info('[7/15] Converting datasets...');
+    // 8. Convert datasets
+    logger.info('[8/16] Converting datasets...');
     await syncAllDatasets(prisma, cmgDb);
 
-    // 8. Convert dataset audit logs
-    logger.info('[8/16] Converting dataset audit logs...');
+    // 9. Convert dataset audit logs
+    logger.info('[9/16] Converting dataset audit logs...');
     await syncAuditLogs(prisma, cmgDb, cmgUserId);
 
-    // 9. Convert stage/download logs
-    logger.info('[9/17] Converting historic stage/download events to logs...');
+    // 10. Convert stage/download logs
+    logger.info('[10/16] Converting historic stage/download events to logs...');
     await syncDownloadStageLogs(prisma, cmgDb, cmgUserId);
 
-    // 10. Convert events collection (Download Copy events -> data_access_log)
-    logger.info('[10/17] Converting CMG events collection to data access logs...');
+    // 11. Convert events collection (Download Copy events -> data_access_log)
+    logger.info('[11/16] Converting CMG events collection to data access logs...');
     await syncEventsCollection(prisma, cmgDb, cmgUserId);
 
-    // 11. Convert dataset import logs (CMG upload history -> Bioloop import logs)
-    logger.info('[11/17] Converting CMG upload history to import logs...');
+    // 12. Convert dataset import logs (CMG upload history -> Bioloop import logs)
+    logger.info('[12/16] Converting CMG upload history to import logs...');
     await syncImportLogs(prisma, cmgDb, cmgUserId);
 
-    // 12. Convert conversions
-    logger.info('[12/17] Converting conversions...');
+    // 13. Convert conversions
+    logger.info('[13/16] Converting conversions...');
     await syncConversions(prisma, cmgDb);
 
-    // 13. Convert projects
-    logger.info('[13/17] Converting projects...');
+    // 14. Convert projects
+    logger.info('[14/16] Converting projects...');
     await syncProjects(prisma, cmgDb);
 
-    // 14. Convert dataset hierarchies (must run after conversions so conversion_id can be stored)
-    logger.info('[14/17] Converting dataset hierarchies...');
+    // 15. Convert dataset hierarchies (must run after conversions so conversion_id can be stored)
+    logger.info('[15/16] Converting dataset hierarchies...');
     await syncDatasetHierarchies(prisma, cmgDb);
 
-    // 15. Convert conversion logs (filesystem - production only)
+    // 16. Convert conversion logs (filesystem - production only)
     if (options.skipConversionLogs) {
-      logger.info('[15/17] Skipping conversion logs (--skip-conversion-logs flag provided)');
+      logger.info('[16/18] Skipping conversion logs (--skip-conversion-logs flag provided)');
     } else {
-      logger.info('[15/17] Converting historic conversion logs...');
+      logger.info('[16/18] Converting historic conversion logs...');
       await syncAllConversionLogs(prisma, cmgDb);
     }
 
-    // 16. Convert sessions (optional)
+    // 17. Convert sessions (optional)
     if (options.skipSessions) {
-      logger.info('[16/17] Skipping sessions (--skip-sessions flag provided)');
+      logger.info('[17/18] Skipping sessions (--skip-sessions flag provided)');
     } else {
-      logger.info('[16/17] Converting genome browser sessions...');
+      logger.info('[17/18] Converting genome browser sessions...');
       await syncSessions(prisma, cmgDb);
     }
 
-    // 17. Initialize cursors
-    logger.info('[17/17] Initializing poller cursors...');
+    // 18. Initialize cursors
+    logger.info('[18/18] Initializing poller cursors...');
     await initializeCursors(prisma, cmgDb);
 
     // Clear lock extender

@@ -309,10 +309,68 @@ async function seedAnalysisTypes(prisma) {
   }
 }
 
+/**
+ * Seed import_source table with production import paths
+ */
+async function seedImportSources(prisma) {
+  logger.info('[BIGBANG] Seeding import sources...');
+
+  const importSources = [
+    {
+      path: '/N/project/yunliu-general/SCA_incoming',
+      label: 'SCA Incoming',
+      description: 'SCA incoming data on Slate-Project filesystem',
+      sort_order: 1,
+    },
+    {
+      path: '/N/project/CMG-SCA',
+      label: 'CMG-SCA',
+      description: 'CMG-SCA incoming data on Slate-Project filesystem',
+      sort_order: 2,
+    },
+    {
+      path: '/N/scratch/cmguser/cmg-bioloop/imports',
+      label: 'CMG-Bioloop Slate-Scratch',
+      description: 'Incoming data on CMG-Bioloop Slate-Scratch filesystem',
+      sort_order: 3,
+    },
+    {
+      path: '/N/project/CMG-SCA/cmg-bioloop/imports',
+      label: 'CMG-Bioloop Slate-Project',
+      description: 'Incoming data on CMG-Bioloop Slate-Project filesystem',
+      sort_order: 4,
+    },
+  ];
+
+  let createdCount = 0;
+  let updatedCount = 0;
+  for (const source of importSources) {
+    const existing = await prisma.import_source.findUnique({ where: { path: source.path } });
+    if (!existing) {
+      await prisma.import_source.create({ data: source });
+      createdCount++;
+    } else {
+      const needsUpdate = existing.label !== source.label
+        || existing.description !== source.description
+        || existing.sort_order !== source.sort_order;
+      if (needsUpdate) {
+        await prisma.import_source.update({
+          where: { path: source.path },
+          data: { label: source.label, description: source.description, sort_order: source.sort_order },
+        });
+        updatedCount++;
+      }
+    }
+  }
+
+  logger.info(`[BIGBANG] Import sources: ${createdCount} created, ${updatedCount} updated, ${importSources.length - createdCount - updatedCount} unchanged`);
+}
+
 module.exports = {
   createRoles,
   createCMGUser,
   populatePipelineDefinitions,
   seedAnalysisTypes,
+  seedImportSources,
 };
 

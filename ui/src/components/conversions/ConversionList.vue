@@ -45,6 +45,31 @@
         hoverable
         :loading="data_loading"
       >
+        <template #cell(status)="{ rowData }">
+          <div class="flex justify-center">
+            <div v-if="getConversionStatus(rowData) === 'ACTIVE'">
+              <va-popover message="Conversion in progress">
+                <half-circle-spinner
+                  class="flex-none"
+                  :animation-duration="1000"
+                  :size="24"
+                  :color="colors.warning"
+                />
+              </va-popover>
+            </div>
+            <div v-else-if="getConversionStatus(rowData) === 'SUCCESS'">
+              <va-popover message="Conversion completed successfully">
+                <va-icon name="check_circle" color="success" />
+              </va-popover>
+            </div>
+            <div v-else-if="getConversionStatus(rowData) === 'FAILURE'">
+              <va-popover message="Conversion failed">
+                <va-icon name="warning" color="warning" />
+              </va-popover>
+            </div>
+          </div>
+        </template>
+
         <template #cell(dataset)="{ rowData }">
           <router-link :to="`/conversions/${rowData.id}`" class="va-link">{{
             rowData.dataset?.name
@@ -65,12 +90,6 @@
             <span>{{ rowData.initiator?.username }}</span>
           </div>
         </template>
-
-        <!-- <template #cell(workflow_id)="{ rowData }">
-          <router-link :to="{ hash: `#${rowData.workflow_id}` }" class="va-link">
-            <span class="text-sm">{{ rowData.workflow_id }}</span>
-          </router-link>
-        </template> -->
       </va-data-table>
     </div>
 
@@ -95,6 +114,9 @@ import * as datetime from "@/services/datetime";
 import toast from "@/services/toast";
 import { useConversionStore } from "@/stores/conversion";
 import { storeToRefs } from "pinia";
+import { HalfCircleSpinner } from "epic-spinners";
+import { useColors } from "vuestic-ui";
+import config from "@/config";
 
 useSearchKeyShortcut();
 
@@ -102,6 +124,7 @@ const props = defineProps({
   label: String,
 });
 
+const { colors } = useColors();
 const store = useConversionStore();
 const { filters, query, params, activeFilters } = storeToRefs(store);
 
@@ -123,12 +146,29 @@ useQueryPersistence({
   history_push: true,
 });
 
+const ACTIVE_WF_STATUSES = ["PENDING", "STARTED"];
+
+function getConversionStatus(conversion) {
+  if (conversion?.metadata?.origin === "legacy") return "SUCCESS";
+  const wfStatus = conversion?.workflow_status;
+  if (!wfStatus) return null;
+  if (ACTIVE_WF_STATUSES.includes(wfStatus)) return "ACTIVE";
+  if (wfStatus === "SUCCESS") return "SUCCESS";
+  return "FAILURE";
+}
+
 const columns = [
+  {
+    key: "status",
+    label: "Status",
+    width: "8%",
+    tdAlign: "center",
+    thAlign: "center",
+  },
   {
     key: "dataset",
     label: "dataset",
     sortable: true,
-    width: "25%",
     tdAlign: "left",
     thAlign: "left",
   },
@@ -136,7 +176,7 @@ const columns = [
     key: "program_name",
     label: "program",
     sortable: false,
-    width: "25%",
+    width: "20%",
     tdAlign: "center",
     thAlign: "center",
   },
@@ -144,7 +184,7 @@ const columns = [
     key: "initiated_at",
     label: "initiated on",
     sortable: true,
-    width: "25%",
+    width: "15%",
     tdAlign: "center",
     thAlign: "center",
   },
@@ -152,6 +192,7 @@ const columns = [
     key: "initiator",
     label: "initiator",
     sortable: false,
+    width: "15%",
     tdAlign: "right",
     thAlign: "right",
   },
@@ -181,6 +222,7 @@ function fetch_items() {
       offset: offset.value,
       sort_by,
       sort_order,
+      include_workflow_status: true,
       ...filters_api,
     })
     .then((res) => {
@@ -195,6 +237,26 @@ function fetch_items() {
       data_loading.value = false;
     });
 }
+
+const tracking = computed(() =>
+  conversions.value.filter((c) => getConversionStatus(c) === "ACTIVE"),
+);
+
+const poll = useIntervalFn(
+  () => {
+    fetch_items();
+  },
+  config.dataset_polling_interval,
+  { immediate: false },
+);
+
+watch(tracking, () => {
+  if (tracking.value.length > 0) {
+    poll.resume();
+  } else {
+    poll.pause();
+  }
+});
 
 onMounted(() => {
   fetch_items();

@@ -688,6 +688,7 @@ router.get(
                     dataset: {
                       include: {
                         workflows: true,
+                        bundle: true,
                       },
                     },
                   },
@@ -1452,6 +1453,7 @@ router.get(
                       include: {
                         genomic_details: true,
                         workflows: true,
+                        bundle: true,
                         states: true,
                       },
                     },
@@ -1524,6 +1526,7 @@ router.get(
           include: {
             genomic_details: true,
             workflows: true,
+            bundle: true,
             states: true,
           },
         });
@@ -1567,9 +1570,29 @@ router.get(
       datasets = Array.from(datasetMap.values());
     }
 
+    // Enrich dataset workflows with Rhythm data so UI can show staging status correctly
+    const enrichedDatasets = await Promise.all(
+      datasets.map(async (ds) => {
+        if (ds.workflows && ds.workflows.length > 0) {
+          try {
+            const wf_res = await wfService.getAll({
+              only_active: true,
+              last_task_run: false,
+              prev_task_runs: false,
+              workflow_ids: ds.workflows.map((x) => x.id),
+            });
+            ds.workflows = wf_res.data.results || [];
+          } catch (error) {
+            ds.workflows = [];
+          }
+        }
+        return ds;
+      }),
+    );
+
     res.json({
-      count: datasets.length,
-      datasets,
+      count: enrichedDatasets.length,
+      datasets: enrichedDatasets,
     });
   }),
 );

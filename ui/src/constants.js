@@ -8,6 +8,20 @@ const exports = {
         test_id: 'sidebar-projects',
       },
       {
+        feature_key: 'genome_browser',
+        icon: 'mdi-chart-gantt',
+        title: 'Tracks',
+        path: '/tracks',
+        test_id: 'sidebar-tracks',
+      },
+      {
+        feature_key: 'genome_browser',
+        icon: 'mdi-eye',
+        title: 'Sessions',
+        path: '/sessions',
+        test_id: 'sidebar-sessions',
+      },
+      {
         icon: 'mdi-folder-plus-outline',
         title: 'Create Dataset',
         test_id: 'sidebar-create-dataset',
@@ -25,20 +39,6 @@ const exports = {
             path: '/datasets/uploads',
           },
         ],
-      },
-      {
-        feature_key: 'genome_browser',
-        icon: 'mdi-chart-gantt',
-        title: 'Tracks',
-        path: '/tracks',
-        test_id: 'sidebar-tracks',
-      },
-      {
-        feature_key: 'genome_browser',
-        icon: 'mdi-eye',
-        title: 'Sessions',
-        path: '/sessions',
-        test_id: 'sidebar-sessions',
       },
     ],
     operator_items: [
