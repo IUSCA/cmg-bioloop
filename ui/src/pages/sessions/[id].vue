@@ -149,15 +149,6 @@
           </va-card>
         </div>
 
-        <!-- Associated Datasets Table -->
-        <div class="grid grid-cols-1 gap-3">
-          <SessionDatasetsTable
-            :session-id="session?.id"
-            :data-requested="session?.data_requested?.requested || false"
-            @datasets-updated="handleDatasetsUpdated"
-          />
-        </div>
-
         <!-- Associated Tracks Information -->
         <div class="grid grid-cols-1 gap-3">
           <va-card>
@@ -335,6 +326,15 @@
               </div>
             </va-card-content>
           </va-card>
+        </div>
+
+        <!-- Associated Datasets Table -->
+        <div class="grid grid-cols-1 gap-3">
+          <SessionDatasetsTable
+            :session-id="session?.id"
+            :data-requested="session?.data_requested?.requested || false"
+            @datasets-updated="handleDatasetsUpdated"
+          />
         </div>
 
         <!-- Workflows (legacy sessions only) -->
@@ -684,35 +684,32 @@
 </template>
 
 <script setup>
+import GenomeDisplay from "@/components/genome/GenomeDisplay.vue";
 import BrowserSelectionModal from "@/components/genomeBrowser/BrowserSelectionModal.vue";
 import WashUBrowser from "@/components/genomeBrowser/WashUBrowser.vue";
+import DatasetDownloadModal from "@/components/project/datasets/DatasetDownloadModal.vue";
+import StageDatasetModal from "@/components/project/datasets/StageDatasetModal.vue";
 import DeleteSessionModal from "@/components/sessions/DeleteSessionModal.vue";
-import SessionDatasetsTable from "@/components/sessions/SessionDatasetsTable.vue";
-import GenomeDisplay from "@/components/genome/GenomeDisplay.vue";
 import UnstagedDatasetsModal from "@/components/sessions/UnstagedDatasetsModal.vue";
 import TracksAsyncAutoComplete from "@/components/tracks/TracksAsyncAutoComplete.vue";
 import AddEditButton from "@/components/utils/buttons/AddEditButton.vue";
 import Pagination from "@/components/utils/Pagination.vue";
-import DatasetDownloadModal from "@/components/project/datasets/DatasetDownloadModal.vue";
-import StageDatasetModal from "@/components/project/datasets/StageDatasetModal.vue";
+import config from "@/config";
 import constants from "@/constants";
+import datasetService from "@/services/dataset";
 import * as datetime from "@/services/datetime";
 import legacyMigrationService from "@/services/legacyMigration";
 import sessionService from "@/services/session";
-import datasetService from "@/services/dataset";
 import toast from "@/services/toast";
 import trackService from "@/services/track";
 import { downloadFile, formatBytes } from "@/services/utils";
-import workflowService from "@/services/workflow";
-import wfService from "@/services/workflow";
+import { default as wfService, default as workflowService } from "@/services/workflow";
 import { useAuthStore } from "@/stores/auth";
 import { useNavStore } from "@/stores/nav";
 import { useSessionsStore } from "@/stores/sessions";
-import config from "@/config";
-import { nextTick } from "vue";
 import { HalfCircleSpinner } from "epic-spinners";
+import { nextTick } from "vue";
 import { useColors } from "vuestic-ui";
-
 const route = useRoute();
 const router = useRouter();
 const sessionsStore = useSessionsStore();
