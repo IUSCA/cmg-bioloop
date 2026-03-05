@@ -1053,6 +1053,7 @@ router.post(
     param('id').isInt().toInt(),
     param('wf').isIn([
       CONSTANTS.WORKFLOWS.INTEGRATED,
+      CONSTANTS.WORKFLOWS.INTAKE_INTEGRATED,
       CONSTANTS.WORKFLOWS.STAGE,
     ]),
   ]),

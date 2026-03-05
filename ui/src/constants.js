@@ -374,6 +374,11 @@ const exports = {
       subjectKey: "dataset_id",
       getRoute: (id) => `/datasets/${id}`,
     },
+    intake_integrated: {
+      label: "Dataset",
+      subjectKey: "dataset_id",
+      getRoute: (id) => `/datasets/${id}`,
+    },
     stage: {
       label: "Dataset",
       subjectKey: "dataset_id",

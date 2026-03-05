@@ -139,6 +139,7 @@ const DATA_REQUEST_STATUS = {
 
 const WORKFLOWS = {
   INTEGRATED: 'integrated',
+  INTAKE_INTEGRATED: 'intake_integrated',
   STAGE: 'stage',
   STAGE_MIGRATED: 'stage_migrated',
   HYDRATE_SESSION: 'hydrate_session',

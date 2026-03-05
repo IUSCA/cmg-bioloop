@@ -581,9 +581,9 @@ async function handleBrowseFilesClick() {
       console.error("Error checking migration status:", error);
     }
   } else {
-    // For non-legacy datasets, check if Integrated workflow is running
+    // For non-legacy datasets, check if Integrated or IntakeIntegrated workflow is running
     const integratedWorkflowActive = (dataset.value.workflows || [])
-      .filter((wf) => wf.name === "integrated")
+      .filter((wf) => wf.name === "integrated" || wf.name === "intake_integrated")
       .some((wf) => !workflowService.is_workflow_done(wf));
 
     if (integratedWorkflowActive) {
