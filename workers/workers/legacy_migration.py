@@ -48,7 +48,10 @@ def is_legacy_dataset(dataset: Dict) -> bool:
     Returns:
         True if the dataset has metadata.origin == 'legacy', False otherwise
     """
-    return dataset.get('metadata', {}).get('origin') == 'legacy'
+    # Use `or {}` to safely handle both a missing metadata key and a None value.
+    # dataset.get('metadata', {}) alone would return None if the key exists with a None value,
+    # causing an AttributeError on the subsequent .get('origin') call.
+    return (dataset.get('metadata') or {}).get('origin') == 'legacy'
 
 
 def is_legacy_conversion(conversion: Dict) -> bool:

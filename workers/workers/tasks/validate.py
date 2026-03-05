@@ -34,20 +34,38 @@ def check_files(celery_task: WorkflowTask, dataset_dir: Path, files_metadata: li
 
 
 def validate_dataset(celery_task, dataset_id, **kwargs):
+    logger.info(f'validate_dataset called for dataset_id={dataset_id}')
+
     dataset = api.get_dataset(dataset_id=dataset_id, files=True)
+    dataset_name = dataset.get('name', dataset_id)
     staged_path = Path(dataset['staged_path'])
+    num_files = len(dataset.get('files') or [])
+
+    logger.info(
+        f'{dataset_name} - validating {num_files} file(s) at staged_path={staged_path}'
+    )
 
     validation_errors = check_files(celery_task=celery_task,
                                     dataset_dir=staged_path,
                                     files_metadata=dataset['files'])
 
     if len(validation_errors) > 0:
-        logger.warning(f'{len(validation_errors)} validation errors for dataset id: {dataset_id} path: {staged_path}')
+        logger.warning(
+            f'{dataset_name} - {len(validation_errors)} validation error(s) at {staged_path}: '
+            f'{validation_errors}'
+        )
         raise exc.ValidationFailed(validation_errors)
+
+    logger.info(f'{dataset_name} - all {num_files} file(s) validated successfully')
 
     update_data = {
         'is_staged': True
     }
+    logger.info(f'{dataset_name} - marking dataset as staged (is_staged=True)')
     api.update_dataset(dataset_id=dataset_id, update_data=update_data)
+
+    logger.info(f'{dataset_name} - adding STAGED state')
     api.add_state_to_dataset(dataset_id=dataset_id, state='STAGED')
+
+    logger.info(f'{dataset_name} - validate_dataset complete')
     return dataset_id, validation_errors

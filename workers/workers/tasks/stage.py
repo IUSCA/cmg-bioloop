@@ -65,6 +65,7 @@ def stage(celery_task: WorkflowTask, dataset: dict) -> (str, str):
     input: dataset['name'], dataset['archive_path'] should exist
     returns: stage_path
     """
+    dataset_name = dataset.get('name', dataset.get('id'))
     staging_dir, alias = compute_staging_path(dataset)
 
     archived_bundle_path = dataset['archive_path']
@@ -75,21 +76,31 @@ def stage(celery_task: WorkflowTask, dataset: dict) -> (str, str):
     bundle_md5 = bundle["md5"]
     bundle_download_path = Path(get_bundle_staged_path(dataset=dataset))
 
+    logger.info(
+        f'{dataset_name} - stage: archive_path={archived_bundle_path}, '
+        f'bundle_download_path={bundle_download_path}, staging_dir={staging_dir}, alias={alias}'
+    )
+
     # Ensure parent directory exists
     bundle_download_path.parent.mkdir(parents=True, exist_ok=True)
 
+    logger.info(f'{dataset_name} - retrieving bundle from archive')
     wf_utils.stage(archive_path=archived_bundle_path,
                    local_file_path=bundle_download_path,
                    celery_task=celery_task)
 
+    logger.info(f'{dataset_name} - verifying bundle checksum (expected md5={bundle_md5})')
     evaluated_checksum = utils.checksum(bundle_download_path)
     if evaluated_checksum != bundle_md5:
         raise exc.ValidationFailed(f'Expected checksum of downloaded/copied file to be {bundle_md5},'
                                    f' but evaluated checksum was {evaluated_checksum}')
 
+    logger.info(f'{dataset_name} - bundle checksum verified: {evaluated_checksum}')
+
     # extract the tar file to stage directory
-    logger.info(f'extracting tar {bundle_download_path} to {staging_dir}')
+    logger.info(f'{dataset_name} - extracting tar {bundle_download_path} to {staging_dir}')
     extract_tarfile(tar_path=bundle_download_path, target_dir=staging_dir, override_arcname=True)
+    logger.info(f'{dataset_name} - extraction complete at {staging_dir}')
 
     # delete the local tar copy after extraction
     # bundle_path.unlink()
@@ -98,8 +109,13 @@ def stage(celery_task: WorkflowTask, dataset: dict) -> (str, str):
 
 
 def stage_dataset(celery_task, dataset_id, **kwargs):
+    logger.info(f'stage_dataset called for dataset_id={dataset_id}')
+
     dataset = api.get_dataset(dataset_id=dataset_id, bundle=True)
+    dataset_name = dataset.get('name', dataset_id)
+
     staged_path, alias = stage(celery_task, dataset)
+    logger.info(f'{dataset_name} - staged at: {staged_path}, alias={alias}')
 
     update_data = {
         'staged_path': staged_path,
@@ -107,6 +123,11 @@ def stage_dataset(celery_task, dataset_id, **kwargs):
             'stage_alias': alias,
         }
     }
+    logger.info(f'{dataset_name} - saving staged_path and alias to database')
     api.update_dataset(dataset_id=dataset_id, update_data=update_data)
+
+    logger.info(f'{dataset_name} - marking dataset as FETCHED')
     api.add_state_to_dataset(dataset_id=dataset_id, state='FETCHED')
+
+    logger.info(f'{dataset_name} - stage_dataset complete')
     return dataset_id,

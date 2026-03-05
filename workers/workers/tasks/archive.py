@@ -34,6 +34,7 @@ def make_tarfile(celery_task: WorkflowTask, tar_path: Path, source_dir: str, sou
     logger.info(f'creating tar of {source_dir} at {tar_path}')
     # if the tar file already exists, delete it
     if tar_path.exists():
+        logger.info(f'existing tar file found at {tar_path}, deleting before recreating')
         tar_path.unlink()
 
     with wf_utils.track_progress_parallel(celery_task=celery_task,
@@ -163,6 +164,12 @@ def archive(celery_task: WorkflowTask, dataset: dict, delete_local_file: bool = 
     dataset_name = dataset['name']
     origin_path = dataset.get('origin_path')
 
+    logger.info(
+        f'{dataset_name} - archive called: is_legacy={is_legacy}, '
+        f'legacy_application_active={legacy_application_active}, '
+        f'cmg_id={cmg_id}, dataset_type={dataset_type}, origin_path={origin_path}'
+    )
+
     # Tar the dataset directory and compute checksum
     bundle = Path(f'{config["paths"][dataset["type"]]["bundle"]["generate"]}/{dataset["name"]}.tar')
 
@@ -268,8 +275,15 @@ def archive(celery_task: WorkflowTask, dataset: dict, delete_local_file: bool = 
             logger.error(error_msg)
             raise Exception(error_msg)
     else:
-        logger.info(f'Creating tar bundle for dataset: {dataset["name"]}')
-        
+        if cmg_id:
+            logger.warning(
+                f'{dataset_name} - cmg_id={cmg_id} is set but is_legacy=False; '
+                f'proceeding with standard Bioloop archival (no CMG coordination). '
+                f'Verify this dataset is not being archived concurrently by CMG.'
+            )
+
+        logger.info(f'{dataset_name} - creating tar bundle for non-legacy dataset')
+
         # Determine bundle generation path based on workflow
         # Datasets can be ingested via the 'Integrated' workflow, or the 'Intake Integrated' workflow.
         # If the Dataset being ingested in present on one of the intake nodes (k2/k3/k4), the archive will be created on the Archive node.
@@ -279,7 +293,12 @@ def archive(celery_task: WorkflowTask, dataset: dict, delete_local_file: bool = 
         is_archive_node = workflow_name == 'intake_integrated'
         is_fetch_node = workflow_name == 'integrated'
 
-        bundle_config = config["paths"][dataset["type"]]["bundle"]        
+        logger.info(
+            f'{dataset_name} - workflow_name={workflow_name!r}, '
+            f'is_archive_node={is_archive_node}, is_fetch_node={is_fetch_node}'
+        )
+
+        bundle_config = config["paths"][dataset["type"]]["bundle"]
 
         # Determine the bundle-generation base path based on whether this task is running on the Archive node or the Fetch node
         if is_archive_node:
@@ -288,10 +307,12 @@ def archive(celery_task: WorkflowTask, dataset: dict, delete_local_file: bool = 
             bundle_base = bundle_config['generate']
         else:
             raise Exception(f'Invalid workflow name: {workflow_name}. Expected workflow name to be either "intake_integrated" or "integrated".')
-        
+
         # Tar the dataset directory and compute checksum
         bundle = Path(f'{bundle_base}/{dataset["name"]}.tar')
-        
+
+        logger.info(f'{dataset_name} - bundle path: {bundle}')
+
         # Ensure parent directory exists
         bundle.parent.mkdir(parents=True, exist_ok=True)
 
@@ -302,6 +323,8 @@ def archive(celery_task: WorkflowTask, dataset: dict, delete_local_file: bool = 
 
         bundle_size = bundle.stat().st_size
         bundle_checksum = utils.checksum(bundle)
+        logger.info(f'{dataset_name} - tar created: size={bundle_size} bytes, md5={bundle_checksum}')
+
         bundle_attrs = {
             'name': bundle.name,
             'size': bundle_size,
@@ -311,22 +334,35 @@ def archive(celery_task: WorkflowTask, dataset: dict, delete_local_file: bool = 
         dataset_type_archive_dir = wf_utils.get_archive_dir(dataset['type'], legacy_dataset=is_legacy)
         dataset_bundle_path = f'{dataset_type_archive_dir}/{bundle.name}'
 
+        logger.info(f'{dataset_name} - uploading bundle to SDA at: {dataset_bundle_path}')
         wf_utils.archive(local_file_path=bundle,
                           archive_path=dataset_bundle_path,
                           celery_task=celery_task)
+        logger.info(f'{dataset_name} - bundle successfully uploaded to SDA at: {dataset_bundle_path}')
 
         # If the task is running on the Archive node, or if the delete_local_file flag is set, delete the local bundle
         if is_archive_node or delete_local_file:
             # file successfully archived, delete the local copy
-            logger.info("Deleting local bundle after successful archiving")
+            logger.info(f'{dataset_name} - deleting local bundle after successful archival: {bundle}')
             bundle.unlink()
+        else:
+            logger.info(f'{dataset_name} - retaining local bundle at: {bundle}')
 
     return dataset_bundle_path, bundle_attrs
 
 
 def archive_dataset(celery_task, dataset_id, **kwargs):
+    logger.info(f'archive_dataset called for dataset_id={dataset_id}')
+
     dataset = api.get_dataset(dataset_id=dataset_id, bundle=True)
+    dataset_name = dataset.get('name', dataset_id)
+
     archived_bundle_path, bundle_attrs = archive(celery_task, dataset)
+    logger.info(
+        f'{dataset_name} - archive completed: '
+        f'archive_path={archived_bundle_path}, '
+        f'bundle_attrs={bundle_attrs}'
+    )
 
     update_data = {
         'archive_path': archived_bundle_path,
@@ -348,7 +384,11 @@ def archive_dataset(celery_task, dataset_id, **kwargs):
     # if bundle_attrs is not None:
     #     update_data['bundle'] = bundle_attrs
 
+    logger.info(f'{dataset_name} - saving archive_path and bundle metadata to database')
     api.update_dataset(dataset_id=dataset_id, update_data=update_data)
+
+    logger.info(f'{dataset_name} - marking dataset as ARCHIVED')
     api.add_state_to_dataset(dataset_id=dataset_id, state='ARCHIVED')
 
+    logger.info(f'{dataset_name} - archive_dataset complete')
     return dataset_id,

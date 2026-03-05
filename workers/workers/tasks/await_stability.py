@@ -127,13 +127,19 @@ def await_stability(celery_task, dataset_id, wait_seconds: int = None, recency_t
     # Maximum timeout for standard Illumina datasets waiting for completion markers
     max_timeout_seconds = 43200  # 12 hours
     start_time = time.time()
-    
+
     # For standard Illumina RAW_DATA datasets, we need to wait for completion markers
     needs_completion_markers = is_raw_data and not is_nanopore
     completion_markers_found = False
 
     if needs_completion_markers:
         logger.info(f'{dataset_name} - standard Illumina dataset, will check for completion markers')
+
+    if not origin_path.exists():
+        logger.warning(
+            f'{dataset_name} - origin path does not exist at start of stability check: {origin_path}; '
+            f'skipping stability loop'
+        )
 
     while origin_path.exists():
         elapsed_time = time.time() - start_time
@@ -177,6 +183,11 @@ def await_stability(celery_task, dataset_id, wait_seconds: int = None, recency_t
                 break
 
         time.sleep(_wait_seconds)
+
+    if not origin_path.exists():
+        logger.warning(
+            f'{dataset_name} - origin path disappeared during or before stability check: {origin_path}'
+        )
 
     # Check if dataset already exists in CMG and persist CMG ID
     # This allows the archive step to coordinate with CMG's archival process

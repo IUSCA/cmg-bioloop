@@ -73,7 +73,7 @@ config = {
             # considered a 'nanopore' dataset. If these keys are changed, the behavior of method
             # ``is_nanopore_dataset()`` in ``dataset.py`` will need to be updated accordingly.
             'source_dir_nanopore_p2solo': '/data/p2solo',
-            'source_dir_nanopore_p24': '/zpool/p24',
+            'source_dir_nanopore_p24': '/zpool/p24/data',
         },
         'DATA_PRODUCT': {
             'source_dir_scratch': '/N/scratch/cmguser/cmg-bioloop/origin/data_products',

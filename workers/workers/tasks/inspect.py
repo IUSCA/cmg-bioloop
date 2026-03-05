@@ -67,16 +67,24 @@ def generate_metadata(celery_task, source: Path):
 
 
 def inspect_dataset(celery_task, dataset_id, **kwargs):
+    logger.info(f'inspect_dataset called for dataset_id={dataset_id}')
+
     dataset = api.get_dataset(dataset_id=dataset_id)
 
     if dataset is None:
         raise exc.RetryableException(f'Dataset {dataset_id} not found or API returned null')
 
+    dataset_name = dataset.get('name', dataset_id)
+    logger.info(
+        f'{dataset_name} - dataset fetched: type={dataset.get("type")}, '
+        f'is_legacy={is_legacy_dataset(dataset)}, origin_path={dataset.get("origin_path")}'
+    )
+
     # For legacy datasets, use extracted archive path instead of origin_path
     if is_legacy_dataset(dataset):
         source = get_retrieved_archive_extraction_path(dataset)
-        logger.info(f'Inspecting legacy dataset from extracted archive path: {source}')
-        
+        logger.info(f'{dataset_name} - inspecting legacy dataset from extracted archive path: {source}')
+
         # Verify the path exists
         if not source.exists():
             raise exc.RetryableException(
@@ -85,10 +93,17 @@ def inspect_dataset(celery_task, dataset_id, **kwargs):
             )
     else:
         source = Path(dataset['origin_path']).resolve()
-        logger.info(f'Inspecting dataset from origin path: {source}')
-    
+        logger.info(f'{dataset_name} - inspecting dataset from origin path: {source}')
+
     du_size = cmd.total_size(source)
+    logger.info(f'{dataset_name} - du_size={du_size} bytes')
+
     num_files, num_directories, size, num_genome_files, metadata = generate_metadata(celery_task, source)
+    logger.info(
+        f'{dataset_name} - metadata generated: '
+        f'num_files={num_files}, num_directories={num_directories}, '
+        f'size={size} bytes, num_genome_files={num_genome_files}'
+    )
 
     update_data = {
         'du_size': du_size,
@@ -98,16 +113,27 @@ def inspect_dataset(celery_task, dataset_id, **kwargs):
         'metadata': {
             'num_genome_files': num_genome_files,
         }
-
     }
+
+    logger.info(f'{dataset_name} - saving inspection metadata to database')
     api.update_dataset(dataset_id=dataset_id, update_data=update_data)
+
     # split metadata into batches and add to dataset
     # this is to avoid large payloads to the API
-    for batch in utils.batched(metadata, n=config['inspect']['file_metadata_batch_size']):
+    batch_size = config['inspect']['file_metadata_batch_size']
+    batches = list(utils.batched(metadata, n=batch_size))
+    logger.info(
+        f'{dataset_name} - uploading {len(metadata)} file records in {len(batches)} batch(es) '
+        f'(batch_size={batch_size})'
+    )
+    for i, batch in enumerate(batches):
+        logger.info(f'{dataset_name} - uploading file metadata batch {i + 1}/{len(batches)}')
         api.add_files_to_dataset(dataset_id=dataset_id, files=batch)
-    
+
     # Add INSPECTED state to track inspection completion
     # This is used by stage_migrated workflow to track progress
+    logger.info(f'{dataset_name} - marking dataset as INSPECTED')
     api.add_state_to_dataset(dataset_id=dataset_id, state='INSPECTED')
 
+    logger.info(f'{dataset_name} - inspect_dataset complete')
     return dataset_id,

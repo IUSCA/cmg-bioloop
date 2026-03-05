@@ -45,12 +45,20 @@ def grant_access_to_parent_chain(leaf: Path, root: Path):
 
 
 def setup_download(celery_task, dataset_id, **kwargs):
+    logger.info(f'setup_download called for dataset_id={dataset_id}')
+
     dataset = api.get_dataset(dataset_id=dataset_id, bundle=True)
+    dataset_name = dataset.get('name', dataset_id)
     staged_path, alias = Path(dataset['staged_path']), glom(dataset, 'metadata.stage_alias')
 
     bundle_path = Path(get_bundle_staged_path(dataset=dataset))
 
+    logger.info(
+        f'{dataset_name} - staged_path={staged_path}, alias={alias}, bundle_path={bundle_path}'
+    )
+
     if not staged_path.exists():
+        logger.error(f'{dataset_name} - staged path does not exist: {staged_path}')
         # TODO: more robust validation?
         raise ValidationFailed(f'Staged path does not exist {staged_path}')
 
@@ -58,17 +66,28 @@ def setup_download(celery_task, dataset_id, **kwargs):
     download_path = download_dir / alias
     bundle_download_path = download_dir / get_bundle_name(dataset)
 
+    logger.info(
+        f'{dataset_name} - creating symlinks in download_dir={download_dir}: '
+        f'dataset -> {download_path}, bundle -> {bundle_download_path}'
+    )
+
     # remove if exists and create a symlink in download dir pointing to the staged path
     rm(download_path)
     download_path.symlink_to(staged_path, target_is_directory=True)
+    logger.info(f'{dataset_name} - symlink created: {download_path} -> {staged_path}')
+
     # do the same for bundle file
     rm(bundle_download_path)
     bundle_download_path.symlink_to(bundle_path)
+    logger.info(f'{dataset_name} - symlink created: {bundle_download_path} -> {bundle_path}')
 
     # enable others to read and cd into stage directory
+    logger.info(f'{dataset_name} - granting read permissions on staged_path and bundle')
     grant_read_permissions_to_others(staged_path)
     grant_read_permissions_to_others(bundle_download_path)
 
     # enable others to navigate to leaf by granting execute permission on parent directories
     grant_access_to_parent_chain(staged_path, root=Path(config['paths']['root']))
+
+    logger.info(f'{dataset_name} - setup_download complete')
     return dataset_id,
