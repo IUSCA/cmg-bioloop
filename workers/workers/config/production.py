@@ -80,7 +80,7 @@ config = {
             'source_dir_project': '/N/project/CMG-SCA/cmg-bioloop/origin/data_products',
 
             # K2 (Compbio) host's Origin paths
-            'source_dir_test': '/home/cmguser/cmg-bioloop-ingestion-test/origin/data_products',
+            # 'source_dir_test': '/home/cmguser/cmg-bioloop-ingestion-test/origin/data_products',
         },
         'recency_threshold_seconds': 0,  # 1 minute for standard Illumina datasets
         'recency_threshold_seconds_nanopore': 21600,  # 6 hours for nanopore datasets

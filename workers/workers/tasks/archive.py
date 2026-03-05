@@ -169,8 +169,9 @@ def archive(celery_task: WorkflowTask, dataset: dict, delete_local_file: bool = 
     # Ensure parent directory exists
     bundle.parent.mkdir(parents=True, exist_ok=True)
 
-    # If dataset has CMG ID, it means the legacy CMG application is also archiving this dataset concurrently. Wait for CMG to complete archival
-    if cmg_id:
+    # If dataset is legacy, it means the legacy CMG application is also archiving this
+    #  dataset concurrently. Wait for CMG to complete archival
+    if is_legacy:
         logger.info(f'{dataset_name} - detected CMG ID: {cmg_id}')
 
         # STRICT VALIDATION: If legacy_migration is enabled, we MUST be able to verify CMG's archival
