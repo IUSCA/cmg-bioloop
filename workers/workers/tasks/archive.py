@@ -173,9 +173,6 @@ def archive(celery_task: WorkflowTask, dataset: dict, delete_local_file: bool = 
     # Tar the dataset directory and compute checksum
     bundle = Path(f'{config["paths"][dataset["type"]]["bundle"]["generate"]}/{dataset["name"]}.tar')
 
-    # Ensure parent directory exists
-    bundle.parent.mkdir(parents=True, exist_ok=True)
-
     # If dataset is legacy, it means the legacy CMG application is also archiving this
     #  dataset concurrently. Wait for CMG to complete archival
     if is_legacy:
@@ -275,6 +272,9 @@ def archive(celery_task: WorkflowTask, dataset: dict, delete_local_file: bool = 
             logger.error(error_msg)
             raise Exception(error_msg)
     else:
+        # Ensure parent directory exists
+        bundle.parent.mkdir(parents=True, exist_ok=True)
+        
         if cmg_id:
             logger.warning(
                 f'{dataset_name} - cmg_id={cmg_id} is set but is_legacy=False; '

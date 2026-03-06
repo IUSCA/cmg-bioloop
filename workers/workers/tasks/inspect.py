@@ -79,21 +79,9 @@ def inspect_dataset(celery_task, dataset_id, **kwargs):
         f'{dataset_name} - dataset fetched: type={dataset.get("type")}, '
         f'is_legacy={is_legacy_dataset(dataset)}, origin_path={dataset.get("origin_path")}'
     )
-
-    # For legacy datasets, use extracted archive path instead of origin_path
-    if is_legacy_dataset(dataset):
-        source = get_retrieved_archive_extraction_path(dataset)
-        logger.info(f'{dataset_name} - inspecting legacy dataset from extracted archive path: {source}')
-
-        # Verify the path exists
-        if not source.exists():
-            raise exc.RetryableException(
-                f'Extracted archive path does not exist: {source}. '
-                'Ensure retrieve_archive completed successfully.'
-            )
-    else:
-        source = Path(dataset['origin_path']).resolve()
-        logger.info(f'{dataset_name} - inspecting dataset from origin path: {source}')
+    
+    source = Path(dataset['origin_path']).resolve()
+    logger.info(f'{dataset_name} - inspecting dataset from origin path: {source}')
 
     du_size = cmd.total_size(source)
     logger.info(f'{dataset_name} - du_size={du_size} bytes')
