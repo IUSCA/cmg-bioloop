@@ -129,7 +129,7 @@ def get_dataset_by_origin_path(origin_path: str, use_auth: bool = True):
         }
     """
     with CMGAPISession(use_auth=use_auth) as s:
-        r = s.get('api/legacy-migration/datasets', params={'origin_path': origin_path})
+        r = s.get('legacy-migration/datasets', params={'origin_path': origin_path})
         r.raise_for_status()
         response = r.json()
         
@@ -168,7 +168,7 @@ def get_dataproduct_by_origin_path(origin_path: str, use_auth: bool = True):
         }
     """
     with CMGAPISession(use_auth=use_auth) as s:
-        r = s.get('api/legacy-migration/dataproducts', params={'origin_path': origin_path})
+        r = s.get('legacy-migration/dataproducts', params={'origin_path': origin_path})
         r.raise_for_status()
         response = r.json()
         
