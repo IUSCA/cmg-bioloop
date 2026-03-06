@@ -318,7 +318,7 @@ async function seedImportSources(prisma) {
   const importSources = [
     {
       path: '/N/project/yunliu-general/SCA_incoming',
-      label: 'SCA Incoming',
+      label: 'YunLiu-General',
       description: 'SCA incoming data on Slate-Project filesystem',
       sort_order: 1,
     },
@@ -330,15 +330,9 @@ async function seedImportSources(prisma) {
     },
     {
       path: '/N/scratch/cmguser/cmg-bioloop/imports',
-      label: 'CMG-Bioloop Slate-Scratch',
+      label: 'Default Slate-Scratch Import Space',
       description: 'Incoming data on CMG-Bioloop Slate-Scratch filesystem',
       sort_order: 3,
-    },
-    {
-      path: '/N/project/CMG-SCA/cmg-bioloop/imports',
-      label: 'CMG-Bioloop Slate-Project',
-      description: 'Incoming data on CMG-Bioloop Slate-Project filesystem',
-      sort_order: 4,
     },
   ];
 

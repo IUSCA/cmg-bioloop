@@ -18,6 +18,19 @@
         </va-input>
       </div>
 
+      <!-- Convert button -->
+      <VaButtonGroup>
+        <va-button
+          @click="handleConvertClick"
+          preset="primary"
+          color="info"
+          class="flex-none"
+        >
+          <i-mdi-orbit-variant class="mr-1" />
+          <span> Convert </span>
+        </va-button>
+      </VaButtonGroup>
+
       <!-- Filter button -->
       <va-button @click="searchModal.show()" preset="primary" class="flex-none">
         <i-mdi-filter />
@@ -104,6 +117,12 @@
     />
 
     <ConversionSearchModal ref="searchModal" @search="handleSearch" />
+
+    <BulkConversionModal
+      ref="conversionModal"
+      :dataset-ids="[]"
+      :allow-raw-data-selection="true"
+    />
   </div>
 </template>
 
@@ -133,6 +152,7 @@ const PAGE_SIZE_OPTIONS = [25, 50, 100];
 const conversions = ref([]);
 const data_loading = ref(false);
 const searchModal = ref(null);
+const conversionModal = ref(null);
 const total_results = ref(0);
 
 // used for OFFSET clause in the SQL used to retrieve the next paginated batch
@@ -306,5 +326,9 @@ function handleSearch() {
     // change current page to 1 triggers the watch on currPage and fetches items
     query.value.page = 1;
   }
+}
+
+function handleConvertClick() {
+  conversionModal.value.show();
 }
 </script>

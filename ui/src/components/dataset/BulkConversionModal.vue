@@ -7,12 +7,16 @@
   >
     <va-inner-loading :loading="loading" class="h-full">
       <div class="min-h-[calc(100vh-15rem)]">
-        <ConversionForm
-          v-if="results === null"
-          v-model:definition="definition"
-          v-model:argValues="argValues"
-          v-model:execution-metadata="execution_metadata"
-        />
+        <template v-if="results === null">
+          <ConversionForm
+            v-model:definition="definition"
+            v-model:argValues="argValues"
+            v-model:execution-metadata="execution_metadata"
+            :allow-raw-data-selection="allowRawDataSelection"
+            v-model:selected-raw-dataset="selectedRawDataset"
+            v-model:dataset-search-term="datasetSearchTerm"
+          />
+        </template>
 
         <!-- results -->
         <div v-else>
@@ -46,9 +50,13 @@
           v-if="results === null"
           @click="convert_datasets"
           variant="primary"
-          :disabled="!definition || argValues.length === 0"
+          :disabled="
+            !definition ||
+            argValues.length === 0 ||
+            (allowRawDataSelection && !selectedRawDataset)
+          "
         >
-          Convert {{ num_datasets }} Datasets
+          Convert {{ num_datasets }} Dataset{{ num_datasets === 1 ? "" : "s" }}
         </va-button>
       </div>
     </va-inner-loading>
@@ -63,6 +71,7 @@ import { readFileAsText } from "@/services/utils";
 
 const props = defineProps({
   datasetIds: { type: Array, required: true },
+  allowRawDataSelection: { type: Boolean, default: false },
 });
 
 const emit = defineEmits(["done"]);
@@ -78,8 +87,17 @@ const definition = ref();
 const argValues = ref([]);
 const results = ref(null);
 const execution_metadata = ref({});
+const selectedRawDataset = ref(null);
+const datasetSearchTerm = ref("");
 
-const num_datasets = computed(() => props.datasetIds?.length || 0);
+const effectiveDatasetIds = computed(() => {
+  if (props.allowRawDataSelection) {
+    return selectedRawDataset.value ? [selectedRawDataset.value.id] : [];
+  }
+  return props.datasetIds;
+});
+
+const num_datasets = computed(() => effectiveDatasetIds.value?.length || 0);
 
 function hide() {
   visible.value = false;
@@ -110,7 +128,7 @@ async function convert_datasets() {
   conversionApiService
     .createBulk({
       definition_id: definition.value.id,
-      dataset_ids: props.datasetIds,
+      dataset_ids: effectiveDatasetIds.value,
       argument_values: removeNullValues(argValues.value.argument_values),
       user_argument_values: argValues.value.user_argument_values,
       process_requests: execution_metadata.value?.platform
@@ -216,21 +234,9 @@ function close() {
   argValues.value = [];
   results.value = null;
   execution_metadata.value = {};
+  selectedRawDataset.value = null;
+  datasetSearchTerm.value = "";
   emit("done");
 }
 
-watch(execution_metadata, (newValue) => {
-  console.log("-------------- BulkConversionModal ------------------");
-  console.log("execution_metadata WATCH, new value:", newValue);
-  console.log("-------------- BulkConversionModal ------------------");
-});
-
-onMounted(() => {
-  console.log("-------------- BulkConversionModal ------------------");
-  console.log(
-    "execution_metadata ON MOUNTED, value:",
-    execution_metadata.value,
-  );
-  console.log("-------------- BulkConversionModal ------------------");
-});
 </script>

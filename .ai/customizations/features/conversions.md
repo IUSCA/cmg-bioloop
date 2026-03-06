@@ -466,6 +466,29 @@ const derivedDatasets = await prisma.dataset_hierarchy.findMany({
 - Column layout adjusted: `status` (8%), `dataset` (flexible/no width), `program` (20%), `initiated on` (15%), `initiator` (15%).
 - Legacy conversions (`conversion.metadata.origin === 'legacy'`) always show the success icon regardless of `workflow_status`, since they were completed in the legacy CMG system before Bioloop workflow tracking existed.
 
+## 2026-03-05
+
+### Convert Button Added to /conversions View; Dataset Picker Added to BulkConversionModal
+
+**Change 1 — ConversionList.vue:**
+- A Convert button (matching the styling and placement of the one in `DatasetList.vue`) has been added to the `/conversions` list view toolbar, positioned before the Filters button.
+- Clicking Convert directly opens `BulkConversionModal` with `allowRawDataSelection=true` (no row-selection phase needed, since the conversions list does not list raw datasets).
+
+**Change 2 — BulkConversionModal.vue:**
+- New prop: `allowRawDataSelection` (Boolean, default `false`).
+- When `true`, a **Dataset** field (backed by `DatasetSelectAutoComplete` filtered to `datasetType="RAW_DATA"`) is rendered at the top of Step 1 inside `ConversionForm` (above the pipeline/definition selector), not outside the stepper.
+- `effectiveDatasetIds` computed replaces `props.datasetIds` everywhere internally:
+  - `allowRawDataSelection=true`: `[selectedRawDataset.id]` (or `[]` if none selected)
+  - `allowRawDataSelection=false`: `props.datasetIds` (existing behavior unchanged)
+- The Convert button is additionally disabled when `allowRawDataSelection=true` and no dataset has been selected.
+- Dataset selection state (`selectedRawDataset`, `datasetSearchTerm`) is reset on modal close.
+- Removed leftover debug `console.log` statements from `watch(execution_metadata)` and `onMounted`.
+
+**Files changed:**
+- `ui/src/components/conversions/ConversionList.vue`
+- `ui/src/components/dataset/BulkConversionModal.vue`
+- `ui/src/components/conversions/ConversionForm.vue`
+
 ## Future Entries
 
 Add entries here as decisions are made, changes are implemented, or issues are resolved.

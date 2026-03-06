@@ -30,6 +30,7 @@
     </template>
 
     <template #step-content-0>
+      <va-inner-loading :loading="loadingResources || loadingImportSources">
       <div class="flex w-full pb-6">
         <va-select
           v-model="selectedFileType"
@@ -71,7 +72,6 @@
             validatingForm ||
             importSources.length === 0
           "
-          :loading="loadingImportSources || loadingResources"
         />
 
         <div class="flex flex-col w-full">
@@ -94,6 +94,7 @@
           </div>
         </div>
       </div>
+      </va-inner-loading>
     </template>
 
     <template #step-content-1>

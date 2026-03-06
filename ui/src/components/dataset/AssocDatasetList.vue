@@ -137,12 +137,17 @@
 </template>
 
 <script setup>
+import config from "@/config";
 import DatasetService from "@/services/dataset";
 import * as datetime from "@/services/datetime";
 import toast from "@/services/toast";
 import { formatBytes, snakeCaseToTitleCase } from "@/services/utils";
 import wfService from "@/services/workflow";
-import config from "@/config";
+import { useAuthStore } from "@/stores/auth";
+import { useColors } from "vuestic-ui";
+
+const auth = useAuthStore();
+const { colors } = useColors();
 
 const props = defineProps({
   datasets_meta: {

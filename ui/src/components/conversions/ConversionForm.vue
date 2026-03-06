@@ -1,7 +1,18 @@
 <template>
-  <va-stepper v-model="currentStep" :steps="steps">
+  <va-stepper v-model="currentStep" :steps="visibleSteps" :controls-hidden="visibleSteps.length <= 1">
     <!-- Step 1: Pipeline Selection -->
     <template #step-content-0>
+      <!-- Dataset selection (shown above pipeline fields when allowRawDataSelection is true) -->
+      <div v-if="allowRawDataSelection" class="mb-10">
+        <DatasetSelectAutoComplete
+          v-model:selected="selectedRawDataset"
+          v-model:search-term="datasetSearchTerm"
+          dataset-type="RAW_DATA"
+          label="Dataset"
+          @clear="selectedRawDataset = null"
+        />
+      </div>
+
       <ConversionDefinitionSelect v-model="definition" class="w-full" />
 
       <div v-if="definition" class="mt-3">
@@ -76,8 +87,8 @@
       </div>
     </template>
 
-    <!-- Step 2: Execution Platform -->
-    <template v-if="isPlatformBasedExecutionEnabled" #step-content-1>
+    <!-- Step 2: Execution Platform (slot index 1 when visible; va-stepper won't request this slot if the step is hidden) -->
+    <template #step-content-1>
       <div class="space-y-4">
         <div class="flex items-center gap-3">
           <va-checkbox
@@ -109,9 +120,15 @@ import { useAuthStore } from "@/stores/auth";
 
 const auth = useAuthStore();
 
+const props = defineProps({
+  allowRawDataSelection: { type: Boolean, default: false },
+});
+
 const definition = defineModel("definition");
 const argValues = defineModel("argValues");
 const executionMetadata = defineModel("executionMetadata");
+const selectedRawDataset = defineModel("selectedRawDataset", { default: null });
+const datasetSearchTerm = defineModel("datasetSearchTerm", { default: "" });
 
 const currentStep = ref(0);
 const usePlatform = ref(false);
@@ -120,22 +137,28 @@ const isPlatformBasedExecutionEnabled = computed(() =>
   auth.isFeatureEnabled("platformBasedExecution"),
 );
 
-// Stepper configuration — Step 2 included only when the feature is enabled
-const steps = computed(() => {
-  const allSteps = [
-    {
-      label: "Pipeline & Arguments",
-      icon: "settings",
-    },
-  ];
-  if (isPlatformBasedExecutionEnabled.value) {
-    allSteps.push({
-      label: "Execution Platform",
-      icon: "cloud",
-    });
-  }
-  return allSteps;
-});
+// All possible steps. Each step may declare a `hidden` condition; steps where
+// hidden === true are excluded from visibleSteps and the stepper never renders them.
+const allSteps = computed(() => [
+  {
+    label: "Pipeline & Arguments",
+    icon: "settings",
+    hidden: false,
+  },
+  {
+    label: "Execution Platform",
+    icon: "cloud",
+    hidden: !isPlatformBasedExecutionEnabled.value,
+  },
+]);
+
+// Only non-hidden steps are passed to va-stepper. Slot indices (#step-content-N)
+// correspond to position in this array, so hidden steps do not shift visible ones.
+const visibleSteps = computed(() =>
+  allSteps.value
+    .filter((s) => !s.hidden)
+    .map(({ hidden: _hidden, ...rest }) => rest),
+);
 
 // Computed property for nested v-model binding
 const platform = computed({
@@ -159,21 +182,8 @@ const platformMetadata = computed({
   },
 });
 
-watch(
-  executionMetadata,
-  (newValue) => {
-    console.log("-------------- ConversionForm ------------------");
-    console.log("executionMetadata WATCH, new value:", newValue);
-    console.log("-------------- ConversionForm ------------------");
-  },
-  { deep: true },
-);
-
-watch(usePlatform, (newValue) => {
-  console.log("-------------- ConversionForm ------------------");
-  console.log("usePlatform WATCH, new value:", newValue);
+watch(usePlatform, () => {
   executionMetadata.value = {};
-  console.log("-------------- ConversionForm ------------------");
 });
 
 watch(isPlatformBasedExecutionEnabled, (enabled) => {
@@ -184,10 +194,4 @@ watch(isPlatformBasedExecutionEnabled, (enabled) => {
   }
 });
 
-onMounted(() => {
-  console.log("-------------- ConversionForm ------------------");
-  console.log("executionMetadata ON MOUNTED, value:", executionMetadata.value);
-  console.log("usePlatform ON MOUNTED, value:", usePlatform.value);
-  console.log("-------------- ConversionForm ------------------");
-});
 </script>
