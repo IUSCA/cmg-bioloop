@@ -205,6 +205,33 @@ def finish_session_hydration(celery_task, session_id, **kwargs):
     return task_body(celery_task, session_id, **kwargs)
 
 
+@app.task(base=WorkflowTask, bind=True, name='parse_analysis_data',
+          autoretry_for=(Exception,),
+          max_retries=2,
+          default_retry_delay=60)
+def parse_analysis_data(celery_task, dataset_id, **kwargs):
+    from workers.tasks.parse_analysis_data import parse_analysis_data as task_body
+    return task_body(celery_task, dataset_id, **kwargs)
+
+
+@app.task(base=WorkflowTask, bind=True, name='upload_static_content',
+          autoretry_for=(Exception,),
+          max_retries=2,
+          default_retry_delay=60)
+def upload_static_content(celery_task, dataset_id, **kwargs):
+    from workers.tasks.upload_static_content import upload_static_content as task_body
+    return task_body(celery_task, dataset_id, **kwargs)
+
+
+@app.task(base=WorkflowTask, bind=True, name='initiate_subdir_workflows',
+          autoretry_for=(Exception,),
+          max_retries=1,
+          default_retry_delay=300)
+def initiate_subdir_workflows(celery_task, dataset_id, **kwargs):
+    from workers.tasks.initiate_subdir_workflows import initiate_subdir_workflows as task_body
+    return task_body(celery_task, dataset_id, **kwargs)
+
+
 # Standalone task (not WorkflowTask) for async upload verification
 @app.task(
     bind=True,

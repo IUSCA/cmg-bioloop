@@ -47,6 +47,7 @@ model dataset {
   upload_logs              dataset_upload_log[]
   import_logs              dataset_import_log[]
   cmg_id                   String?
+  xenium_id                Int?
 
   @@unique([name, type, is_deleted])
 }
@@ -129,6 +130,7 @@ model dataset_import_log {
   created_at   DateTime      @default(now()) @db.Timestamp(6)
   updated_at   DateTime      @default(now()) @updatedAt @db.Timestamp(6)
   cmg_id       String?       @db.VarChar(100)
+  xenium_id    Int?
   source_run   String?
   notes        String?
   metadata     Json?
@@ -204,6 +206,7 @@ model user {
   is_deleted                 Boolean             @default(false)
   metadata                   Json?
   cmg_id                     String?                  @db.VarChar(100)
+  xenium_id                  Int?
   user_role                  user_role[]
   settings                   user_settings?
   contacts                   contact[]
@@ -351,6 +354,7 @@ model project {
   owner_id        Int?
   owner           user?             @relation(fields: [owner_id], references: [id], onDelete: SetNull)
   cmg_id          String?
+  xenium_id       Int?
   users           project_user[]
   datasets        project_dataset[]
   contacts        project_contact[]
@@ -494,7 +498,8 @@ model genome_browser_session {
   access_count      Int                @default(0)
   is_public         Boolean            @default(false)
   metadata          Json?
-  cmg_id            String?            @db.VarChar(100) // CMG session ID for migration tracking
+  cmg_id            String?            @db.VarChar(100)
+  xenium_id         Int?
   session_tracks    session_track[]
   session_workflows session_workflow[]
 }
@@ -604,6 +609,7 @@ model process_request {
 model conversion {
   id               Int                          @id @default(autoincrement())
   cmg_id           String?
+  xenium_id        Int?
   initiated_at     DateTime                     @default(now()) @db.Timestamp(6)
   definition_id    Int
   workflow_id      String?
@@ -759,4 +765,48 @@ model cmg_sync_process_lock {
   last_completed_at DateTime?
   updated_at        DateTime  @updatedAt
 }
+
+// ---------------------------------------------------------------
+// The following tables support polling-based synchronization
+// between the Xenium PostgreSQL database and cmg-bioloop's database.
+
+// Tracks cursor position (last-seen row) for each xenium poller.
+// Uses integer xenium_id instead of MongoDB ObjectId.
+model xenium_sync_cursor {
+  poller_name       String    @id
+  last_updated_at   DateTime?
+  last_xenium_id    Int?
+  locked_by         String?
+  lock_expires_at   DateTime?
+  last_started_at   DateTime?
+  last_succeeded_at DateTime?
+  last_failed_at    DateTime?
+  last_error        String?
+  last_run_count    Int?
+  updated_at        DateTime  @updatedAt
+}
+
+// Retry queue for xenium poller documents that failed processing.
+model xenium_sync_retry {
+  id            Int       @id @default(autoincrement())
+  poller_name   String
+  xenium_id     Int
+  failure_count Int       @default(0)
+  last_error    String?
+  next_retry_at DateTime?
+  updated_at    DateTime  @updatedAt
+
+  @@unique([poller_name, xenium_id])
+}
+
+// Process-level lock to prevent concurrent xenium bigbang/poller runs.
+model xenium_sync_process_lock {
+  process_name      String    @id @db.VarChar(50)
+  locked_by         String?   @db.VarChar(200)
+  lock_expires_at   DateTime?
+  last_started_at   DateTime?
+  last_completed_at DateTime?
+  updated_at        DateTime  @updatedAt
+}
+
 // --- CMG-Bioloop database-synchronization END ---

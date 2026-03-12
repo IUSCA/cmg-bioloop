@@ -22,6 +22,15 @@ app.config_from_object(celeryconfig)
 logger = get_task_logger(__name__)
 
 
+def _is_legacy_source_active(source_name: str) -> bool:
+    cfg = config.get('legacy_application_active', False)
+    if isinstance(cfg, bool):
+        return cfg
+    if isinstance(cfg, dict):
+        return bool(cfg.get(source_name, False))
+    return False
+
+
 def make_tarfile(celery_task: WorkflowTask, tar_path: Path, source_dir: str, source_size: int):
     """
 
@@ -156,7 +165,7 @@ def archive(celery_task: WorkflowTask, dataset: dict, delete_local_file: bool = 
     """
     # Check if this is a legacy dataset and if the legacy CMG application is still active
     is_legacy = is_legacy_dataset(dataset)
-    legacy_application_active = config.get('legacy_application_active', False)
+    legacy_application_active = _is_legacy_source_active('cmg')
 
     # Check if dataset has a CMG ID (was registered in CMG concurrently)
     cmg_id = dataset.get('cmg_id')

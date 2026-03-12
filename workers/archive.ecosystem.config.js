@@ -7,7 +7,7 @@ module.exports = {
     {
       name: 'celery_worker',
       script: 'python',
-      args: "-m celery -A workers.celery_app worker --loglevel INFO -O fair --pidfile celery_worker.pid --hostname 'cmg-bioloop-archive-w1@%h' --autoscale=1,1 --queues 'cmg-bioloop-archive.cmg-test.sca.iu.edu.q'",
+      args: "-m celery -A workers.celery_app worker --loglevel INFO -O fair --pidfile celery_worker.pid --hostname 'cmg-bioloop-archive-w1@%h' --autoscale=1,1 --queues 'cmg-bioloop-archive.cmg-test.sca.iu.edu.q,cmg-bioloop-xenium-archive.cmg-test.sca.iu.edu.q'",
       watch: false,
       interpreter: '',
       log_date_format: 'YYYY-MM-DD HH:mm Z',

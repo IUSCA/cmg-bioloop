@@ -128,7 +128,7 @@
   },
   "workflow_registry": {
     "integrated": {
-      "description": "An end-to-end workflow to inspect, archive, state and validate a dataset",
+      "description": "An end-to-end workflow to inspect, archive, stage and validate a dataset. Includes optional Xenium-specific steps (parse_analysis_data, upload_static_content) that are no-ops for non-Xenium datasets.",
       "steps": [
         {
           "name": "await stability",
@@ -139,6 +139,12 @@
           "name": "inspect",
           "task": "inspect_dataset",
           "queue": "cmg-bioloop-fetch.cmg-test.sca.iu.edu.q"
+        },
+        {
+          "name": "parse analysis data",
+          "task": "parse_analysis_data",
+          "queue": "cmg-bioloop-fetch.cmg-test.sca.iu.edu.q",
+          "comment": "Xenium-specific: reads analysis_summary.html from origin_path. No-op for non-Xenium datasets."
         },
         {
           "name": "run qc",
@@ -164,11 +170,17 @@
           "name": "setup_download",
           "task": "setup_dataset_download",
           "queue": "cmg-bioloop-fetch.cmg-test.sca.iu.edu.q"
+        },
+        {
+          "name": "upload static content",
+          "task": "upload_static_content",
+          "queue": "cmg-bioloop-fetch.cmg-test.sca.iu.edu.q",
+          "comment": "Xenium-specific: uploads analysis_summary.html from staged_path. No-op for non-Xenium datasets."
         }
       ]
     },
     "intake_integrated": {
-      "description": "End-to-end workflow for datasets on archive node (watch.py instrument ingestion)",
+      "description": "End-to-end workflow for datasets on archive node (watch.py instrument ingestion). Includes optional Xenium-specific steps (parse_analysis_data, upload_static_content) that are no-ops for non-Xenium datasets.",
       "steps": [
         {
           "name": "await stability",
@@ -179,6 +191,12 @@
           "name": "inspect",
           "task": "inspect_dataset",
           "queue": "cmg-bioloop-archive.cmg-test.sca.iu.edu.q"
+        },
+        {
+          "name": "parse analysis data",
+          "task": "parse_analysis_data",
+          "queue": "cmg-bioloop-archive.cmg-test.sca.iu.edu.q",
+          "comment": "Xenium-specific: reads analysis_summary.html from origin_path before archival. No-op for non-Xenium datasets."
         },
         {
           "name": "archive",
@@ -199,6 +217,72 @@
           "name": "setup_download",
           "task": "setup_dataset_download",
           "queue": "cmg-bioloop-fetch.cmg-test.sca.iu.edu.q"
+        },
+        {
+          "name": "upload static content",
+          "task": "upload_static_content",
+          "queue": "cmg-bioloop-fetch.cmg-test.sca.iu.edu.q",
+          "comment": "Xenium-specific: uploads analysis_summary.html from staged_path. No-op for non-Xenium datasets."
+        }
+      ]
+    },
+    "subdir_wf_initiator": {
+      "description": "Workflow for Xenium RAW_DATA datasets: awaits stability, then registers each subdirectory as a DATA_PRODUCT and launches the intake_integrated workflow on each.",
+      "steps": [
+        {
+          "name": "await stability",
+          "task": "await_stability",
+          "queue": "cmg-bioloop-xenium-archive.cmg-test.sca.iu.edu.q"
+        },
+        {
+          "name": "initiate dataproduct workflows",
+          "task": "initiate_subdir_workflows",
+          "queue": "cmg-bioloop-xenium-archive.cmg-test.sca.iu.edu.q"
+        }
+      ]
+    },
+    "stage_migrated_xenium": {
+      "description": "Stage and validate Xenium datasets that were migrated via bigbang. Unlike stage_migrated (CMG), no archive retrieval is needed — files are accessible on the Xenium file system.",
+      "steps": [
+        {
+          "name": "begin_migration",
+          "task": "begin_migration",
+          "queue": "cmg-bioloop-xenium-archive.cmg-test.sca.iu.edu.q"
+        },
+        {
+          "name": "inspect",
+          "task": "inspect_dataset",
+          "queue": "cmg-bioloop-xenium-archive.cmg-test.sca.iu.edu.q"
+        },
+        {
+          "name": "parse analysis data",
+          "task": "parse_analysis_data",
+          "queue": "cmg-bioloop-xenium-archive.cmg-test.sca.iu.edu.q"
+        },
+        {
+          "name": "stage",
+          "task": "stage_dataset",
+          "queue": "cmg-bioloop-xenium-fetch.cmg-test.sca.iu.edu.q"
+        },
+        {
+          "name": "validate",
+          "task": "validate_dataset",
+          "queue": "cmg-bioloop-xenium-fetch.cmg-test.sca.iu.edu.q"
+        },
+        {
+          "name": "setup_download",
+          "task": "setup_dataset_download",
+          "queue": "cmg-bioloop-xenium-fetch.cmg-test.sca.iu.edu.q"
+        },
+        {
+          "name": "upload static content",
+          "task": "upload_static_content",
+          "queue": "cmg-bioloop-xenium-fetch.cmg-test.sca.iu.edu.q"
+        },
+        {
+          "name": "end_migration",
+          "task": "end_migration",
+          "queue": "cmg-bioloop-xenium-fetch.cmg-test.sca.iu.edu.q"
         }
       ]
     },
@@ -379,5 +463,8 @@
     "spaceranger-v1.3.1",
     "spaceranger-v1.1.0"
   ],
-  "legacy_application_active": true
+  "legacy_application_active": {
+    "cmg": true,
+    "xenium": true
+  }
 }

@@ -27,6 +27,7 @@ These documents serve as the **single source of truth** for:
 - **`PRODUCTION_ENVIRONMENT.md`** - Critical production warnings and restrictions
 - **`AI_PROTOCOL.md`** - How AI agents should work with this repository
 - **`README.md`** - This file
+- **`features/migration-documentation-checklists.md`** - Central index for CMG/Xenium migration doc follow-ups
 
 ### `/bioloop/` - Platform Core
 
@@ -173,4 +174,4 @@ Update changelog if:
 
 ---
 
-**Last Updated:** 2026-02-06
+**Last Updated:** 2026-03-12

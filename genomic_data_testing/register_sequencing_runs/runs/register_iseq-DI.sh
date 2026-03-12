@@ -203,7 +203,7 @@ Application,FASTQ Only
 Assay,TruSeq HT
 Description,iSeq Dual Index Test Run
 Chemistry,Amplicon
-
+Ple
 [Reads]
 151
 151

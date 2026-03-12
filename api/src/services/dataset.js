@@ -42,6 +42,22 @@ function normalize_name(name) {
 }
 
 /**
+ * Source-aware legacy activity check.
+ * Supports both legacy boolean config and per-source object config:
+ *   - legacy_application_active: true|false
+ *   - legacy_application_active: { cmg: boolean, xenium: boolean }
+ */
+function isAnyLegacySourceActive() {
+  if (!config.has('legacy_application_active')) return false;
+  const legacyActiveConfig = config.get('legacy_application_active');
+  if (typeof legacyActiveConfig === 'boolean') return legacyActiveConfig;
+  if (legacyActiveConfig && typeof legacyActiveConfig === 'object') {
+    return Boolean(legacyActiveConfig.cmg) || Boolean(legacyActiveConfig.xenium);
+  }
+  return false;
+}
+
+/**
  * Generates the absolute path where a dataset will be uploaded to.
  *
  * @function getUploadedDatasetPath
@@ -978,7 +994,7 @@ async function create({
 } = {}) {
   // If the legacy CMG application is still active and the origin-application has been explicitly set,
   // mark this dataset as originating from CMG-Bioloop (as opposed to the legacy CMG app).
-  const legacyApplicationActive = config.has('legacy_application_active') && config.get('legacy_application_active');
+  const legacyApplicationActive = isAnyLegacySourceActive();
   const createData = (legacyApplicationActive && !data.metadata?.origin)
     ? { ...data, metadata: { ...data.metadata, origin: 'bioloop' } }
     : data;

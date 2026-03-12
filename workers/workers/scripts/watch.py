@@ -33,6 +33,22 @@ _LEGACY_APP_SOURCE_DIR_KEYS = [
 ]
 
 
+def _is_legacy_source_active(source_name: str) -> bool:
+    """
+    Source-aware legacy activity check.
+
+    Supports both legacy boolean config and per-source dict config:
+      - legacy_application_active = True|False
+      - legacy_application_active = {'cmg': bool, 'xenium': bool}
+    """
+    cfg = config.get('legacy_application_active', False)
+    if isinstance(cfg, bool):
+        return cfg
+    if isinstance(cfg, dict):
+        return bool(cfg.get(source_name, False))
+    return False
+
+
 def _get_legacy_app_source_dirs() -> list[Path]:
     """Return the filesystem directories that the legacy CMG application watches for the appearance of new datasets."""
     raw_data_reg = config['registration'].get('RAW_DATA', {})
@@ -52,8 +68,19 @@ def _compute_dataset_origin(candidate: Path) -> str | None:
 
     Returns None otherwise.
     """
-    if not config.get('legacy_application_active', False):
+    if not _is_legacy_source_active('cmg') and not _is_legacy_source_active('xenium'):
         return None
+
+    # Xenium source tagging: when xenium source is active and the path is under
+    # source_dir_xenium, preserve source provenance for migration-aware flows.
+    xenium_source_dir = config.get('registration', {}).get('RAW_DATA', {}).get('source_dir_xenium')
+    if _is_legacy_source_active('xenium') and xenium_source_dir:
+        try:
+            candidate_resolved = candidate.resolve()
+            if candidate_resolved.is_relative_to(Path(xenium_source_dir)):
+                return 'legacy_xenium'
+        except ValueError:
+            pass
     legacy_dirs = _get_legacy_app_source_dirs()
     candidate_resolved = candidate.resolve()
     for legacy_dir in legacy_dirs:
@@ -360,6 +387,30 @@ if __name__ == "__main__":
         full_scan_every_n_scans=config['registration']['full_scan_every_n_scans']
     )
 
+    # ------------------------------------------------------------------------------------------------
+    # Xenium RAW_DATA observer
+    #
+    # Xenium instrument output lands at /zpool/xenium/<run_dir>/.
+    # Each run directory is registered as a RAW_DATA dataset and processed by
+    # `subdir_wf_initiator`, which registers each subdirectory as a DATA_PRODUCT
+    # and launches `intake_integrated` on each.
+    #
+    # The `source_dir_xenium` config key must be set in config['registration']['RAW_DATA']
+    # before enabling this observer. The rejects list (config['registration']['RAW_DATA']['rejects'])
+    # should include '.snapshots', 'temp', and any other Xenium-specific noise directories.
+    #
+    obs_xenium = None
+    xenium_source_dir = config.get('registration', {}).get('RAW_DATA', {}).get('source_dir_xenium')
+    if xenium_source_dir:
+        obs_xenium = Observer(
+            name='raw_data_obs---xenium',
+            dir_path=xenium_source_dir,
+            callback=Register('RAW_DATA', default_wf_name='subdir_wf_initiator').register,
+            interval=config['registration']['poll_interval_seconds'],
+            full_scan_every_n_scans=config['registration']['full_scan_every_n_scans'],
+        )
+    # ------------------------------------------------------------------------------------------------
+
     # Register all dataset-observers to the poller
     poller = Poller()
     poller.register(obs1)
@@ -375,6 +426,8 @@ if __name__ == "__main__":
     poller.register(obs10)
     poller.register(obs11)
     poller.register(obs12)
+    if obs_xenium:
+        poller.register(obs_xenium)
 
     # Start the poller
     poller.poll()

@@ -1,162 +1,21 @@
 /**
- * Legacy Migration Service
+ * Legacy Migration Service — Backward Compatibility Re-Export
  *
- * Handles legacy dataset and session migration status queries and utilities.
- * Specifically for CMG datasets migrated from MongoDB that need hydration.
+ * This file exists so existing code that imports '@/services/legacyMigration'
+ * continues to work without changes. It re-exports the CMG migration service,
+ * which is the original implementation this file contained.
+ *
+ * For new code, import from the source-specific submodules:
+ *   CMG:    '@/services/legacyMigration/cmg'
+ *   Xenium: '@/services/legacyMigration/xenium'
+ *   Both:   '@/services/legacyMigration'  (returns { cmg, xenium })
  */
 
-const prisma = require('@/db');
-
-/**
- * Check if a dataset is a legacy CMG dataset (created via bigbang migration).
- * @param {Object} dataset - The dataset object with a metadata field
- * @returns {boolean}
- */
-function isLegacyDataset(dataset) {
-  return dataset?.metadata?.origin === 'legacy';
-}
-
-/**
- * Check if a genome browser session is a legacy CMG session (created via bigbang migration).
- * @param {Object} session - The session object with a metadata field
- * @returns {boolean}
- */
-function isLegacySession(session) {
-  return session?.metadata?.origin === 'legacy';
-}
-
-/**
- * Check if a conversion is a legacy CMG conversion (created via bigbang migration).
- * @param {Object} conversion - The conversion object with a metadata field
- * @returns {boolean}
- */
-function isLegacyConversion(conversion) {
-  return conversion?.metadata?.origin === 'legacy';
-}
-
-/**
- * Check if a dataset has reached a specific migration state
- * @param {number} datasetId - The dataset ID
- * @param {string} state - The state to check for
- * @returns {Promise<boolean>} - True if the state exists
- */
-async function hasReachedState(datasetId, state) {
-  const stateRecord = await prisma.dataset_state.findFirst({
-    where: {
-      dataset_id: datasetId,
-      state,
-    },
-  });
-  return !!stateRecord;
-}
-
-/**
- * Get migration status information for a dataset
- * @param {number} datasetId - The dataset ID
- * @returns {Promise<Object>} - Migration status object
- */
-async function getDatasetMigrationStatus(datasetId) {
-  // Get the dataset to check if it's a legacy dataset
-  const dataset = await prisma.dataset.findUnique({
-    where: { id: datasetId },
-    select: {
-      id: true,
-      metadata: true,
-    },
-  });
-
-  if (!dataset) {
-    throw new Error(`Dataset with ID ${datasetId} not found`);
-  }
-
-  if (!isLegacyDataset(dataset)) {
-    return {
-      is_legacy: false,
-      is_hydrated: false,
-      is_validated: false,
-      is_migrated: false,
-      is_migration_initiated: false,
-      is_retrieved: false,
-      is_inspected: false,
-      is_metadata_populated: false,
-    };
-  }
-
-  // Check all migration states
-  const [
-    isMigrationInitiated,
-    isRetrieved,
-    isInspected,
-    isMetadataPopulated,
-    isValidated,
-    isMigrated,
-  ] = await Promise.all([
-    hasReachedState(datasetId, 'MIGRATION_INITIATED'),
-    hasReachedState(datasetId, 'RETRIEVED'),
-    hasReachedState(datasetId, 'INSPECTED'),
-    hasReachedState(datasetId, 'METADATA_POPULATED'),
-    hasReachedState(datasetId, 'STAGED'),
-    hasReachedState(datasetId, 'MIGRATED'),
-  ]);
-
-  return {
-    is_legacy: true,
-    is_migration_initiated: isMigrationInitiated,
-    is_retrieved: isRetrieved,
-    is_inspected: isInspected,
-    is_metadata_populated: isMetadataPopulated,
-    is_hydrated: isMetadataPopulated, // Hydration complete when metadata populated
-    is_validated: isValidated,
-    is_migrated: isMigrated,
-  };
-}
-
-/**
- * Check if a dataset is currently undergoing migration
- * @param {number} datasetId - The dataset ID
- * @returns {Promise<boolean>} - True if migration is in progress
- */
-async function isMigrationInProgress(datasetId) {
-  const status = await getDatasetMigrationStatus(datasetId);
-
-  // Migration is in progress if it's initiated but not completed
-  return status.is_migration_initiated && !status.is_migrated;
-}
-
-/**
- * Get migration status information for a session
- * @param {number} sessionId - The session ID
- * @returns {Promise<Object>} - Migration status object
- */
-async function getSessionMigrationStatus(sessionId) {
-  // Get the session to check if it's a legacy session and hydration status
-  const session = await prisma.genome_browser_session.findUnique({
-    where: { id: sessionId },
-    select: {
-      id: true,
-      metadata: true,
-    },
-  });
-
-  if (!session) {
-    throw new Error(`Session with ID ${sessionId} not found`);
-  }
-
-  // Session is hydrated if metadata.is_hydrated is true
-  const isHydrated = session.metadata?.is_hydrated === true;
-
-  return {
-    is_legacy: isLegacySession(session),
-    is_hydrated: isHydrated,
-  };
-}
+const cmg = require('./legacyMigration/cmg');
+const xenium = require('./legacyMigration/xenium');
 
 module.exports = {
-  isLegacyDataset,
-  isLegacySession,
-  isLegacyConversion,
-  getDatasetMigrationStatus,
-  getSessionMigrationStatus,
-  isMigrationInProgress,
-  hasReachedState,
+  ...cmg,
+  cmg,
+  xenium,
 };

@@ -1081,20 +1081,26 @@ router.post(
       let actualWorkflow = wf_name;
 
       if (legacyMigrationService.isLegacyDataset(dataset)) {
-        // This is a legacy CMG dataset
         const migrationStatus = await legacyMigrationService.getDatasetMigrationStatus(dataset.id);
-
-        // If migration is already in progress, return error
         if (migrationStatus.is_migration_initiated && !migrationStatus.is_migrated) {
           return next(createError(409, 'Dataset is already being staged'));
         }
-
-        // If not yet hydrated, use stage_migrated workflow
         if (!migrationStatus.is_hydrated) {
           actualWorkflow = CONSTANTS.WORKFLOWS.STAGE_MIGRATED;
-          logger.info(`Legacy dataset ${dataset.id} needs hydration, using stage_migrated workflow`);
+          logger.info(`Legacy CMG dataset ${dataset.id} needs hydration, using stage_migrated workflow`);
         } else {
-          logger.info(`Legacy dataset ${dataset.id} already hydrated, using standard stage workflow`);
+          logger.info(`Legacy CMG dataset ${dataset.id} already hydrated, using standard stage workflow`);
+        }
+      } else if (legacyMigrationService.xenium?.isLegacyXeniumDataset?.(dataset)) {
+        const migrationStatus = await legacyMigrationService.xenium.getDatasetMigrationStatus(dataset.id);
+        if (migrationStatus.is_migration_initiated && !migrationStatus.is_migrated) {
+          return next(createError(409, 'Dataset is already being staged'));
+        }
+        if (!migrationStatus.is_hydrated) {
+          actualWorkflow = CONSTANTS.WORKFLOWS.STAGE_MIGRATED_XENIUM;
+          logger.info(`Legacy Xenium dataset ${dataset.id} needs hydration, using stage_migrated_xenium workflow`);
+        } else {
+          logger.info(`Legacy Xenium dataset ${dataset.id} already hydrated, using standard stage workflow`);
         }
       }
 
@@ -1132,15 +1138,19 @@ const report_storage = multer.diskStorage({
         },
       });
 
-      if (dataset?.metadata?.report_id) {
-        const parent_dir = `reports/${dataset?.metadata?.report_id}`;
-        await fsPromises.mkdir(parent_dir, {
-          recursive: true,
-        });
+      // Two parallel mechanisms for storing report files, one per data source:
+      //   - report_id (core bioloop / CMG): UUID key for multiqc_report.html
+      //   - analysis_summary_file_dir (Xenium): UUID key for analysis_summary.html
+      // Both live in the dataset.metadata JSONB column and do not conflict.
+      const reportUuid = dataset?.metadata?.analysis_summary_file_dir
+        ?? dataset?.metadata?.report_id;
 
+      if (reportUuid) {
+        const parent_dir = `reports/${reportUuid}`;
+        await fsPromises.mkdir(parent_dir, { recursive: true });
         cb(null, parent_dir);
       } else {
-        cb('report_id is not set');
+        cb('Neither report_id nor analysis_summary_file_dir is set on this dataset');
       }
     } catch (e) {
       cb(e);
@@ -1148,7 +1158,9 @@ const report_storage = multer.diskStorage({
   },
 
   filename(req, file, cb) {
-    cb(null, 'multiqc_report.html');
+    // Xenium uploads analysis_summary.html; core bioloop / CMG upload multiqc_report.html.
+    // Use the original filename provided by the caller so both are stored correctly.
+    cb(null, file.originalname);
   },
 });
 

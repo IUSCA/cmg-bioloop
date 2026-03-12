@@ -30,6 +30,10 @@ APP_ID = 'cmg-test.sca.iu.edu'
 FETCH_QUEUE = f'cmg-bioloop-fetch.{APP_ID}.q'
 ARCHIVE_QUEUE = f'cmg-bioloop-archive.{APP_ID}.q'
 CONVERSION_QUEUE = f'cmg-bioloop-conversion.{APP_ID}.q'
+# Dedicated Xenium queues managed by cmg-bioloop (not xenium-fork queue names).
+# Archive queue handles zpool-side operations; fetch queue handles staged-side work.
+XENIUM_ARCHIVE_QUEUE = f'cmg-bioloop-xenium-archive.{APP_ID}.q'
+XENIUM_FETCH_QUEUE = f'cmg-bioloop-xenium-fetch.{APP_ID}.q'
 
 ONE_HOUR = 60 * 60
 ONE_GIGABYTE = 1024 * 1024 * 1024
@@ -42,6 +46,8 @@ config = {
     'fetch_queue': FETCH_QUEUE,
     'archive_queue': ARCHIVE_QUEUE,
     'conversion_queue': CONVERSION_QUEUE,
+    'xenium_archive_queue': XENIUM_ARCHIVE_QUEUE,
+    'xenium_fetch_queue': XENIUM_FETCH_QUEUE,
     # cspell: disable-next-line
     'genome_file_types': ['.cbcl', '.bcl', '.bcl.gz', '.bgzf', '.fastq.gz', '.bam', '.bam.bai', '.vcf.gz',
                           '.vcf.gz.tbi', '.vcf'],
@@ -193,6 +199,11 @@ config = {
                     'queue': FETCH_QUEUE
                 },
                 {
+                    'name': 'parse analysis data',
+                    'task': 'parse_analysis_data',
+                    'queue': XENIUM_FETCH_QUEUE
+                },
+                {
                     'name': 'run qc',
                     'task': 'generate_qc',
                     'queue': FETCH_QUEUE
@@ -217,6 +228,11 @@ config = {
                     'task': 'setup_dataset_download',
                     'queue': FETCH_QUEUE
                 },
+                {
+                    'name': 'upload static content',
+                    'task': 'upload_static_content',
+                    'queue': XENIUM_FETCH_QUEUE
+                },
             ]
         },
         'intake_integrated': {
@@ -231,6 +247,11 @@ config = {
                     'name': 'inspect',
                     'task': 'inspect_dataset',
                     'queue': ARCHIVE_QUEUE
+                },
+                {
+                    'name': 'parse analysis data',
+                    'task': 'parse_analysis_data',
+                    'queue': XENIUM_ARCHIVE_QUEUE
                 },
                 {
                     'name': 'archive',
@@ -252,6 +273,71 @@ config = {
                     'task': 'setup_dataset_download',
                     'queue': FETCH_QUEUE
                 },
+                {
+                    'name': 'upload static content',
+                    'task': 'upload_static_content',
+                    'queue': XENIUM_FETCH_QUEUE
+                },
+            ]
+        },
+        'subdir_wf_initiator': {
+            'description': 'Registers xenium RAW_DATA subdirectories as DATA_PRODUCT and launches intake_integrated',
+            'steps': [
+                {
+                    'name': 'await stability',
+                    'task': 'await_stability',
+                    'queue': XENIUM_ARCHIVE_QUEUE
+                },
+                {
+                    'name': 'initiate dataproduct workflows',
+                    'task': 'initiate_subdir_workflows',
+                    'queue': XENIUM_ARCHIVE_QUEUE
+                }
+            ]
+        },
+        'stage_migrated_xenium': {
+            'description': 'Stage and hydrate legacy Xenium datasets',
+            'steps': [
+                {
+                    'name': 'begin_migration',
+                    'task': 'begin_migration',
+                    'queue': XENIUM_ARCHIVE_QUEUE
+                },
+                {
+                    'name': 'inspect',
+                    'task': 'inspect_dataset',
+                    'queue': XENIUM_ARCHIVE_QUEUE
+                },
+                {
+                    'name': 'parse analysis data',
+                    'task': 'parse_analysis_data',
+                    'queue': XENIUM_ARCHIVE_QUEUE
+                },
+                {
+                    'name': 'stage',
+                    'task': 'stage_dataset',
+                    'queue': XENIUM_FETCH_QUEUE
+                },
+                {
+                    'name': 'validate',
+                    'task': 'validate_dataset',
+                    'queue': XENIUM_FETCH_QUEUE
+                },
+                {
+                    'name': 'setup_download',
+                    'task': 'setup_dataset_download',
+                    'queue': XENIUM_FETCH_QUEUE
+                },
+                {
+                    'name': 'upload static content',
+                    'task': 'upload_static_content',
+                    'queue': XENIUM_FETCH_QUEUE
+                },
+                {
+                    'name': 'end_migration',
+                    'task': 'end_migration',
+                    'queue': XENIUM_FETCH_QUEUE
+                }
             ]
         },
         "conversion": {
@@ -391,7 +477,10 @@ config = {
             'slurm_script_dir': '/slurm_scripts',
         },
     },
-    'legacy_application_active': True,
+    'legacy_application_active': {
+        'cmg': True,
+        'xenium': True,
+    },
     'upload': {
       'verify_checksums': True,  # Enable BLAKE3 manifest-based checksum verification
     },

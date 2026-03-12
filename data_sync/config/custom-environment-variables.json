@@ -9,5 +9,9 @@
   "cmg": {
     "legacyConversionsLogsDir": "CMG_LEGACY_CONVERSIONS_LOGS_DIR"
   },
+  "legacy_application_active": {
+    "cmg": "LEGACY_APPLICATION_ACTIVE_CMG",
+    "xenium": "LEGACY_APPLICATION_ACTIVE_XENIUM"
+  },
   "data_root": "DATA_ROOT"
 }

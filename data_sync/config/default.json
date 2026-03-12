@@ -9,5 +9,9 @@
   "cmg": {
     "legacyConversionsLogsDir": "/opt/sca/project/ingestion_source_dir/CMG-SCA/production/runlogs"
   },
+  "legacy_application_active": {
+    "cmg": true,
+    "xenium": true
+  },
   "data_root": "/tmp"
 }

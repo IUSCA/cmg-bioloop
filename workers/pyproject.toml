@@ -18,6 +18,8 @@ fire = "^0.5.0"
 pika = "^1.3.2"
 pymongo = "4.11.1"
 fabric = "^3.2.2"        # SSH connections for SLURM executor
+beautifulsoup4 = "^4.12.2"  # parse_analysis_data task: parse analysis_summary.html
+python-slugify = "^8.0.1"   # utility used in xenium worker code
 
 [tool.poetry.group.dev.dependencies]
 jupyterlab = "^4.3.5"

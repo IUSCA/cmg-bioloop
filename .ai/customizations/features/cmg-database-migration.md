@@ -8,6 +8,7 @@
 - `/CMG_BIOLOOP_DATABASE_SYNC---POLLING.md`
 - `/data_sync/` directory
 - `/CMG_SYNC_IMPLEMENTATION_PROGRESS.md`
+- `.ai/features/migration-documentation-checklists.md` (CMG + Cross-App sections)
 
 ---
 
@@ -729,6 +730,15 @@ The following poller scripts must be updated to set `metadata.origin` on rows th
 
 ---
 
+## 2026-03-11
+
+- Decision: CMG clear operation is source-scoped by default in data-sync workflows.
+- Change: `bigbang_cmg_sync.js` now supports `--clear-cmg-target-data` to remove CMG-originated migrated rows (plus CMG cursor/retry state) without truncating xenium-originated data.
+- Decision: Deprecated clear alias `--clear-target-db` removed from CMG bigbang CLI; only explicit `--clear-cmg-target-data` is supported.
+- Change: Central orchestrator `data_sync/bin/init.sh` now uses explicit app/action flags and forwards CMG clear as `--clear-cmg-target-data` instead of full-database truncation semantics.
+
+---
+
 ## Future Entries
 
 Add entries here as decisions are made, changes are implemented, or issues are resolved.
@@ -745,5 +755,5 @@ Format:
 
 ---
 
-**Last Updated:** 2026-02-22
+**Last Updated:** 2026-03-12
 

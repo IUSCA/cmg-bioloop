@@ -142,6 +142,7 @@ const WORKFLOWS = {
   INTAKE_INTEGRATED: 'intake_integrated',
   STAGE: 'stage',
   STAGE_MIGRATED: 'stage_migrated',
+  STAGE_MIGRATED_XENIUM: 'stage_migrated_xenium',
   HYDRATE_SESSION: 'hydrate_session',
 };
 
