@@ -12,33 +12,38 @@ import shutil
 from datetime import datetime
 from pathlib import Path
 
+from dotenv import load_dotenv
 import pytest
+
+# Load .env before importing any workers.* modules.
+#
+# The container may already have APP_API_TOKEN='' as a system env var (set via
+# docker-compose or a previous entrypoint run).  workers/config/__init__.py now
+# uses override=True, but we call load_dotenv here as well so the correct token
+# is in os.environ before any cached import of workers.config can be triggered
+# by pytest itself or its plugins.
+load_dotenv(override=True)
 
 import workers.api as api
 from workers.constants.upload import UPLOAD_STATUS
 
-# Configure logging to file
-TEST_LOGS_DIR = Path(__file__).parent.parent / 'test_logs'
-TEST_LOGS_DIR.mkdir(exist_ok=True)
+# Log output is configured in pytest.ini (log_file, log_file_level, log_cli).
+# pytest_sessionstart below also writes a per-run timestamped file alongside
+# the persistent watch_tests.log managed by pytest itself.
+#
+# Log locations (Docker):
+#   container: /opt/sca/app/test_logs/
+#   host:      workers/test_logs/   (volume: ./workers/:/opt/sca/app)
+# Log locations (local/non-Docker):
+#   workers/test_logs/
+#
+# Per-run file:   test_logs/test_run_YYYYMMDD_HHMMSS.log
+# Persistent log: test_logs/watch_tests.log  (controlled by pytest.ini log_file)
+TEST_LOGS_DIR: Path = Path(__file__).parent.parent / 'test_logs'
 
-# Create timestamped log file for this test run
-timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-log_file = TEST_LOGS_DIR / f'test_run_{timestamp}.log'
+logging.getLogger().setLevel(logging.DEBUG)
 
-logging.basicConfig(
-    level=logging.DEBUG,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler(log_file),
-        logging.StreamHandler()  # Also print to console
-    ]
-)
-
-logger = logging.getLogger(__name__)
-logger.info("="*80)
-logger.info(f"TEST RUN STARTED: {timestamp}")
-logger.info(f"Log file: {log_file}")
-logger.info("="*80)
+logger: logging.Logger = logging.getLogger(__name__)
 
 
 @pytest.fixture(scope="session")
@@ -251,35 +256,49 @@ def upload_log(api_client, test_dataset):
     return None
 
 
-def pytest_configure(config):
+def pytest_sessionstart(session: pytest.Session) -> None:
     """
-    Pytest hook: Configure markers for test categorization.
+    Pytest hook: Add a per-run timestamped FileHandler to the root logger.
+
+    This creates test_logs/test_run_YYYYMMDD_HHMMSS.log alongside the
+    persistent watch_tests.log that pytest writes via pytest.ini log_file.
+    Both files land in the same test_logs/ directory.
     """
-    config.addinivalue_line(
-        "markers", "integration: Integration tests (run against Docker services)"
+    TEST_LOGS_DIR.mkdir(exist_ok=True)
+    timestamp: str = datetime.now().strftime('%Y%m%d_%H%M%S')
+    run_log_path: Path = TEST_LOGS_DIR / f'test_run_{timestamp}.log'
+
+    handler: logging.FileHandler = logging.FileHandler(run_log_path)
+    handler.setLevel(logging.DEBUG)
+    handler.setFormatter(
+        logging.Formatter('%(asctime)s %(levelname)-8s %(name)s %(message)s')
     )
-    config.addinivalue_line(
-        "markers", "slow: Slow tests (may take minutes)"
-    )
-    config.addinivalue_line(
-        "markers", "requires_celery: Tests that require Celery worker running"
-    )
+    logging.getLogger().addHandler(handler)
+
+    logger.info("=" * 80)
+    logger.info(f"TEST RUN STARTED: {timestamp}")
+    logger.info(f"Per-run log:   {run_log_path}")
+    logger.info(f"Persistent log: {TEST_LOGS_DIR / 'watch_tests.log'} (pytest.ini log_file)")
+    logger.info("=" * 80)
 
 
-def pytest_runtest_setup(item):
+def pytest_runtest_setup(item: pytest.Item) -> None:
     """
     Pytest hook: Log test start.
     """
-    logger.info("\n" + "="*80)
+    logger.info("\n" + "=" * 80)
     logger.info(f"TEST STARTED: {item.name}")
     logger.info(f"Module: {item.module.__name__}")
-    logger.info("="*80)
+    logger.info("=" * 80)
 
 
-def pytest_runtest_teardown(item, nextitem):
+def pytest_runtest_teardown(
+    item: pytest.Item,
+    nextitem: pytest.Item | None,
+) -> None:
     """
     Pytest hook: Log test completion.
     """
-    logger.info("="*80)
+    logger.info("=" * 80)
     logger.info(f"TEST COMPLETED: {item.name}")
-    logger.info("="*80 + "\n")
+    logger.info("=" * 80 + "\n")

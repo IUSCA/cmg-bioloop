@@ -51,6 +51,7 @@ const {
   acquireProcessLock,
   releaseProcessLock,
   forceReleaseAllProcessLocks,
+  checkProcessLockStatus,
   POLLER_LOCK_TTL_MS,
 } = require('./sync/shared/process_lock_manager');
 
@@ -258,6 +259,16 @@ async function main() {
       logger.warn('[CLEAR-LOCKS] Clearing all existing process locks...');
       const count = await forceReleaseAllProcessLocks(prisma);
       logger.warn(`[CLEAR-LOCKS] Released ${count} process lock(s)`);
+    }
+
+    const bigbangLockStatus = await checkProcessLockStatus(prisma, 'bigbang');
+    if (bigbangLockStatus) {
+      logger.error('');
+      logger.error('='.repeat(80));
+      logger.error('[FAILED] CMG bigbang is currently running');
+      logger.error('='.repeat(80));
+      logger.error('Start CMG pollers only after bigbang completes.');
+      process.exit(1);
     }
 
     // Acquire process lock BEFORE starting pollers

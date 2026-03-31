@@ -344,16 +344,40 @@ These instructions are mandatory for continuation chats and should be treated as
 - Change: Wired `bigbang_xenium_sync.js` to execute all 8 real migration phases (removed stubs), including optional xenium-scoped target cleanup before rerun.
 - Change: Added reusable Xenium sync helpers (`bigbang/helpers.js`, `utils/role_mapper.js`) to centralize source-retirement origin policy, integer ID coercion, chunking, and project slug generation; poller role mapping now uses the shared utility.
 - Change: Added `legacy_application_active.{cmg,xenium}` support in `data_sync` config files so data-sync-created records follow the same source-aware retirement policy as API/workers.
-- Change: Refactored `data_sync/bin/init.sh` to explicit per-app action flags (`--cmg-run-bigbang`, `--cmg-run-pollers`, `--xenium-run-bigbang`, `--xenium-run-pollers`) and per-app controls for target DB, lock clearing, and source-scoped clear-target behavior.
+- Change: Refactored `data_sync/bin/init.sh` to explicit per-app action flags and controls for target DB, lock clearing, and source-scoped clear-target behavior.
 - Change: Added `--dry-run` mode in `init.sh` to print fully resolved per-app commands/flags before execution for safer review in multi-branch migration scenarios.
-- Decision: Orchestrator flags are now explicit per app and per action; ambiguous aggregate flags are rejected (`--all`, `--both`, `--cmg`, `--xenium`, `--bigbang`, `--pollers`) in favor of `--cmg-run-bigbang`, `--cmg-run-pollers`, `--xenium-run-bigbang`, `--xenium-run-pollers`.
+- Decision: Orchestrator flags are explicit per app and per action; ambiguous aggregate flags are rejected (`--all`, `--both`, `--cmg`, `--xenium`, `--bigbang`, `--pollers`).
 - Decision: `init.sh` requires at least one explicit action flag and never infers app selection by default (supersedes prior default-`bigbang` behavior).
 - Change: CMG clear behavior is now source-scoped; CMG bigbang supports `--clear-cmg-target-data` and deletes CMG-originated rows/cursors/retries without truncating xenium data.
 - Change: Orchestrator clear flags are now source-consistent and symmetric: `--cmg-clear-target-data` and `--xenium-clear-target-data`.
 - Change: Xenium bigbang now exposes explicit source-scoped clear flag `--clear-xenium-target-data`; init forwards the explicit form.
 - Decision: Deprecated clear alias `--clear-target-db` removed from Xenium bigbang CLI; only explicit `--clear-xenium-target-data` is supported.
-- Clarification: Scenario matrix validated in dry-run mode for these cases: single-app initial bigbang, second-app follow-up bigbang + pollers, one-app rerun after both migrated, and dual-app rerun with independent per-app target-db/clear-locks/clear-target-data arguments.
+- Clarification: Scenario matrix validated in dry-run mode for these cases: single-app initial bigbang, second-app follow-up bigbang + pollers, one-app rerun after both migrated, and dual-app rerun with explicit per-app action/clear/lock flags.
 
 ---
 
-**Last Updated:** 2026-03-12
+## 2026-03-12
+
+- Change: Added explicit Xenium poller lifecycle controls in `data_sync/bin/init.sh`: `--xenium-start-pollers`, `--xenium-stop-pollers`, `--xenium-restart-pollers` (managed background mode with PID files under `data_sync/run/`).
+- Change: Added symmetric CMG lifecycle controls in the same orchestrator for operational parity.
+- Decision: Hybrid-row handling was removed from source-scoped clear logic; Xenium and CMG are treated as isolated migration domains with no cross-source contamination path.
+- Change: Removed `--cmg-run-pollers` / `--xenium-run-pollers` from `init.sh`; poller lifecycle now uses only explicit per-app start/stop/restart flags.
+- Change: Replaced per-app target-db flags with a shared `--target-db` in `init.sh`; all selected CMG/Xenium actions now run against the same target database.
+
+---
+
+## 2026-03-13
+
+- Fix: Xenium origin retirement helper no longer falls back to `legacy_application_active.cmg` when `legacy_application_active.xenium` is absent; Xenium now defaults to active unless explicitly disabled.
+- Fix: Xenium clear flow now mirrors CMG semantics for stale-lock recovery during reset operations (`--clear-xenium-target-data` clears rows/cursors/retries and then clears Xenium process locks before lock acquisition).
+- Fix: Xenium poller startup now rejects launch when Xenium bigbang lock is active to avoid concurrent write races.
+- Fix: Xenium bigbang clear operation now runs sequential deletes (instead of one interactive transaction) to reduce timeout risk on large cascades.
+- Change: Xenium metrics reporter now includes `lastSuccessTime`; reserved usernames skipped by Xenium user sync now emit warning logs.
+- Fix: Xenium unique-name/slug generators now include bounded attempt guards and descriptive failures.
+- Change: Xenium pollers now write structured failure entries to `xenium_sync_errors.jsonl`; full source-row payload snapshots are gated behind `XENIUM_SYNC_LOG_FULL_PAYLOAD=true|1|yes`.
+- Decision: Xenium bigbang timestamp fallback is deterministic when source timestamps are null/invalid (`1970-01-01T00:00:00.000Z`) to preserve rerun-stable history.
+- Change: Xenium poller base now supports optional Prisma transaction timeout overrides; Xenium ACL poller defaults were hardened to `batchSize=50` and `transactionTimeoutMs=30000` to reduce timeout pressure from source reads inside target transactions.
+
+---
+
+**Last Updated:** 2026-03-13

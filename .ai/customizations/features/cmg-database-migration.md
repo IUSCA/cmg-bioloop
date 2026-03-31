@@ -739,6 +739,26 @@ The following poller scripts must be updated to set `metadata.origin` on rows th
 
 ---
 
+## 2026-03-12
+
+- Change: Added explicit CMG poller lifecycle controls in `data_sync/bin/init.sh`: `--cmg-start-pollers`, `--cmg-stop-pollers`, `--cmg-restart-pollers` (managed background mode with PID files under `data_sync/run/`).
+- Change: Added symmetric Xenium lifecycle controls in the same orchestrator for parity and reduced operator branching confusion.
+- Decision: Hybrid-row handling was removed from source-scoped clear logic; CMG and Xenium are treated as isolated migration domains with no cross-source contamination path.
+- Change: Removed `--cmg-run-pollers` / `--xenium-run-pollers` from `init.sh`; poller lifecycle now uses only explicit per-app start/stop/restart flags.
+- Change: Replaced per-app target-db flags with a shared `--target-db` in `init.sh`; all selected CMG/Xenium actions now run against the same target database.
+
+---
+
+## 2026-03-13
+
+- Fix: CMG poller startup now checks for an active CMG bigbang lock and exits early to avoid concurrent write races.
+- Fix: CMG bigbang progress logging now uses a consistent `[N/18]` step counter across all phases.
+- Fix: `data_sync/bin/init.sh` help output now excludes the shebang line and CMG environment warnings now align with supported CMG inputs (`--cmg-uri`, `MONGO_URI`, `CMG_MONGO_HOST`) instead of warning only on missing `MONGO_URI`.
+- Change: CMG poller base now supports optional Prisma transaction timeout overrides; CMG ACL poller defaults were hardened to `batchSize=50` and `transactionTimeoutMs=30000` to reduce timeout pressure from source reads inside target transactions.
+- Change: CMG bigbang now seeds the `about` table from repository-root `about_cmg` content (plain text converted to escaped `<p>` HTML blocks) and only creates a new about row when content differs from the latest existing row.
+
+---
+
 ## Future Entries
 
 Add entries here as decisions are made, changes are implemented, or issues are resolved.
@@ -755,5 +775,5 @@ Format:
 
 ---
 
-**Last Updated:** 2026-03-12
+**Last Updated:** 2026-03-13
 

@@ -1,5 +1,8 @@
 # CMG Big-Bang Sync - Usage Guide
 
+> For operational runs, prefer `./bin/init.sh` (see `bin/README.md`).
+> Use this document for CMG bigbang-specific behavior/details.
+
 ## Overview
 
 The big-bang synchronization script performs a **one-time migration** of all existing CMG data into Bioloop.
@@ -13,9 +16,7 @@ The big-bang synchronization script performs a **one-time migration** of all exi
    npx prisma generate
    ```
 
-2. **MongoDB Access**: Ensure you have credentials for:
-   - CMG MongoDB (legacy data)
-   - Rhythm MongoDB (workflow data)
+2. **MongoDB Access**: Ensure you have credentials for CMG MongoDB (legacy data).
 
 3. **Clean Bioloop Database**: The script assumes an empty or minimal Bioloop database
 
@@ -33,7 +34,7 @@ cd /opt/sca/app
 
 # Test in isolated sandbox database
 # Note: --max-old-space-size=6144 allocates 6GB to Node.js heap (container has 8GB limit)
-node --max-old-space-size=6144 src/bigbang_sync.js \
+node --max-old-space-size=6144 src/bigbang_cmg_sync.js \
   --target-db=sandbox \
   --cmg-uri="mongodb://username:password@host:27017/cmg" \
   --skip-sessions \
@@ -49,7 +50,7 @@ After testing successfully in sandbox:
 
 ```bash
 # Sync to production (reads config from ../api/.env automatically)
-node --max-old-space-size=6144 src/bigbang_sync.js \
+node --max-old-space-size=6144 src/bigbang_cmg_sync.js \
   --target-db=app \
   --cmg-uri="mongodb://username:password@host:27017/cmg" \
   --skip-sessions \
@@ -73,7 +74,7 @@ docker compose -f docker-compose.sandbox.yml exec db_sandbox bash
 cd /opt/sca/app
 
 # Run the script (reads CMG MongoDB from .env file)
-node src/bigbang_sync.js --target-db=sandbox
+node src/bigbang_cmg_sync.js --target-db=sandbox
 ```
 
 ### Method 4: One-Liner from Host
@@ -83,11 +84,11 @@ cd data_sync
 
 # Sandbox test (skip conversion logs since filesystem not accessible)
 docker compose -f docker-compose.sandbox.yml exec db_sandbox \
-  node /opt/sca/app/src/bigbang_sync.js --target-db=sandbox --skip-sessions --skip-conversion-logs
+  node /opt/sca/app/src/bigbang_cmg_sync.js --target-db=sandbox --skip-sessions --skip-conversion-logs
 
 # Production sync (include conversion logs)
 docker compose -f docker-compose.sandbox.yml exec db_sandbox \
-  node /opt/sca/app/src/bigbang_sync.js --target-db=app --skip-sessions
+  node /opt/sca/app/src/bigbang_cmg_sync.js --target-db=app --skip-sessions
 ```
 
 ## Options
@@ -99,7 +100,7 @@ docker compose -f docker-compose.sandbox.yml exec db_sandbox \
 | `--skip-sessions` | Skip genome browser session conversion (recommended for first run) |
 | `--skip-conversion-logs` | Skip conversion logs migration from filesystem (useful for local/dev) |
 | `--clear-locks` | Clear any existing process locks before starting (useful if previous run crashed) |
-| `--clear-target-db` | Clear all data from target database before migration (preserves schema and sync infrastructure) |
+| `--clear-cmg-target-data` | Clear CMG-originated rows from target database before migration |
 | `--help`, `-h` | Show help message |
 
 ### Target Database Options
@@ -184,7 +185,7 @@ echo "CMG_LEGACY_CONVERSIONS_LOGS_DIR=/opt/sca/project/ingestion_source_dir/CMG-
 **Skipping:**
 ```bash
 # Use --skip-conversion-logs flag to skip this step (useful for local/dev)
-node src/bigbang_sync.js --skip-conversion-logs
+node src/bigbang_cmg_sync.js --skip-conversion-logs
 ```
 
 **Behavior:**
@@ -318,7 +319,7 @@ These indicate:
 3. **Start Incremental Poller**
    ```bash
    # The poller script
-   node src/poller_sync.js
+   node src/poller_cmg_sync.js
    ```
 
 ## Troubleshooting
@@ -333,7 +334,7 @@ These indicate:
 
 **Fix Option 1 (Recommended)**: Restart with `--clear-locks` flag
 ```bash
-node src/bigbang_sync.js --clear-locks
+node src/bigbang_cmg_sync.js --clear-locks
 ```
 
 **Fix Option 2**: Manually clear the lock in database
@@ -417,23 +418,12 @@ The JavaScript version produces **identical results** to the Python version when
 ## Files Created
 
 ```
-api/src/scripts/
-├── cmg_bigbang_sync.js                    # Main script
-└── cmg_sync/
-    ├── bigbang/
-    │   ├── seed_constants.js              # Roles, programs, definitions
-    │   ├── sync_users.js                  # Users + roles
-    │   ├── sync_datasets.js               # Datasets (RAW_DATA + DATA_PRODUCT)
-    │   ├── sync_audit_logs.js             # Audit logs from events
-    │   ├── sync_dataset_hierarchies.js    # Dataset relationships
-    │   ├── sync_projects.js               # Projects + associations
-    │   ├── sync_conversions.js            # Conversions + derived datasets
-    │   ├── sync_sessions.js               # Genome browser sessions
-    │   └── initialize_cursors.js          # Poller cursor setup
-    └── utils/
-        ├── cmg_helpers.js                 # CMG utility functions
-        ├── role_mapper.js                 # Role mapping
-        └── duplicate_handler.js           # Duplicate name handling
+data_sync/src/
+├── bigbang_cmg_sync.js                    # Main CMG bigbang script
+└── sync/cmg/
+    ├── bigbang/                           # CMG bigbang modules
+    ├── pollers/                           # CMG pollers
+    └── utils/                             # CMG utilities
 ```
 
 ## Support

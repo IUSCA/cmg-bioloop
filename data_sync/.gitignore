@@ -11,6 +11,8 @@ npm-debug.log*
 logs/
 logs_from_prod/
 *.log
+run/*.pid
+run/*.pid.lock
 
 # Prisma
 prisma/migrations/*.sql

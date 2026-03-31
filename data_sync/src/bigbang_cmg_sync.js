@@ -72,7 +72,14 @@ const logger = {};
 });
 
 // Bigbang modules
-const { createRoles, createCMGUser, populatePipelineDefinitions, seedAnalysisTypes, seedImportSources } = require('./sync/cmg/bigbang/seed_constants');
+const {
+  createRoles,
+  createCMGUser,
+  populatePipelineDefinitions,
+  seedAnalysisTypes,
+  seedImportSources,
+  seedAboutContent,
+} = require('./sync/cmg/bigbang/seed_constants');
 const { populateBioloopUsers } = require('./sync/cmg/bigbang/populate_bioloop_users');
 const { syncUsers } = require('./sync/cmg/bigbang/sync_users');
 const { syncAllDatasets } = require('./sync/cmg/bigbang/sync_datasets');
@@ -409,63 +416,64 @@ async function main() {
     logger.info('');
 
     // 1. Create roles
-    logger.info('[1/15] Creating roles...');
+    logger.info('[1/18] Creating roles...');
     await createRoles(prisma);
 
     // 2. Create CMG system user
-    logger.info('[2/15] Creating CMG system user...');
+    logger.info('[2/18] Creating CMG system user...');
     const cmgUserId = await createCMGUser(prisma);
 
     // 3. Populate pipeline definitions
-    logger.info('[3/15] Populating pipeline definitions...');
+    logger.info('[3/18] Populating pipeline definitions...');
     await populatePipelineDefinitions(prisma, cmgUserId);
 
     // 4. Seed analysis types
-    logger.info('[4/16] Seeding analysis types...');
+    logger.info('[4/18] Seeding analysis types...');
     await seedAnalysisTypes(prisma);
 
-    // 5. Seed import sources
-    logger.info('[5/16] Seeding import sources...');
+    // 5. Seed import sources and about content
+    logger.info('[5/18] Seeding import sources and About content...');
     await seedImportSources(prisma);
+    await seedAboutContent(prisma, cmgUserId);
 
     // 6. Populate Bioloop users (from JSON files)
-    logger.info('[6/16] Populating Bioloop users from JSON files...');
+    logger.info('[6/18] Populating Bioloop users from JSON files...');
     await populateBioloopUsers(prisma);
 
     // 7. Convert CMG users
-    logger.info('[7/16] Converting CMG users...');
+    logger.info('[7/18] Converting CMG users...');
     await syncUsers(prisma, cmgDb);
 
     // 8. Convert datasets
-    logger.info('[8/16] Converting datasets...');
+    logger.info('[8/18] Converting datasets...');
     await syncAllDatasets(prisma, cmgDb);
 
     // 9. Convert dataset audit logs
-    logger.info('[9/16] Converting dataset audit logs...');
+    logger.info('[9/18] Converting dataset audit logs...');
     await syncAuditLogs(prisma, cmgDb, cmgUserId);
 
     // 10. Convert stage/download logs
-    logger.info('[10/16] Converting historic stage/download events to logs...');
+    logger.info('[10/18] Converting historic stage/download events to logs...');
     await syncDownloadStageLogs(prisma, cmgDb, cmgUserId);
 
     // 11. Convert events collection (Download Copy events -> data_access_log)
-    logger.info('[11/16] Converting CMG events collection to data access logs...');
+    logger.info('[11/18] Converting CMG events collection to data access logs...');
     await syncEventsCollection(prisma, cmgDb, cmgUserId);
 
     // 12. Convert dataset import logs (CMG upload history -> Bioloop import logs)
-    logger.info('[12/16] Converting CMG upload history to import logs...');
+    logger.info('[12/18] Converting CMG upload history to import logs...');
     await syncImportLogs(prisma, cmgDb, cmgUserId);
 
     // 13. Convert conversions
-    logger.info('[13/16] Converting conversions...');
+    logger.info('[13/18] Converting conversions...');
     await syncConversions(prisma, cmgDb);
 
     // 14. Convert projects
-    logger.info('[14/16] Converting projects...');
+    logger.info('[14/18] Converting projects...');
     await syncProjects(prisma, cmgDb);
 
     // 15. Convert dataset hierarchies (must run after conversions so conversion_id can be stored)
-    logger.info('[15/16] Converting dataset hierarchies...');
+    logger.info('[15/18] Converting dataset hierarchies...');
     await syncDatasetHierarchies(prisma, cmgDb);
 
     // 16. Convert conversion logs (filesystem - production only)

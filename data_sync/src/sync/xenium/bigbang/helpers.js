@@ -16,9 +16,6 @@ function isLegacySourceActive(sourceName = 'xenium') {
     if (Object.prototype.hasOwnProperty.call(legacyConfig, sourceName)) {
       return Boolean(legacyConfig[sourceName]);
     }
-    if (Object.prototype.hasOwnProperty.call(legacyConfig, 'cmg')) {
-      return Boolean(legacyConfig.cmg);
-    }
   }
 
   return true;
@@ -46,7 +43,7 @@ function coerceIntegerId(value) {
 
 function toDateOrNow(value) {
   const date = value ? new Date(value) : null;
-  if (!date || Number.isNaN(date.getTime())) return new Date();
+  if (!date || Number.isNaN(date.getTime())) return new Date('1970-01-01T00:00:00.000Z');
   return date;
 }
 
@@ -72,9 +69,9 @@ async function generateUniqueProjectSlug(prisma, projectName, xeniumId) {
   const baseSlug = slugify(projectName) || `project-${xeniumId || Date.now()}`;
   let slug = baseSlug;
   let n = 1;
+  const maxAttempts = 1000;
 
-  // eslint-disable-next-line no-constant-condition
-  while (true) {
+  while (n <= maxAttempts) {
     // eslint-disable-next-line no-await-in-loop
     const existing = await prisma.project.findUnique({ where: { slug } });
     if (!existing || existing.xenium_id === xeniumId) {
@@ -83,6 +80,11 @@ async function generateUniqueProjectSlug(prisma, projectName, xeniumId) {
     slug = `${baseSlug}-${n}`;
     n += 1;
   }
+
+  throw new Error(
+    `[XENIUM][generateUniqueProjectSlug] Failed to generate unique slug `
+    + `for projectName="${projectName}" after ${maxAttempts} attempts`,
+  );
 }
 
 module.exports = {

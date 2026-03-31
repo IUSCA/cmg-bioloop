@@ -15,7 +15,15 @@ const { XENIUM_POLLER_NAMES } = require('../constants');
 
 class XeniumProjectACLPoller extends XeniumBasePoller {
   constructor(prisma, xeniumPrisma, options = {}) {
-    super(XENIUM_POLLER_NAMES.PROJECT_ACL, prisma, xeniumPrisma, options);
+    const aclDefaults = {
+      pollIntervalMs: 10000,
+      batchSize: 50,
+      transactionTimeoutMs: 30000,
+    };
+    super(XENIUM_POLLER_NAMES.PROJECT_ACL, prisma, xeniumPrisma, {
+      ...aclDefaults,
+      ...options,
+    });
   }
 
   getSourceModel() {

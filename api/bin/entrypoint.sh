@@ -105,14 +105,15 @@ if [ "${OAUTH_DOWNLOAD_CLIENT_ID}" = "xxx" ] || [ "${OAUTH_DOWNLOAD_CLIENT_SECRE
 fi
 
 
-# if ! grep -q "^APP_API_TOKEN=[^ ]\+" "workers/.env"; then
 echo "Generating APP_API_TOKEN"
-echo "overwriting workers/.env file"
-> workers/.env
-echo "Removed all content from workers/.env"
-echo "APP_API_TOKEN=$(node src/scripts/issue_token.js cmguser)"
-echo "APP_API_TOKEN=$(node src/scripts/issue_token.js cmguser)" > workers/.env
-# fi
+APP_API_TOKEN=$(node src/scripts/issue_token.js cmguser)
+if [ $? -ne 0 ] || [ -z "$APP_API_TOKEN" ]; then
+  echo "ERROR: Failed to generate APP_API_TOKEN. Error from issue_token.js:"
+  node src/scripts/issue_token.js cmguser
+  exit 1
+fi
+echo "Writing APP_API_TOKEN to workers/.env"
+echo "APP_API_TOKEN=$APP_API_TOKEN" > workers/.env
 
 # Dynamically load environment variables from .env file
 # This will export all variables in the .env file to the environment

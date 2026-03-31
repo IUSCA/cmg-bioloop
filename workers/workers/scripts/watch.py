@@ -1,6 +1,7 @@
 import fnmatch
 import logging
 from pathlib import Path
+from typing import Any
 
 from sca_rhythm import Workflow
 
@@ -93,11 +94,21 @@ def _compute_dataset_origin(candidate: Path) -> str | None:
 
 
 class Register:
-    def __init__(self, dataset_type, default_wf_name='integrated', **kwargs):
+    def __init__(
+        self,
+        dataset_type: str,
+        default_wf_name: str = 'integrated',
+        wf_start_kwargs: dict[str, Any] | None = None,
+        **kwargs: Any,
+    ) -> None:
         self.dataset_type = dataset_type
         self.reg_config = config['registration'][self.dataset_type]
         self.reject_patterns: set[str] = set(self.reg_config['rejects'])
         self.default_wf_name = default_wf_name
+        # kwargs passed verbatim to Workflow.start() alongside the dataset_id.
+        # Use this to pass step-level overrides (e.g. recency_threshold=5 for
+        # test environments) without touching the shared config.
+        self.wf_start_kwargs: dict[str, Any] = wf_start_kwargs or {}
         self.batch_size: int = 100
         self.metadata = kwargs
 
@@ -170,6 +181,7 @@ class Register:
             'name': candidate.name,
             'type': self.dataset_type,
             'origin_path': str(candidate.resolve()),
+            'create_method': 'SCAN',
         }
         # add metadata to the dataset payload
         # - origin: 'legacy' if the dataset originates from the legacy CMG application
@@ -203,6 +215,7 @@ class Register:
                 'name': candidate.name,
                 'type': self.dataset_type,
                 'origin_path': str(candidate.resolve()),
+                'create_method': 'SCAN',
             }
             # add metadata to the dataset payload
             # - origin: 'legacy' if the dataset originates from the legacy CMG application
@@ -258,7 +271,7 @@ class Register:
 
         logger.info(f'Starting workflow execution via Celery')
         # connects to celery - failure point
-        wf.start(dataset_id)
+        wf.start(dataset_id, **self.wf_start_kwargs)
         logger.info(f'Workflow started for dataset {dataset["name"]}')
 
 

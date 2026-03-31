@@ -113,17 +113,15 @@ function sanitizeUri(str) {
 }
 
 async function clearXeniumTargetRows(prisma) {
-  logger.warn('[CLEAR-TARGET-DB] Clearing xenium-originated rows from target');
+  logger.warn('[CLEAR-XENIUM-DATA] Clearing xenium-originated rows from target');
 
-  await prisma.$transaction(async (tx) => {
-    await tx.project.deleteMany({ where: { xenium_id: { not: null } } });
-    await tx.dataset.deleteMany({ where: { xenium_id: { not: null } } });
-    await tx.user.deleteMany({ where: { xenium_id: { not: null } } });
-    await tx.xenium_sync_retry.deleteMany({});
-    await tx.xenium_sync_cursor.deleteMany({});
-  });
+  await prisma.project.deleteMany({ where: { xenium_id: { not: null } } });
+  await prisma.dataset.deleteMany({ where: { xenium_id: { not: null } } });
+  await prisma.user.deleteMany({ where: { xenium_id: { not: null } } });
+  await prisma.xenium_sync_retry.deleteMany({});
+  await prisma.xenium_sync_cursor.deleteMany({});
 
-  logger.warn('[CLEAR-TARGET-DB] Xenium rows cleared');
+  logger.warn('[CLEAR-XENIUM-DATA] Xenium rows cleared');
 }
 
 async function main() {
@@ -177,6 +175,12 @@ async function main() {
       process.exit(1);
     }
 
+    if (options.clearXeniumTargetData) {
+      await clearXeniumTargetRows(prisma);
+      logger.info('[CLEAR-XENIUM-DATA] Clearing xenium process locks for fresh start...');
+      await forceReleaseAllProcessLocks(prisma);
+    }
+
     lockAcquired = await acquireProcessLock(prisma, 'xenium_bigbang', DEFAULT_LOCK_TTL_MS);
     if (!lockAcquired) {
       logger.error('[FAILED] Another xenium bigbang process is already running');
@@ -192,10 +196,6 @@ async function main() {
         clearInterval(lockExtender);
       }
     }, 120000);
-
-    if (options.clearXeniumTargetData) {
-      await clearXeniumTargetRows(prisma);
-    }
 
     logger.info('Starting xenium bigbang migration...');
     logger.info('');

@@ -41,21 +41,23 @@ async function syncProjectAssociations(prisma, xeniumPrisma, sourceProjectId, ta
     .filter(Boolean)
     .map((datasetId) => ({ project_id: targetProjectId, dataset_id: datasetId }));
 
-  await prisma.project_user.deleteMany({ where: { project_id: targetProjectId } });
-  await prisma.project_dataset.deleteMany({ where: { project_id: targetProjectId } });
+  await prisma.$transaction(async (tx) => {
+    await tx.project_user.deleteMany({ where: { project_id: targetProjectId } });
+    await tx.project_dataset.deleteMany({ where: { project_id: targetProjectId } });
 
-  if (resolvedProjectUsers.length > 0) {
-    await prisma.project_user.createMany({
-      data: resolvedProjectUsers,
-      skipDuplicates: true,
-    });
-  }
-  if (resolvedProjectDatasets.length > 0) {
-    await prisma.project_dataset.createMany({
-      data: resolvedProjectDatasets,
-      skipDuplicates: true,
-    });
-  }
+    if (resolvedProjectUsers.length > 0) {
+      await tx.project_user.createMany({
+        data: resolvedProjectUsers,
+        skipDuplicates: true,
+      });
+    }
+    if (resolvedProjectDatasets.length > 0) {
+      await tx.project_dataset.createMany({
+        data: resolvedProjectDatasets,
+        skipDuplicates: true,
+      });
+    }
+  });
 }
 
 /**

@@ -12,12 +12,15 @@
 #
 # Action Flags (explicit; at least one required):
 #   --cmg-run-bigbang
-#   --cmg-run-pollers
+#   --cmg-start-pollers
+#   --cmg-stop-pollers
+#   --cmg-restart-pollers
 #   --xenium-run-bigbang
-#   --xenium-run-pollers
+#   --xenium-start-pollers
+#   --xenium-stop-pollers
+#   --xenium-restart-pollers
 #
 # CMG Options:
-#   --cmg-target-db DB               Target DB for CMG actions (default: sandbox)
 #   --cmg-clear-locks                Pass --clear-locks to CMG script(s)
 #   --cmg-clear-target-data          Clear CMG-originated rows before CMG bigbang
 #   --cmg-skip-sessions              Pass-through to CMG bigbang
@@ -25,20 +28,20 @@
 #   --cmg-uri URI                    Pass-through to CMG bigbang
 #
 # Xenium Options:
-#   --xenium-target-db DB            Target DB for Xenium actions (default: sandbox)
 #   --xenium-clear-locks             Pass --clear-locks to Xenium script(s)
 #   --xenium-clear-target-data       Clear Xenium-originated rows before Xenium bigbang
 #
 # General:
+#   --target-db DB                   Shared target DB for all actions: sandbox (default), app, or custom
 #   --dry-run                        Print resolved commands; do not execute
 #   -h, --help                       Show this help message
 #
 # Examples:
 #   ./bin/init.sh --cmg-run-bigbang
-#   ./bin/init.sh --xenium-run-bigbang --xenium-run-pollers
 #   ./bin/init.sh --cmg-run-bigbang --xenium-run-bigbang
-#   ./bin/init.sh --cmg-run-bigbang --xenium-run-bigbang --cmg-target-db app --xenium-target-db sandbox
-#   ./bin/init.sh --cmg-run-pollers --xenium-run-pollers
+#   ./bin/init.sh --cmg-run-bigbang --xenium-run-bigbang --target-db app
+#   ./bin/init.sh --cmg-start-pollers
+#   ./bin/init.sh --cmg-restart-pollers --xenium-stop-pollers
 ##
 
 set -e
@@ -56,12 +59,15 @@ DIM='\033[2m'
 NC='\033[0m'
 
 RUN_CMG_BIGBANG=false
-RUN_CMG_POLLERS=false
+START_CMG_POLLERS=false
+STOP_CMG_POLLERS=false
+RESTART_CMG_POLLERS=false
 RUN_XENIUM_BIGBANG=false
-RUN_XENIUM_POLLERS=false
+START_XENIUM_POLLERS=false
+STOP_XENIUM_POLLERS=false
+RESTART_XENIUM_POLLERS=false
 
-CMG_TARGET_DB="sandbox"
-XENIUM_TARGET_DB="sandbox"
+TARGET_DB="sandbox"
 CMG_CLEAR_LOCKS=false
 XENIUM_CLEAR_LOCKS=false
 CMG_CLEAR_TARGET_DATA=false
@@ -71,7 +77,7 @@ DRY_RUN=false
 CMG_EXTRA_BIGBANG_ARGS=()
 
 show_help() {
-  grep '^#' "$SCRIPT_PATH" | sed 's/^# \?//' | sed 's/^##$//'
+  grep '^# ' "$SCRIPT_PATH" | sed 's/^# \?//' | sed 's/^##$//'
   exit 0
 }
 
@@ -104,14 +110,16 @@ parse_args() {
   while [[ $# -gt 0 ]]; do
     case "$1" in
       --cmg-run-bigbang) RUN_CMG_BIGBANG=true ;;
-      --cmg-run-pollers) RUN_CMG_POLLERS=true ;;
+      --cmg-start-pollers) START_CMG_POLLERS=true ;;
+      --cmg-stop-pollers) STOP_CMG_POLLERS=true ;;
+      --cmg-restart-pollers) RESTART_CMG_POLLERS=true ;;
       --xenium-run-bigbang) RUN_XENIUM_BIGBANG=true ;;
-      --xenium-run-pollers) RUN_XENIUM_POLLERS=true ;;
+      --xenium-start-pollers) START_XENIUM_POLLERS=true ;;
+      --xenium-stop-pollers) STOP_XENIUM_POLLERS=true ;;
+      --xenium-restart-pollers) RESTART_XENIUM_POLLERS=true ;;
 
-      --cmg-target-db=*) CMG_TARGET_DB="${1#*=}" ;;
-      --cmg-target-db) CMG_TARGET_DB="$2" ; shift ;;
-      --xenium-target-db=*) XENIUM_TARGET_DB="${1#*=}" ;;
-      --xenium-target-db) XENIUM_TARGET_DB="$2" ; shift ;;
+      --target-db=*) TARGET_DB="${1#*=}" ;;
+      --target-db) TARGET_DB="$2" ; shift ;;
 
       --cmg-clear-locks) CMG_CLEAR_LOCKS=true ;;
       --xenium-clear-locks) XENIUM_CLEAR_LOCKS=true ;;
@@ -126,9 +134,15 @@ parse_args() {
         shift
         ;;
 
-      --target-db=*|--target-db|--clear-locks|--clear-cmg-db|--clear-xenium-db|--cmg|--xenium|--all|--bigbang|--pollers|--both)
+      --cmg-run-pollers|--xenium-run-pollers)
+        echo -e "${RED}Removed flag: $1${NC}"
+        echo -e "${RED}Use explicit lifecycle flags: --*-start-pollers / --*-stop-pollers / --*-restart-pollers${NC}"
+        exit 1
+        ;;
+
+      --cmg-target-db=*|--cmg-target-db|--xenium-target-db=*|--xenium-target-db|--clear-locks|--clear-cmg-db|--clear-xenium-db|--cmg|--xenium|--all|--bigbang|--pollers|--both)
         echo -e "${RED}Deprecated/ambiguous flag: $1${NC}"
-        echo -e "${RED}Use explicit per-app flags (run with --help).${NC}"
+        echo -e "${RED}Use explicit per-app action flags and shared --target-db (run with --help).${NC}"
         exit 1
         ;;
 
@@ -145,7 +159,7 @@ parse_args() {
 }
 
 build_cmg_bigbang_args() {
-  local args=("--target-db=${CMG_TARGET_DB}")
+  local args=("--target-db=${TARGET_DB}")
   if [[ "$CMG_CLEAR_LOCKS" == true ]]; then args+=("--clear-locks"); fi
   if [[ "$CMG_CLEAR_TARGET_DATA" == true ]]; then args+=("--clear-cmg-target-data"); fi
   args+=("${CMG_EXTRA_BIGBANG_ARGS[@]}")
@@ -153,22 +167,80 @@ build_cmg_bigbang_args() {
 }
 
 build_xenium_bigbang_args() {
-  local args=("--target-db=${XENIUM_TARGET_DB}")
+  local args=("--target-db=${TARGET_DB}")
   if [[ "$XENIUM_CLEAR_LOCKS" == true ]]; then args+=("--clear-locks"); fi
   if [[ "$XENIUM_CLEAR_TARGET_DATA" == true ]]; then args+=("--clear-xenium-target-data"); fi
   echo "${args[@]}"
 }
 
 build_cmg_poller_args() {
-  local args=("--target-db=${CMG_TARGET_DB}")
+  local args=("--target-db=${TARGET_DB}")
   if [[ "$CMG_CLEAR_LOCKS" == true ]]; then args+=("--clear-locks"); fi
   echo "${args[@]}"
 }
 
 build_xenium_poller_args() {
-  local args=("--target-db=${XENIUM_TARGET_DB}")
+  local args=("--target-db=${TARGET_DB}")
   if [[ "$XENIUM_CLEAR_LOCKS" == true ]]; then args+=("--clear-locks"); fi
   echo "${args[@]}"
+}
+
+cmg_pid_file() {
+  echo "run/cmg_poller.pid"
+}
+
+xenium_pid_file() {
+  echo "run/xenium_poller.pid"
+}
+
+is_pid_running() {
+  local pid="$1"
+  [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null
+}
+
+stop_pid_set() {
+  local source_label="$1"
+  shift
+  local pids=("$@")
+  local attempts=0
+
+  if [[ ${#pids[@]} -eq 0 ]]; then
+    return 0
+  fi
+
+  log "${YELLOW}Stopping ${source_label} poller process(es): ${pids[*]}${NC}"
+  for pid in "${pids[@]}"; do
+    kill -TERM "$pid" 2>/dev/null || true
+  done
+
+  while [[ $attempts -lt 15 ]]; do
+    local any_running=false
+    for pid in "${pids[@]}"; do
+      if is_pid_running "$pid"; then
+        any_running=true
+        break
+      fi
+    done
+    if [[ "$any_running" == false ]]; then
+      break
+    fi
+    sleep 1
+    attempts=$((attempts + 1))
+  done
+
+  local forced=false
+  for pid in "${pids[@]}"; do
+    if is_pid_running "$pid"; then
+      forced=true
+      kill -KILL "$pid" 2>/dev/null || true
+    fi
+  done
+
+  if [[ "$forced" == true ]]; then
+    log "${YELLOW}${source_label} poller required SIGKILL after timeout.${NC}"
+  else
+    log "${GREEN}${source_label} poller stopped gracefully.${NC}"
+  fi
 }
 
 validate_args() {
@@ -186,18 +258,35 @@ validate_args() {
     exit 1
   fi
 
-  if [[ "$RUN_CMG_BIGBANG" != true && "$RUN_CMG_POLLERS" != true && "$RUN_XENIUM_BIGBANG" != true && "$RUN_XENIUM_POLLERS" != true ]]; then
+  if [[ "$RESTART_CMG_POLLERS" == true && "$STOP_CMG_POLLERS" == true ]]; then
+    echo -e "${RED}Error: Use either --cmg-stop-pollers or --cmg-restart-pollers, not both.${NC}"
+    exit 1
+  fi
+  if [[ "$RESTART_XENIUM_POLLERS" == true && "$STOP_XENIUM_POLLERS" == true ]]; then
+    echo -e "${RED}Error: Use either --xenium-stop-pollers or --xenium-restart-pollers, not both.${NC}"
+    exit 1
+  fi
+
+  if [[ "$RUN_CMG_BIGBANG" != true && "$START_CMG_POLLERS" != true && "$STOP_CMG_POLLERS" != true && "$RESTART_CMG_POLLERS" != true && "$RUN_XENIUM_BIGBANG" != true && "$START_XENIUM_POLLERS" != true && "$STOP_XENIUM_POLLERS" != true && "$RESTART_XENIUM_POLLERS" != true ]]; then
     echo -e "${RED}Error: select at least one action flag (e.g., --cmg-run-bigbang).${NC}"
     echo "Run with --help for usage."
     exit 1
   fi
 
-  if [[ "$RUN_CMG_BIGBANG" == true || "$RUN_CMG_POLLERS" == true ]]; then
-    if [[ -z "$MONGO_URI" ]]; then
-      echo -e "${YELLOW}Warning: MONGO_URI is not set (required for CMG operations).${NC}"
+  if [[ "$RUN_CMG_BIGBANG" == true || "$START_CMG_POLLERS" == true || "$RESTART_CMG_POLLERS" == true ]]; then
+    local has_cmg_uri_arg=false
+    for arg in "${CMG_EXTRA_BIGBANG_ARGS[@]}"; do
+      if [[ "$arg" == --cmg-uri=* || "$arg" == --cmg-uri ]]; then
+        has_cmg_uri_arg=true
+        break
+      fi
+    done
+
+    if [[ "$has_cmg_uri_arg" == false && -z "${MONGO_URI:-}" && -z "${CMG_MONGO_HOST:-}" ]]; then
+      echo -e "${YELLOW}Warning: CMG MongoDB connection env looks unset (no --cmg-uri, MONGO_URI, or CMG_MONGO_HOST).${NC}"
     fi
   fi
-  if [[ "$RUN_XENIUM_BIGBANG" == true || "$RUN_XENIUM_POLLERS" == true ]]; then
+  if [[ "$RUN_XENIUM_BIGBANG" == true || "$START_XENIUM_POLLERS" == true || "$RESTART_XENIUM_POLLERS" == true ]]; then
     if [[ -z "$XENIUM_DATABASE_URL" ]]; then
       echo -e "${YELLOW}Warning: XENIUM_DATABASE_URL is not set (required for Xenium operations).${NC}"
     fi
@@ -218,18 +307,124 @@ run_xenium_bigbang() {
   ./bin/bigbang_xenium.sh "${args[@]}"
 }
 
-run_cmg_pollers() {
-  header "CMG Pollers (MongoDB → PostgreSQL)"
+start_cmg_pollers_managed() {
+  header "CMG Pollers Start (managed background mode)"
+  mkdir -p run logs
+  local pid_file
+  pid_file="$(cmg_pid_file)"
+  local existing_pid=""
+  if [[ -f "$pid_file" ]]; then
+    existing_pid="$(<"$pid_file")"
+    if is_pid_running "$existing_pid"; then
+      echo -e "${RED}Error: CMG poller already running with PID ${existing_pid} (pid file: ${pid_file}).${NC}"
+      exit 1
+    fi
+    rm -f "$pid_file"
+  fi
+
   read -r -a args <<< "$(build_cmg_poller_args)"
-  log "${YELLOW}Running: ./bin/start_pollers_cmg.sh $(join_args "${args[@]}")${NC}"
-  ./bin/start_pollers_cmg.sh "${args[@]}"
+  local poller_log="logs/cmg_poller_${TARGET_DB}_$(date '+%Y%m%d_%H%M%S').log"
+  log "${YELLOW}Running (background): node src/poller_cmg_sync.js $(join_args "${args[@]}")${NC}"
+  log "${DIM}Output log: ${poller_log}${NC}"
+  nohup node src/poller_cmg_sync.js "${args[@]}" >> "$poller_log" 2>&1 &
+  local pid=$!
+  echo "$pid" > "$pid_file"
+  sleep 1
+  if ! is_pid_running "$pid"; then
+    rm -f "$pid_file"
+    echo -e "${RED}Error: CMG poller failed to stay running. Check ${poller_log}.${NC}"
+    exit 1
+  fi
+  log "${GREEN}CMG poller started (PID ${pid}).${NC}"
 }
 
-run_xenium_pollers() {
-  header "Xenium Pollers (PostgreSQL → PostgreSQL)"
+stop_cmg_pollers_managed() {
+  header "CMG Pollers Stop"
+  mkdir -p run
+  local pid_file
+  pid_file="$(cmg_pid_file)"
+  local pids=()
+
+  if [[ -f "$pid_file" ]]; then
+    local pid_from_file
+    pid_from_file="$(<"$pid_file")"
+    if is_pid_running "$pid_from_file"; then
+      pids+=("$pid_from_file")
+    fi
+  fi
+
+  if [[ ${#pids[@]} -eq 0 ]]; then
+    mapfile -t pids < <(pgrep -f "poller_cmg_sync\\.js" || true)
+  fi
+
+  if [[ ${#pids[@]} -eq 0 ]]; then
+    log "${YELLOW}No CMG poller process found.${NC}"
+    rm -f "$pid_file"
+    return 0
+  fi
+
+  stop_pid_set "CMG" "${pids[@]}"
+  rm -f "$pid_file"
+}
+
+start_xenium_pollers_managed() {
+  header "Xenium Pollers Start (managed background mode)"
+  mkdir -p run logs
+  local pid_file
+  pid_file="$(xenium_pid_file)"
+  local existing_pid=""
+  if [[ -f "$pid_file" ]]; then
+    existing_pid="$(<"$pid_file")"
+    if is_pid_running "$existing_pid"; then
+      echo -e "${RED}Error: Xenium poller already running with PID ${existing_pid} (pid file: ${pid_file}).${NC}"
+      exit 1
+    fi
+    rm -f "$pid_file"
+  fi
+
   read -r -a args <<< "$(build_xenium_poller_args)"
-  log "${YELLOW}Running: ./bin/start_pollers_xenium.sh $(join_args "${args[@]}")${NC}"
-  ./bin/start_pollers_xenium.sh "${args[@]}"
+  local poller_log="logs/xenium_poller_${TARGET_DB}_$(date '+%Y%m%d_%H%M%S').log"
+  log "${YELLOW}Running (background): node src/poller_xenium_sync.js $(join_args "${args[@]}")${NC}"
+  log "${DIM}Output log: ${poller_log}${NC}"
+  nohup node src/poller_xenium_sync.js "${args[@]}" >> "$poller_log" 2>&1 &
+  local pid=$!
+  echo "$pid" > "$pid_file"
+  sleep 1
+  if ! is_pid_running "$pid"; then
+    rm -f "$pid_file"
+    echo -e "${RED}Error: Xenium poller failed to stay running. Check ${poller_log}.${NC}"
+    exit 1
+  fi
+  log "${GREEN}Xenium poller started (PID ${pid}).${NC}"
+}
+
+stop_xenium_pollers_managed() {
+  header "Xenium Pollers Stop"
+  mkdir -p run
+  local pid_file
+  pid_file="$(xenium_pid_file)"
+  local pids=()
+
+  if [[ -f "$pid_file" ]]; then
+    local pid_from_file
+    pid_from_file="$(<"$pid_file")"
+    if is_pid_running "$pid_from_file"; then
+      pids+=("$pid_from_file")
+    fi
+  fi
+
+  if [[ ${#pids[@]} -eq 0 ]]; then
+    mapfile -t pids < <(pgrep -f "poller_xenium_sync\\.js" || true)
+  fi
+
+  if [[ ${#pids[@]} -eq 0 ]]; then
+    log "${YELLOW}No Xenium poller process found.${NC}"
+    rm -f "$pid_file"
+    return 0
+  fi
+
+  stop_pid_set "Xenium" "${pids[@]}"
+  rm -f "$pid_file"
 }
 
 main() {
@@ -247,6 +442,8 @@ main() {
 
   log "${DIM}Log file: ${LOG_FILE}${NC}"
   log ""
+  log "Shared target DB: ${TARGET_DB}"
+  log ""
   log "${BOLD}Resolved Actions:${NC}"
   if [[ "$RUN_CMG_BIGBANG" == true ]]; then
     read -r -a cmg_bigbang_args <<< "$(build_cmg_bigbang_args)"
@@ -256,13 +453,27 @@ main() {
     read -r -a xenium_bigbang_args <<< "$(build_xenium_bigbang_args)"
     log "  ● Xenium bigbang  ./bin/bigbang_xenium.sh $(join_args "${xenium_bigbang_args[@]}")"
   fi
-  if [[ "$RUN_CMG_POLLERS" == true ]]; then
-    read -r -a cmg_poller_args <<< "$(build_cmg_poller_args)"
-    log "  ● CMG pollers  ./bin/start_pollers_cmg.sh $(join_args "${cmg_poller_args[@]}")"
+  if [[ "$START_CMG_POLLERS" == true ]]; then
+    read -r -a cmg_start_args <<< "$(build_cmg_poller_args)"
+    log "  ● CMG pollers start (managed)  node src/poller_cmg_sync.js $(join_args "${cmg_start_args[@]}")"
   fi
-  if [[ "$RUN_XENIUM_POLLERS" == true ]]; then
-    read -r -a xenium_poller_args <<< "$(build_xenium_poller_args)"
-    log "  ● Xenium pollers  ./bin/start_pollers_xenium.sh $(join_args "${xenium_poller_args[@]}")"
+  if [[ "$STOP_CMG_POLLERS" == true ]]; then
+    log "  ● CMG pollers stop (managed)"
+  fi
+  if [[ "$RESTART_CMG_POLLERS" == true ]]; then
+    read -r -a cmg_restart_args <<< "$(build_cmg_poller_args)"
+    log "  ● CMG pollers restart (managed)  node src/poller_cmg_sync.js $(join_args "${cmg_restart_args[@]}")"
+  fi
+  if [[ "$START_XENIUM_POLLERS" == true ]]; then
+    read -r -a xenium_start_args <<< "$(build_xenium_poller_args)"
+    log "  ● Xenium pollers start (managed)  node src/poller_xenium_sync.js $(join_args "${xenium_start_args[@]}")"
+  fi
+  if [[ "$STOP_XENIUM_POLLERS" == true ]]; then
+    log "  ● Xenium pollers stop (managed)"
+  fi
+  if [[ "$RESTART_XENIUM_POLLERS" == true ]]; then
+    read -r -a xenium_restart_args <<< "$(build_xenium_poller_args)"
+    log "  ● Xenium pollers restart (managed)  node src/poller_xenium_sync.js $(join_args "${xenium_restart_args[@]}")"
   fi
   log ""
 
@@ -272,23 +483,17 @@ main() {
     exit 0
   fi
 
+  # Stop/restart actions happen before bigbang.
+  if [[ "$STOP_CMG_POLLERS" == true || "$RESTART_CMG_POLLERS" == true ]]; then stop_cmg_pollers_managed; fi
+  if [[ "$STOP_XENIUM_POLLERS" == true || "$RESTART_XENIUM_POLLERS" == true ]]; then stop_xenium_pollers_managed; fi
+
   # Run bigbang actions first, then pollers.
   if [[ "$RUN_CMG_BIGBANG" == true ]]; then run_cmg_bigbang; fi
   if [[ "$RUN_XENIUM_BIGBANG" == true ]]; then run_xenium_bigbang; fi
 
-  if [[ "$RUN_CMG_POLLERS" == true && "$RUN_XENIUM_POLLERS" == true ]]; then
-    log "${YELLOW}Starting both poller processes in background (Ctrl+C to stop both)...${NC}"
-    run_cmg_pollers &
-    CMG_PID=$!
-    run_xenium_pollers &
-    XENIUM_PID=$!
-    trap "kill $CMG_PID $XENIUM_PID 2>/dev/null" SIGINT SIGTERM
-    wait $CMG_PID
-    wait $XENIUM_PID
-  else
-    if [[ "$RUN_CMG_POLLERS" == true ]]; then run_cmg_pollers; fi
-    if [[ "$RUN_XENIUM_POLLERS" == true ]]; then run_xenium_pollers; fi
-  fi
+  # Managed background starts/restarts.
+  if [[ "$START_CMG_POLLERS" == true || "$RESTART_CMG_POLLERS" == true ]]; then start_cmg_pollers_managed; fi
+  if [[ "$START_XENIUM_POLLERS" == true || "$RESTART_XENIUM_POLLERS" == true ]]; then start_xenium_pollers_managed; fi
 
   log ""
   log "${GREEN}${BOLD}✓ init.sh completed${NC}"

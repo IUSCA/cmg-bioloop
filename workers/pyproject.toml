@@ -29,20 +29,6 @@ pytest-asyncio = "^0.23.0"
 pytest-timeout = "^2.2.0"
 blake3 = "^0.4.1"
 
-[tool.pytest.ini_options]
-# By default, skip all integration tests so `pytest` works without Docker.
-# To run integration tests: pytest -m integration
-# To run only watch script tests: pytest -m watch_script
-addopts = "-m 'not integration'"
-markers = [
-    "integration: requires running Docker stack (API, Postgres, Redis, Celery, Rhythm)",
-    "slow: takes more than a few seconds",
-    "requires_celery: Celery worker must be running",
-    "watch_script: tests for watch.py Observer/Register behavior",
-    "integrated_wf: tests for the integrated workflow steps (archive, validate, etc.)",
-    "stage_wf: tests for the stage workflow steps",
-]
-
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"

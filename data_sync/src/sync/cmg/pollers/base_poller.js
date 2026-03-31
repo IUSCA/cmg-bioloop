@@ -34,6 +34,9 @@ class BasePoller {
     this.batchSize = options.batchSize || 200;
     this.lockTtlMs = options.lockTtlMs || 60000; // 60 seconds
     this.timeBudgetMs = options.timeBudgetMs || 30000; // 30 seconds
+    this.transactionTimeoutMs = Number.isInteger(options.transactionTimeoutMs)
+      ? options.transactionTimeoutMs
+      : null;
     
     // State
     this.isRunning = false;
@@ -233,7 +236,7 @@ class BasePoller {
     let processedCount = 0;
     let lastDoc = null;
     
-    await this.prisma.$transaction(async (tx) => {
+    const transactionBody = async (tx) => {
       for (const doc of docs) {
         try {
           // Check time budget
@@ -242,11 +245,10 @@ class BasePoller {
             logger.warn(`[${this.pollerName}] Time budget exceeded, stopping batch at ${processedCount}/${docs.length}`);
             break;
           }
-          
+
           await this.processDocument(doc, tx);
           processedCount++;
           lastDoc = doc;
-          
         } catch (docError) {
           // Log individual document error
           await logSyncError({
@@ -257,21 +259,27 @@ class BasePoller {
             error: docError,
             cmg_document: doc,
           });
-          
+
           logger.warn(`[${this.pollerName}] Failed to process document ${doc._id}: ${docError.message}`);
-          
+
           // Track retry
           await this.trackRetry(tx, doc._id.toString(), docError);
-          
+
           // Continue with next document (don't throw - we want partial batch progress)
         }
       }
-      
+
       // Update cursor to last successfully processed document
       if (lastDoc) {
         await updateCursor(tx, this.pollerName, lastDoc.updatedAt, lastDoc._id.toString());
       }
-    });
+    };
+
+    if (this.transactionTimeoutMs) {
+      await this.prisma.$transaction(transactionBody, { timeout: this.transactionTimeoutMs });
+    } else {
+      await this.prisma.$transaction(transactionBody);
+    }
     
     return processedCount;
   }

@@ -15,6 +15,7 @@
 
 const logger = require('../../../logger');
 const { xeniumCursorManager } = require('../../shared/cursor_manager');
+const { logSyncError } = require('../error_logger');
 
 const { acquireLock, releaseLock, updateCursor } = xeniumCursorManager;
 
@@ -45,6 +46,9 @@ class XeniumBasePoller {
     this.batchSize = options.batchSize || 200;
     this.lockTtlMs = options.lockTtlMs || 60000;
     this.timeBudgetMs = options.timeBudgetMs || 30000;
+    this.transactionTimeoutMs = Number.isInteger(options.transactionTimeoutMs)
+      ? options.transactionTimeoutMs
+      : null;
 
     this.isRunning = false;
     this.instanceId = `${pollerName}-${process.pid}-${Date.now()}`;
@@ -210,7 +214,7 @@ class XeniumBasePoller {
     let processedCount = 0;
     let lastRow = null;
 
-    await this.prisma.$transaction(async (tx) => {
+    const transactionBody = async (tx) => {
       for (const row of rows) {
         const elapsed = Date.now() - batchStart;
         if (elapsed > this.timeBudgetMs) {
@@ -223,6 +227,14 @@ class XeniumBasePoller {
           processedCount++;
           lastRow = row;
         } catch (rowError) {
+          await logSyncError({
+            poller: this.pollerName,
+            operation: 'processRow',
+            sourceModel,
+            xeniumId: row.id,
+            sourceRow: row,
+            error: rowError,
+          });
           logger.warn(`[${this.pollerName}] Failed to process row ${row.id}: ${rowError.message}`);
           await this.trackRetry(tx, row.id, rowError);
         }
@@ -231,7 +243,13 @@ class XeniumBasePoller {
       if (lastRow) {
         await updateCursor(tx, this.pollerName, lastRow.updated_at, lastRow.id);
       }
-    });
+    };
+
+    if (this.transactionTimeoutMs) {
+      await this.prisma.$transaction(transactionBody, { timeout: this.transactionTimeoutMs });
+    } else {
+      await this.prisma.$transaction(transactionBody);
+    }
 
     return processedCount;
   }

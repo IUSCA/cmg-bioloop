@@ -88,6 +88,9 @@ async function syncUsers(prisma, xeniumPrisma) {
       }
 
       if (sourceUser.username === 'cmguser' || sourceUser.username === 'xeniumuser') {
+        logger.warn(
+          `[XENIUM][sync_users] Skipping reserved username "${sourceUser.username}" (xenium_id=${xeniumId})`,
+        );
         skippedCount += 1;
         continue;
       }

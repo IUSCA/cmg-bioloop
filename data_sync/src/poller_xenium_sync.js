@@ -46,6 +46,7 @@ const {
   acquireProcessLock,
   releaseProcessLock,
   forceReleaseAllProcessLocks,
+  checkProcessLockStatus,
 } = xeniumProcessLockManager;
 
 function parseArgs() {
@@ -138,6 +139,7 @@ function startMetricsReporter(pollers) {
       logger.info(`  Failed: ${metrics.failedRuns}`);
       logger.info(`  Total processed: ${metrics.totalProcessed}`);
       logger.info(`  Last run: ${metrics.lastRunTime || 'Never'}`);
+      logger.info(`  Last success: ${metrics.lastSuccessTime || 'Never'}`);
       if (metrics.lastError) {
         logger.info(`  Last error: ${metrics.lastError}`);
       }
@@ -171,6 +173,13 @@ async function main() {
       logger.warn('[CLEAR-LOCKS] Clearing xenium process locks...');
       const count = await forceReleaseAllProcessLocks(prisma);
       logger.warn(`[CLEAR-LOCKS] Released ${count} process lock(s)`);
+    }
+
+    const bigbangLockStatus = await checkProcessLockStatus(prisma, 'xenium_bigbang');
+    if (bigbangLockStatus) {
+      logger.error('[FAILED] Xenium bigbang is currently running.');
+      logger.error('Start xenium pollers only after bigbang completes.');
+      process.exit(1);
     }
 
     lockAcquired = await acquireProcessLock(prisma, 'xenium_poller', POLLER_LOCK_TTL_MS);

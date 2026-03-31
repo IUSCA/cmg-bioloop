@@ -37,9 +37,9 @@ async function ensureUniqueDatasetName(prisma, desiredName, datasetType, isDelet
   const baseName = String(desiredName || '').trim() || 'UNKNOWN';
   let candidate = baseName;
   let suffix = 1;
+  const maxAttempts = 1000;
 
-  // eslint-disable-next-line no-constant-condition
-  while (true) {
+  while (suffix <= maxAttempts) {
     // eslint-disable-next-line no-await-in-loop
     const existing = await prisma.dataset.findFirst({
       where: {
@@ -53,6 +53,11 @@ async function ensureUniqueDatasetName(prisma, desiredName, datasetType, isDelet
     candidate = `${baseName}--xenium-${suffix}`;
     suffix += 1;
   }
+
+  throw new Error(
+    `[XENIUM][sync_datasets] Failed to generate unique dataset name `
+    + `for base="${baseName}", type="${datasetType}" after ${maxAttempts} attempts`,
+  );
 }
 
 async function resolveAnalysisTypeId(prisma, sourceDataset) {

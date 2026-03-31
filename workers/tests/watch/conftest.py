@@ -10,47 +10,108 @@ Requirements:
 """
 
 import logging
+import os
 import shutil
 import uuid
+from collections.abc import Generator
 from pathlib import Path
+from typing import Any
 
 import pytest
 
 import workers.api as api
 from workers.config import config
-from workers.workers.scripts.watch import Register
-from workers.workers.services.watchlib import Observer
+from workers.scripts.watch import Register
+from workers.services.watchlib import Observer
 
 logger = logging.getLogger(__name__)
 
-FIXTURES_DIR = Path(__file__).parent / 'fixtures'
+# Seconds passed as recency_threshold to await_stability via wf.start() kwargs.
+# Overrides the shared config value for this test's workflow invocation only,
+# so docker.py/common.py thresholds are unaffected.
+# Override via env var: WATCH_TEST_RECENCY_THRESHOLD=10 poetry run pytest ...
+_RECENCY_THRESHOLD: int = int(os.getenv('WATCH_TEST_RECENCY_THRESHOLD', '5'))
+
+FIXTURES_DIR: Path = Path(__file__).parent / 'fixtures'
+
+# Fixture directory name per dataset type.
+# RAW_DATA: includes CopyComplete.txt (required by await_stability for standard Illumina datasets).
+# DATA_PRODUCT: no completion markers required.
+_FIXTURE_DIR_BY_TYPE: dict[str, Path] = {
+    'RAW_DATA': FIXTURES_DIR / 'raw_data_type_dataset',
+    'DATA_PRODUCT': FIXTURES_DIR / 'data_product_type_dataset',
+}
 
 
 @pytest.fixture(scope='function')
-def watched_dir(tmp_path):
+def watched_dir(dataset_type: str) -> Generator[Path, None, None]:
     """
-    A fresh temporary directory for the Observer to watch.
-    Each test gets its own isolated watched directory.
+    A fresh isolated subdirectory inside the configured source_dir for this
+    dataset_type (e.g. /opt/sca/data/origin/raw_data/_test_<uuid>/).
+
+    Using the source_dir (a Docker landing_volume mount) ensures that both
+    the test runner process and the Celery worker process share the same
+    filesystem view of the dataset files via the same absolute path.
+
+    If the source_dir does not exist (running outside Docker), falls back to
+    a local temp directory with a warning. In that case tests that depend on
+    Celery workers accessing origin_path will fail or behave unexpectedly.
     """
-    logger.info(f'Watch test: using watched dir {tmp_path}')
-    return tmp_path
+    source_dir: Path = Path(config['registration'][dataset_type]['source_dir'])
+    test_session_dir: Path = (
+        source_dir if source_dir.exists() else Path('/tmp/bioloop_watch_tests')
+    ) / f'_test_{uuid.uuid4().hex[:12]}'
+
+    if not source_dir.exists():
+        logger.warning(
+            f'source_dir {source_dir} not found. '
+            f'Falling back to {test_session_dir}. '
+            f'Celery tasks that access origin_path may fail outside Docker.'
+        )
+
+    test_session_dir.mkdir(parents=True, exist_ok=True)
+    logger.info(f'Created isolated test watch dir: {test_session_dir}')
+
+    yield test_session_dir
+
+    if test_session_dir.exists():
+        shutil.rmtree(test_session_dir)
+        logger.info(f'Removed test watch dir: {test_session_dir}')
+
+
+@pytest.fixture(params=['RAW_DATA', 'DATA_PRODUCT'], scope='function')
+def dataset_type(request: pytest.FixtureRequest) -> str:
+    """
+    Parameterized fixture providing each dataset type in turn.
+    Tests that depend on this fixture run once per type.
+    """
+    return request.param
 
 
 @pytest.fixture(scope='function')
-def raw_data_observer(watched_dir):
+def type_observer(
+    dataset_type: str,
+    watched_dir: Path,
+) -> Observer:
     """
-    An Observer instance watching watched_dir, wired to a RAW_DATA Register.
+    An Observer instance watching watched_dir, wired to a Register for the
+    current dataset_type.
 
     The Observer's first watch() call is made here (with an empty directory),
     establishing the initial known-state. Subsequent watch() calls in tests
-    will detect newly added directories as 'add' events.
+    or in the registered_dataset fixture will detect newly added directories
+    as 'add' events.
 
     This tests the Observer -> Register chain exactly as watch.py does in
     production, just without the Poller's blocking loop.
     """
-    register = Register(dataset_type='RAW_DATA', default_wf_name='integrated')
-    obs = Observer(
-        name='test_raw_data_observer',
+    register: Register = Register(
+        dataset_type=dataset_type,
+        default_wf_name='integrated',
+        wf_start_kwargs={'recency_threshold': _RECENCY_THRESHOLD},
+    )
+    obs: Observer = Observer(
+        name=f'test_{dataset_type.lower()}_observer',
         dir_path=str(watched_dir),
         callback=register.register,
         interval=1,
@@ -58,58 +119,63 @@ def raw_data_observer(watched_dir):
     # Establish initial state: Observer sees an empty directory.
     # This mirrors what happens when watch.py starts up before any datasets arrive.
     obs.watch()
-    logger.info(f'Observer initialized with empty watched dir: {watched_dir}')
+    logger.info(f'Observer initialized with empty watched dir: {watched_dir} (type: {dataset_type})')
     return obs
 
 
 @pytest.fixture(scope='function')
-def registered_raw_dataset(watched_dir, raw_data_observer):
+def registered_dataset(
+    dataset_type: str,
+    watched_dir: Path,
+    type_observer: Observer,
+) -> Generator[dict[str, Any], None, None]:
     """
     Creates a small real test dataset directory inside watched_dir (copied from
-    tests/watch/fixtures/raw_data_dataset/), then triggers one Observer.watch()
+    tests/watch/fixtures/<type>_type_dataset/), then triggers one Observer.watch()
     cycle to simulate the watch script detecting a new dataset.
 
-    Yields the registered dataset dict (fetched from the API after registration).
+    Yields a dict with the registered dataset (fetched from API) and its
+    filesystem path:
+        {
+            'dataset': <dataset dict from API>,
+            'path': <Path to dataset directory>,
+        }
 
     Teardown: deletes the dataset from the API and removes the directory.
     """
-    # Give the dataset a unique name so parallel test runs don't collide
-    dataset_name = f'test_watch_{uuid.uuid4().hex[:12]}'
-    dataset_path = watched_dir / dataset_name
+    dataset_name: str = f'test_watch_{uuid.uuid4().hex[:12]}'
+    dataset_path: Path = watched_dir / dataset_name
 
-    fixture_src = FIXTURES_DIR / 'raw_data_dataset'
+    fixture_src: Path = _FIXTURE_DIR_BY_TYPE[dataset_type]
     shutil.copytree(fixture_src, dataset_path)
-    logger.info(f'Copied fixture to: {dataset_path}')
+    logger.info(f'Copied {dataset_type} fixture to: {dataset_path}')
 
     # Trigger the Observer: it diffs current dirs against known state and
     # calls Register.register('add', [dataset_path]) for the new directory.
-    raw_data_observer.watch()
-    logger.info(f'Observer.watch() triggered - should have registered: {dataset_name}')
+    type_observer.watch()
+    logger.info(f'Observer.watch() triggered - should have registered: {dataset_name} (type: {dataset_type})')
 
-    # Fetch the created dataset from the API to verify and return it
-    matches = api.get_all_datasets(
-        dataset_type='RAW_DATA',
+    matches: list[dict[str, Any]] = api.get_all_datasets(
+        dataset_type=dataset_type,
         name=dataset_name,
         match_name_exact=True,
     )
     if not matches:
         pytest.fail(
-            f'Dataset "{dataset_name}" was not found in the API after Observer.watch(). '
-            'Check that the API is reachable and APP_API_TOKEN is set correctly.'
+            f'Dataset "{dataset_name}" (type: {dataset_type}) was not found in the API '
+            f'after Observer.watch(). Check API reachability and APP_API_TOKEN.'
         )
 
-    dataset = api.get_dataset(dataset_id=matches[0]['id'], workflows=True)
-    logger.info(f'Registered dataset: id={dataset["id"]}, name={dataset["name"]}')
+    dataset: dict[str, Any] = api.get_dataset(dataset_id=matches[0]['id'], workflows=True)
+    logger.info(f'Registered dataset: id={dataset["id"]}, name={dataset["name"]}, type={dataset_type}')
 
-    yield dataset
+    yield {'dataset': dataset, 'path': dataset_path}
 
-    # Teardown: remove dataset from API and filesystem
+    # Teardown: remove dataset record from API.
+    # The dataset directory on disk is cleaned up by the watched_dir fixture
+    # (it removes the entire test session dir).
     try:
         api.delete_dataset(dataset['id'])
         logger.info(f'Deleted test dataset from API: {dataset["id"]}')
     except Exception as e:
         logger.warning(f'Failed to delete test dataset {dataset["id"]} from API: {e}')
-
-    if dataset_path.exists():
-        shutil.rmtree(dataset_path)
-        logger.info(f'Removed test dataset directory: {dataset_path}')

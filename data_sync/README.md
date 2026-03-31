@@ -1,6 +1,6 @@
-# CMG to Bioloop Data Sync
+# CMG/Xenium to Bioloop Data Sync
 
-This directory contains the standalone CMG to Bioloop database synchronization system. It runs in its own container (`db_sandbox`) with an isolated PostgreSQL instance.
+This directory contains the standalone legacy-data synchronization system for both CMG and Xenium sources. It runs in its own container (`db_sandbox`) with an isolated PostgreSQL instance.
 
 ## ⚠️ CRITICAL WARNING
 
@@ -15,21 +15,24 @@ To sync to production, use `--target-db=app` instead. See [SETUP_GUIDE.md](SETUP
 ```
 data_sync/
 ├── src/
-│   ├── bigbang_sync.js          # One-time migration script
-│   ├── poller_sync.js            # Continuous sync script
+│   ├── bigbang_cmg_sync.js       # CMG one-time migration script
+│   ├── bigbang_xenium_sync.js    # Xenium one-time migration script
+│   ├── poller_cmg_sync.js        # CMG continuous sync script
+│   ├── poller_xenium_sync.js     # Xenium continuous sync script
 │   ├── logger.js                 # Winston logger configuration
 │   └── sync/                     # Sync modules
-│       ├── bigbang/              # Big-bang migration modules
-│       ├── pollers/              # Continuous sync pollers
-│       ├── utils/                # Utility functions
-│       ├── connections.js        # Database connection management
-│       ├── cursor_manager.js     # Polling cursor management
-│       ├── error_logger.js       # Error logging
-│       └── process_lock_manager.js # Process-level locking
+│       ├── cmg/                  # CMG source modules
+│       ├── xenium/               # Xenium source modules
+│       └── shared/               # Shared cursor/error/lock utilities
 ├── config/                       # Configuration files (node-config)
 ├── prisma/                       # Prisma schema and migrations
 ├── bin/
-│   └── entrypoint.sh            # Container entrypoint script
+│   ├── init.sh                   # Canonical orchestrator (recommended)
+│   ├── bigbang_cmg.sh
+│   ├── bigbang_xenium.sh
+│   ├── start_pollers_cmg.sh
+│   ├── start_pollers_xenium.sh
+│   └── entrypoint.sh             # Container entrypoint script
 ├── populate_bundles.js           # Standalone bundle population script (run on host with HSI)
 ├── Dockerfile                    # Container definition
 ├── package.json                  # Node.js dependencies (schema points to ../api/prisma)
@@ -85,14 +88,40 @@ The `.env` file will override values from `.env.default`.
 
 ## Usage
 
-### One-Time Migration (Big-Bang)
+### Canonical Orchestration (Recommended)
+
+Use `data_sync/bin/init.sh` for day-to-day operations.
+
+```bash
+# Bigbang both sources to sandbox
+./bin/init.sh --cmg-run-bigbang --xenium-run-bigbang --target-db sandbox
+
+# Start both pollers in managed mode
+./bin/init.sh --cmg-start-pollers --xenium-start-pollers --target-db app
+
+# Stop both pollers
+./bin/init.sh --cmg-stop-pollers --xenium-stop-pollers
+```
+
+Key points:
+- `--target-db` is shared across all selected actions in a run
+- poller lifecycle is explicit (`start|stop|restart`) per app
+- use `--dry-run` for preflight command resolution
+
+See `bin/README.md` for the full current flag reference.
+
+### Direct Script Usage (Advanced)
+
+Use direct scripts when you intentionally want single-source control without the orchestrator.
+
+#### CMG Bigbang
 
 ```bash
 # Test in sandbox (recommended first)
-node src/bigbang_sync.js --target-db=sandbox --clear-locks
+node src/bigbang_cmg_sync.js --target-db=sandbox --clear-locks
 
 # Sync to production database (after testing)
-node src/bigbang_sync.js --target-db=app --skip-sessions --clear-locks
+node src/bigbang_cmg_sync.js --target-db=app --skip-sessions --clear-locks
 ```
 
 **Target Options:**
@@ -100,14 +129,26 @@ node src/bigbang_sync.js --target-db=app --skip-sessions --clear-locks
 - `--target-db=app` - Reads from `../api/.env` and writes to production database
 - `--target-db=custom` - Uses `DATABASE_URL` from environment
 
-### Continuous Sync (Poller)
+#### Xenium Bigbang
+
+```bash
+node src/bigbang_xenium_sync.js --target-db=sandbox --clear-locks
+```
+
+#### CMG Poller
 
 ```bash
 # Sandbox (testing)
-node src/poller_sync.js --target-db=sandbox
+node src/poller_cmg_sync.js --target-db=sandbox
 
 # Production (actual sync)
-node src/poller_sync.js --target-db=app
+node src/poller_cmg_sync.js --target-db=app
+```
+
+#### Xenium Poller
+
+```bash
+node src/poller_xenium_sync.js --target-db=sandbox
 ```
 
 ### Bundle Population (Separate Utility)
@@ -144,6 +185,7 @@ See **POPULATE_BUNDLES_USAGE.md** for full documentation.
 - **SETUP_GUIDE.md** - Complete setup and configuration (includes network isolation warning)
 - **BIGBANG_SYNC_USAGE.md** - One-time migration documentation
 - **POLLER_SYNC_USAGE.md** - Continuous sync documentation
+- **bin/README.md** - Current orchestrator and script entrypoints
 - **CMG_BIOLOOP_FIELD_MAPPING.md** - Field mapping reference for testing and validation
 - **POPULATE_BUNDLES_USAGE.md** - Bundle population script for legacy archived datasets
 - **TARGET_DATABASE_CONFIGURATION.md** - Choose between sandbox and production databases

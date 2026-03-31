@@ -15,9 +15,13 @@ const logger = require('../../../logger');
  */
 class ProjectACLPoller extends BasePoller {
   constructor(prisma, cmgDb, options = {}) {
+    const aclDefaults = {
+      pollIntervalMs: 10000,
+      batchSize: 50,
+      transactionTimeoutMs: 30000,
+    };
     super('project_acl', prisma, cmgDb, {
-      pollIntervalMs: options.pollIntervalMs || 10000, // 10 seconds
-      batchSize: options.batchSize || 100, // Smaller batch due to expensive operations
+      ...aclDefaults,
       ...options,
     });
   }

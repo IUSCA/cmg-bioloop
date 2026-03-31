@@ -1,14 +1,17 @@
 # CMG Incremental Poller - Usage Guide
 
+> For operational runs, prefer `./bin/init.sh` lifecycle flags (`--cmg-start-pollers`, `--cmg-stop-pollers`, `--cmg-restart-pollers`).
+> Use this document for CMG poller internals.
+
 ## Overview
 
 The incremental poller system provides **continuous synchronization** of CMG changes into Bioloop after the big-bang migration. It runs indefinitely (managed by PM2) and polls CMG for changes every 10-15 seconds.
 
 ## Prerequisites
 
-1. **Big-Bang Complete**: Run `cmg_bigbang_sync.js` first
+1. **Big-Bang Complete**: Run `bigbang_cmg_sync.js` first
 2. **Prisma Migration**: Sync tables must exist
-3. **MongoDB Access**: CMG and Rhythm MongoDB credentials configured
+3. **MongoDB Access**: CMG MongoDB credentials configured
 
 ## How It Works
 
@@ -39,11 +42,10 @@ The poller system consists of 5 independent pollers:
 - **Updates**: Description, size, du_size, num_files, num_directories, file_type
 - **Does NOT update**: name, type (immutable)
 
-### 5. Workflow Status Poller (`workflow_status`)
-- **Polls**: Rhythm MongoDB `workflow_meta` collection
-- **Interval**: 10 seconds
-- **Updates**: Dataset states based on completed workflows
-- **Workflows tracked**: `integrated`, `stage`
+### 5. Project Metadata Poller (`project_metadata`)
+- **Polls**: CMG `projects` collection
+- **Interval**: 20 seconds
+- **Updates**: project name, description, funding, browser_enabled
 
 ## Cursor-Based Synchronization & Edge Cases
 
@@ -185,13 +187,13 @@ This is an acceptable trade-off because:
 cd /opt/sca/app  # Or your project root
 
 # Normal run (will fail if another instance is running)
-node src/poller_sync.js
+node src/poller_cmg_sync.js
 
 # Clear stale locks before starting
-node src/poller_sync.js --clear-locks
+node src/poller_cmg_sync.js --clear-locks
 
 # Show help
-node src/poller_sync.js --help
+node src/poller_cmg_sync.js --help
 ```
 
 **Command-line Options:**
@@ -205,10 +207,10 @@ node src/poller_sync.js --help
 **Examples:**
 ```bash
 # Test poller in sandbox (recommended first)
-node src/poller_sync.js --target-db=sandbox --clear-locks
+node src/poller_cmg_sync.js --target-db=sandbox --clear-locks
 
 # Run poller against production database
-node src/poller_sync.js --target-db=app --clear-locks
+node src/poller_cmg_sync.js --target-db=app --clear-locks
 ```
 
 **See `TARGET_DATABASE_CONFIGURATION.md` for detailed documentation on target database options.**
@@ -281,7 +283,7 @@ Example output:
  project_acl       | 2026-01-08 10:30:42  | 507f1f77bcf86cd8  | NULL      | NULL
  dataset_activity  | 2026-01-08 10:30:40  | 507f1f77bcf86cd9  | NULL      | NULL
  dataset_metadata  | 2026-01-08 10:30:38  | 507f1f77bcf86cda  | NULL      | NULL
- workflow_status   | 2026-01-08 10:30:35  | 507f1f77bcf86cdb  | NULL      | NULL
+ project_metadata  | 2026-01-08 10:30:35  | 507f1f77bcf86cdb  | NULL      | NULL
 ```
 
 ### Lock Mechanism
@@ -416,7 +418,7 @@ If you see the error: `[FAILED] Another poller process is already running`
 pm2 stop cmg-poller
 
 # Restart with lock clearing
-node src/poller_sync.js --clear-locks
+node src/poller_cmg_sync.js --clear-locks
 
 # Or if using PM2, manually clear locks then restart
 pm2 restart cmg-poller
@@ -511,9 +513,9 @@ Default batch sizes (documents per poll):
 - project_acl: 100 (smaller due to expensive operations)
 - dataset_activity: 200
 - dataset_metadata: 200
-- workflow_status: 200
+- project_metadata: 200
 
-To change, edit poller constructors in `cmg_poller_sync.js`:
+To change, edit poller constructors in `poller_cmg_sync.js`:
 
 ```javascript
 const userRolesPoller = new UserRolesPoller(prisma, cmgDb, {
@@ -528,7 +530,7 @@ Default intervals:
 - project_acl: 10s (critical for access)
 - dataset_activity: 10s
 - dataset_metadata: 15s (less critical)
-- workflow_status: 10s
+- project_metadata: 20s
 
 To change:
 

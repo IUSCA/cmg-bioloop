@@ -1,5 +1,7 @@
 const { CMD_LINE_PROGRAMS, CONVERSION_DEFINITIONS, ARGUMENT_DATA, OTHER_PROGRAM_NAMES } = require('../constants');
 const logger = require('../../../logger');
+const fs = require('fs').promises;
+const path = require('path');
 
 /**
  * Seed constants: roles, cmd_line_programs, conversion_definitions, arguments
@@ -360,11 +362,71 @@ async function seedImportSources(prisma) {
   logger.info(`[BIGBANG] Import sources: ${createdCount} created, ${updatedCount} updated, ${importSources.length - createdCount - updatedCount} unchanged`);
 }
 
+function escapeHtml(value) {
+  return String(value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function convertPlainTextToHtml(content) {
+  const paragraphs = String(content)
+    .split(/\n\s*\n/g)
+    .map((p) => p.trim())
+    .filter((p) => p.length > 0)
+    .map((p) => `<p>${escapeHtml(p)}</p>`);
+  return paragraphs.join('\n');
+}
+
+/**
+ * Seed About page content from repository root `about_cmg` file.
+ * Creates a new about row only when content differs from current latest row.
+ */
+async function seedAboutContent(prisma, cmgUserId) {
+  logger.info('[BIGBANG] Seeding About content...');
+
+  const aboutPath = path.resolve(__dirname, '../../../../../about_cmg');
+  let aboutText = '';
+  try {
+    aboutText = await fs.readFile(aboutPath, 'utf8');
+  } catch (error) {
+    logger.warn(`[BIGBANG] about_cmg not found at ${aboutPath}; skipping about seed`);
+    return;
+  }
+
+  const html = convertPlainTextToHtml(aboutText);
+  if (!html) {
+    logger.warn('[BIGBANG] about_cmg is empty after parsing; skipping about seed');
+    return;
+  }
+
+  const latest = await prisma.about.findFirst({
+    orderBy: { created_at: 'desc' },
+    select: { id: true, html: true },
+  });
+
+  if (latest && latest.html === html) {
+    logger.info('[BIGBANG] About content already up to date');
+    return;
+  }
+
+  await prisma.about.create({
+    data: {
+      html,
+      last_updated_by_id: cmgUserId || null,
+    },
+  });
+  logger.info('[BIGBANG] About content inserted');
+}
+
 module.exports = {
   createRoles,
   createCMGUser,
   populatePipelineDefinitions,
   seedAnalysisTypes,
   seedImportSources,
+  seedAboutContent,
 };
 
