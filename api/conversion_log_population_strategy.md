@@ -42,7 +42,7 @@ File: data_sync/src/sync/bigbang/sync_conversion_logs.js
 Purpose: Main log synchronization logic
 Exports: syncConversionLogs(prisma, cmgDb) function
 4.2 Files to Modify
-File 1: data_sync/src/bigbang_sync.js
+File 1: data_sync/src/bigbang_cmg_sync.js
 Add import for syncConversionLogs function
 Add new step in sync sequence (after conversion sync, before remaining steps)
 Add skipConversionLogs option to function parameters (default: false)
@@ -198,10 +198,10 @@ No modification or truncation of message content
 7. CLI Arguments & Execution
 7.1 Bigbang Sync Usage
 Run with conversion logs (default):
-Command: node src/bigbang_sync.js
+Command: node src/bigbang_cmg_sync.js
 Behavior: Performs full sync including conversion logs
 Run without conversion logs:
-Command: node src/bigbang_sync.js --skip-conversion-logs
+Command: node src/bigbang_cmg_sync.js --skip-conversion-logs
 Behavior: Skips conversion logs sync step
 7.2 Migrate Script Usage
 Run with conversion logs (default):

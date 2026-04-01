@@ -17,6 +17,7 @@ run/*.pid.lock
 # Prisma
 prisma/migrations/*.sql
 !prisma/migrations/**/migration.sql
+src/generated/
 
 # IDE
 .vscode/

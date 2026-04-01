@@ -26,7 +26,7 @@ Format per entry:
 - `api/src/services/dataset.js`
 - `api/src/routes/datasets/index.js`
 - `data_sync/src/sync/bigbang/sync_dataset_hierarchies.js`
-- `data_sync/src/bigbang_sync.js`
+- `data_sync/src/bigbang_cmg_sync.js`
 - `ui/src/components/dataset/AssocDatasetList.vue`
 
 **E2E candidate:** yes

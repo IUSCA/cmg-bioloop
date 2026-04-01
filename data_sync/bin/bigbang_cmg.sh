@@ -7,18 +7,27 @@
 # This script migrates all existing data and initializes cursor positions for future
 # incremental sync via pollers.
 #
+# Wrapper behavior:
+#   Host-side launcher only. Executes Node.js script inside db_sandbox container.
+#   Compose file is selected from APP_ENV/NODE_ENV (production -> prod compose;
+#   otherwise localhost compose).
+#
 # Usage:
 #   ./bin/bigbang_cmg.sh [options]
 #
 # Options:
 #   --target-db DB         Target database: 'sandbox' (default), 'app', or 'custom'
-#   --clear-cmg-target-data Clear CMG-originated data from target DB before migration
+#   --clear-target-db      Clear all CMG + Xenium migration data from target DB before migration
 #   --clear-locks          Force release all existing process locks
 #   --skip-sessions        Skip genome browser session conversion
 #   -h, --help             Show this help message
 #
-# Environment Variables:
-#   See migrate.sh for full list of environment variables
+# Environment Variables (CMG source):
+#   CMG_MONGO_HOST
+#   CMG_MONGO_PORT
+#   CMG_MONGO_DB
+#   CMG_MONGO_USERNAME
+#   CMG_MONGO_PASSWORD
 #
 # Examples:
 #
@@ -28,8 +37,8 @@
 #   # Migrate to main app database
 #   ./bin/bigbang_cmg.sh --target-db app
 #
-#   # Clear CMG-originated data before migration
-#   ./bin/bigbang_cmg.sh --target-db sandbox --clear-cmg-target-data
+#   # Clear all legacy migration data before migration
+#   ./bin/bigbang_cmg.sh --target-db sandbox --clear-target-db
 #
 #   # Skip genome browser sessions (faster migration for testing)
 #   ./bin/bigbang_cmg.sh --skip-sessions
@@ -99,9 +108,19 @@ for arg in "$@"; do
   esac
 done
 
-# Check if Node.js is available
-if ! command -v node &> /dev/null; then
-  echo -e "${RED}Error: Node.js is not installed or not in PATH${NC}"
+# Check if Docker is available
+if ! command -v docker &> /dev/null; then
+  echo -e "${RED}Error: Docker is not installed or not in PATH${NC}"
+  exit 1
+fi
+
+source "$SCRIPT_DIR/init.sh"
+
+COMPOSE_FILE="$(resolve_compose_file)"
+
+if ! docker compose -f "$COMPOSE_FILE" ps db_sandbox | grep -q "Up"; then
+  echo -e "${RED}Error: db_sandbox container is not running for ${COMPOSE_FILE}.${NC}"
+  echo -e "${YELLOW}  Start it with: docker compose -f ${COMPOSE_FILE} up -d${NC}"
   exit 1
 fi
 
@@ -109,7 +128,7 @@ fi
 echo -e "${YELLOW}Starting big-bang migration...${NC}"
 echo ""
 
-node src/bigbang_cmg_sync.js "$@"
+docker compose -f "$COMPOSE_FILE" exec db_sandbox node /opt/sca/app/src/bigbang_cmg_sync.js "$@"
 exit_code=$?
 
 echo ""

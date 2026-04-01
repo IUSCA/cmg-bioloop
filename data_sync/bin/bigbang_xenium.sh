@@ -9,12 +9,17 @@
 # Unlike the CMG bigbang (MongoDB → PostgreSQL), this is a
 # PostgreSQL-to-PostgreSQL migration.
 #
+# Wrapper behavior:
+#   Host-side launcher only. Executes Node.js script inside db_sandbox container.
+#   Compose file is selected from APP_ENV/NODE_ENV (production -> prod compose;
+#   otherwise localhost compose).
+#
 # Usage:
 #   ./bin/bigbang_xenium.sh [options]
 #
 # Options:
 #   --target-db DB         Target database: 'sandbox' (default), 'app', or 'custom'
-#   --clear-xenium-target-data Clear xenium-originated data from target DB before migration
+#   --clear-target-db      Clear all CMG + Xenium migration data from target DB before migration
 #   --clear-locks          Force release all existing xenium process locks
 #   -h, --help             Show this help message
 #
@@ -33,8 +38,8 @@
 #   # Migrate to main app database
 #   ./bin/bigbang_xenium.sh --target-db app
 #
-#   # Clear existing xenium data before migration
-#   ./bin/bigbang_xenium.sh --target-db sandbox --clear-xenium-target-data
+#   # Clear all legacy migration data before migration
+#   ./bin/bigbang_xenium.sh --target-db sandbox --clear-target-db
 #
 #   # Clear stuck process locks from previous failed run
 #   ./bin/bigbang_xenium.sh --clear-locks
@@ -94,15 +99,19 @@ for arg in "$@"; do
   esac
 done
 
-if ! command -v node &> /dev/null; then
-  echo -e "${RED}Error: Node.js is not installed or not in PATH${NC}"
+if ! command -v docker &> /dev/null; then
+  echo -e "${RED}Error: Docker is not installed or not in PATH${NC}"
   exit 1
 fi
 
-if [ -z "${XENIUM_PG_HOST:-}" ] || [ -z "${XENIUM_PG_DATABASE:-}" ]; then
-  echo -e "${YELLOW}Warning: Xenium source properties appear incomplete.${NC}"
-  echo -e "${YELLOW}  Set XENIUM_PG_HOST, XENIUM_PG_PORT, XENIUM_PG_DATABASE, XENIUM_PG_USERNAME, XENIUM_PG_PASSWORD in data_sync/.env.${NC}"
-  echo ""
+source "$SCRIPT_DIR/init.sh"
+
+COMPOSE_FILE="$(resolve_compose_file)"
+
+if ! docker compose -f "$COMPOSE_FILE" ps db_sandbox | grep -q "Up"; then
+  echo -e "${RED}Error: db_sandbox container is not running for ${COMPOSE_FILE}.${NC}"
+  echo -e "${YELLOW}  Start it with: docker compose -f ${COMPOSE_FILE} up -d${NC}"
+  exit 1
 fi
 
 echo -e "${BLUE}${BOLD}╔═══════════════════════════════════════════════════════════╗${NC}"
@@ -112,7 +121,7 @@ echo ""
 echo -e "${YELLOW}Starting xenium big-bang migration...${NC}"
 echo ""
 
-node src/bigbang_xenium_sync.js "$@"
+docker compose -f "$COMPOSE_FILE" exec db_sandbox node /opt/sca/app/src/bigbang_xenium_sync.js "$@"
 exit_code=$?
 
 echo ""

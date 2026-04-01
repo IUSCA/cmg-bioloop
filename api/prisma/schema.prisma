@@ -354,7 +354,7 @@ model project {
   owner_id        Int?
   owner           user?             @relation(fields: [owner_id], references: [id], onDelete: SetNull)
   cmg_id          String?
-  xenium_id       Int?
+  xenium_id       String?
   users           project_user[]
   datasets        project_dataset[]
   contacts        project_contact[]

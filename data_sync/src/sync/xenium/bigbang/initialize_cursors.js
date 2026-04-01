@@ -16,7 +16,16 @@ const { xeniumCursorManager } = require('../../shared/cursor_manager');
 const { XENIUM_POLLER_NAMES } = require('../constants');
 const { coerceIntegerId } = require('./helpers');
 
-async function getModelTailCursor(xeniumPrisma, modelName) {
+function coerceCursorId(value, idMode) {
+  if (idMode === 'string') {
+    // xenium_sync_cursor.last_xenium_id is currently INT, so string IDs cannot be stored here.
+    // Keep last_updated_at but leave last_xenium_id null for string-backed source models.
+    return null;
+  }
+  return coerceIntegerId(value);
+}
+
+async function getModelTailCursor(xeniumPrisma, modelName, idMode) {
   const row = await xeniumPrisma[modelName].findFirst({
     orderBy: [{ updated_at: 'desc' }, { id: 'desc' }],
     select: { id: true, updated_at: true },
@@ -26,8 +35,8 @@ async function getModelTailCursor(xeniumPrisma, modelName) {
     return { lastUpdatedAt: null, lastXeniumId: null };
   }
 
-  const lastXeniumId = coerceIntegerId(row.id);
-  if (!lastXeniumId) {
+  const lastXeniumId = coerceCursorId(row.id, idMode);
+  if (idMode === 'int' && !lastXeniumId) {
     return { lastUpdatedAt: null, lastXeniumId: null };
   }
 
@@ -46,15 +55,15 @@ async function initializeCursors(prisma, xeniumPrisma) {
   logger.info('[XENIUM][initialize_cursors] Initializing xenium poller cursors');
 
   const cursorSpecs = [
-    { pollerName: XENIUM_POLLER_NAMES.USER_ROLES, modelName: 'user' },
-    { pollerName: XENIUM_POLLER_NAMES.PROJECT_ACL, modelName: 'project' },
-    { pollerName: XENIUM_POLLER_NAMES.DATASET_METADATA, modelName: 'dataset' },
-    { pollerName: XENIUM_POLLER_NAMES.PROJECT_METADATA, modelName: 'project' },
+    { pollerName: XENIUM_POLLER_NAMES.USER_ROLES, modelName: 'user', idMode: 'int' },
+    { pollerName: XENIUM_POLLER_NAMES.PROJECT_ACL, modelName: 'project', idMode: 'string' },
+    { pollerName: XENIUM_POLLER_NAMES.DATASET_METADATA, modelName: 'dataset', idMode: 'int' },
+    { pollerName: XENIUM_POLLER_NAMES.PROJECT_METADATA, modelName: 'project', idMode: 'string' },
   ];
 
   for (const spec of cursorSpecs) {
     // eslint-disable-next-line no-await-in-loop
-    const cursor = await getModelTailCursor(xeniumPrisma, spec.modelName);
+    const cursor = await getModelTailCursor(xeniumPrisma, spec.modelName, spec.idMode);
     // eslint-disable-next-line no-await-in-loop
     await xeniumCursorManager.initializeCursor(
       prisma,

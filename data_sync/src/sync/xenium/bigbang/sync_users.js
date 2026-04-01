@@ -13,14 +13,26 @@ const logger = require('../../../logger');
 const { withDatasetOrigin, coerceIntegerId, splitIntoChunks, toDateOrNow } = require('./helpers');
 const { mapXeniumRolesToBioloop } = require('../utils/role_mapper');
 
-async function syncUserRoles(prisma, xeniumPrisma, sourceUserId, targetUserId) {
+async function getSourceRoleNames(xeniumPrisma, sourceUserId) {
   const sourceUserRoles = await xeniumPrisma.user_role.findMany({
     where: { user_id: sourceUserId },
-    include: { roles: true },
+    select: { role_id: true },
   });
-  const mappedRoleNames = mapXeniumRolesToBioloop(
-    sourceUserRoles.map((entry) => entry.roles?.name).filter(Boolean),
-  );
+
+  const roleIds = sourceUserRoles
+    .map((entry) => Number(entry.role_id))
+    .filter((id) => Number.isInteger(id) && id > 0);
+
+  if (roleIds.length === 0) return [];
+
+  const sql = `SELECT id, name FROM "role" WHERE id IN (${roleIds.join(',')})`;
+  const rows = await xeniumPrisma.$queryRawUnsafe(sql);
+  return rows.map((row) => row.name).filter(Boolean);
+}
+
+async function syncUserRoles(prisma, xeniumPrisma, sourceUserId, targetUserId) {
+  const sourceRoleNames = await getSourceRoleNames(xeniumPrisma, sourceUserId);
+  const mappedRoleNames = mapXeniumRolesToBioloop(sourceRoleNames);
 
   const targetRoleRows = await prisma.role.findMany({
     where: { name: { in: mappedRoleNames } },
@@ -70,6 +82,17 @@ async function syncUsers(prisma, xeniumPrisma) {
 
   const sourceUsers = await xeniumPrisma.user.findMany({
     orderBy: { id: 'asc' },
+    select: {
+      id: true,
+      username: true,
+      email: true,
+      name: true,
+      cas_id: true,
+      is_deleted: true,
+      created_at: true,
+      updated_at: true,
+      metadata: true,
+    },
   });
   logger.info(`[XENIUM][sync_users] Found ${sourceUsers.length} source users`);
 

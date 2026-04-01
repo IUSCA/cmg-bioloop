@@ -17,7 +17,7 @@
  * Options:
  *   --target-db=<target>        Target database: sandbox (default), app, or custom
  *   --clear-locks               Clear any existing process locks before starting
- *   --clear-xenium-target-data  Clear xenium-originated rows from target before migration
+ *   --clear-target-db           Clear all CMG- and Xenium-originated rows before migration
  *   --help, -h                  Show help message
  *
  * Xenium Source Properties (CMG-style discrete config):
@@ -41,11 +41,13 @@
  * 6. Sync dataset hierarchies (RAW_DATA → DATA_PRODUCT)
  * 7. Sync projects
  * 8. Initialize xenium poller cursors
+ * 9. Bootstrap production users/roles from mounted api JSON files
  */
 
 require('module-alias/register');
 const config = require('config');
 const { PrismaClient } = require('@prisma/client');
+const { PrismaClient: XeniumSourcePrismaClient } = require('.prisma/xenium-client');
 const originalLogger = require('./logger');
 const { setDatabaseUrl } = require('./utils/db_config');
 
@@ -57,6 +59,7 @@ const { syncImportLogs } = require('./sync/xenium/bigbang/sync_import_logs');
 const { syncDatasetHierarchies } = require('./sync/xenium/bigbang/sync_dataset_hierarchies');
 const { syncProjects } = require('./sync/xenium/bigbang/sync_projects');
 const { initializeCursors } = require('./sync/xenium/bigbang/initialize_cursors');
+const { bootstrapProdUsers } = require('./sync/shared/bootstrap_prod_users');
 
 const {
   xeniumProcessLockManager,
@@ -70,6 +73,7 @@ const {
   checkProcessLockStatus,
   forceReleaseAllProcessLocks,
 } = xeniumProcessLockManager;
+const { forceReleaseAllSyncProcessLocks } = require('./sync/shared/process_lock_manager');
 
 // Wrap logger to count log statements
 let logStatementCount = 0;
@@ -91,8 +95,8 @@ function parseArgs() {
       [, options.targetDb] = arg.split('=');
     } else if (arg === '--clear-locks') {
       options.clearLocks = true;
-    } else if (arg === '--clear-xenium-target-data') {
-      options.clearXeniumTargetData = true;
+    } else if (arg === '--clear-target-db') {
+      options.clearTargetDb = true;
     } else if (arg === '--help' || arg === '-h') {
       // eslint-disable-next-line no-console
       console.log(`
@@ -101,7 +105,7 @@ Usage: node src/bigbang_xenium_sync.js [options]
 Options:
   --target-db=<target>   Target database: sandbox (default), app, or custom
   --clear-locks          Clear any existing process locks before starting
-  --clear-xenium-target-data  Clear xenium-originated rows from target before migration
+  --clear-target-db      Clear all CMG- and Xenium-originated rows before migration
   --help, -h             Show this help message
 
 Environment Variables:
@@ -159,16 +163,83 @@ function buildXeniumSourceUri() {
   return uri;
 }
 
-async function clearXeniumTargetRows(prisma) {
-  logger.warn('[CLEAR-XENIUM-DATA] Clearing xenium-originated rows from target');
+async function clearCmgOriginatedRows(prisma) {
+  const cmgConversionIds = (await prisma.conversion.findMany({
+    where: { cmg_id: { not: null } },
+    select: { id: true },
+  })).map((row) => row.id);
 
+  const cmgDatasetIds = (await prisma.dataset.findMany({
+    where: { cmg_id: { not: null } },
+    select: { id: true },
+  })).map((row) => row.id);
+
+  if (cmgConversionIds.length > 0) {
+    await prisma.argument_value.deleteMany({
+      where: { conversion_id: { in: cmgConversionIds } },
+    });
+    await prisma.process_request.deleteMany({
+      where: { conversion_id: { in: cmgConversionIds } },
+    });
+  }
+
+  if (cmgDatasetIds.length > 0) {
+    await prisma.data_access_log.deleteMany({
+      where: { dataset_id: { in: cmgDatasetIds } },
+    });
+    await prisma.stage_request_log.deleteMany({
+      where: { dataset_id: { in: cmgDatasetIds } },
+    });
+  }
+
+  await prisma.project.deleteMany({ where: { cmg_id: { not: null } } });
+  await prisma.genome_browser_session.deleteMany({ where: { cmg_id: { not: null } } });
+  await prisma.conversion.deleteMany({ where: { cmg_id: { not: null } } });
+  await prisma.dataset_import_log.deleteMany({ where: { cmg_id: { not: null } } });
+  await prisma.dataset.deleteMany({ where: { cmg_id: { not: null } } });
+  await prisma.user.deleteMany({
+    where: {
+      cmg_id: { not: null },
+      username: { not: 'cmguser' },
+    },
+  });
+
+  await prisma.cmg_sync_retry.deleteMany({});
+  await prisma.cmg_sync_cursor.deleteMany({});
+}
+
+async function clearXeniumOriginatedRows(prisma) {
   await prisma.project.deleteMany({ where: { xenium_id: { not: null } } });
   await prisma.dataset.deleteMany({ where: { xenium_id: { not: null } } });
   await prisma.user.deleteMany({ where: { xenium_id: { not: null } } });
   await prisma.xenium_sync_retry.deleteMany({});
   await prisma.xenium_sync_cursor.deleteMany({});
+}
 
-  logger.warn('[CLEAR-XENIUM-DATA] Xenium rows cleared');
+async function clearAllLegacyMigrationTargetData(prisma) {
+  logger.warn('='.repeat(80));
+  logger.warn('CLEARING ALL LEGACY MIGRATION DATA (CMG + XENIUM)');
+  logger.warn('='.repeat(80));
+  logger.warn('Deletes CMG- and Xenium-originated business rows and both sync cursor/retry tables.');
+  logger.warn('');
+
+  try {
+    await clearCmgOriginatedRows(prisma);
+    logger.info('CMG-originated rows cleared.');
+    await clearXeniumOriginatedRows(prisma);
+    logger.info('Xenium-originated rows cleared.');
+    logger.info('');
+  } catch (error) {
+    logger.error('Failed to clear legacy migration rows:', error.message);
+    throw error;
+  }
+}
+
+async function getSourceTableSet(xeniumPrisma) {
+  const rows = await xeniumPrisma.$queryRawUnsafe(
+    "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public'",
+  );
+  return new Set(rows.map((row) => row.table_name));
 }
 
 async function main() {
@@ -197,9 +268,10 @@ async function main() {
 
     // Source database (Xenium)
     const xeniumDatabaseUrl = buildXeniumSourceUri();
-    xeniumPrisma = new PrismaClient({ datasources: { db: { url: xeniumDatabaseUrl } } });
+    xeniumPrisma = new XeniumSourcePrismaClient({ datasources: { db: { url: xeniumDatabaseUrl } } });
     await xeniumPrisma.$connect();
     logger.info('[OK] Connected to Xenium PostgreSQL (source)');
+    const sourceTables = await getSourceTableSet(xeniumPrisma);
 
     if (options.clearLocks) {
       logger.warn('[CLEAR-LOCKS] Clearing all existing xenium process locks...');
@@ -216,10 +288,10 @@ async function main() {
       process.exit(1);
     }
 
-    if (options.clearXeniumTargetData) {
-      await clearXeniumTargetRows(prisma);
-      logger.info('[CLEAR-XENIUM-DATA] Clearing xenium process locks for fresh start...');
-      await forceReleaseAllProcessLocks(prisma);
+    if (options.clearTargetDb) {
+      await clearAllLegacyMigrationTargetData(prisma);
+      logger.info('[CLEAR-TARGET-DB] Resetting CMG and Xenium process locks...');
+      await forceReleaseAllSyncProcessLocks(prisma);
     }
 
     lockAcquired = await acquireProcessLock(prisma, 'xenium_bigbang', DEFAULT_LOCK_TTL_MS);
@@ -241,29 +313,36 @@ async function main() {
     logger.info('Starting xenium bigbang migration...');
     logger.info('');
 
-    logger.info('[1/8] Seeding constants (roles, xenium system user, analysis types, import sources)...');
+    logger.info('[1/9] Seeding constants (roles, xenium system user, analysis types, import sources)...');
     await seedConstants(prisma);
 
-    logger.info('[2/8] Syncing users...');
+    logger.info('[2/9] Syncing users...');
     await syncUsers(prisma, xeniumPrisma);
 
-    logger.info('[3/8] Syncing datasets (RAW_DATA and DATA_PRODUCT)...');
+    logger.info('[3/9] Syncing datasets (RAW_DATA and DATA_PRODUCT)...');
     await syncAllDatasets(prisma, xeniumPrisma);
 
-    logger.info('[4/8] Syncing dataset audit logs...');
+    logger.info('[4/9] Syncing dataset audit logs...');
     await syncAuditLogs(prisma, xeniumPrisma);
 
-    logger.info('[5/8] Syncing dataset import logs...');
-    await syncImportLogs(prisma, xeniumPrisma);
+    if (sourceTables.has('dataset_import_log')) {
+      logger.info('[5/9] Syncing dataset import logs...');
+      await syncImportLogs(prisma, xeniumPrisma);
+    } else {
+      logger.warn('[5/9] Skipping dataset import logs (source table dataset_import_log not present).');
+    }
 
-    logger.info('[6/8] Syncing dataset hierarchies (RAW_DATA → DATA_PRODUCT)...');
+    logger.info('[6/9] Syncing dataset hierarchies (RAW_DATA → DATA_PRODUCT)...');
     await syncDatasetHierarchies(prisma, xeniumPrisma);
 
-    logger.info('[7/8] Syncing projects...');
+    logger.info('[7/9] Syncing projects...');
     await syncProjects(prisma, xeniumPrisma);
 
-    logger.info('[8/8] Initializing xenium poller cursors...');
+    logger.info('[8/9] Initializing xenium poller cursors...');
     await initializeCursors(prisma, xeniumPrisma);
+
+    logger.info('[9/9] Bootstrapping production users/roles from API JSON...');
+    await bootstrapProdUsers(prisma, logger, 'XENIUM');
 
     if (lockExtender) clearInterval(lockExtender);
 
@@ -288,8 +367,11 @@ async function main() {
     logger.error('='.repeat(80));
     logger.error('[FAILED] Xenium bigbang migration FAILED');
     logger.error('='.repeat(80));
-    logger.error('Error:', sanitizeUri(error.message));
-    if (error.stack) logger.error('Stack:', sanitizeUri(error.stack));
+    const errorMessage = error instanceof Error
+      ? error.message
+      : (typeof error === 'string' ? error : JSON.stringify(error));
+    logger.error(`Error: ${sanitizeUri(errorMessage || String(error))}`);
+    if (error && error.stack) logger.error(`Stack: ${sanitizeUri(error.stack)}`);
 
     process.exit(1);
   } finally {

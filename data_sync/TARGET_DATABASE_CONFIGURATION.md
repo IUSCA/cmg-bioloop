@@ -26,10 +26,10 @@ docker compose -f docker-compose.sandbox.yml exec db_sandbox bash
 cd /opt/sca/app
 
 # Explicit sandbox (same as no flag)
-node src/bigbang_sync.js --target-db=sandbox
+node src/bigbang_cmg_sync.js --target-db=sandbox
 
 # Or just omit the flag (defaults to sandbox)
-node src/bigbang_sync.js
+node src/bigbang_cmg_sync.js
 ```
 
 Output:
@@ -46,7 +46,7 @@ docker compose -f docker-compose.sandbox.yml exec db_sandbox bash
 cd /opt/sca/app
 
 # Automatically reads DATABASE_URL from ../api/.env
-node src/bigbang_sync.js --target-db=app
+node src/bigbang_cmg_sync.js --target-db=app
 ```
 
 Output:
@@ -69,7 +69,7 @@ cd /opt/sca/app
 
 # Set DATABASE_URL manually
 export DATABASE_URL="postgresql://user:pass@custom-host:5432/custom_db?schema=public"
-node src/bigbang_sync.js --target-db=custom
+node src/bigbang_cmg_sync.js --target-db=custom
 ```
 
 ---
@@ -83,7 +83,7 @@ You can still set `DATABASE_URL` directly in `.env`:
 DATABASE_URL=postgresql://appuser:password@postgres:5432/app?schema=public
 
 # Run without --target-db flag (uses .env value)
-node src/bigbang_sync.js
+node src/bigbang_cmg_sync.js
 ```
 
 ---
@@ -103,7 +103,7 @@ docker compose -f docker-compose.sandbox.yml exec db_sandbox bash
 cd /opt/sca/app
 
 # Run to sandbox (default)
-node --max-old-space-size=6144 src/bigbang_sync.js \
+node --max-old-space-size=6144 src/bigbang_cmg_sync.js \
   --cmg-uri="mongodb://user:pass@cmg-host:27017/cmg"
 ```
 
@@ -115,7 +115,7 @@ docker compose -f docker-compose.sandbox.yml exec db_sandbox bash
 cd /opt/sca/app
 
 # Reads DATABASE_URL from ../api/.env automatically
-node --max-old-space-size=6144 src/bigbang_sync.js \
+node --max-old-space-size=6144 src/bigbang_cmg_sync.js \
   --target-db=app \
   --cmg-uri="mongodb://prod_user:prod_pass@prod-cmg-host:27017/cmg"
 ```
@@ -135,14 +135,14 @@ node src/poller_sync.js --target-db=app
 
 ```bash
 # Step 1: Test in sandbox
-node src/bigbang_sync.js --target-db=sandbox
+node src/bigbang_cmg_sync.js --target-db=sandbox
 
 # Step 2: Verify data in sandbox
 docker compose -f docker-compose.sandbox.yml exec db_sandbox \
   psql -U appuser -d bioloop_sync -c "SELECT COUNT(*) FROM dataset;"
 
 # Step 3: If successful, sync to app DB
-node src/bigbang_sync.js --target-db=app
+node src/bigbang_cmg_sync.js --target-db=app
 
 # Step 4: Verify data in app DB
 docker compose exec postgres \
@@ -197,14 +197,14 @@ docker compose exec postgres \
 
 ```bash
 # Step 1: Test migration logic
-node src/bigbang_sync.js --target-db=sandbox --skip-sessions
+node src/bigbang_cmg_sync.js --target-db=sandbox --skip-sessions
 
 # Step 2: Verify data quality
 docker compose -f docker-compose.sandbox.yml exec db_sandbox \
   psql -U appuser -d bioloop_sync
 
 # Step 3: If successful, run to production
-node src/bigbang_sync.js --target-db=app
+node src/bigbang_cmg_sync.js --target-db=app
 ```
 
 ### 2. Backup Before Production Sync
@@ -240,7 +240,7 @@ ls -la /opt/sca/api/.env
 
 # If missing, use custom target with explicit DATABASE_URL
 export DATABASE_URL="postgresql://appuser:password@postgres:5432/app?schema=public"
-node src/bigbang_sync.js --target-db=custom
+node src/bigbang_cmg_sync.js --target-db=custom
 ```
 
 ### Error: "Connection refused" when using --target-db=app
@@ -298,17 +298,17 @@ Before running sync to production:
 
 ```bash
 # Test in sandbox (default)
-node src/bigbang_sync.js
+node src/bigbang_cmg_sync.js
 
 # Explicitly target sandbox
-node src/bigbang_sync.js --target-db=sandbox
+node src/bigbang_cmg_sync.js --target-db=sandbox
 
 # Sync to app's database (reads from ../api/.env)
-node src/bigbang_sync.js --target-db=app
+node src/bigbang_cmg_sync.js --target-db=app
 
 # Sync to custom database
 export DATABASE_URL="postgresql://user:pass@host:5432/db"
-node src/bigbang_sync.js --target-db=custom
+node src/bigbang_cmg_sync.js --target-db=custom
 
 # Start poller for app database
 node src/poller_sync.js --target-db=app
@@ -317,7 +317,7 @@ node src/poller_sync.js --target-db=app
 node src/poller_sync.js --target-db=sandbox
 
 # Run with all safety options
-node src/bigbang_sync.js --target-db=app --skip-sessions --clear-locks
+node src/bigbang_cmg_sync.js --target-db=app --skip-sessions --clear-locks
 ```
 
 ---
@@ -328,7 +328,7 @@ The `src/utils/db_config.js` utility handles all the logic:
 
 ```javascript
 // When you call:
-node src/bigbang_sync.js --target-db=app
+node src/bigbang_cmg_sync.js --target-db=app
 
 // The script does:
 const { setDatabaseUrl } = require('./utils/db_config');

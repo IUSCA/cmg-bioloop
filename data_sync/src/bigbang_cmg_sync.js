@@ -6,30 +6,26 @@
  * One-time initial population of all CMG data into Bioloop.
  *
  * Usage:
- *   node src/bigbang_sync.js [options]
+ *   node src/bigbang_cmg_sync.js [options]
  *
  * Options:
- *   --cmg-uri=<uri>             MongoDB connection string for CMG database
  *   --target-db=<target>        Target database: sandbox (default), app, or custom
  *   --skip-sessions             Skip genome browser session conversion
  *   --skip-conversion-logs      Skip conversion logs migration (from filesystem)
  *   --clear-locks               Clear any existing process locks before starting
- *   --clear-cmg-target-data     Clear CMG-originated rows from target database before migration
+ *   --clear-target-db           Clear all CMG- and Xenium-originated rows before migration
  *   --help, -h                  Show help message
  *
- * Environment Variables (alternative to --cmg-uri):
+ * Environment Variables:
  *   CMG_MONGO_HOST, CMG_MONGO_PORT, CMG_MONGO_DB, CMG_MONGO_USERNAME,
  *   CMG_MONGO_PASSWORD
  *
  * Examples:
  *   # Using environment variables (via config system)
- *   node src/bigbang_sync.js
- *
- *   # Using command-line URI
- *   node src/bigbang_sync.js --cmg-uri="mongodb://user:pass@host:27017/cmg"
+ *   node src/bigbang_cmg_sync.js
  *
  *   # Skip sessions and clear stale locks
- *   node src/bigbang_sync.js --skip-sessions --clear-locks
+ *   node src/bigbang_cmg_sync.js --skip-sessions --clear-locks
  *
  * Order of operations:
  * 1. Create roles
@@ -37,19 +33,19 @@
  * 3. Populate pipeline definitions (cmd_line_programs, conversion_definitions, arguments)
  * 4. Seed analysis types (file types from CMG)
  * 5. Seed import sources (production /N/... paths)
- * 6. Populate Bioloop users (from api/*.json files)
- * 7. Convert CMG users (skip if already exists as Bioloop user)
- * 8. Convert datasets (RAW_DATA and DATA_PRODUCT)
- * 9. Convert dataset audit logs (from events)
- * 10. Convert stage/download logs (data_access_log, stage_request_log, dataset_state)
- * 11. Convert events collection (Download Copy events -> data_access_log)
- * 12. Convert dataset import logs (CMG upload history)
- * 13. Convert conversions
- * 14. Convert projects
- * 15. Convert dataset hierarchies
- * 16. Convert conversion logs (from filesystem - production only)
- * 17. Convert sessions (optional - many will be skipped)
- * 18. Initialize cursors for pollers
+ * 6. Convert CMG users (skip if already exists as Bioloop user)
+ * 7. Convert datasets (RAW_DATA and DATA_PRODUCT)
+ * 8. Convert dataset audit logs (from events)
+ * 9. Convert stage/download logs (data_access_log, stage_request_log, dataset_state)
+ * 10. Convert events collection (Download Copy events -> data_access_log)
+ * 11. Convert dataset import logs (CMG upload history)
+ * 12. Convert conversions
+ * 13. Convert projects
+ * 14. Convert dataset hierarchies
+ * 15. Convert conversion logs (from filesystem - production only)
+ * 16. Convert sessions (optional - many will be skipped)
+ * 17. Initialize cursors for pollers
+ * 18. Bootstrap production users/roles from mounted api JSON files
  */
 
 require('module-alias/register');
@@ -80,7 +76,6 @@ const {
   seedImportSources,
   seedAboutContent,
 } = require('./sync/cmg/bigbang/seed_constants');
-const { populateBioloopUsers } = require('./sync/cmg/bigbang/populate_bioloop_users');
 const { syncUsers } = require('./sync/cmg/bigbang/sync_users');
 const { syncAllDatasets } = require('./sync/cmg/bigbang/sync_datasets');
 const { syncAuditLogs } = require('./sync/cmg/bigbang/sync_audit_logs');
@@ -93,14 +88,19 @@ const { syncConversions } = require('./sync/cmg/bigbang/sync_conversions');
 const { syncAllConversionLogs } = require('./sync/cmg/bigbang/sync_conversion_logs');
 const { syncSessions } = require('./sync/cmg/bigbang/sync_sessions');
 const { initializeCursors } = require('./sync/cmg/bigbang/initialize_cursors');
+const { bootstrapProdUsers } = require('./sync/shared/bootstrap_prod_users');
+const {
+  cmgProcessLockManager,
+  forceReleaseAllSyncProcessLocks,
+  DEFAULT_LOCK_TTL_MS,
+} = require('./sync/shared/process_lock_manager');
 const {
   acquireProcessLock,
   releaseProcessLock,
   extendProcessLock,
   checkProcessLockStatus,
   forceReleaseAllProcessLocks,
-  DEFAULT_LOCK_TTL_MS,
-} = require('./sync/shared/process_lock_manager');
+} = cmgProcessLockManager;
 
 /**
  * Parse command line arguments
@@ -111,27 +111,26 @@ function parseArgs() {
 
   // eslint-disable-next-line no-restricted-syntax
   for (const arg of args) {
-    if (arg.startsWith('--cmg-uri=')) {
-      [, options.cmgUri] = arg.split('=');
-    } else if (arg.startsWith('--target-db=')) {
+    if (arg.startsWith('--target-db=')) {
       [, options.targetDb] = arg.split('=');
+    } else if (arg === '--cmg-uri' || arg.startsWith('--cmg-uri=')) {
+      // eslint-disable-next-line no-console
+      console.error('Removed flag: --cmg-uri. Set CMG_MONGO_* environment variables instead.');
+      process.exit(1);
     } else if (arg === '--skip-sessions') {
       options.skipSessions = true;
     } else if (arg === '--skip-conversion-logs') {
       options.skipConversionLogs = true;
     } else if (arg === '--clear-locks') {
       options.clearLocks = true;
-    } else if (arg === '--clear-cmg-target-data') {
-      options.clearCmgTargetData = true;
+    } else if (arg === '--clear-target-db') {
+      options.clearTargetDb = true;
     } else if (arg === '--help' || arg === '-h') {
       // eslint-disable-next-line no-console
       console.log(`
-Usage: node src/bigbang_sync.js [options]
+Usage: node src/bigbang_cmg_sync.js [options]
 
 Options:
-  --cmg-uri=<uri>        MongoDB connection string for CMG database
-                         Format: mongodb://username:password@host:port/database
-  
   --target-db=<target>        Target database: sandbox (default), app, or custom
                               - sandbox: Use data_sync's isolated PostgreSQL
                               - app: Read from ../api/.env and use app's database
@@ -143,35 +142,32 @@ Options:
   
   --clear-locks               Clear any existing process locks before starting
   
-  --clear-cmg-target-data     Clear CMG-originated rows from target database (keeps xenium rows)
+  --clear-target-db           Clear all CMG- and Xenium-originated rows (schema preserved)
   
   --help, -h             Show this help message
 
-Environment Variables (alternative to --cmg-uri):
+Environment Variables:
   CMG_MONGO_HOST, CMG_MONGO_PORT, CMG_MONGO_DB, CMG_MONGO_USERNAME,
   CMG_MONGO_PASSWORD
 
 Examples:
-  # Using command-line URI (sandbox DB)
-  node src/bigbang_sync.js --cmg-uri="mongodb://cmg:pass@localhost:27017/cmg"
-  
   # Using environment variables (via config system)
-  node src/bigbang_sync.js
+  node src/bigbang_cmg_sync.js
   
   # Target app's production database
-  node src/bigbang_sync.js --target-db=app
+  node src/bigbang_cmg_sync.js --target-db=app
   
   # Skip sessions (recommended for first run)
-  node src/bigbang_sync.js --skip-sessions
+  node src/bigbang_cmg_sync.js --skip-sessions
   
   # Skip conversion logs (useful for local/dev without filesystem access)
-  node src/bigbang_sync.js --skip-conversion-logs
+  node src/bigbang_cmg_sync.js --skip-conversion-logs
   
   # Sync to app DB with all options
-  node src/bigbang_sync.js --target-db=app --skip-sessions --clear-locks
+  node src/bigbang_cmg_sync.js --target-db=app --skip-sessions --clear-locks
   
-  # Clear CMG-originated target rows and run fresh CMG migration
-  node src/bigbang_sync.js --clear-cmg-target-data --skip-sessions --skip-conversion-logs
+  # Clear all legacy migration rows and run fresh CMG migration
+  node src/bigbang_cmg_sync.js --clear-target-db --skip-sessions --skip-conversion-logs
 `);
       process.exit(0);
     }
@@ -198,13 +194,9 @@ function sanitizeUri(str) {
 }
 
 /**
- * Build CMG MongoDB connection URI from config or command line
+ * Build CMG MongoDB connection URI from config
  */
-function buildMongoUri(cmdLineUri) {
-  if (cmdLineUri) {
-    return cmdLineUri;
-  }
-
+function buildMongoUri() {
   // Get from config system
   const dbConfig = config.get('cmg_mongodb');
 
@@ -214,7 +206,7 @@ function buildMongoUri(cmdLineUri) {
 
   if (!host || !database) {
     const errorMsg = 'CMG MongoDB configuration missing. '
-      + 'Please set CMG_MONGO_* environment variables or use --cmg-uri flag.';
+      + 'Please set CMG_MONGO_* environment variables.';
     throw new Error(errorMsg);
   }
 
@@ -229,66 +221,74 @@ function buildMongoUri(cmdLineUri) {
   return uri;
 }
 
-/**
- * Clear CMG-originated data from target database (keeps schema intact)
- * @param {PrismaClient} prisma - Prisma client instance
- */
-async function clearCmgTargetData(prisma) {
+async function clearCmgOriginatedRows(prisma) {
+  const cmgConversionIds = (await prisma.conversion.findMany({
+    where: { cmg_id: { not: null } },
+    select: { id: true },
+  })).map((row) => row.id);
+
+  const cmgDatasetIds = (await prisma.dataset.findMany({
+    where: { cmg_id: { not: null } },
+    select: { id: true },
+  })).map((row) => row.id);
+
+  if (cmgConversionIds.length > 0) {
+    await prisma.argument_value.deleteMany({
+      where: { conversion_id: { in: cmgConversionIds } },
+    });
+    await prisma.process_request.deleteMany({
+      where: { conversion_id: { in: cmgConversionIds } },
+    });
+  }
+
+  if (cmgDatasetIds.length > 0) {
+    await prisma.data_access_log.deleteMany({
+      where: { dataset_id: { in: cmgDatasetIds } },
+    });
+    await prisma.stage_request_log.deleteMany({
+      where: { dataset_id: { in: cmgDatasetIds } },
+    });
+  }
+
+  await prisma.project.deleteMany({ where: { cmg_id: { not: null } } });
+  await prisma.genome_browser_session.deleteMany({ where: { cmg_id: { not: null } } });
+  await prisma.conversion.deleteMany({ where: { cmg_id: { not: null } } });
+  await prisma.dataset_import_log.deleteMany({ where: { cmg_id: { not: null } } });
+  await prisma.dataset.deleteMany({ where: { cmg_id: { not: null } } });
+  await prisma.user.deleteMany({
+    where: {
+      cmg_id: { not: null },
+      username: { not: 'cmguser' },
+    },
+  });
+
+  await prisma.cmg_sync_retry.deleteMany({});
+  await prisma.cmg_sync_cursor.deleteMany({});
+}
+
+async function clearXeniumOriginatedRows(prisma) {
+  await prisma.project.deleteMany({ where: { xenium_id: { not: null } } });
+  await prisma.dataset.deleteMany({ where: { xenium_id: { not: null } } });
+  await prisma.user.deleteMany({ where: { xenium_id: { not: null } } });
+  await prisma.xenium_sync_retry.deleteMany({});
+  await prisma.xenium_sync_cursor.deleteMany({});
+}
+
+async function clearAllLegacyMigrationTargetData(prisma) {
   logger.warn('='.repeat(80));
-  logger.warn('CLEARING CMG-ORIGINATED TARGET DATA');
+  logger.warn('CLEARING ALL LEGACY MIGRATION DATA (CMG + XENIUM)');
   logger.warn('='.repeat(80));
-  logger.warn('This will delete CMG-originated business rows and CMG sync cursors/retries.');
-  logger.warn('Xenium rows and schema are preserved.');
+  logger.warn('Deletes CMG- and Xenium-originated business rows and both sync cursor/retry tables.');
   logger.warn('');
 
   try {
-    const cmgConversionIds = (await prisma.conversion.findMany({
-      where: { cmg_id: { not: null } },
-      select: { id: true },
-    })).map((row) => row.id);
-
-    const cmgDatasetIds = (await prisma.dataset.findMany({
-      where: { cmg_id: { not: null } },
-      select: { id: true },
-    })).map((row) => row.id);
-
-    if (cmgConversionIds.length > 0) {
-      await prisma.argument_value.deleteMany({
-        where: { conversion_id: { in: cmgConversionIds } },
-      });
-      await prisma.process_request.deleteMany({
-        where: { conversion_id: { in: cmgConversionIds } },
-      });
-    }
-
-    if (cmgDatasetIds.length > 0) {
-      await prisma.data_access_log.deleteMany({
-        where: { dataset_id: { in: cmgDatasetIds } },
-      });
-      await prisma.stage_request_log.deleteMany({
-        where: { dataset_id: { in: cmgDatasetIds } },
-      });
-    }
-
-    await prisma.project.deleteMany({ where: { cmg_id: { not: null } } });
-    await prisma.genome_browser_session.deleteMany({ where: { cmg_id: { not: null } } });
-    await prisma.conversion.deleteMany({ where: { cmg_id: { not: null } } });
-    await prisma.dataset_import_log.deleteMany({ where: { cmg_id: { not: null } } });
-    await prisma.dataset.deleteMany({ where: { cmg_id: { not: null } } });
-    await prisma.user.deleteMany({
-      where: {
-        cmg_id: { not: null },
-        username: { not: 'cmguser' },
-      },
-    });
-
-    await prisma.cmg_sync_retry.deleteMany({});
-    await prisma.cmg_sync_cursor.deleteMany({});
-
-    logger.info('CMG-originated target data cleared successfully');
+    await clearCmgOriginatedRows(prisma);
+    logger.info('CMG-originated rows cleared.');
+    await clearXeniumOriginatedRows(prisma);
+    logger.info('Xenium-originated rows cleared.');
     logger.info('');
   } catch (error) {
-    logger.error('Failed to clear CMG target rows:', error.message);
+    logger.error('Failed to clear legacy migration rows:', error.message);
     throw error;
   }
 }
@@ -360,10 +360,10 @@ async function main() {
       process.exit(1);
     }
 
-    if (options.clearCmgTargetData) {
-      await clearCmgTargetData(prisma);
-      logger.info('[CLEAR-CMG-DATA] Clearing CMG process locks for fresh start...');
-      await forceReleaseAllProcessLocks(prisma);
+    if (options.clearTargetDb) {
+      await clearAllLegacyMigrationTargetData(prisma);
+      logger.info('[CLEAR-TARGET-DB] Resetting CMG and Xenium process locks...');
+      await forceReleaseAllSyncProcessLocks(prisma);
     }
 
     // Acquire process lock BEFORE starting migration
@@ -377,7 +377,7 @@ async function main() {
       logger.error(
         'If you are certain no other instance is running, you can restart with:',
       );
-      logger.error('  node src/bigbang_sync.js --clear-locks');
+      logger.error('  node src/bigbang_cmg_sync.js --clear-locks');
       logger.error('');
       logger.error('Or manually clear the lock via Prisma:');
       logger.error(
@@ -389,7 +389,7 @@ async function main() {
     }
 
     // Build connection URIs
-    const cmgUri = buildMongoUri(options.cmgUri);
+    const cmgUri = buildMongoUri();
 
     logger.info('Connecting to databases...');
     logger.info(`CMG MongoDB: ${cmgUri.replace(/\/\/.*@/, '//<credentials>@')}`);
@@ -416,85 +416,85 @@ async function main() {
     logger.info('');
 
     // 1. Create roles
-    logger.info('[1/18] Creating roles...');
+    logger.info('[1/17] Creating roles...');
     await createRoles(prisma);
 
     // 2. Create CMG system user
-    logger.info('[2/18] Creating CMG system user...');
+    logger.info('[2/17] Creating CMG system user...');
     const cmgUserId = await createCMGUser(prisma);
 
     // 3. Populate pipeline definitions
-    logger.info('[3/18] Populating pipeline definitions...');
+    logger.info('[3/17] Populating pipeline definitions...');
     await populatePipelineDefinitions(prisma, cmgUserId);
 
     // 4. Seed analysis types
-    logger.info('[4/18] Seeding analysis types...');
+    logger.info('[4/17] Seeding analysis types...');
     await seedAnalysisTypes(prisma);
 
     // 5. Seed import sources and about content
-    logger.info('[5/18] Seeding import sources and About content...');
+    logger.info('[5/17] Seeding import sources and About content...');
     await seedImportSources(prisma);
     await seedAboutContent(prisma, cmgUserId);
 
-    // 6. Populate Bioloop users (from JSON files)
-    logger.info('[6/18] Populating Bioloop users from JSON files...');
-    await populateBioloopUsers(prisma);
-
-    // 7. Convert CMG users
-    logger.info('[7/18] Converting CMG users...');
+    // 6. Convert CMG users
+    logger.info('[6/17] Converting CMG users...');
     await syncUsers(prisma, cmgDb);
 
-    // 8. Convert datasets
-    logger.info('[8/18] Converting datasets...');
+    // 7. Convert datasets
+    logger.info('[7/17] Converting datasets...');
     await syncAllDatasets(prisma, cmgDb);
 
-    // 9. Convert dataset audit logs
-    logger.info('[9/18] Converting dataset audit logs...');
+    // 8. Convert dataset audit logs
+    logger.info('[8/17] Converting dataset audit logs...');
     await syncAuditLogs(prisma, cmgDb, cmgUserId);
 
-    // 10. Convert stage/download logs
-    logger.info('[10/18] Converting historic stage/download events to logs...');
+    // 9. Convert stage/download logs
+    logger.info('[9/17] Converting historic stage/download events to logs...');
     await syncDownloadStageLogs(prisma, cmgDb, cmgUserId);
 
-    // 11. Convert events collection (Download Copy events -> data_access_log)
-    logger.info('[11/18] Converting CMG events collection to data access logs...');
+    // 10. Convert events collection (Download Copy events -> data_access_log)
+    logger.info('[10/17] Converting CMG events collection to data access logs...');
     await syncEventsCollection(prisma, cmgDb, cmgUserId);
 
-    // 12. Convert dataset import logs (CMG upload history -> Bioloop import logs)
-    logger.info('[12/18] Converting CMG upload history to import logs...');
+    // 11. Convert dataset import logs (CMG upload history -> Bioloop import logs)
+    logger.info('[11/17] Converting CMG upload history to import logs...');
     await syncImportLogs(prisma, cmgDb, cmgUserId);
 
-    // 13. Convert conversions
-    logger.info('[13/18] Converting conversions...');
+    // 12. Convert conversions
+    logger.info('[12/17] Converting conversions...');
     await syncConversions(prisma, cmgDb);
 
-    // 14. Convert projects
-    logger.info('[14/18] Converting projects...');
+    // 13. Convert projects
+    logger.info('[13/17] Converting projects...');
     await syncProjects(prisma, cmgDb);
 
-    // 15. Convert dataset hierarchies (must run after conversions so conversion_id can be stored)
-    logger.info('[15/18] Converting dataset hierarchies...');
+    // 14. Convert dataset hierarchies (must run after conversions so conversion_id can be stored)
+    logger.info('[14/17] Converting dataset hierarchies...');
     await syncDatasetHierarchies(prisma, cmgDb);
 
-    // 16. Convert conversion logs (filesystem - production only)
+    // 15. Convert conversion logs (filesystem - production only)
     if (options.skipConversionLogs) {
-      logger.info('[16/18] Skipping conversion logs (--skip-conversion-logs flag provided)');
+      logger.info('[15/17] Skipping conversion logs (--skip-conversion-logs flag provided)');
     } else {
-      logger.info('[16/18] Converting historic conversion logs...');
+      logger.info('[15/17] Converting historic conversion logs...');
       await syncAllConversionLogs(prisma, cmgDb);
     }
 
-    // 17. Convert sessions (optional)
+    // 16. Convert sessions (optional)
     if (options.skipSessions) {
-      logger.info('[17/18] Skipping sessions (--skip-sessions flag provided)');
+      logger.info('[16/17] Skipping sessions (--skip-sessions flag provided)');
     } else {
-      logger.info('[17/18] Converting genome browser sessions...');
+      logger.info('[16/17] Converting genome browser sessions...');
       await syncSessions(prisma, cmgDb);
     }
 
-    // 18. Initialize cursors
-    logger.info('[18/18] Initializing poller cursors...');
+    // 17. Initialize cursors
+    logger.info('[17/18] Initializing poller cursors...');
     await initializeCursors(prisma, cmgDb);
+
+    // 18. Bootstrap production users/roles (same source JSON as api init_prod_users.js)
+    logger.info('[18/18] Bootstrapping production users/roles from API JSON...');
+    await bootstrapProdUsers(prisma, logger, 'CMG');
 
     // Clear lock extender
     if (lockExtender) {

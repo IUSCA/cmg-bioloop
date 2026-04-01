@@ -195,7 +195,7 @@ Timestamped activity log from both agents.
    - Required for efficient poller queries
 
 2. **Run Bigbang Sync**
-   - Command: `node src/bigbang_sync.js --target-db=app --skip-conversion-logs --clear-target-db`
+   - Command: `node src/bigbang_cmg_sync.js --target-db=app --skip-conversion-logs --clear-target-db`
    - Duration: ~6-10 minutes
    - Syncs all data from CMG to Bioloop
    - Initializes poller cursors

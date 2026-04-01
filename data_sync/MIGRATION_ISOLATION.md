@@ -49,7 +49,7 @@ cd data_sync
 docker compose -f docker-compose.sandbox.yml exec db_sandbox bash
 
 # Run bigbang script
-docker compose -f docker-compose.sandbox.yml exec db_sandbox node src/bigbang_sync.js
+docker compose -f docker-compose.sandbox.yml exec db_sandbox node src/bigbang_cmg_sync.js
 
 # Run poller script
 docker compose -f docker-compose.sandbox.yml exec db_sandbox node src/poller_sync.js

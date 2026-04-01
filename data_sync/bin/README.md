@@ -35,16 +35,15 @@ Action flags (at least one required):
 
 CMG options:
 - `--cmg-clear-locks`
-- `--cmg-clear-target-data`
 - `--cmg-skip-sessions`
 - `--cmg-skip-conversion-logs`
 - `--cmg-uri <uri>`
 
 Xenium options:
 - `--xenium-clear-locks`
-- `--xenium-clear-target-data`
 
 Shared/global options:
+- `--clear-target-db` (clears all CMG + Xenium migration rows on the target before bigbang)
 - `--target-db <sandbox|app|custom>` (default: `sandbox`)
 - `--dry-run`
 - `-h`, `--help`
@@ -65,7 +64,7 @@ Reset both source datasets and rerun both bigbangs:
 ```bash
 ./bin/init.sh \
   --cmg-run-bigbang --xenium-run-bigbang \
-  --cmg-clear-target-data --xenium-clear-target-data \
+  --clear-target-db \
   --cmg-clear-locks --xenium-clear-locks \
   --target-db sandbox
 ```

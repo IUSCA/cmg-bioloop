@@ -27,7 +27,18 @@ async function syncImportLogs(prisma, xeniumPrisma) {
   logger.info('[XENIUM][sync_import_logs] Starting import-log synchronization');
 
   const [sourceLogs, targetDatasets] = await Promise.all([
-    xeniumPrisma.dataset_import_log.findMany({ orderBy: { id: 'asc' } }),
+    xeniumPrisma.dataset_import_log.findMany({
+      orderBy: { id: 'asc' },
+      select: {
+        id: true,
+        dataset_id: true,
+        source_run: true,
+        notes: true,
+        metadata: true,
+        created_at: true,
+        updated_at: true,
+      },
+    }),
     prisma.dataset.findMany({
       where: { xenium_id: { not: null } },
       select: { id: true, xenium_id: true, name: true },

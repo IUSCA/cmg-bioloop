@@ -100,7 +100,7 @@ docker compose -f docker-compose.sandbox.yml exec db_sandbox \
 | `--skip-sessions` | Skip genome browser session conversion (recommended for first run) |
 | `--skip-conversion-logs` | Skip conversion logs migration from filesystem (useful for local/dev) |
 | `--clear-locks` | Clear any existing process locks before starting (useful if previous run crashed) |
-| `--clear-cmg-target-data` | Clear CMG-originated rows from target database before migration |
+| `--clear-target-db` | Clear all CMG- and Xenium-originated migration rows before migration |
 | `--help`, `-h` | Show help message |
 
 ### Target Database Options

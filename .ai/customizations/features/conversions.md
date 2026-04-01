@@ -399,7 +399,7 @@ const derivedDatasets = await prisma.dataset_hierarchy.findMany({
 - `api/src/services/dataset.js`
 - `api/src/routes/datasets/index.js`
 - `data_sync/src/sync/bigbang/sync_dataset_hierarchies.js`
-- `data_sync/src/bigbang_sync.js`
+- `data_sync/src/bigbang_cmg_sync.js`
 - `ui/src/components/dataset/AssocDatasetList.vue`
 
 ## 2026-03-03

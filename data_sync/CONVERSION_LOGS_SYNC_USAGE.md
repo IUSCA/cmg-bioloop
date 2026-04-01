@@ -16,11 +16,11 @@ The conversion logs sync is **automatically included** in the bigbang migration 
 # From host
 cd /opt/sca/cmg/data_sync
 docker compose -f docker-compose.sandbox.yml exec db_sandbox \
-  node /opt/sca/app/src/bigbang_sync.js --target-db=app
+  node /opt/sca/app/src/bigbang_cmg_sync.js --target-db=app
 
 # Conversion logs will be synced automatically unless you skip them:
 docker compose -f docker-compose.sandbox.yml exec db_sandbox \
-  node /opt/sca/app/src/bigbang_sync.js --target-db=app --skip-conversion-logs
+  node /opt/sca/app/src/bigbang_cmg_sync.js --target-db=app --skip-conversion-logs
 ```
 
 **Use this method for:**
@@ -324,7 +324,7 @@ The conversion logs sync is **step 12** in the bigbang migration order:
 
 **To skip during bigbang:**
 ```bash
-node src/bigbang_sync.js --skip-conversion-logs
+node src/bigbang_cmg_sync.js --skip-conversion-logs
 ```
 
 ## Related Documentation

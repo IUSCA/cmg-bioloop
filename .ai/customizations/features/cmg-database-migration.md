@@ -733,9 +733,9 @@ The following poller scripts must be updated to set `metadata.origin` on rows th
 ## 2026-03-11
 
 - Decision: CMG clear operation is source-scoped by default in data-sync workflows.
-- Change: `bigbang_cmg_sync.js` now supports `--clear-cmg-target-data` to remove CMG-originated migrated rows (plus CMG cursor/retry state) without truncating xenium-originated data.
-- Decision: Deprecated clear alias `--clear-target-db` removed from CMG bigbang CLI; only explicit `--clear-cmg-target-data` is supported.
-- Change: Central orchestrator `data_sync/bin/init.sh` now uses explicit app/action flags and forwards CMG clear as `--clear-cmg-target-data` instead of full-database truncation semantics.
+- Change: CMG bigbang moved to source-scoped clear behavior (CMG-originated rows/cursors/retries only), preserving xenium-originated data.
+- Decision: Legacy clear-flag transitions were completed and later superseded by unified clear semantics.
+- Change: Central orchestrator `data_sync/bin/init.sh` adopted explicit app/action flags and source-aware clear handling instead of full-database truncation semantics.
 
 ---
 
@@ -759,6 +759,12 @@ The following poller scripts must be updated to set `metadata.origin` on rows th
 
 ---
 
+## 2026-04-01
+
+- Decision: Supersedes 2026-03-11 clear-flag split: `bigbang_cmg_sync.js`, `bigbang_xenium_sync.js`, and `init.sh` now use a single `--clear-target-db` that removes all CMG- and Xenium-originated migration rows and resets both sync lock tables (see `clear_legacy_target_data.js`, `forceReleaseAllSyncProcessLocks`).
+
+---
+
 ## Future Entries
 
 Add entries here as decisions are made, changes are implemented, or issues are resolved.
@@ -775,5 +781,5 @@ Format:
 
 ---
 
-**Last Updated:** 2026-03-13
+**Last Updated:** 2026-04-01
 

@@ -58,7 +58,7 @@ networks:
 **Use the `--target-db=app` flag** instead of modifying networks:
 
 ```bash
-node src/bigbang_sync.js --target-db=app
+node src/bigbang_cmg_sync.js --target-db=app
 ```
 
 This reads credentials from `../api/.env` and connects to the main database via hostname (works despite network isolation).
@@ -252,7 +252,7 @@ Points to main app's schema:
     "schema": "/opt/sca/api/prisma/schema.prisma"
   },
   "scripts": {
-    "bigbang": "node src/bigbang_sync.js",
+    "bigbang": "node src/bigbang_cmg_sync.js",
     "poller": "node src/poller_sync.js",
     "prisma:generate": "prisma generate --schema=/opt/sca/api/prisma/schema.prisma",
     "prisma:migrate": "prisma migrate deploy --schema=/opt/sca/api/prisma/schema.prisma"
@@ -338,7 +338,7 @@ The bigbang sync can write to either the **sandbox database** (for testing) or t
 ```bash
 cd data_sync
 docker compose -f docker-compose.sandbox.yml exec db_sandbox \
-  node src/bigbang_sync.js --target-db=sandbox --clear-locks
+  node src/bigbang_cmg_sync.js --target-db=sandbox --clear-locks
 ```
 
 #### Sync to Production Database
@@ -346,7 +346,7 @@ docker compose -f docker-compose.sandbox.yml exec db_sandbox \
 ```bash
 cd data_sync
 docker compose -f docker-compose.sandbox.yml exec db_sandbox \
-  node src/bigbang_sync.js --target-db=app --skip-sessions --clear-locks
+  node src/bigbang_cmg_sync.js --target-db=app --skip-sessions --clear-locks
 ```
 
 **Options:**
@@ -440,7 +440,7 @@ cd data_sync
 docker compose -f docker-compose.sandbox.yml exec db_sandbox bash
 
 # Once inside:
-node src/bigbang_sync.js --help
+node src/bigbang_cmg_sync.js --help
 node src/poller_sync.js --help
 npx prisma studio --schema=/opt/sca/api/prisma/schema.prisma
 ```
@@ -626,7 +626,7 @@ docker compose -f docker-compose.sandbox.yml restart db_sandbox
 **Clear locks:**
 ```bash
 cd data_sync
-docker compose -f docker-compose.sandbox.yml exec db_sandbox node src/bigbang_sync.js --clear-locks
+docker compose -f docker-compose.sandbox.yml exec db_sandbox node src/bigbang_cmg_sync.js --clear-locks
 # OR
 docker compose -f docker-compose.sandbox.yml exec db_sandbox node src/poller_sync.js --clear-locks
 ```
@@ -641,7 +641,7 @@ docker compose -f docker-compose.sandbox.yml exec db_sandbox node src/poller_syn
 - `config/custom-environment-variables.json` - Env var mappings
 
 ### Scripts
-- `src/bigbang_sync.js` - One-time migration
+- `src/bigbang_cmg_sync.js` - One-time migration
 - `src/poller_sync.js` - Continuous sync orchestrator
 
 ### Sync Modules
@@ -697,7 +697,7 @@ NODE_ENV=production
 
 ```bash
 cd data_sync
-docker compose -f docker-compose.sandbox.yml exec db_sandbox node src/bigbang_sync.js
+docker compose -f docker-compose.sandbox.yml exec db_sandbox node src/bigbang_cmg_sync.js
 ```
 
 ### Setup Continuous Poller

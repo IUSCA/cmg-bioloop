@@ -13,6 +13,9 @@ services:
       - .:/opt/sca/app
       - ../api/prisma:/opt/sca/api/prisma:ro
       - ../api/.env:/opt/sca/api/.env:ro
+      - ../api/admins.json:/opt/sca/api/admins.json:ro
+      - ../api/operators.json:/opt/sca/api/operators.json:ro
+      - ../api/users.json:/opt/sca/api/users.json:ro
       - db_sandbox_pgdata:/var/lib/postgresql/15/main
       - db_sandbox_node_modules:/opt/sca/app/node_modules
       # Shared mount for CMG<->Bioloop sync testing coordination

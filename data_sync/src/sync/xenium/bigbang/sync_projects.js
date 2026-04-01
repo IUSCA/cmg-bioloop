@@ -27,8 +27,14 @@ const {
 
 async function syncProjectAssociations(prisma, xeniumPrisma, sourceProjectId, targetProjectId, maps) {
   const [sourceProjectUsers, sourceProjectDatasets] = await Promise.all([
-    xeniumPrisma.project_user.findMany({ where: { project_id: sourceProjectId } }),
-    xeniumPrisma.project_dataset.findMany({ where: { project_id: sourceProjectId } }),
+    xeniumPrisma.project_user.findMany({
+      where: { project_id: sourceProjectId },
+      select: { user_id: true },
+    }),
+    xeniumPrisma.project_dataset.findMany({
+      where: { project_id: sourceProjectId },
+      select: { dataset_id: true },
+    }),
   ]);
 
   const resolvedProjectUsers = sourceProjectUsers
@@ -69,7 +75,20 @@ async function syncProjects(prisma, xeniumPrisma) {
   logger.info('[XENIUM][sync_projects] Starting project synchronization');
 
   const [sourceProjects, targetUsers, targetDatasets] = await Promise.all([
-    xeniumPrisma.project.findMany({ orderBy: { updated_at: 'asc' } }),
+    xeniumPrisma.project.findMany({
+      orderBy: { updated_at: 'asc' },
+      select: {
+        id: true,
+        owner_id: true,
+        name: true,
+        description: true,
+        funding: true,
+        browser_enabled: true,
+        created_at: true,
+        updated_at: true,
+        metadata: true,
+      },
+    }),
     prisma.user.findMany({
       where: { xenium_id: { not: null } },
       select: { id: true, xenium_id: true },
@@ -93,7 +112,9 @@ async function syncProjects(prisma, xeniumPrisma) {
   for (const chunk of chunks) {
     // eslint-disable-next-line no-restricted-syntax
     for (const sourceProject of chunk) {
-      const xeniumId = coerceIntegerId(sourceProject.id);
+      const xeniumId = typeof sourceProject.id === 'string'
+        ? sourceProject.id.trim()
+        : String(sourceProject.id || '').trim();
       if (!xeniumId) {
         skippedCount += 1;
         continue;

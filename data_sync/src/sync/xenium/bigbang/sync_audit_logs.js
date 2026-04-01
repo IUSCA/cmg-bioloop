@@ -23,7 +23,18 @@ async function syncAuditLogs(prisma, xeniumPrisma) {
   logger.info('[XENIUM][sync_audit_logs] Starting audit log synchronization');
 
   const [sourceAuditLogs, targetDatasets, targetUsers, systemUser] = await Promise.all([
-    xeniumPrisma.dataset_audit.findMany({ orderBy: { id: 'asc' } }),
+    xeniumPrisma.dataset_audit.findMany({
+      orderBy: { id: 'asc' },
+      select: {
+        id: true,
+        dataset_id: true,
+        user_id: true,
+        action: true,
+        timestamp: true,
+        old_data: true,
+        new_data: true,
+      },
+    }),
     prisma.dataset.findMany({
       where: { xenium_id: { not: null } },
       select: { id: true, xenium_id: true },

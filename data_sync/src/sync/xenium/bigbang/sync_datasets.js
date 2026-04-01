@@ -60,32 +60,8 @@ async function ensureUniqueDatasetName(prisma, desiredName, datasetType, isDelet
   );
 }
 
-async function resolveAnalysisTypeId(prisma, sourceDataset) {
-  if (!sourceDataset.analysis_type?.name || !sourceDataset.analysis_type?.extension) {
-    return null;
-  }
-
-  const name = sourceDataset.analysis_type.name;
-  const extension = sourceDataset.analysis_type.extension;
-
-  let targetAnalysisType = await prisma.analysis_type.findFirst({
-    where: {
-      name: { equals: name, mode: 'insensitive' },
-      extension: { equals: extension, mode: 'insensitive' },
-    },
-  });
-
-  if (!targetAnalysisType) {
-    targetAnalysisType = await prisma.analysis_type.create({
-      data: {
-        name,
-        extension,
-        metadata: withDatasetOrigin(sourceDataset.analysis_type.metadata),
-      },
-    });
-  }
-
-  return targetAnalysisType.id;
+async function resolveAnalysisTypeId() {
+  return null;
 }
 
 /**
@@ -110,9 +86,24 @@ async function syncAllDatasets(prisma, xeniumPrisma) {
 
   const sourceDatasets = await xeniumPrisma.dataset.findMany({
     where: { type: { in: ['RAW_DATA', 'DATA_PRODUCT'] } },
-    include: {
-      analysis_type: true,
-      genomic_details: true,
+    select: {
+      id: true,
+      name: true,
+      type: true,
+      is_deleted: true,
+      description: true,
+      num_directories: true,
+      num_files: true,
+      du_size: true,
+      size: true,
+      bundle_size: true,
+      created_at: true,
+      updated_at: true,
+      origin_path: true,
+      archive_path: true,
+      staged_path: true,
+      is_staged: true,
+      metadata: true,
     },
     orderBy: { id: 'asc' },
   });
@@ -171,7 +162,6 @@ async function syncAllDatasets(prisma, xeniumPrisma) {
             staged_path: sourceDataset.staged_path || null,
             is_staged: Boolean(sourceDataset.is_staged),
             create_method: sourceDataset.create_method || null,
-            file_type: sourceDataset.file_type || null,
             analysis_type_id: analysisTypeId,
             metadata,
           },
@@ -194,7 +184,6 @@ async function syncAllDatasets(prisma, xeniumPrisma) {
             is_deleted: Boolean(sourceDataset.is_deleted),
             is_staged: Boolean(sourceDataset.is_staged),
             create_method: sourceDataset.create_method || null,
-            file_type: sourceDataset.file_type || null,
             analysis_type_id: analysisTypeId,
             metadata,
           },
@@ -202,21 +191,7 @@ async function syncAllDatasets(prisma, xeniumPrisma) {
         updatedCount += 1;
       }
 
-      if (sourceDataset.genomic_details) {
-        // eslint-disable-next-line no-await-in-loop
-        await prisma.dataset_genomic_attributes.upsert({
-          where: { dataset_id: targetDataset.id },
-          create: {
-            dataset_id: targetDataset.id,
-            genome_type: sourceDataset.genomic_details.genome_type || null,
-            genome_value: sourceDataset.genomic_details.genome_value || null,
-          },
-          update: {
-            genome_type: sourceDataset.genomic_details.genome_type || null,
-            genome_value: sourceDataset.genomic_details.genome_value || null,
-          },
-        });
-      }
+      // Xenium source schema does not include genomic_details in this environment.
     }
   }
 

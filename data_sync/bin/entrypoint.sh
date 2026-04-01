@@ -51,6 +51,10 @@ echo "PostgreSQL is ready!"
 echo "Generating Prisma Client from main app's schema..."
 /opt/sca/app/node_modules/.bin/prisma generate --schema=/opt/sca/api/prisma/schema.prisma || echo "Warning: Prisma generate failed"
 
+# Generate dedicated Prisma Client for Xenium source schema
+echo "Generating Prisma Client for Xenium source schema..."
+/opt/sca/app/node_modules/.bin/prisma generate --schema=/opt/sca/app/prisma/xenium_source.prisma || echo "Warning: Xenium Prisma generate failed"
+
 # Run Prisma migrations from main app's migrations directory
 echo "Running Prisma migrations from main app..."
 /opt/sca/app/node_modules/.bin/prisma migrate deploy --schema=/opt/sca/api/prisma/schema.prisma || echo "Warning: Prisma migrations failed or not needed"

@@ -22,16 +22,14 @@
 #
 # CMG Options:
 #   --cmg-clear-locks                Pass --clear-locks to CMG script(s)
-#   --cmg-clear-target-data          Clear CMG-originated rows before CMG bigbang
 #   --cmg-skip-sessions              Pass-through to CMG bigbang
 #   --cmg-skip-conversion-logs       Pass-through to CMG bigbang
-#   --cmg-uri URI                    Pass-through to CMG bigbang
 #
 # Xenium Options:
 #   --xenium-clear-locks             Pass --clear-locks to Xenium script(s)
-#   --xenium-clear-target-data       Clear Xenium-originated rows before Xenium bigbang
 #
 # General:
+#   --clear-target-db                Clear all CMG + Xenium migration rows before any selected bigbang(s)
 #   --target-db DB                   Shared target DB for all actions: sandbox (default), app, or custom
 #   --dry-run                        Print resolved commands; do not execute
 #   -h, --help                       Show this help message
@@ -70,8 +68,7 @@ RESTART_XENIUM_POLLERS=false
 TARGET_DB="sandbox"
 CMG_CLEAR_LOCKS=false
 XENIUM_CLEAR_LOCKS=false
-CMG_CLEAR_TARGET_DATA=false
-XENIUM_CLEAR_TARGET_DATA=false
+CLEAR_TARGET_DB=false
 DRY_RUN=false
 
 CMG_EXTRA_BIGBANG_ARGS=()
@@ -84,6 +81,25 @@ show_help() {
 log() {
   echo -e "$1"
   echo "[$(date '+%Y-%m-%d %H:%M:%S')] $(echo "$1" | sed 's/\x1B\[[0-9;]*m//g')" >> "$LOG_FILE"
+}
+
+resolve_compose_file() {
+  local app_env="${APP_ENV:-}"
+  local node_env="${NODE_ENV:-}"
+
+  if [[ -z "$app_env" || -z "$node_env" ]] && [[ -f ".env" ]]; then
+    local env_app env_node
+    env_app="$(sed -n 's/^APP_ENV=//p' .env | head -n 1 | tr -d '"' | tr -d "'")"
+    env_node="$(sed -n 's/^NODE_ENV=//p' .env | head -n 1 | tr -d '"' | tr -d "'")"
+    if [[ -z "$app_env" ]]; then app_env="$env_app"; fi
+    if [[ -z "$node_env" ]]; then node_env="$env_node"; fi
+  fi
+
+  if [[ "$app_env" == "production" || "$node_env" == "production" ]]; then
+    echo "docker-compose.prod.yml"
+  else
+    echo "docker-compose.localhost.yml"
+  fi
 }
 
 join_args() {
@@ -123,17 +139,10 @@ parse_args() {
 
       --cmg-clear-locks) CMG_CLEAR_LOCKS=true ;;
       --xenium-clear-locks) XENIUM_CLEAR_LOCKS=true ;;
-      --cmg-clear-target-data) CMG_CLEAR_TARGET_DATA=true ;;
-      --xenium-clear-target-data) XENIUM_CLEAR_TARGET_DATA=true ;;
+      --clear-target-db) CLEAR_TARGET_DB=true ;;
 
       --cmg-skip-sessions) CMG_EXTRA_BIGBANG_ARGS+=("--skip-sessions") ;;
       --cmg-skip-conversion-logs) CMG_EXTRA_BIGBANG_ARGS+=("--skip-conversion-logs") ;;
-      --cmg-uri=*) CMG_EXTRA_BIGBANG_ARGS+=("$1") ;;
-      --cmg-uri)
-        CMG_EXTRA_BIGBANG_ARGS+=("$1" "$2")
-        shift
-        ;;
-
       --cmg-run-pollers|--xenium-run-pollers)
         echo -e "${RED}Removed flag: $1${NC}"
         echo -e "${RED}Use explicit lifecycle flags: --*-start-pollers / --*-stop-pollers / --*-restart-pollers${NC}"
@@ -161,7 +170,7 @@ parse_args() {
 build_cmg_bigbang_args() {
   local args=("--target-db=${TARGET_DB}")
   if [[ "$CMG_CLEAR_LOCKS" == true ]]; then args+=("--clear-locks"); fi
-  if [[ "$CMG_CLEAR_TARGET_DATA" == true ]]; then args+=("--clear-cmg-target-data"); fi
+  if [[ "$CLEAR_TARGET_DB" == true ]]; then args+=("--clear-target-db"); fi
   args+=("${CMG_EXTRA_BIGBANG_ARGS[@]}")
   echo "${args[@]}"
 }
@@ -169,7 +178,7 @@ build_cmg_bigbang_args() {
 build_xenium_bigbang_args() {
   local args=("--target-db=${TARGET_DB}")
   if [[ "$XENIUM_CLEAR_LOCKS" == true ]]; then args+=("--clear-locks"); fi
-  if [[ "$XENIUM_CLEAR_TARGET_DATA" == true ]]; then args+=("--clear-xenium-target-data"); fi
+  if [[ "$CLEAR_TARGET_DB" == true ]]; then args+=("--clear-target-db"); fi
   echo "${args[@]}"
 }
 
@@ -244,12 +253,8 @@ stop_pid_set() {
 }
 
 validate_args() {
-  if [[ "$CMG_CLEAR_TARGET_DATA" == true && "$RUN_CMG_BIGBANG" != true ]]; then
-    echo -e "${RED}Error: --cmg-clear-target-data requires --cmg-run-bigbang.${NC}"
-    exit 1
-  fi
-  if [[ "$XENIUM_CLEAR_TARGET_DATA" == true && "$RUN_XENIUM_BIGBANG" != true ]]; then
-    echo -e "${RED}Error: --xenium-clear-target-data requires --xenium-run-bigbang.${NC}"
+  if [[ "$CLEAR_TARGET_DB" == true && "$RUN_CMG_BIGBANG" != true && "$RUN_XENIUM_BIGBANG" != true ]]; then
+    echo -e "${RED}Error: --clear-target-db requires --cmg-run-bigbang and/or --xenium-run-bigbang.${NC}"
     exit 1
   fi
 
@@ -274,16 +279,8 @@ validate_args() {
   fi
 
   if [[ "$RUN_CMG_BIGBANG" == true || "$START_CMG_POLLERS" == true || "$RESTART_CMG_POLLERS" == true ]]; then
-    local has_cmg_uri_arg=false
-    for arg in "${CMG_EXTRA_BIGBANG_ARGS[@]}"; do
-      if [[ "$arg" == --cmg-uri=* || "$arg" == --cmg-uri ]]; then
-        has_cmg_uri_arg=true
-        break
-      fi
-    done
-
-    if [[ "$has_cmg_uri_arg" == false && -z "${MONGO_URI:-}" && -z "${CMG_MONGO_HOST:-}" ]]; then
-      echo -e "${YELLOW}Warning: CMG MongoDB connection env looks unset (no --cmg-uri, MONGO_URI, or CMG_MONGO_HOST).${NC}"
+    if [[ -z "${MONGO_URI:-}" && -z "${CMG_MONGO_HOST:-}" ]]; then
+      echo -e "${YELLOW}Warning: CMG MongoDB connection env looks unset (no MONGO_URI or CMG_MONGO_HOST).${NC}"
     fi
   fi
   if [[ "$RUN_XENIUM_BIGBANG" == true || "$START_XENIUM_POLLERS" == true || "$RESTART_XENIUM_POLLERS" == true ]]; then
@@ -499,4 +496,6 @@ main() {
   log "${GREEN}${BOLD}✓ init.sh completed${NC}"
 }
 
-main "$@"
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+  main "$@"
+fi

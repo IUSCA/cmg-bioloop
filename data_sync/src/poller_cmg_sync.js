@@ -48,12 +48,15 @@ const ProjectMetadataPoller = require('./sync/cmg/pollers/project_metadata_polle
 
 // Process lock manager
 const {
+  cmgProcessLockManager,
+  POLLER_LOCK_TTL_MS,
+} = require('./sync/shared/process_lock_manager');
+const {
   acquireProcessLock,
   releaseProcessLock,
   forceReleaseAllProcessLocks,
   checkProcessLockStatus,
-  POLLER_LOCK_TTL_MS,
-} = require('./sync/shared/process_lock_manager');
+} = cmgProcessLockManager;
 
 /**
  * Parse command line arguments

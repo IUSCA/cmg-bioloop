@@ -23,8 +23,8 @@ This document summarizes the changes made to add historic download/stage event t
 - Handles duplicates gracefully
 - Progress logging every 500 datasets
 
-### Updated: `bigbang_sync.js`
-**Location:** `data_sync/src/bigbang_sync.js`
+### Updated: `bigbang_cmg_sync.js`
+**Location:** `data_sync/src/bigbang_cmg_sync.js`
 
 **Changes:**
 1. Added import for new `syncDownloadStageLogs` module
@@ -235,7 +235,7 @@ curl "http://localhost:3001/api/metrics/space-utilization-by-timestamp?measureme
 ### Command:
 ```bash
 cd data_sync
-node src/bigbang_sync.js --target-db=app --skip-sessions --clear-locks
+node src/bigbang_cmg_sync.js --target-db=app --skip-sessions --clear-locks
 ```
 
 ### Expected Output:
@@ -281,7 +281,7 @@ node src/bigbang_sync.js --target-db=app --skip-sessions --clear-locks
 
 ### BigBang Sync:
 1. `data_sync/src/sync/bigbang/sync_download_stage_logs.js` (NEW)
-2. `data_sync/src/bigbang_sync.js` (MODIFIED)
+2. `data_sync/src/bigbang_cmg_sync.js` (MODIFIED)
 
 ### UI Components:
 3. `ui/src/components/statistics/DataAccessCountByTimeChart.vue` (MODIFIED)

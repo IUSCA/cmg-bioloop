@@ -309,7 +309,7 @@ The logger supports different log levels via `LOG_LEVEL` environment variable:
 LOG_LEVEL=debug
 
 # Or via command line
-LOG_LEVEL=debug node src/bigbang_sync.js
+LOG_LEVEL=debug node src/bigbang_cmg_sync.js
 ```
 
 **Levels:**

@@ -173,16 +173,20 @@ function createProcessLockManager({ lockTableModel }) {
 const cmgProcessLockManager = createProcessLockManager({ lockTableModel: 'cmg_sync_process_lock' });
 const xeniumProcessLockManager = createProcessLockManager({ lockTableModel: 'xenium_sync_process_lock' });
 
+/**
+ * Release every held lock in both CMG and Xenium sync lock tables (same target DB).
+ */
+async function forceReleaseAllSyncProcessLocks(prisma) {
+  const cmgCount = await cmgProcessLockManager.forceReleaseAllProcessLocks(prisma);
+  const xeniumCount = await xeniumProcessLockManager.forceReleaseAllProcessLocks(prisma);
+  return cmgCount + xeniumCount;
+}
+
 module.exports = {
   createProcessLockManager,
   cmgProcessLockManager,
   xeniumProcessLockManager,
-  // Named exports for backward-compatible usage by CMG scripts
-  acquireProcessLock: cmgProcessLockManager.acquireProcessLock,
-  releaseProcessLock: cmgProcessLockManager.releaseProcessLock,
-  extendProcessLock: cmgProcessLockManager.extendProcessLock,
-  checkProcessLockStatus: cmgProcessLockManager.checkProcessLockStatus,
-  forceReleaseAllProcessLocks: cmgProcessLockManager.forceReleaseAllProcessLocks,
+  forceReleaseAllSyncProcessLocks,
   DEFAULT_LOCK_TTL_MS,
   POLLER_LOCK_TTL_MS,
   INSTANCE_ID,

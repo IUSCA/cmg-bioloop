@@ -13,7 +13,7 @@
 | ID | Issue | Severity | Applies To |
 |----|-------|----------|------------|
 | H1 | `isLegacySourceActive` inherits CMG's boolean when xenium key absent | **HIGH** | Xenium |
-| H2 | `--clear-xenium-target-data` doesn't auto-clear bigbang lock | **HIGH** | Xenium |
+| H2 | Legacy Xenium clear flow didn't auto-clear bigbang lock | **HIGH** | Xenium |
 | H3 | Retry table is dead-letter log; failed rows bypassed when cursor advances | **HIGH** | Both |
 | H4 | `clearXeniumTargetRows` single transaction will timeout for large datasets | **HIGH** | Xenium |
 | H5 | `trackRetry` inside transaction — entry lost on transaction rollback | **HIGH** | Both |
@@ -74,7 +74,7 @@ function isLegacySourceActive(sourceName = 'xenium') {
 
 ---
 
-### H2. `--clear-xenium-target-data` does not auto-clear the bigbang lock (asymmetry with CMG)
+### H2. Legacy Xenium clear flow did not auto-clear the bigbang lock (asymmetry with CMG)
 
 **Files:** `data_sync/src/bigbang_cmg_sync.js` vs `data_sync/src/bigbang_xenium_sync.js`
 
@@ -85,8 +85,8 @@ const pollerLockStatus = await checkProcessLockStatus(prisma, 'poller');
 if (pollerLockStatus) { ... process.exit(1); }
 
 // 2. Clear data AND auto-clear all CMG locks
-if (options.clearCmgTargetData) {
-  await clearCmgTargetData(prisma);
+if (options.clearTargetDb) {
+  await clearAllLegacyMigrationTargetData(prisma);
   await forceReleaseAllProcessLocks(prisma);  // clears stale bigbang lock too
 }
 
@@ -108,14 +108,14 @@ lockAcquired = await acquireProcessLock(prisma, 'xenium_bigbang', DEFAULT_LOCK_T
 if (!lockAcquired) { ... process.exit(1); }  // exits here before reaching step 4
 
 // 4. Clear data — NEVER REACHED if step 3 failed
-if (options.clearXeniumTargetData) { await clearXeniumTargetRows(prisma); }
+if (options.clearTargetDb) { await clearAllLegacyMigrationTargetData(prisma); }
 ```
 
-**The bug:** If a previous xenium bigbang crashed without releasing its `xenium_bigbang` lock, passing `--clear-xenium-target-data` alone is not sufficient — the script exits at step 3 before ever reaching the clear step. The operator must separately pass `--clear-locks` in addition. In CMG, `--clear-cmg-target-data` handles this scenario implicitly via `forceReleaseAllProcessLocks`. This is an undocumented asymmetry that will be a footgun during disaster recovery.
+**The bug:** If a previous xenium bigbang crashed without releasing its `xenium_bigbang` lock, the old clear flow could exit at step 3 before reaching the clear step unless lock clearing was also requested. CMG handled this scenario implicitly via lock release during clear. This asymmetry was a footgun during disaster recovery.
 
 **Fix options (either):**
 1. Move `clearXeniumTargetRows` and `forceReleaseAllProcessLocks` to before `acquireProcessLock`, mirroring the CMG pattern.
-2. Or: document explicitly in `--help` output and the ops runbook that `--clear-locks` is always required alongside `--clear-xenium-target-data`.
+2. Or: document explicitly in `--help` output and the ops runbook that lock clear is required alongside data clear.
 
 ---
 
@@ -176,7 +176,7 @@ async function clearXeniumTargetRows(prisma) {
 
 Prisma interactive transactions default to a **5-second timeout**. When `dataset.deleteMany` runs, the schema's `onDelete: Cascade` triggers cascading deletes for every associated `dataset_file`, `dataset_audit`, `dataset_import_log`, `dataset_hierarchy`, `data_access_log`, `stage_request_log`, and `bundle` row. For a production xenium migration with hundreds of datasets and thousands of associated rows, this single transaction will exceed the timeout and throw a `PrismaClientKnownRequestError`.
 
-**Compare to CMG:** `clearCmgTargetData` does not use a transaction at all. It runs sequential `deleteMany` calls outside any transaction context, explicitly pre-deleting dependent records (argument_values, process_requests, data_access_logs, stage_request_logs) before the main entity deletes. This avoids the timeout at the cost of atomicity.
+**Compare to CMG:** CMG clear did not use a transaction. It ran sequential `deleteMany` calls outside any transaction context, explicitly pre-deleting dependent records (argument_values, process_requests, data_access_logs, stage_request_logs) before the main entity deletes. This avoids the timeout at the cost of atomicity.
 
 Since the bigbang is idempotent (and a failed clear is always recoverable by re-running with `--clear-locks`), the CMG approach's lack of atomicity is acceptable. The xenium transaction-based approach is conceptually cleaner but will fail at scale.
 

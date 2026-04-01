@@ -7,8 +7,8 @@
  *
  * Key difference from CMG BasePoller:
  *   - Source is PostgreSQL (xeniumPrisma), not MongoDB (cmgDb)
- *   - Cursor uses `updated_at` (DateTime) + `id` (Integer), not MongoDB ObjectId
- *   - Retry table is `xenium_sync_retry` (integer xenium_id field)
+ *   - Cursor uses `updated_at` plus optional `id` tie-breaker, not MongoDB ObjectId
+ *   - Retry table is `xenium_sync_retry`
  *
  * Fully implemented in Chat 3.
  */
@@ -77,13 +77,14 @@ class XeniumBasePoller {
     const where = {};
 
     if (cursor.last_updated_at) {
-      where.OR = [
-        { updated_at: { gt: cursor.last_updated_at } },
-        {
+      where.OR = [{ updated_at: { gt: cursor.last_updated_at } }];
+
+      if (cursor.last_xenium_id != null) {
+        where.OR.push({
           updated_at: cursor.last_updated_at,
           id: { gt: cursor.last_xenium_id },
-        },
-      ];
+        });
+      }
     }
 
     if (roundEnd) {
@@ -241,7 +242,8 @@ class XeniumBasePoller {
       }
 
       if (lastRow) {
-        await updateCursor(tx, this.pollerName, lastRow.updated_at, lastRow.id);
+        const cursorRecordId = typeof lastRow.id === 'number' ? lastRow.id : null;
+        await updateCursor(tx, this.pollerName, lastRow.updated_at, cursorRecordId);
       }
     };
 

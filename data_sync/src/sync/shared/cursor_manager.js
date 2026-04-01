@@ -101,11 +101,11 @@ function createCursorManager({ cursorModel, idField }) {
    * @param {Object} tx - Prisma transaction client
    * @param {string} pollerName - Poller name
    * @param {Date} updatedAt - `updated_at` timestamp of the last processed record
-   * @param {string|number} recordId - ID value to store in idField
+   * @param {string|number|null} recordId - ID value to store in idField (or null)
    */
   async function updateCursor(tx, pollerName, updatedAt, recordId) {
-    if (!updatedAt || recordId == null) {
-      throw new Error(`Invalid cursor update args for ${pollerName}: updatedAt=${updatedAt}, recordId=${recordId}`);
+    if (!updatedAt) {
+      throw new Error(`Invalid cursor update args for ${pollerName}: updatedAt=${updatedAt}`);
     }
 
     await tx[cursorModel].update({

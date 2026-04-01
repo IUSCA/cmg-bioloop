@@ -26,6 +26,10 @@ async function syncDatasetHierarchies(prisma, xeniumPrisma) {
   const [sourceHierarchies, targetDatasets] = await Promise.all([
     xeniumPrisma.dataset_hierarchy.findMany({
       orderBy: [{ source_id: 'asc' }, { derived_id: 'asc' }],
+      select: {
+        source_id: true,
+        derived_id: true,
+      },
     }),
     prisma.dataset.findMany({
       where: { xenium_id: { not: null } },
@@ -74,7 +78,7 @@ async function syncDatasetHierarchies(prisma, xeniumPrisma) {
         data: {
           source_id: sourceId,
           derived_id: derivedId,
-          metadata: sourceLink.metadata || null,
+          metadata: null,
         },
       });
       createdCount += 1;

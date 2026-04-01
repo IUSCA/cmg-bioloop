@@ -52,7 +52,7 @@ Shared utilities (cursor manager, error logger, process lock manager) live in `s
 
 ```
 data_sync/src/
-├── bigbang_cmg_sync.js        (renamed from bigbang_sync.js)
+├── bigbang_cmg_sync.js        (renamed from bigbang_cmg_sync.js)
 ├── bigbang_xenium_sync.js     (new)
 ├── poller_cmg_sync.js         (renamed from poller_sync.js)
 ├── poller_xenium_sync.js      (new)
@@ -348,10 +348,10 @@ These instructions are mandatory for continuation chats and should be treated as
 - Change: Added `--dry-run` mode in `init.sh` to print fully resolved per-app commands/flags before execution for safer review in multi-branch migration scenarios.
 - Decision: Orchestrator flags are explicit per app and per action; ambiguous aggregate flags are rejected (`--all`, `--both`, `--cmg`, `--xenium`, `--bigbang`, `--pollers`).
 - Decision: `init.sh` requires at least one explicit action flag and never infers app selection by default (supersedes prior default-`bigbang` behavior).
-- Change: CMG clear behavior is now source-scoped; CMG bigbang supports `--clear-cmg-target-data` and deletes CMG-originated rows/cursors/retries without truncating xenium data.
-- Change: Orchestrator clear flags are now source-consistent and symmetric: `--cmg-clear-target-data` and `--xenium-clear-target-data`.
-- Change: Xenium bigbang now exposes explicit source-scoped clear flag `--clear-xenium-target-data`; init forwards the explicit form.
-- Decision: Deprecated clear alias `--clear-target-db` removed from Xenium bigbang CLI; only explicit `--clear-xenium-target-data` is supported.
+- Change: Clear behavior moved to source-scoped semantics so CMG/Xenium data could be reset independently during transition periods.
+- Change: Orchestrator clear semantics were made source-consistent/symmetric during that transition.
+- Change: Xenium bigbang adopted explicit source-scoped clear handling and `init.sh` forwarded it.
+- Decision: Legacy clear aliases were retired during the transition.
 - Clarification: Scenario matrix validated in dry-run mode for these cases: single-app initial bigbang, second-app follow-up bigbang + pollers, one-app rerun after both migrated, and dual-app rerun with explicit per-app action/clear/lock flags.
 
 ---
@@ -369,7 +369,7 @@ These instructions are mandatory for continuation chats and should be treated as
 ## 2026-03-13
 
 - Fix: Xenium origin retirement helper no longer falls back to `legacy_application_active.cmg` when `legacy_application_active.xenium` is absent; Xenium now defaults to active unless explicitly disabled.
-- Fix: Xenium clear flow now mirrors CMG semantics for stale-lock recovery during reset operations (`--clear-xenium-target-data` clears rows/cursors/retries and then clears Xenium process locks before lock acquisition).
+- Fix: Xenium clear flow now mirrors CMG semantics for stale-lock recovery during reset operations (clear rows/cursors/retries first, then clear Xenium process locks before lock acquisition).
 - Fix: Xenium poller startup now rejects launch when Xenium bigbang lock is active to avoid concurrent write races.
 - Fix: Xenium bigbang clear operation now runs sequential deletes (instead of one interactive transaction) to reduce timeout risk on large cascades.
 - Change: Xenium metrics reporter now includes `lastSuccessTime`; reserved usernames skipped by Xenium user sync now emit warning logs.
@@ -381,4 +381,12 @@ These instructions are mandatory for continuation chats and should be treated as
 
 ---
 
-**Last Updated:** 2026-03-13
+## 2026-04-01
+
+- Decision: Replaced per-source clear flags with one shared flag: `--clear-target-db` on `bigbang_cmg_sync.js`, `bigbang_xenium_sync.js`, and `init.sh`.
+- Change: `data_sync/src/sync/shared/clear_legacy_target_data.js` deletes all CMG- and Xenium-originated migration rows in one flow; `forceReleaseAllSyncProcessLocks` clears both CMG and Xenium process lock tables after a target clear.
+- Operational caveat: after Prisma migrations relevant to migration/sync paths, restart both the main API container and the `db_sandbox` container before running bigbang, so both runtimes use regenerated/current Prisma clients.
+
+---
+
+**Last Updated:** 2026-04-01
