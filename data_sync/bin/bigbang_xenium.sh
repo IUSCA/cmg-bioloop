@@ -19,7 +19,11 @@
 #   -h, --help             Show this help message
 #
 # Environment Variables:
-#   XENIUM_DATABASE_URL    PostgreSQL connection URL for the Xenium source database
+#   XENIUM_PG_HOST         Xenium source PostgreSQL host
+#   XENIUM_PG_PORT         Xenium source PostgreSQL port
+#   XENIUM_PG_DATABASE     Xenium source PostgreSQL database name
+#   XENIUM_PG_USERNAME     Xenium source PostgreSQL username
+#   XENIUM_PG_PASSWORD     Xenium source PostgreSQL password
 #
 # Examples:
 #
@@ -95,9 +99,9 @@ if ! command -v node &> /dev/null; then
   exit 1
 fi
 
-if [ -z "$XENIUM_DATABASE_URL" ]; then
-  echo -e "${YELLOW}Warning: XENIUM_DATABASE_URL is not set.${NC}"
-  echo -e "${YELLOW}  Set it in data_sync/.env or export it before running this script.${NC}"
+if [ -z "${XENIUM_PG_HOST:-}" ] || [ -z "${XENIUM_PG_DATABASE:-}" ]; then
+  echo -e "${YELLOW}Warning: Xenium source properties appear incomplete.${NC}"
+  echo -e "${YELLOW}  Set XENIUM_PG_HOST, XENIUM_PG_PORT, XENIUM_PG_DATABASE, XENIUM_PG_USERNAME, XENIUM_PG_PASSWORD in data_sync/.env.${NC}"
   echo ""
 fi
 

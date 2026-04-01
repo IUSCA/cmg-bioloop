@@ -6,6 +6,13 @@
     "username": "",
     "password": ""
   },
+  "xenium_postgresql": {
+    "host": "localhost",
+    "port": 5432,
+    "database": "bioloop",
+    "username": "",
+    "password": ""
+  },
   "cmg": {
     "legacyConversionsLogsDir": "/opt/sca/project/ingestion_source_dir/CMG-SCA/production/runlogs"
   },

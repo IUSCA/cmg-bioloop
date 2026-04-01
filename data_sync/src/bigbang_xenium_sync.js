@@ -20,8 +20,17 @@
  *   --clear-xenium-target-data  Clear xenium-originated rows from target before migration
  *   --help, -h                  Show help message
  *
- * Environment Variables:
- *   XENIUM_DATABASE_URL   Connection URL for the Xenium source PostgreSQL database
+ * Xenium Source Properties (CMG-style discrete config):
+ *   XENIUM_PG_HOST
+ *   XENIUM_PG_PORT
+ *   XENIUM_PG_DATABASE
+ *   XENIUM_PG_USERNAME
+ *   XENIUM_PG_PASSWORD
+ *
+ * These are loaded through node-config:
+ *   - defaults: data_sync/config/default.json (xenium_postgresql.*)
+ *   - env mapping: data_sync/config/custom-environment-variables.json
+ *   - commonly set in: data_sync/.env
  *
  * Order of operations:
  * 1. Seed constants (roles, xenium system user, analysis types, import sources)
@@ -96,7 +105,16 @@ Options:
   --help, -h             Show this help message
 
 Environment Variables:
-  XENIUM_DATABASE_URL    PostgreSQL connection URL for the Xenium source database
+  XENIUM_PG_HOST         Xenium source PostgreSQL host
+  XENIUM_PG_PORT         Xenium source PostgreSQL port
+  XENIUM_PG_DATABASE     Xenium source PostgreSQL database name
+  XENIUM_PG_USERNAME     Xenium source PostgreSQL username
+  XENIUM_PG_PASSWORD     Xenium source PostgreSQL password
+
+Config Source:
+  data_sync/config/default.json (xenium_postgresql.* defaults)
+  data_sync/config/custom-environment-variables.json (env mapping)
+  data_sync/.env (recommended place to set XENIUM_PG_* values)
 `);
       process.exit(0);
     }
@@ -110,6 +128,35 @@ function sanitizeUri(str) {
   if (typeof str !== 'string') str = JSON.stringify(str);
   str = str.replace(/postgresql:\/\/[^:]+:[^@]+@/g, 'postgresql://<credentials>@');
   return str;
+}
+
+function buildXeniumSourceUri() {
+  const dbConfig = config.get('xenium_postgresql');
+  const {
+    host, port, database, username, password,
+  } = dbConfig;
+
+  if (!host || !database) {
+    throw new Error(
+      'Xenium PostgreSQL source configuration missing. '
+      + 'Set XENIUM_PG_HOST, XENIUM_PG_PORT, XENIUM_PG_DATABASE, '
+      + 'XENIUM_PG_USERNAME, XENIUM_PG_PASSWORD in data_sync/.env '
+      + '(or xenium_postgresql.* via node-config).',
+    );
+  }
+
+  let uri = 'postgresql://';
+  if (username) {
+    uri += encodeURIComponent(username);
+    if (password !== undefined && password !== null && String(password).length > 0) {
+      uri += `:${encodeURIComponent(password)}`;
+    }
+    uri += '@';
+  }
+
+  uri += `${host}:${port || 5432}/${database}`;
+  uri += '?schema=public';
+  return uri;
 }
 
 async function clearXeniumTargetRows(prisma) {
@@ -149,13 +196,7 @@ async function main() {
     logger.info('[OK] Connected to cmg-bioloop PostgreSQL (target)');
 
     // Source database (Xenium)
-    const xeniumDatabaseUrl = process.env.XENIUM_DATABASE_URL || config.get('xenium_postgresql.url');
-    if (!xeniumDatabaseUrl) {
-      throw new Error(
-        'Xenium source database URL not configured. '
-        + 'Set XENIUM_DATABASE_URL environment variable or xenium_postgresql.url in config.',
-      );
-    }
+    const xeniumDatabaseUrl = buildXeniumSourceUri();
     xeniumPrisma = new PrismaClient({ datasources: { db: { url: xeniumDatabaseUrl } } });
     await xeniumPrisma.$connect();
     logger.info('[OK] Connected to Xenium PostgreSQL (source)');

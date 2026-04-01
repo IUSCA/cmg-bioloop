@@ -6,6 +6,13 @@
     "username": "CMG_MONGO_USERNAME",
     "password": "CMG_MONGO_PASSWORD"
   },
+  "xenium_postgresql": {
+    "host": "XENIUM_PG_HOST",
+    "port": "XENIUM_PG_PORT",
+    "database": "XENIUM_PG_DATABASE",
+    "username": "XENIUM_PG_USERNAME",
+    "password": "XENIUM_PG_PASSWORD"
+  },
   "cmg": {
     "legacyConversionsLogsDir": "CMG_LEGACY_CONVERSIONS_LOGS_DIR"
   },

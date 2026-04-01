@@ -287,8 +287,8 @@ validate_args() {
     fi
   fi
   if [[ "$RUN_XENIUM_BIGBANG" == true || "$START_XENIUM_POLLERS" == true || "$RESTART_XENIUM_POLLERS" == true ]]; then
-    if [[ -z "$XENIUM_DATABASE_URL" ]]; then
-      echo -e "${YELLOW}Warning: XENIUM_DATABASE_URL is not set (required for Xenium operations).${NC}"
+    if [[ -z "${XENIUM_DATABASE_URL:-}" && -z "${XENIUM_PG_HOST:-}" ]]; then
+      echo -e "${YELLOW}Warning: Xenium source connection env looks unset (no XENIUM_DATABASE_URL or XENIUM_PG_HOST).${NC}"
     fi
   fi
 }

@@ -377,6 +377,7 @@ These instructions are mandatory for continuation chats and should be treated as
 - Change: Xenium pollers now write structured failure entries to `xenium_sync_errors.jsonl`; full source-row payload snapshots are gated behind `XENIUM_SYNC_LOG_FULL_PAYLOAD=true|1|yes`.
 - Decision: Xenium bigbang timestamp fallback is deterministic when source timestamps are null/invalid (`1970-01-01T00:00:00.000Z`) to preserve rerun-stable history.
 - Change: Xenium poller base now supports optional Prisma transaction timeout overrides; Xenium ACL poller defaults were hardened to `batchSize=50` and `transactionTimeoutMs=30000` to reduce timeout pressure from source reads inside target transactions.
+- Change: Xenium bigbang source DB configuration now uses discrete node-config properties (`xenium_postgresql.{host,port,database,username,password}`) mapped from `XENIUM_PG_*` env vars, replacing direct `XENIUM_DATABASE_URL` usage in bigbang.
 
 ---
 
