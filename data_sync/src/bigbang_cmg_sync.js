@@ -80,7 +80,7 @@ const {
   seedImportSources,
   seedAboutContent,
 } = require('./sync/cmg/bigbang/seed_constants');
-const { populateBioloopUsers } = require('./sync/cmg/bigbang/populate_bioloop_users');
+const { bootstrapProdUsers } = require('./sync/shared/bootstrap_prod_users');
 const { syncUsers } = require('./sync/cmg/bigbang/sync_users');
 const { syncAllDatasets } = require('./sync/cmg/bigbang/sync_datasets');
 const { syncAuditLogs } = require('./sync/cmg/bigbang/sync_audit_logs');
@@ -94,13 +94,16 @@ const { syncAllConversionLogs } = require('./sync/cmg/bigbang/sync_conversion_lo
 const { syncSessions } = require('./sync/cmg/bigbang/sync_sessions');
 const { initializeCursors } = require('./sync/cmg/bigbang/initialize_cursors');
 const {
+  cmgProcessLockManager,
+  DEFAULT_LOCK_TTL_MS,
+} = require('./sync/shared/process_lock_manager');
+const {
   acquireProcessLock,
   releaseProcessLock,
   extendProcessLock,
   checkProcessLockStatus,
   forceReleaseAllProcessLocks,
-  DEFAULT_LOCK_TTL_MS,
-} = require('./sync/shared/process_lock_manager');
+} = cmgProcessLockManager;
 
 /**
  * Parse command line arguments
@@ -121,7 +124,7 @@ function parseArgs() {
       options.skipConversionLogs = true;
     } else if (arg === '--clear-locks') {
       options.clearLocks = true;
-    } else if (arg === '--clear-cmg-target-data') {
+    } else if (arg === '--clear-cmg-target-data' || arg === '--clear-target-db') {
       options.clearCmgTargetData = true;
     } else if (arg === '--help' || arg === '-h') {
       // eslint-disable-next-line no-console
@@ -436,9 +439,9 @@ async function main() {
     await seedImportSources(prisma);
     await seedAboutContent(prisma, cmgUserId);
 
-    // 6. Populate Bioloop users (from JSON files)
-    logger.info('[6/18] Populating Bioloop users from JSON files...');
-    await populateBioloopUsers(prisma);
+    // 6. Bootstrap production users/roles (from api JSON files)
+    logger.info('[6/18] Bootstrapping production users/roles from API JSON...');
+    await bootstrapProdUsers(prisma, logger, 'CMG');
 
     // 7. Convert CMG users
     logger.info('[7/18] Converting CMG users...');

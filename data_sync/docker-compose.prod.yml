@@ -24,8 +24,11 @@ services:
     ports:
       - "127.0.0.1:5434:5432"
     networks:
-      - sandbox_network
-      - bioloop_prod_network
+      sandbox_network: {}
+      bioloop_prod_network:
+        # Reserve a non-conflicting IP on shared app network.
+        # Main app reserves 172.19.0.2 (api) and 172.19.0.3 (postgres).
+        ipv4_address: 172.19.0.8
     deploy:
       resources:
         limits:

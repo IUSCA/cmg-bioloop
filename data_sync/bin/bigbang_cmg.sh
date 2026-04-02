@@ -108,6 +108,23 @@ for arg in "$@"; do
   esac
 done
 
+should_migrate_app_db() {
+  local prev=""
+  for arg in "$@"; do
+    case "$arg" in
+      --target-db=app) return 0 ;;
+      --target-db=*) return 1 ;;
+      app)
+        if [ "$prev" = "--target-db" ]; then
+          return 0
+        fi
+        ;;
+    esac
+    prev="$arg"
+  done
+  return 1
+}
+
 # Check if Docker is available
 if ! command -v docker &> /dev/null; then
   echo -e "${RED}Error: Docker is not installed or not in PATH${NC}"
@@ -122,6 +139,11 @@ if ! docker compose -f "$COMPOSE_FILE" ps db_sandbox | grep -q "Up"; then
   echo -e "${RED}Error: db_sandbox container is not running for ${COMPOSE_FILE}.${NC}"
   echo -e "${YELLOW}  Start it with: docker compose -f ${COMPOSE_FILE} up -d${NC}"
   exit 1
+fi
+
+if should_migrate_app_db "$@"; then
+  echo -e "${YELLOW}Applying Prisma migrations to app database (preflight)...${NC}"
+  docker compose -f "$COMPOSE_FILE" exec db_sandbox sh -lc 'DATABASE_URL="$(node -e "process.stdout.write(require(\"/opt/sca/app/src/utils/db_config\").getDatabaseUrl(\"app\"))")" npx prisma migrate deploy --schema /opt/sca/api/prisma/schema.prisma'
 fi
 
 # Run the Node.js bigbang script

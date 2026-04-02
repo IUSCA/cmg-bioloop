@@ -95,6 +95,36 @@ for arg in "$@"; do
   esac
 done
 
+should_migrate_app_db() {
+  local prev=""
+  for arg in "$@"; do
+    case "$arg" in
+      --target-db=app) return 0 ;;
+      --target-db=*) return 1 ;;
+      app)
+        if [ "$prev" = "--target-db" ]; then
+          return 0
+        fi
+        ;;
+    esac
+    prev="$arg"
+  done
+  return 1
+}
+
+# Build per-phase arg lists:
+# - CMG gets all user flags.
+# - Xenium gets all flags EXCEPT --clear-target-db so we don't run the
+#   expensive legacy-data clear twice in one wrapper invocation.
+CMG_ARGS=("$@")
+XENIUM_ARGS=()
+for arg in "$@"; do
+  if [ "$arg" = "--clear-target-db" ]; then
+    continue
+  fi
+  XENIUM_ARGS+=("$arg")
+done
+
 # Check if Docker is available
 if ! command -v docker &> /dev/null; then
   echo -e "${RED}Error: Docker is not installed or not in PATH${NC}"
@@ -111,12 +141,17 @@ if ! docker compose -f "$COMPOSE_FILE" ps db_sandbox | grep -q "Up"; then
   exit 1
 fi
 
+if should_migrate_app_db "$@"; then
+  echo -e "${YELLOW}Applying Prisma migrations to app database (preflight)...${NC}"
+  docker compose -f "$COMPOSE_FILE" exec db_sandbox sh -lc 'DATABASE_URL="$(node -e "process.stdout.write(require(\"/opt/sca/app/src/utils/db_config\").getDatabaseUrl(\"app\"))")" npx prisma migrate deploy --schema /opt/sca/api/prisma/schema.prisma'
+fi
+
 # ── Phase 1: CMG bigbang ──────────────────────────────────────────────────────
 
 echo -e "${YELLOW}[1/2] Starting CMG big-bang migration...${NC}"
 echo ""
 
-docker compose -f "$COMPOSE_FILE" exec db_sandbox node /opt/sca/app/src/bigbang_cmg_sync.js "$@"
+docker compose -f "$COMPOSE_FILE" exec db_sandbox node /opt/sca/app/src/bigbang_cmg_sync.js "${CMG_ARGS[@]}"
 cmg_exit=$?
 
 echo ""
@@ -139,7 +174,7 @@ echo ""
 echo -e "${YELLOW}[2/2] Starting Xenium big-bang migration...${NC}"
 echo ""
 
-docker compose -f "$COMPOSE_FILE" exec db_sandbox node /opt/sca/app/src/bigbang_xenium_sync.js "$@"
+docker compose -f "$COMPOSE_FILE" exec db_sandbox node /opt/sca/app/src/bigbang_xenium_sync.js "${XENIUM_ARGS[@]}"
 xenium_exit=$?
 
 echo ""

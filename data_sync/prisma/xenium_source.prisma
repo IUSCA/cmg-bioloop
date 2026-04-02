@@ -1,0 +1,114 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../node_modules/.prisma/xenium-client"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model dataset {
+  id              Int      @id @default(autoincrement())
+  name            String
+  type            String
+  num_directories Int?
+  num_files       Int?
+  du_size         BigInt?
+  size            BigInt?
+  bundle_size     BigInt?
+  description     String?
+  created_at      DateTime @default(now()) @db.Timestamp(6)
+  updated_at      DateTime @default(now()) @updatedAt @db.Timestamp(6)
+  origin_path     String?
+  archive_path    String?
+  staged_path     String?
+  is_deleted      Boolean  @default(false)
+  is_staged       Boolean  @default(false)
+  metadata        Json?
+}
+
+model dataset_hierarchy {
+  source_id  Int
+  derived_id Int
+  metadata   Json?
+
+  @@id([source_id, derived_id])
+}
+
+model dataset_audit {
+  id         Int       @id @default(autoincrement())
+  action     String
+  timestamp  DateTime  @default(now())
+  old_data   Json?
+  new_data   Json?
+  user_id    Int?
+  dataset_id Int?
+}
+
+model dataset_import_log {
+  id         Int      @id @default(autoincrement())
+  source_run String?
+  notes      String?
+  metadata   Json?
+  created_at DateTime @default(now()) @db.Timestamp(6)
+  updated_at DateTime @default(now()) @updatedAt @db.Timestamp(6)
+  dataset_id Int?
+}
+
+model user {
+  id         Int        @id @default(autoincrement())
+  username   String     @unique @db.VarChar(100)
+  name       String?    @db.VarChar(100)
+  email      String     @unique @db.VarChar(100)
+  cas_id     String?    @unique @db.VarChar(100)
+  created_at DateTime   @default(now()) @db.Timestamp(6)
+  updated_at DateTime   @default(now()) @updatedAt @db.Timestamp(6)
+  is_deleted Boolean    @default(false)
+  metadata   Json?
+  user_role  user_role[]
+}
+
+model roles {
+  id       Int         @id @default(autoincrement())
+  name     String
+  description String?
+  metadata Json?
+  users    user_role[]
+  @@map("role")
+}
+
+model user_role {
+  user_id Int
+  role_id Int
+  user    user  @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  roles   roles @relation(fields: [role_id], references: [id], onDelete: Cascade)
+
+  @@id([user_id, role_id])
+}
+
+model project {
+  id              String  @id @default(uuid())
+  name            String
+  description     String?
+  funding         String?
+  browser_enabled Boolean @default(false)
+  metadata        Json?
+  created_at      DateTime @default(now()) @db.Timestamp(6)
+  updated_at      DateTime @default(now()) @updatedAt @db.Timestamp(6)
+  owner_id        Int?
+}
+
+model project_user {
+  project_id String
+  user_id    Int
+
+  @@id([project_id, user_id])
+}
+
+model project_dataset {
+  project_id String
+  dataset_id Int
+
+  @@id([project_id, dataset_id])
+}
