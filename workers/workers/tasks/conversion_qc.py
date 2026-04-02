@@ -10,7 +10,6 @@ import workers.api as api
 import workers.config.celeryconfig as celeryconfig
 from workers.config import config
 from workers.conversion import (get_conversion_output_dir,
-                                get_conversion_qc_reports_dir,
                                 get_genomic_qc_output_dir)
 from workers.tasks.qc import create_report
 
@@ -51,19 +50,9 @@ def generate_qc(celery_task, dataset_id_conversion_id, **kwargs):
     print(f"qc_source_dirs (filtered sample directories): {qc_source_dirs}")
     print("--------------------------------")
 
-    # Base QC output directory: use the unified conversion QC reports dir when configured,
-    # falling back to the per-conversion-output dir.
-    use_conversion_dirs = (
-        config.get('genomic_conversion', {})
-        .get('qc', {})
-        .get('use_conversion_dirs', False)
-    )
-    if use_conversion_dirs and config.get('paths', {}).get('conversion', {}).get('qc_reports'):
-        qc_base_dir = get_conversion_qc_reports_dir(conversion, dataset['name'])
-        print(f"qc_base_dir (unified conversion qc_reports): {qc_base_dir}")
-    else:
-        qc_base_dir = get_genomic_qc_output_dir(conversion)
-        print(f"qc_base_dir (conversion output): {qc_base_dir}")
+    # Base QC output directory
+    qc_base_dir: Path = get_genomic_qc_output_dir(conversion)
+    print(f"qc_base_dir: {qc_base_dir}")
     qc_base_dir.mkdir(parents=True, exist_ok=True)
 
     # Run QC on EACH sample directory separately (matches CMG behavior)

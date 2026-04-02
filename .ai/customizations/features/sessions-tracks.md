@@ -5,10 +5,7 @@
 **Status:** Implemented
 
 **Related Documentation:**
-- `/genome-browser-sessions-tracks-conversions-2026-01-03.md`
-- `/genome-browser-igv-washu-implementation-2026-01-03.md`
-- `/SESSION_STAGING_ENHANCEMENT_COMPLETE.md`
-- `/SESSION_STAGING_DYNAMIC_EVALUATION.md`
+- `/docs/features/genome-browser-sessions.md` - Detailed architectural walkthrough
 
 ---
 
@@ -78,15 +75,6 @@
 - Enhanced track selection UI with multiple selection and display list
 - Session validation allows empty genome values (flexible validation)
 - Config consolidation: moved file type arrays to service config files
-
-**Current Status:**
-- Core session/track framework: Implemented
-- File serving with cookie auth: Implemented
-- IGV integration: Implemented
-- WashU integration: Implemented
-- Session staging: Implemented
-- Track creation from dataset files: Implemented
-- UI components: Implemented
 
 ---
 

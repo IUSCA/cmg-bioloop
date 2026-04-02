@@ -54,8 +54,7 @@
     "path": "UPLOAD_HOST_DIR"
   },
   "conversion": {
-    "output_dir": "CONVERSION_OUTPUT_DIR",
-    "reports_base_dir": "CONVERSION_REPORTS_BASE_DIR"
+    "output_dir": "CONVERSION_OUTPUT_DIR"
   },
   "e2e": {
     "users": {

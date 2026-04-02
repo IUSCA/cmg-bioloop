@@ -19,22 +19,24 @@ USER appuser:appgroup
 
 # create node_modules directory before the external / docker volume mounts
 # otherwise docker daemon will attempt to create this directory and it will be owned by root:root.
-RUN mkdir /opt/sca/app/node_modules
+RUN mkdir -p /opt/sca/app/node_modules
 # echo "created node_modules directory"
 
 # setup for installing npm global packages as non-root user
 RUN npm config set prefix '/home/appuser/.local/'
 RUN mkdir -p /home/appuser/.local/bin
 ENV PATH="/home/appuser/.local/bin/:${PATH}"
-
-# install pnpm and install packages from pnpm-lock.yaml
-RUN npm install pm2 -g
+ENV NPM_CONFIG_CACHE=/home/appuser/.npm
+RUN rm -rf /home/appuser/.npm \
+  && mkdir -p /home/appuser/.npm/_cacache/content-v2/sha512 \
+  /home/appuser/.npm/_cacache/index-v5 \
+  /home/appuser/.npm/_logs
 
 # Copy package files for dependency installation
 COPY --chown=appuser:appgroup package*.json ./
 
 # Install dependencies during build phase
-RUN npm ci
+RUN npm ci --cache=/home/appuser/.npm --no-audit --prefer-online
 
 # Copy the rest of the application code
 COPY --chown=appuser:appgroup . .

@@ -1,0 +1,65 @@
+erDiagram
+    user ||--o{ genome_browser_session : "owns"
+    genome_browser_session ||--o{ session_track : "has"
+    genome_browser_session ||--o{ session_workflow : "has"
+    track ||--o{ session_track : "joins"
+    track ||--|| dataset_file : "wraps (1:1)"
+    dataset ||--o{ dataset_file : "contains"
+    dataset ||--o| dataset_genomic_attributes : "has genome info"
+    project ||--o{ dataset : "groups"
+    project ||--o{ project_user : "membership"
+    user ||--o{ project_user : "belongs to"
+
+    genome_browser_session {
+        int id PK
+        int user_id FK
+        string title
+        string genome
+        string genome_type
+        bool is_public
+        json metadata
+        string cmg_id
+    }
+
+    track {
+        int id PK
+        int dataset_file_id FK "unique"
+        string name
+        string color
+    }
+
+    session_track {
+        int id PK
+        int session_id FK
+        int track_id FK
+        string color
+        string title
+        int order
+    }
+
+    session_workflow {
+        int session_id PK
+        string workflow_id PK
+    }
+
+    dataset_file {
+        int id PK
+        int dataset_id FK
+        string path
+        json metadata "format, role"
+    }
+
+    dataset {
+        int id PK
+        int project_id FK
+        string name
+        string type
+        string origin_path
+    }
+
+    dataset_genomic_attributes {
+        int id PK
+        int dataset_id FK "unique"
+        string genome_type
+        string genome_value
+    }

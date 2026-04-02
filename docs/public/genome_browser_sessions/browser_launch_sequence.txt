@@ -1,0 +1,58 @@
+sequenceDiagram
+    participant U as UI (sessions/[id].vue)
+    participant Modal as Browser Modal
+    participant API as API (/sessions)
+    participant Cookie as Cookie Middleware
+    participant DB as PostgreSQL
+    participant PR as PathResolver
+    participant FS as Filesystem
+    participant Browser as IGV / WashU
+
+    U->>U: Click "View in Browser"
+    U->>API: GET /sessions/:id
+    API->>DB: Load session + tracks + datasets
+    API->>API: evaluateDataRequestStatus()
+    API-->>U: Session data + staging status
+
+    alt Unstaged datasets exist
+        U->>U: Show "Unstaged Datasets" modal
+        U->>API: POST /sessions/:id/data-request
+        API-->>U: Staging workflows triggered
+    end
+
+    alt Legacy session not hydrated
+        U->>API: POST /sessions/:id/workflows/hydrate_session
+        API-->>U: Hydration workflow started
+        U->>U: Poll until hydrated
+    end
+
+    U->>U: Show BrowserSelectionModal (IGV / WashU)
+
+    U->>API: POST /sessions/:id/set-file-cookie
+    API->>API: Mint JWT
+    API-->>U: Set-Cookie: bioloop_auth (HttpOnly, path-scoped)
+
+    U->>API: GET /sessions/:id/datahub?browser=igv|washu
+    API->>DB: Load session tracks + dataset files
+    API->>PR: getRelativeFilePath() per track
+    API->>API: findIndexFileForPrimary()
+    API->>API: serializeTrackForIGV() or serializeTrackForWashU()
+    API-->>U: { genome, tracks[] }
+
+    U->>Modal: Open fullscreen modal
+    U->>Browser: Initialize with genome + tracks config
+
+    loop Each track file request
+        Browser->>API: GET /sessions/:id/files/expose/{path}
+        API->>Cookie: Validate bioloop_auth cookie
+        Cookie-->>API: JWT verified
+        API->>PR: resolveToAbsolutePath(path)
+        API->>API: Verify path belongs to session track
+        API->>FS: Stream file (Range support, no compression)
+        FS-->>Browser: 200 / 206 Partial Content
+    end
+
+    Browser-->>Modal: Tracks rendered
+
+    Note over U,Browser: User closes modal
+    U->>Browser: dispose() / unmount() + cleanup

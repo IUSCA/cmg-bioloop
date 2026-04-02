@@ -14,9 +14,7 @@
     "password": "XENIUM_PG_PASSWORD"
   },
   "cmg": {
-    "legacyConversionsLogsDir": "CMG_LEGACY_CONVERSIONS_LOGS_DIR",
-    "legacyQcReportsDir": "CMG_LEGACY_QC_REPORTS_DIR",
-    "qcReportsTargetDir": "CMG_QC_REPORTS_TARGET_DIR"
+    "legacyConversionsLogsDir": "CMG_LEGACY_CONVERSIONS_LOGS_DIR"
   },
   "legacy_application_active": {
     "cmg": "LEGACY_APPLICATION_ACTIVE_CMG",

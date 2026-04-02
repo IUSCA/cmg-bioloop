@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 /**
- * CMG to Bioloop Big-Bang Synchronization Script (CMG source)
+ * CMG to Bioloop Big-Bang Synchronization Script
  *
  * One-time initial population of all CMG data into Bioloop.
  *
@@ -14,7 +14,7 @@
  *   --skip-sessions             Skip genome browser session conversion
  *   --skip-conversion-logs      Skip conversion logs migration (from filesystem)
  *   --clear-locks               Clear any existing process locks before starting
- *   --clear-cmg-target-data     Clear CMG-originated rows from target database before migration
+ *   --clear-target-db           Clear all data from target database before migration (also clears locks)
  *   --help, -h                  Show help message
  *
  * Environment Variables (alternative to --cmg-uri):
@@ -72,27 +72,20 @@ const logger = {};
 });
 
 // Bigbang modules
-const {
-  createRoles,
-  createCMGUser,
-  populatePipelineDefinitions,
-  seedAnalysisTypes,
-  seedImportSources,
-  seedAboutContent,
-} = require('./sync/cmg/bigbang/seed_constants');
-const { populateBioloopUsers } = require('./sync/cmg/bigbang/populate_bioloop_users');
-const { syncUsers } = require('./sync/cmg/bigbang/sync_users');
-const { syncAllDatasets } = require('./sync/cmg/bigbang/sync_datasets');
-const { syncAuditLogs } = require('./sync/cmg/bigbang/sync_audit_logs');
-const { syncDownloadStageLogs } = require('./sync/cmg/bigbang/sync_download_stage_logs');
-const syncEventsCollection = require('./sync/cmg/bigbang/sync_events_collection');
-const { syncImportLogs } = require('./sync/cmg/bigbang/sync_import_logs');
-const { syncDatasetHierarchies } = require('./sync/cmg/bigbang/sync_dataset_hierarchies');
-const { syncProjects } = require('./sync/cmg/bigbang/sync_projects');
-const { syncConversions } = require('./sync/cmg/bigbang/sync_conversions');
-const { syncAllConversionLogs } = require('./sync/cmg/bigbang/sync_conversion_logs');
-const { syncSessions } = require('./sync/cmg/bigbang/sync_sessions');
-const { initializeCursors } = require('./sync/cmg/bigbang/initialize_cursors');
+const { createRoles, createCMGUser, populatePipelineDefinitions, seedAnalysisTypes, seedImportSources } = require('./sync/bigbang/seed_constants');
+const { populateBioloopUsers } = require('./sync/bigbang/populate_bioloop_users');
+const { syncUsers } = require('./sync/bigbang/sync_users');
+const { syncAllDatasets } = require('./sync/bigbang/sync_datasets');
+const { syncAuditLogs } = require('./sync/bigbang/sync_audit_logs');
+const { syncDownloadStageLogs } = require('./sync/bigbang/sync_download_stage_logs');
+const syncEventsCollection = require('./sync/bigbang/sync_events_collection');
+const { syncImportLogs } = require('./sync/bigbang/sync_import_logs');
+const { syncDatasetHierarchies } = require('./sync/bigbang/sync_dataset_hierarchies');
+const { syncProjects } = require('./sync/bigbang/sync_projects');
+const { syncConversions } = require('./sync/bigbang/sync_conversions');
+const { syncAllConversionLogs } = require('./sync/bigbang/sync_conversion_logs');
+const { syncSessions } = require('./sync/bigbang/sync_sessions');
+const { initializeCursors } = require('./sync/bigbang/initialize_cursors');
 const {
   acquireProcessLock,
   releaseProcessLock,
@@ -100,7 +93,7 @@ const {
   checkProcessLockStatus,
   forceReleaseAllProcessLocks,
   DEFAULT_LOCK_TTL_MS,
-} = require('./sync/shared/process_lock_manager');
+} = require('./sync/process_lock_manager');
 
 /**
  * Parse command line arguments
@@ -121,8 +114,8 @@ function parseArgs() {
       options.skipConversionLogs = true;
     } else if (arg === '--clear-locks') {
       options.clearLocks = true;
-    } else if (arg === '--clear-cmg-target-data') {
-      options.clearCmgTargetData = true;
+    } else if (arg === '--clear-target-db') {
+      options.clearTargetDb = true;
     } else if (arg === '--help' || arg === '-h') {
       // eslint-disable-next-line no-console
       console.log(`
@@ -143,7 +136,9 @@ Options:
   
   --clear-locks               Clear any existing process locks before starting
   
-  --clear-cmg-target-data     Clear CMG-originated rows from target database (keeps xenium rows)
+  --clear-target-db           Clear all data from target database before migration (keeps schema)
+                              Also clears process locks to allow fresh start.
+                              WARNING: This deletes all existing data!
   
   --help, -h             Show this help message
 
@@ -170,8 +165,8 @@ Examples:
   # Sync to app DB with all options
   node src/bigbang_sync.js --target-db=app --skip-sessions --clear-locks
   
-  # Clear CMG-originated target rows and run fresh CMG migration
-  node src/bigbang_sync.js --clear-cmg-target-data --skip-sessions --skip-conversion-logs
+  # Clear target DB and run fresh migration
+  node src/bigbang_sync.js --clear-target-db --skip-sessions --skip-conversion-logs
 `);
       process.exit(0);
     }
@@ -230,65 +225,55 @@ function buildMongoUri(cmdLineUri) {
 }
 
 /**
- * Clear CMG-originated data from target database (keeps schema intact)
+ * Clear all data from target database (keeps schema intact)
  * @param {PrismaClient} prisma - Prisma client instance
  */
-async function clearCmgTargetData(prisma) {
+async function clearTargetDatabase(prisma) {
   logger.warn('='.repeat(80));
-  logger.warn('CLEARING CMG-ORIGINATED TARGET DATA');
+  logger.warn('⚠️  CLEARING TARGET DATABASE');
   logger.warn('='.repeat(80));
-  logger.warn('This will delete CMG-originated business rows and CMG sync cursors/retries.');
-  logger.warn('Xenium rows and schema are preserved.');
+  logger.warn('This will DELETE ALL DATA from the target database!');
+  logger.warn('Schema (tables) and sync infrastructure will be preserved.');
   logger.warn('');
 
   try {
-    const cmgConversionIds = (await prisma.conversion.findMany({
-      where: { cmg_id: { not: null } },
-      select: { id: true },
-    })).map((row) => row.id);
+    // Get all table names from the database
+    const tables = await prisma.$queryRaw`
+      SELECT tablename 
+      FROM pg_tables 
+      WHERE schemaname = 'public'
+      ORDER BY tablename;
+    `;
 
-    const cmgDatasetIds = (await prisma.dataset.findMany({
-      where: { cmg_id: { not: null } },
-      select: { id: true },
-    })).map((row) => row.id);
+    logger.info(`Found ${tables.length} tables to clear`);
 
-    if (cmgConversionIds.length > 0) {
-      await prisma.argument_value.deleteMany({
-        where: { conversion_id: { in: cmgConversionIds } },
-      });
-      await prisma.process_request.deleteMany({
-        where: { conversion_id: { in: cmgConversionIds } },
-      });
+    // Build single TRUNCATE statement with all tables (CASCADE handles foreign keys)
+    // Skip Prisma migrations table and sync infrastructure tables
+    const tablesToClear = tables
+      .map(t => t.tablename)
+      .filter(name => 
+        name !== '_prisma_migrations' &&      // Prisma schema management
+        name !== 'cmg_sync_process_lock' &&   // Active process locks
+        name !== 'cmg_sync_cursor' &&         // Sync cursor positions
+        name !== 'cmg_sync_retry'             // Failed documents retry queue
+      );
+
+    if (tablesToClear.length > 0) {
+      // Use RESTART IDENTITY to reset auto-increment sequences
+      // CASCADE automatically truncates tables with foreign key references
+      const truncateStatement = `TRUNCATE TABLE ${tablesToClear.map(t => `"${t}"`).join(', ')} RESTART IDENTITY CASCADE;`;
+      
+      logger.debug(`Truncating ${tablesToClear.length} tables...`);
+      await prisma.$executeRawUnsafe(truncateStatement);
+      
+      logger.info(`✅ Target database cleared successfully (${tablesToClear.length} tables)`);
+    } else {
+      logger.info('No tables to clear');
     }
-
-    if (cmgDatasetIds.length > 0) {
-      await prisma.data_access_log.deleteMany({
-        where: { dataset_id: { in: cmgDatasetIds } },
-      });
-      await prisma.stage_request_log.deleteMany({
-        where: { dataset_id: { in: cmgDatasetIds } },
-      });
-    }
-
-    await prisma.project.deleteMany({ where: { cmg_id: { not: null } } });
-    await prisma.genome_browser_session.deleteMany({ where: { cmg_id: { not: null } } });
-    await prisma.conversion.deleteMany({ where: { cmg_id: { not: null } } });
-    await prisma.dataset_import_log.deleteMany({ where: { cmg_id: { not: null } } });
-    await prisma.dataset.deleteMany({ where: { cmg_id: { not: null } } });
-    await prisma.user.deleteMany({
-      where: {
-        cmg_id: { not: null },
-        username: { not: 'cmguser' },
-      },
-    });
-
-    await prisma.cmg_sync_retry.deleteMany({});
-    await prisma.cmg_sync_cursor.deleteMany({});
-
-    logger.info('CMG-originated target data cleared successfully');
+    
     logger.info('');
   } catch (error) {
-    logger.error('Failed to clear CMG target rows:', error.message);
+    logger.error('Failed to clear target database:', error.message);
     throw error;
   }
 }
@@ -360,9 +345,12 @@ async function main() {
       process.exit(1);
     }
 
-    if (options.clearCmgTargetData) {
-      await clearCmgTargetData(prisma);
-      logger.info('[CLEAR-CMG-DATA] Clearing CMG process locks for fresh start...');
+    // Clear target database if requested (do this BEFORE lock check)
+    // When clearing target DB, also clear locks to allow fresh start
+    if (options.clearTargetDb) {
+      await clearTargetDatabase(prisma);
+      // Also clear locks since we're starting fresh
+      logger.info('[CLEAR-DB] Clearing process locks for fresh start...');
       await forceReleaseAllProcessLocks(prisma);
     }
 
@@ -416,64 +404,63 @@ async function main() {
     logger.info('');
 
     // 1. Create roles
-    logger.info('[1/18] Creating roles...');
+    logger.info('[1/15] Creating roles...');
     await createRoles(prisma);
 
     // 2. Create CMG system user
-    logger.info('[2/18] Creating CMG system user...');
+    logger.info('[2/15] Creating CMG system user...');
     const cmgUserId = await createCMGUser(prisma);
 
     // 3. Populate pipeline definitions
-    logger.info('[3/18] Populating pipeline definitions...');
+    logger.info('[3/15] Populating pipeline definitions...');
     await populatePipelineDefinitions(prisma, cmgUserId);
 
     // 4. Seed analysis types
-    logger.info('[4/18] Seeding analysis types...');
+    logger.info('[4/16] Seeding analysis types...');
     await seedAnalysisTypes(prisma);
 
-    // 5. Seed import sources and about content
-    logger.info('[5/18] Seeding import sources and About content...');
+    // 5. Seed import sources
+    logger.info('[5/16] Seeding import sources...');
     await seedImportSources(prisma);
-    await seedAboutContent(prisma, cmgUserId);
 
     // 6. Populate Bioloop users (from JSON files)
-    logger.info('[6/18] Populating Bioloop users from JSON files...');
+    logger.info('[6/16] Populating Bioloop users from JSON files...');
     await populateBioloopUsers(prisma);
 
     // 7. Convert CMG users
-    logger.info('[7/18] Converting CMG users...');
+    logger.info('[7/16] Converting CMG users...');
     await syncUsers(prisma, cmgDb);
 
     // 8. Convert datasets
-    logger.info('[8/18] Converting datasets...');
+    logger.info('[8/16] Converting datasets...');
     await syncAllDatasets(prisma, cmgDb);
 
     // 9. Convert dataset audit logs
-    logger.info('[9/18] Converting dataset audit logs...');
+    logger.info('[9/16] Converting dataset audit logs...');
     await syncAuditLogs(prisma, cmgDb, cmgUserId);
 
     // 10. Convert stage/download logs
-    logger.info('[10/18] Converting historic stage/download events to logs...');
+    logger.info('[10/16] Converting historic stage/download events to logs...');
     await syncDownloadStageLogs(prisma, cmgDb, cmgUserId);
 
     // 11. Convert events collection (Download Copy events -> data_access_log)
-    logger.info('[11/18] Converting CMG events collection to data access logs...');
+    logger.info('[11/16] Converting CMG events collection to data access logs...');
     await syncEventsCollection(prisma, cmgDb, cmgUserId);
 
     // 12. Convert dataset import logs (CMG upload history -> Bioloop import logs)
-    logger.info('[12/18] Converting CMG upload history to import logs...');
+    logger.info('[12/16] Converting CMG upload history to import logs...');
     await syncImportLogs(prisma, cmgDb, cmgUserId);
 
     // 13. Convert conversions
-    logger.info('[13/18] Converting conversions...');
+    logger.info('[13/16] Converting conversions...');
     await syncConversions(prisma, cmgDb);
 
     // 14. Convert projects
-    logger.info('[14/18] Converting projects...');
+    logger.info('[14/16] Converting projects...');
     await syncProjects(prisma, cmgDb);
 
     // 15. Convert dataset hierarchies (must run after conversions so conversion_id can be stored)
-    logger.info('[15/18] Converting dataset hierarchies...');
+    logger.info('[15/16] Converting dataset hierarchies...');
     await syncDatasetHierarchies(prisma, cmgDb);
 
     // 16. Convert conversion logs (filesystem - production only)

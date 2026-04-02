@@ -75,31 +75,35 @@ function getDatabaseUrl(targetDb = 'sandbox') {
         throw new Error(`Could not read ${apiEnvPath}. File may not exist or be empty.`);
       }
 
-      if (apiEnvVars.DATABASE_URL) {
-        // Expand environment variables in DATABASE_URL if present
-        let dbUrl = apiEnvVars.DATABASE_URL;
-        
-        // Replace ${VAR} or $VAR patterns with actual values from apiEnvVars
-        dbUrl = dbUrl.replace(/\$\{([^}]+)\}/g, (match, varName) => {
-          return apiEnvVars[varName] || process.env[varName] || match;
-        });
-        dbUrl = dbUrl.replace(/\$([A-Z_]+)/g, (match, varName) => {
-          return apiEnvVars[varName] || process.env[varName] || match;
-        });
-        
-        return dbUrl;
-      }
-
-      // Fallback: construct from individual variables (common in some setups)
+      // Prefer constructing from discrete fields so credentials are properly
+      // URL-encoded (raw DATABASE_URL may break when password has URI chars).
       const host = apiEnvVars.POSTGRES_HOST || apiEnvVars.DATABASE_HOST || 'postgres';
       const port = apiEnvVars.POSTGRES_PORT || apiEnvVars.DATABASE_PORT || '5432';
       const user = apiEnvVars.POSTGRES_USER || apiEnvVars.DATABASE_USER || 'appuser';
       const password = apiEnvVars.POSTGRES_PASSWORD || apiEnvVars.DATABASE_PASSWORD || 'example';
       const database = apiEnvVars.POSTGRES_DB || apiEnvVars.DATABASE_NAME || 'app';
       const schema = apiEnvVars.POSTGRES_SCHEMA || 'public';
+      if (host && port && user && database) {
+        const dbUrl = `postgresql://${encodeURIComponent(user)}:${encodeURIComponent(password)}@${host}:${port}/${database}?schema=${schema}`;
+        return dbUrl;
+      }
 
-      const dbUrl = `postgresql://${user}:${password}@${host}:${port}/${database}?schema=${schema}`;
-      return dbUrl;
+      // Final fallback: resolve DATABASE_URL with variable expansion.
+      if (apiEnvVars.DATABASE_URL) {
+        let dbUrl = apiEnvVars.DATABASE_URL;
+        dbUrl = dbUrl.replace(/\$\{([^}]+)\}/g, (match, varName) => (
+          apiEnvVars[varName] || process.env[varName] || match
+        ));
+        dbUrl = dbUrl.replace(/\$([A-Z_]+)/g, (match, varName) => (
+          apiEnvVars[varName] || process.env[varName] || match
+        ));
+        return dbUrl;
+      }
+
+      throw new Error(
+        `Could not resolve app database connection from ${apiEnvPath}. `
+        + 'Set POSTGRES_HOST/PORT/USER/PASSWORD/DB (preferred) or DATABASE_URL.',
+      );
     }
 
     case 'custom':

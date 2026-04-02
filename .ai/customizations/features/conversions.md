@@ -399,7 +399,7 @@ const derivedDatasets = await prisma.dataset_hierarchy.findMany({
 - `api/src/services/dataset.js`
 - `api/src/routes/datasets/index.js`
 - `data_sync/src/sync/bigbang/sync_dataset_hierarchies.js`
-- `data_sync/src/bigbang_cmg_sync.js`
+- `data_sync/src/bigbang_sync.js`
 - `ui/src/components/dataset/AssocDatasetList.vue`
 
 ## 2026-03-03
@@ -489,57 +489,6 @@ const derivedDatasets = await prisma.dataset_hierarchy.findMany({
 - `ui/src/components/dataset/BulkConversionModal.vue`
 - `ui/src/components/conversions/ConversionForm.vue`
 
-## 2026-04-01
-
-### QC/MultiQC Reports: Unified Storage, Direct Serving, Token Removal
-
-**Problem:** Legacy QC/MultiQC reports (FastQC + MultiQC per data product) lived at `/N/project/CMG-SCA/production/qc/<conversion_cmg_id>/<dataproduct_name>/` but were not viewable in the Bioloop UI. Future conversions wrote QC to a different location (`<conversion_output_dir>/qc/fastqc/`). The existing "View Reports" (bcl2fastq Reports/) used a token-in-URL approach via the secure_download microservice.
-
-**Architecture Decisions:**
-
-- Decision: All conversion QC/MultiQC reports (legacy and future) share a single base directory: `/N/scratch/cmguser/cmg-bioloop/conversions/qc_reports/`
-- Decision: Directory structure is `<conversion_identifier>/<dataset_name>/` where identifier is `cmg_id` for legacy conversions, `conversion.id` for new ones
-- Decision: Mount the conversions directory (`/N/scratch/cmguser/cmg-bioloop/conversions/`) read-only in the API container at `/opt/sca/data/conversion_reports`
-- Decision: API serves QC reports and bcl2fastq Reports directly via cookie auth (same-origin JWT), eliminating the need for the secure_download token approach
-- Decision: Full filesystem paths are never exposed in URLs; the API maps conversion ID + dataset name to the filesystem internally
-- Decision: The standard bioloop `qc.py` task has an opt-in config flag (`genomic_conversion.qc.use_conversion_dirs`) that, when enabled, writes QC to the conversion-specific directory instead of the standard bioloop QC path. Enabled in CMG production config.
-- Decision: `derive_data_products.py` now stores `conversion_id` and `conversion_cmg_id` in each data product's `metadata`, allowing `qc.py._generate_qc` to resolve the correct output directory without extra API calls
-- Decision: Bigbang adds a new step (16/19) that copies legacy QC report dirs from `/N/project/CMG-SCA/production/qc/` to the unified scratch location, following symlinks (copying actual files, not symlinks)
-
-**Worker Changes:**
-- `workers/workers/config/common.py`: Added `paths.conversion.qc_reports` and `genomic_conversion.qc.use_conversion_dirs` (default `False`)
-- `workers/workers/config/production.py`: Set `qc_reports` path and enabled `use_conversion_dirs`
-- `workers/workers/conversion.py`: Added `get_conversion_qc_reports_dir()` helper
-- `workers/workers/tasks/qc.py`: Added `_resolve_qc_dir()` that routes to conversion-specific dir when config is enabled and dataset has conversion metadata
-- `workers/workers/tasks/conversion_qc.py`: Updated to use unified QC reports dir when `use_conversion_dirs` is enabled
-- `workers/workers/tasks/derive_data_products.py`: Stores `conversion_id` and `conversion_cmg_id` in data product metadata
-
-**Bigbang Changes:**
-- New module: `data_sync/src/sync/cmg/bigbang/sync_qc_reports.js` — copies legacy QC dirs
-- Added as step 16/19 in both `bigbang_cmg_sync.js` and `bigbang_sync.js`
-- Config: `cmg.legacyQcReportsDir` (source), `cmg.qcReportsTargetDir` (target)
-
-**Docker Changes:**
-- `docker-compose-prod.yml`: Added `${CONVERSION_REPORTS_HOST_DIR}:${CONVERSION_REPORTS_MOUNT_DIR}:ro` volume mount to API service
-
-**API Changes:**
-- `api/config/default.json`: Added `conversion.reports_base_dir`
-- New routes in `api/src/routes/conversions/index.js`:
-  - `GET /:id/qc-reports` — lists available QC report directories per conversion
-  - `GET /:id/qc-reports/:datasetName/*` — serves QC report files (cookie auth)
-  - `GET /:id/conversion-reports/*` — serves bcl2fastq report files (cookie auth, replaces token approach)
-- Path traversal prevention on all file-serving routes
-
-**UI Changes:**
-- `ConversionView.vue`: "Reports" row split into "Conversion Reports" and "QC Reports"
-  - Conversion Reports: opens bcl2fastq Reports via direct API route (no token)
-  - QC Reports: fetches available report dirs from API, renders a button per data product that opens MultiQC report
-- `conversion/api.js`: Added `getQcReports(id)` method
-
-**Token approach removed:** The old `/:id/reports` token-generation endpoint and `api/src/routes/reports/conversions.js` have been deleted. The `reports/index.js` router no longer mounts the conversions sub-router. All report serving now goes through the direct cookie-auth routes above.
-
----
-
 ## Future Entries
 
 Add entries here as decisions are made, changes are implemented, or issues are resolved.
@@ -556,5 +505,5 @@ Format:
 
 ---
 
-**Last Updated:** 2026-04-01
+**Last Updated:** 2026-02-22
 

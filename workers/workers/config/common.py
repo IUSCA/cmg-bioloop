@@ -98,7 +98,6 @@ config = {
         'conversion': {
           'reports': '/path/to/conversion_reports',
           'reports_access': '/path/to/access/conversion_reports',
-          'qc_reports': '/path/to/conversion_qc_reports',
         },
         'root': '/path/to/root'
     },
@@ -379,6 +378,22 @@ config = {
               "name": "populate file metadata",
               "task": "populate_file_metadata"
             },
+            # {
+            #   "name": "archive",
+            #   "task": "archive_dataset"
+            # },
+            # {
+            #   "name": "stage",
+            #   "task": "stage_dataset"
+            # },
+            # {
+            #   "name": "validate",
+            #   "task": "validate_dataset"
+            # },
+            # {
+            #   "name": "delete_source",
+            #   "task": "delete_source"
+            # }
           ]
         },
         "hydrate_session": {
@@ -437,7 +452,6 @@ config = {
         },
         'qc': {
             'enabled': True,  # Set to False to skip QC generation (requires fastqc and multiqc)
-            'use_conversion_dirs': False,  # Write QC to conversion-specific dirs instead of standard bioloop dirs
         }
     },
     'file_info_population': {

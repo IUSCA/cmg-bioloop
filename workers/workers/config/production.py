@@ -46,7 +46,6 @@ config = {
         'download_dir': '/N/scratch/cmguser/cmg-bioloop/production/downloads',
         'conversion': {
           'reports': '/N/scratch/cmguser/cmg-bioloop/conversions/reports',
-          'qc_reports': '/N/scratch/cmguser/cmg-bioloop/conversions/qc_reports',
           # 'reports_access': '/opt/sca/cmg/api/public/reports', 
         },
     },
@@ -90,10 +89,5 @@ config = {
         'purge': {
             'max_purges': 25
         },
-    },
-    'genomic_conversion': {
-        'qc': {
-            'use_conversion_dirs': True,
-        }
     },
 }

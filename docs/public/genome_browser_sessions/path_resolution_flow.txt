@@ -1,0 +1,33 @@
+flowchart TD
+    Start([Database stores file path]) --> EnvCheck{NODE_ENV?}
+
+    EnvCheck -->|production / non-docker| ProdPath
+    EnvCheck -->|docker / local dev| DockerPath
+
+    subgraph ProdPath [Production Path Resolution]
+        P1[DB path: /N/scratch/cmguser/cmg-bioloop/stage/data_products/dataset-42/file.bam]
+        P2[Strip host prefix: /N/scratch]
+        P3[Prepend mount: /opt/sca/scratch/ingestion_source_dir]
+        P4[Insert system_user: cmguser]
+        P5[Result: /opt/sca/scratch/ingestion_source_dir/cmguser/cmg-bioloop/stage/data_products/dataset-42/file.bam]
+        P1 --> P2 --> P3 --> P4 --> P5
+    end
+
+    subgraph DockerPath [Docker / Local Dev Path Resolution]
+        D1[DB path: /opt/sca/data/data_products/dataset-42/file.bam]
+        D2[Path is under DATA_ROOT — no translation needed]
+        D3[Insert dataset type folder if missing]
+        D4[Result: /opt/sca/data/data_products/dataset-42/file.bam]
+        D1 --> D2 --> D3 --> D4
+    end
+
+    ProdPath --> Serve
+    DockerPath --> Serve
+
+    subgraph Serve [File Exposure Endpoint]
+        S1[Build relative path for datahub URL]
+        S2[Validate: path matches a session track file]
+        S3[Resolve to absolute filesystem path]
+        S4[Stream with Range support, compression disabled]
+        S1 --> S2 --> S3 --> S4
+    end
