@@ -14,7 +14,9 @@
     "password": ""
   },
   "cmg": {
-    "legacyConversionsLogsDir": "/opt/sca/project/ingestion_source_dir/CMG-SCA/production/runlogs"
+    "legacyConversionsLogsDir": "/opt/sca/project/ingestion_source_dir/CMG-SCA/production/runlogs",
+    "legacyQcReportsDir": "/opt/sca/project/ingestion_source_dir/CMG-SCA/production/qc",
+    "qcReportsTargetDir": "/opt/sca/data/conversion_reports/qc_reports"
   },
   "legacy_application_active": {
     "cmg": true,

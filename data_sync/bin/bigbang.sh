@@ -1,14 +1,16 @@
 #!/bin/bash
 
 ##
-# Bioloop Legacy Big-Bang Wrapper (CMG sync entrypoint)
+# Bioloop Big-Bang Wrapper (Central — runs CMG then Xenium)
 #
-# Performs one-time historical data migration from CMG (MongoDB) to Bioloop (PostgreSQL).
-# This script migrates all existing data and initializes cursor positions for future
-# incremental sync via pollers.
+# Runs both legacy migrations sequentially:
+#   1. CMG bigbang  (MongoDB → Bioloop PostgreSQL)
+#   2. Xenium bigbang (Xenium PostgreSQL → Bioloop PostgreSQL)
+#
+# If CMG bigbang fails, the script aborts and Xenium bigbang is NOT run.
 #
 # Wrapper behavior:
-#   Host-side launcher only. Executes Node.js script inside db_sandbox container.
+#   Host-side launcher only. Executes Node.js scripts inside db_sandbox container.
 #   Compose file is selected from APP_ENV/NODE_ENV (production -> prod compose;
 #   otherwise localhost compose).
 #
@@ -19,29 +21,23 @@
 #   --target-db DB         Target database: 'sandbox' (default), 'app', or 'custom'
 #   --clear-target-db      Clear all CMG + Xenium migration data from target DB before migration
 #   --clear-locks          Force release all existing process locks
-#   --skip-sessions        Skip genome browser session conversion
+#   --skip-sessions        Skip genome browser session conversion (CMG only)
 #   -h, --help             Show this help message
 #
 # Environment Variables:
-# - CMG source (used by this wrapper/script):
-#   CMG_MONGO_HOST
-#   CMG_MONGO_PORT
-#   CMG_MONGO_DB
-#   CMG_MONGO_USERNAME
-#   CMG_MONGO_PASSWORD
-# - Xenium source (used by Xenium bigbang scripts, not by this wrapper):
-#   XENIUM_PG_HOST
-#   XENIUM_PG_PORT
-#   XENIUM_PG_DATABASE
-#   XENIUM_PG_USERNAME
-#   XENIUM_PG_PASSWORD
+# - CMG source:
+#   CMG_MONGO_HOST, CMG_MONGO_PORT, CMG_MONGO_DB,
+#   CMG_MONGO_USERNAME, CMG_MONGO_PASSWORD
+# - Xenium source:
+#   XENIUM_PG_HOST, XENIUM_PG_PORT, XENIUM_PG_DATABASE,
+#   XENIUM_PG_USERNAME, XENIUM_PG_PASSWORD
 #
 # Examples:
 #
-#   # Migrate to sandbox database (default)
+#   # Migrate both apps to sandbox database (default)
 #   ./bin/bigbang.sh
 #
-#   # Migrate to main app database
+#   # Migrate both apps to main app database
 #   ./bin/bigbang.sh --target-db app
 #
 #   # Clear existing data before migration
@@ -53,35 +49,20 @@
 #   # Clear stuck process locks from previous failed run
 #   ./bin/bigbang.sh --clear-locks
 #
-# Migration Steps (12 total):
-#   1.  Create roles (admin, operator, user)
-#   2.  Create CMG system user
-#   3.  Populate pipeline definitions (conversion workflows)
-#   4.  Convert users
-#   5.  Convert datasets (raw data)
-#   6.  Convert dataset audit logs
-#   7.  Convert CMG upload history to import logs
-#   8.  Convert dataset hierarchies (raw → derived relationships)
-#   9.  Convert projects
-#   10. Convert conversions (pipeline runs)
-#   11. Convert genome browser sessions
-#   12. Initialize poller cursors
-#
 # Process Locking:
-#   This script uses database-level locking to prevent multiple instances
-#   from running simultaneously. If a previous run crashed, use --clear-locks.
+#   Each bigbang acquires its own process lock (cmg_sync_process_lock /
+#   xenium_sync_process_lock). If a previous run crashed, use --clear-locks.
 #
 # Idempotency:
-#   This migration is idempotent - it can be safely re-run multiple times.
-#   Existing records are skipped based on cmg_id or unique constraints.
-#   Data inserted before any error is retained in the database.
+#   Both migrations are idempotent — they can be safely re-run.
+#   Existing records are skipped based on cmg_id / xenium_id or unique constraints.
 #
 # Logs:
-#   Detailed logs are written to: data_sync/logs/bigbang_sync_*.log
-#   On production host, logs are in: /tmp/data_sync_logs/
+#   CMG logs:    /tmp/data_sync_logs/bigbang_cmg_sync_*.log
+#   Xenium logs: /tmp/data_sync_logs/bigbang_xenium_sync_*.log
 #
 # Exit Codes:
-#   0 - Success
+#   0 - Both migrations succeeded
 #   1 - Migration failed (check logs)
 #   2 - Another bigbang process is already running
 #
@@ -130,23 +111,54 @@ if ! docker compose -f "$COMPOSE_FILE" ps db_sandbox | grep -q "Up"; then
   exit 1
 fi
 
-# Run the Node.js bigbang script
-echo -e "${YELLOW}Starting big-bang migration...${NC}"
+# ── Phase 1: CMG bigbang ──────────────────────────────────────────────────────
+
+echo -e "${YELLOW}[1/2] Starting CMG big-bang migration...${NC}"
 echo ""
 
 docker compose -f "$COMPOSE_FILE" exec db_sandbox node /opt/sca/app/src/bigbang_cmg_sync.js "$@"
-exit_code=$?
+cmg_exit=$?
 
 echo ""
-if [ $exit_code -eq 0 ]; then
-  echo -e "${GREEN}✓ Big-bang migration completed successfully${NC}"
-elif [ $exit_code -eq 2 ]; then
-  echo -e "${RED}✗ Another bigbang process is already running${NC}"
-  echo -e "${YELLOW}  Use --clear-locks to force release locks${NC}"
-else
-  echo -e "${RED}✗ Big-bang migration failed${NC}"
-  echo -e "${YELLOW}  Check logs in data_sync/logs/ for details${NC}"
+if [ $cmg_exit -ne 0 ]; then
+  if [ $cmg_exit -eq 2 ]; then
+    echo -e "${RED}✗ CMG bigbang: another process is already running${NC}"
+    echo -e "${YELLOW}  Use --clear-locks to force release locks${NC}"
+  else
+    echo -e "${RED}✗ CMG big-bang migration failed — aborting (Xenium bigbang will NOT run)${NC}"
+    echo -e "${YELLOW}  Check logs in /tmp/data_sync_logs/ for details${NC}"
+  fi
+  exit $cmg_exit
 fi
 
-exit $exit_code
+echo -e "${GREEN}✓ CMG big-bang migration completed successfully${NC}"
+echo ""
+
+# ── Phase 2: Xenium bigbang ───────────────────────────────────────────────────
+
+echo -e "${YELLOW}[2/2] Starting Xenium big-bang migration...${NC}"
+echo ""
+
+docker compose -f "$COMPOSE_FILE" exec db_sandbox node /opt/sca/app/src/bigbang_xenium_sync.js "$@"
+xenium_exit=$?
+
+echo ""
+if [ $xenium_exit -ne 0 ]; then
+  if [ $xenium_exit -eq 2 ]; then
+    echo -e "${RED}✗ Xenium bigbang: another process is already running${NC}"
+    echo -e "${YELLOW}  Use --clear-locks to force release locks${NC}"
+  else
+    echo -e "${RED}✗ Xenium big-bang migration failed${NC}"
+    echo -e "${YELLOW}  Check logs in /tmp/data_sync_logs/ for details${NC}"
+  fi
+  exit $xenium_exit
+fi
+
+echo -e "${GREEN}✓ Both CMG and Xenium big-bang migrations completed successfully${NC}"
+echo ""
+echo "Next steps:"
+echo "  1. Verify data integrity in Bioloop database"
+echo "  2. Start pollers: ./bin/start_pollers.sh"
+
+exit 0
 

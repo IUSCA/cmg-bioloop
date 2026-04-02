@@ -1,4 +1,6 @@
 const express = require('express');
+const fs = require('fs');
+const fsp = require('fs').promises;
 const path = require('path');
 const {
   body, param, query,
@@ -11,7 +13,6 @@ const config = require('config');
 const { isFeatureEnabled } = require('@/services/features');
 const legacyMigrationService = require('@/services/legacyMigration');
 const logger = require('@/services/logger');
-const authService = require('../../services/auth');
 const { validate } = require('../../middleware/validators');
 const asyncHandler = require('../../middleware/asyncHandler');
 const { accessControl } = require('../../middleware/auth');
@@ -991,90 +992,148 @@ router.get(
   }),
 );
 
-// Get secure URLs for viewing conversion reports via secure_download service
+// ---------------------------------------------------------------------------
+// QC / MultiQC report serving  (mounted volume, cookie auth — no tokens)
+// ---------------------------------------------------------------------------
+
+/**
+ * Resolve the filesystem identifier for a conversion (cmg_id for legacy,
+ * string id for new) and the reports base directory.
+ */
+async function resolveConversionReportContext(conversionId) {
+  const conversion = await prisma.conversion.findUnique({
+    where: { id: conversionId },
+    include: { dataset: true },
+  });
+  if (!conversion) return null;
+
+  const isLegacy = legacyMigrationService.isLegacyConversion(conversion);
+  const conversionIdentifier = isLegacy
+    ? (conversion.cmg_id || String(conversion.id))
+    : String(conversion.id);
+  const reportsBaseDir = config.get('conversion.reports_base_dir');
+
+  return { conversion, conversionIdentifier, reportsBaseDir };
+}
+
+// List available QC report directories (one per data product) for a conversion
 router.get(
-  '/:id/reports',
+  '/:id/qc-reports',
+  isPermittedTo('read'),
+  validate([param('id').isInt({ min: 1 }).toInt()]),
+  asyncHandler(async (req, res, next) => {
+    const ctx = await resolveConversionReportContext(req.params.id);
+    if (!ctx) return next(createError.NotFound('Conversion not found'));
+
+    const qcDir = path.join(
+      ctx.reportsBaseDir, 'qc_reports', ctx.conversionIdentifier,
+    );
+
+    let entries = [];
+    try {
+      const dirents = await fsp.readdir(qcDir, { withFileTypes: true });
+      entries = await Promise.all(
+        dirents
+          .filter((d) => d.isDirectory())
+          .map(async (d) => {
+            const dpDir = path.join(qcDir, d.name);
+            const files = await fsp.readdir(dpDir).catch(() => []);
+            const hasMultiqc = files.includes('multiqc_report.html');
+            const fastqcFiles = files.filter((f) => f.endsWith('_fastqc.html'));
+            return {
+              dataset_name: d.name,
+              has_multiqc: hasMultiqc,
+              fastqc_count: fastqcFiles.length,
+            };
+          }),
+      );
+    } catch {
+      // Directory doesn't exist — no QC reports for this conversion
+    }
+
+    return res.json({
+      conversion_id: ctx.conversionIdentifier,
+      qc_reports: entries,
+    });
+  }),
+);
+
+// Serve individual QC report files
+router.get(
+  '/:id/qc-reports/:datasetName/*',
   isPermittedTo('read'),
   validate([
     param('id').isInt({ min: 1 }).toInt(),
+    param('datasetName').isString().notEmpty(),
   ]),
   asyncHandler(async (req, res, next) => {
-    // #swagger.tags = ['Conversions']
-    // #swagger.summary = Get secure URLs for viewing conversion reports
+    const ctx = await resolveConversionReportContext(req.params.id);
+    if (!ctx) return next(createError.NotFound('Conversion not found'));
 
-    const conversionId = req.params.id;
-    logger.info(`[CONVERSIONS] Generating secure URLs for conversion ${conversionId}`);
-
-    // Look up conversion and dataset to determine path
-    const conversion = await prisma.conversion.findUnique({
-      where: { id: conversionId },
-      include: {
-        dataset: true,
-      },
-    });
-
-    if (!conversion) {
-      logger.error(`[CONVERSIONS] Conversion ${conversionId} not found in database`);
-      return next(createError.NotFound('Conversion not found'));
-    }
-
-    logger.info('[CONVERSIONS] Found conversion', {
-      id: conversion.id,
-      cmg_id: conversion.cmg_id,
-      dataset_id: conversion.dataset_id,
-      dataset_cmg_id: conversion.dataset?.cmg_id,
-    });
-
-    if (!conversion.dataset) {
-      logger.error(`[CONVERSIONS] Dataset not found for conversion ${conversionId}`);
-      return next(createError.NotFound('Dataset not found for conversion'));
-    }
-
-    // For legacy conversions, use the CMG ID as the path identifier (matching CMG's directory structure)
-    // Use dataset NAME (not ID) as the path structure uses dataset names
-    const isLegacyConversion = legacyMigrationService.isLegacyConversion(conversion);
-    const conversionIdentifier = isLegacyConversion
-      ? (conversion.cmg_id || String(conversion.id))
-      : String(conversion.id);
-    const datasetName = conversion.dataset.name;
-
-    // Get CONVERSION_OUTPUT_DIR from environment
-    const conversionOutputDir = process.env.CONVERSION_OUTPUT_DIR || config.get('conversion.output_dir');
-
-    // Construct absolute path: {CONVERSION_OUTPUT_DIR}/{conversion_id}/{dataset_name}/Reports
-    const absoluteReportsPath = path.join(
-      conversionOutputDir,
-      conversionIdentifier,
-      datasetName,
-      'Reports',
+    const relativePath = req.params[0] || '';
+    const filePath = path.join(
+      ctx.reportsBaseDir, 'qc_reports',
+      ctx.conversionIdentifier, req.params.datasetName, relativePath,
     );
 
-    logger.info(`[CONVERSIONS] Absolute reports path: ${absoluteReportsPath}`);
+    // Prevent path traversal
+    const resolvedBase = path.resolve(
+      ctx.reportsBaseDir, 'qc_reports', ctx.conversionIdentifier,
+    );
+    const resolvedFile = path.resolve(filePath);
+    if (!resolvedFile.startsWith(resolvedBase)) {
+      return next(createError.Forbidden());
+    }
 
-    // Issue token with download_file scope (reuse existing scope for now)
-    // TODO: Create separate 'view_reports:' scope in future for better separation
-    // Token scope uses the absolute path so secure_download doesn't need to extrapolate
-    const token = await authService.get_download_token(absoluteReportsPath);
+    try {
+      const stat = await fsp.stat(resolvedFile);
+      if (stat.isDirectory()) {
+        const files = await fsp.readdir(resolvedFile);
+        return res.json({ files });
+      }
+      return res.sendFile(resolvedFile);
+    } catch {
+      return next(createError.NotFound('Report file not found'));
+    }
+  }),
+);
 
-    logger.info(`[CONVERSIONS] Token issued for: ${absoluteReportsPath}`);
+// Serve bcl2fastq / conversion report files (replaces the token-based approach)
+router.get(
+  '/:id/conversion-reports/*',
+  isPermittedTo('read'),
+  validate([param('id').isInt({ min: 1 }).toInt()]),
+  asyncHandler(async (req, res, next) => {
+    const ctx = await resolveConversionReportContext(req.params.id);
+    if (!ctx) return next(createError.NotFound('Conversion not found'));
 
-    // Construct URLs with absolute paths after /reports/
-    // secure_download will receive these absolute paths and use them directly
-    const reportsUrl = `/reports/${absoluteReportsPath}`;
-    const indexUrl = `/reports/${absoluteReportsPath}/html/index.html`;
+    const datasetName = ctx.conversion.dataset?.name;
+    if (!datasetName) return next(createError.NotFound('Dataset not found'));
 
-    // Append token as query parameter
-    const reportsUrlWithToken = `${reportsUrl}?access_token=${token.accessToken}`;
-    const indexUrlWithToken = `${indexUrl}?access_token=${token.accessToken}`;
+    const relativePath = req.params[0] || '';
+    const filePath = path.join(
+      ctx.reportsBaseDir, 'reports',
+      ctx.conversionIdentifier, datasetName, 'Reports', relativePath,
+    );
 
-    logger.info('[CONVERSIONS] Returning URLs with absolute paths and token appended');
+    const resolvedBase = path.resolve(
+      ctx.reportsBaseDir, 'reports', ctx.conversionIdentifier,
+    );
+    const resolvedFile = path.resolve(filePath);
+    if (!resolvedFile.startsWith(resolvedBase)) {
+      return next(createError.Forbidden());
+    }
 
-    return res.json({
-      conversion_id: conversionIdentifier,
-      dataset_name: datasetName,
-      reports_url: reportsUrlWithToken,
-      index_url: indexUrlWithToken,
-    });
+    try {
+      const stat = await fsp.stat(resolvedFile);
+      if (stat.isDirectory()) {
+        const files = await fsp.readdir(resolvedFile);
+        return res.json({ files });
+      }
+      return res.sendFile(resolvedFile);
+    } catch {
+      return next(createError.NotFound('Report file not found'));
+    }
   }),
 );
 

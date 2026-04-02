@@ -7,7 +7,7 @@
  * Runs after big-bang migration to keep data in sync.
  *
  * Usage:
- *   node src/poller_sync.js [options]
+ *   node src/poller_cmg_sync.js [options]
  *
  * Options:
  *   --clear-locks    Clear any existing process locks before starting
@@ -18,10 +18,10 @@
  *
  * Examples:
  *   # Normal run (will fail if another instance is running)
- *   node src/poller_sync.js
+ *   node src/poller_cmg_sync.js
  *
  *   # Clear stale locks before starting
- *   node src/poller_sync.js --clear-locks
+ *   node src/poller_cmg_sync.js --clear-locks
  *
  * Pollers:
  * - user_roles: Syncs user role changes
@@ -82,7 +82,7 @@ function parseArgs() {
       // eslint-disable-next-line no-console
       console.log('Usage:');
       // eslint-disable-next-line no-console
-      console.log('  node src/poller_sync.js [options]');
+      console.log('  node src/poller_cmg_sync.js [options]');
       // eslint-disable-next-line no-console
       console.log('');
       // eslint-disable-next-line no-console
@@ -285,7 +285,7 @@ async function main() {
       logger.error(
         'If you are certain no other instance is running, you can restart with:',
       );
-      logger.error('  node src/poller_sync.js --clear-locks');
+      logger.error('  node src/poller_cmg_sync.js --clear-locks');
       logger.error('');
       logger.error('Or manually clear the lock via Prisma:');
       logger.error(

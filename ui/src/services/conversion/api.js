@@ -50,9 +50,8 @@ class ConversionService {
     return api.get(`/conversions/${id}/logs`);
   }
 
-  getReports(id) {
-    console.log("getReports", id);
-    return api.get(`/conversions/${id}/reports`);
+  getQcReports(id) {
+    return api.get(`/conversions/${id}/qc-reports`);
   }
 }
 

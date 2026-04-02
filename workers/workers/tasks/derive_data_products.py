@@ -189,6 +189,8 @@ def derive_data_products(celery_task, dataset_id: int, conversion_id: int):
         product_payload['metadata'] = {
             **product_payload.get('metadata', {}),
             'origin': conversion_origin,
+            'conversion_id': conversion_id,
+            'conversion_cmg_id': conversion.get('cmg_id'),
         }
 
     # Create all data products using bulk API

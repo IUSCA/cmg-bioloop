@@ -63,6 +63,50 @@ def create_report(celery_task: WorkflowTask, dataset_dir: Path, dataset_qc_dir: 
     return report_id
 
 
+def _resolve_qc_dir(dataset):
+    """
+    Determine the QC output directory for a dataset.
+
+    When genomic_conversion.qc.use_conversion_dirs is enabled AND the dataset was
+    produced by a conversion, QC reports are written to a conversion-specific
+    directory under paths.conversion.qc_reports.  This allows both legacy
+    (bigbang-copied) and new conversion QC reports to share the same filesystem
+    location and be served from a single mount.
+
+    Otherwise the standard bioloop per-type QC path is used.
+    """
+    dataset_name = dataset.get('name', dataset['id'])
+    dataset_type = dataset['type']
+    is_conversion_dataset = dataset.get('create_method') == 'CONVERSION'
+    use_conversion_dirs = (
+        config.get('genomic_conversion', {})
+        .get('qc', {})
+        .get('use_conversion_dirs', False)
+    )
+
+    if use_conversion_dirs and is_conversion_dataset:
+        metadata = dataset.get('metadata') or {}
+        conversion_id = metadata.get('conversion_id')
+        conversion_cmg_id = metadata.get('conversion_cmg_id')
+        if conversion_id:
+            qc_reports_base = Path(config['paths']['conversion']['qc_reports'])
+            conversion_identifier = conversion_cmg_id or str(conversion_id)
+            qc_dir = qc_reports_base / conversion_identifier / dataset_name
+            logger.info(
+                f'{dataset_name} - using conversion-specific QC dir: {qc_dir}'
+            )
+            return qc_dir
+
+        logger.warning(
+            f'{dataset_name} - use_conversion_dirs enabled but no conversion_id in metadata; '
+            f'falling back to standard QC path'
+        )
+
+    qc_dir = Path(config['paths'][dataset_type]['qc']) / dataset_name / 'qc'
+    logger.info(f'{dataset_name} - using standard QC dir: {qc_dir}')
+    return qc_dir
+
+
 def _generate_qc(celery_task, dataset_id, **kwargs):
     dataset = api.get_dataset(dataset_id=dataset_id)
     dataset_name = dataset.get('name', dataset_id)
@@ -83,13 +127,9 @@ def _generate_qc(celery_task, dataset_id, **kwargs):
         dataset_dir = Path(dataset['staged_path'])
         logger.info(f'{dataset_name} - using staged_path as dataset_dir: {dataset_dir}')
 
-    dataset_type = dataset['type']
-    # dataset_qc_dir is intentionally placed under the configured qc root, not under
-    # the origin_path parent (which is an instrument drop directory for new datasets).
-    dataset_qc_dir = Path(config['paths'][dataset_type]['qc']) / dataset['name'] / 'qc'
+    dataset_qc_dir = _resolve_qc_dir(dataset)
     logger.info(f'{dataset_name} - qc output directory: {dataset_qc_dir}')
 
-    # todo: ensure fastqc is being run at the same path in CMG
     report_id = create_report(
         celery_task=celery_task,
         dataset_dir=dataset_dir,
@@ -99,7 +139,6 @@ def _generate_qc(celery_task, dataset_id, **kwargs):
 
     report_filename = dataset_qc_dir / 'multiqc_report.html'
 
-    # if the report is created successfully
     if report_filename.exists():
         logger.info(f'{dataset_name} - QC report generated: {report_filename}, report_id={report_id}')
         update_data = {
@@ -115,8 +154,6 @@ def _generate_qc(celery_task, dataset_id, **kwargs):
         logger.warning(
             f'{dataset_name} - multiqc report not found at {report_filename}; QC state will not be set'
         )
-        # TODO: fail the task if there is no report?
-        # nonRetryable exception
 
     return dataset_id,
 

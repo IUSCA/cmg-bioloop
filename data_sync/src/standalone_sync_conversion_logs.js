@@ -23,7 +23,7 @@ const path = require('path');
 const logger = require('./logger');
 const { setDatabaseUrl } = require('./utils/db_config');
 const { sanitizeUri } = require('./utils/uri_sanitizer');
-const { syncConversionLogs } = require('./sync/bigbang/sync_conversion_logs');
+const { syncConversionLogs } = require('./sync/cmg/bigbang/sync_conversion_logs');
 
 // Parse command line arguments
 function parseArgs() {

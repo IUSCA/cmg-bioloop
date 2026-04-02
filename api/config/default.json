@@ -100,7 +100,8 @@
     "path": ""
   },
   "conversion": {
-    "output_dir": "/opt/sca/data/conversions"
+    "output_dir": "/opt/sca/data/conversions",
+    "reports_base_dir": "/opt/sca/data/conversion_reports"
   },
   "trackFileTypes": [
     { "name": "BAM", "id": "bam" },

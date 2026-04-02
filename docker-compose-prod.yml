@@ -31,11 +31,13 @@ services:
       - ${FILESYSTEM_BASE_DIR_PROJECT}:${FILESYSTEM_MOUNT_DIR_PROJECT}
       # - ${FILESYSTEM_BASE_DIR_PROJECT_1}:${FILESYSTEM_MOUNT_DIR_PROJECT_1}
       - ${UPLOAD_HOST_DIR}:${UPLOAD_HOST_DIR}
+      - ${CONVERSION_REPORTS_HOST_DIR}:${CONVERSION_REPORTS_MOUNT_DIR}:ro
     expose:
       - 3030
     # entrypoint: [ "tail", "-f", "/dev/null" ]
     environment:
       - UPLOAD_HOST_DIR=${UPLOAD_HOST_DIR} # Host filesystem path for uploads
+      - CONVERSION_REPORTS_BASE_DIR=${CONVERSION_REPORTS_MOUNT_DIR}
     entrypoint:
       - sh
       - -c

@@ -33,18 +33,47 @@
                     </td>
                   </tr>
 
-                  <!-- Reports -->
+                  <!-- Conversion Reports (bcl2fastq Reports/) -->
                   <tr>
-                    <td>Reports</td>
+                    <td>Conversion Reports</td>
                     <td>
                       <va-button
                         preset="secondary"
                         icon="open_in_new"
                         size="small"
-                        @click="openReports"
+                        @click="openConversionReports"
                       >
                         View Reports
                       </va-button>
+                    </td>
+                  </tr>
+
+                  <!-- QC / MultiQC Reports -->
+                  <tr>
+                    <td>QC Reports</td>
+                    <td>
+                      <div
+                        v-if="qcReports.length > 0"
+                        class="flex flex-wrap gap-2"
+                      >
+                        <va-button
+                          v-for="qc in qcReports"
+                          :key="qc.dataset_name"
+                          preset="secondary"
+                          icon="open_in_new"
+                          size="small"
+                          @click="openQcReport(qc.dataset_name)"
+                        >
+                          {{ qc.dataset_name }}
+                          <span v-if="qc.has_multiqc" class="ml-1 text-xs opacity-70">(MultiQC)</span>
+                        </va-button>
+                      </div>
+                      <span v-else-if="qcReportsLoaded" class="text-sm opacity-60">
+                        No QC reports available
+                      </span>
+                      <span v-else class="text-sm opacity-60">
+                        Loading...
+                      </span>
                     </td>
                   </tr>
 
@@ -154,44 +183,34 @@ const workflow = ref({});
 const logs = ref([]);
 const loading = ref(false);
 const showLogsModal = ref(false);
+const qcReports = ref([]);
+const qcReportsLoaded = ref(false);
 
 function openLogsModal() {
   showLogsModal.value = true;
 }
 
-function openReports() {
-  console.log("openReports");
+function openConversionReports() {
+  const url = `${config.apiBasePath}/conversions/${props.conversionId}/conversion-reports/html/index.html`;
+  window.open(url, "_blank");
+}
 
-  const conversionId = props.conversionId;
-  console.log("conversionId", conversionId);
+function openQcReport(datasetName) {
+  const url = `${config.apiBasePath}/conversions/${props.conversionId}/qc-reports/${encodeURIComponent(datasetName)}/multiqc_report.html`;
+  window.open(url, "_blank");
+}
 
-  console.log("will call getReports");
+function fetchQcReports() {
   conversionApiService
-    .getReports(conversionId)
+    .getQcReports(props.conversionId)
     .then((res) => {
-      console.log("res", res);
-      // index_url already has the token appended
-      const indexUrlWithToken = res.data.index_url;
-      console.log("indexUrlWithToken", indexUrlWithToken);
-
-      // Get secure_download base URL from environment variable
-      const secureDownloadBaseUrl = import.meta.env.VITE_UPLOAD_API_BASE_PATH;
-      console.log(
-        "secureDownloadBaseUrl (from VITE_UPLOAD_API_BASE_PATH):",
-        secureDownloadBaseUrl,
-      );
-
-      // Construct full URL (token already in index_url)
-      const fullUrl = `${secureDownloadBaseUrl}${indexUrlWithToken}`;
-      console.log("Opening:", fullUrl);
-      window.open(fullUrl, "_blank");
+      qcReports.value = res.data.qc_reports || [];
     })
-    .catch((err) => {
-      console.error("error", err);
-      toast.error("Could not load reports");
+    .catch(() => {
+      qcReports.value = [];
     })
     .finally(() => {
-      console.log("finally");
+      qcReportsLoaded.value = true;
     });
 }
 
@@ -267,8 +286,8 @@ const polling_interval = computed(() => {
 });
 
 onMounted(() => {
-  console.log("ConversionView onMounted", props.conversionId);
   fetch_conversion(true);
+  fetchQcReports();
 });
 
 // Set up polling for active workflows

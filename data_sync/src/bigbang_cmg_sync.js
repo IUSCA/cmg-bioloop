@@ -43,9 +43,10 @@
  * 13. Convert projects
  * 14. Convert dataset hierarchies
  * 15. Convert conversion logs (from filesystem - production only)
- * 16. Convert sessions (optional - many will be skipped)
- * 17. Initialize cursors for pollers
- * 18. Bootstrap production users/roles from mounted api JSON files
+ * 16. Copy legacy QC/MultiQC reports to unified scratch location
+ * 17. Convert sessions (optional - many will be skipped)
+ * 18. Initialize cursors for pollers
+ * 19. Bootstrap production users/roles from mounted api JSON files
  */
 
 require('module-alias/register');
@@ -86,6 +87,7 @@ const { syncDatasetHierarchies } = require('./sync/cmg/bigbang/sync_dataset_hier
 const { syncProjects } = require('./sync/cmg/bigbang/sync_projects');
 const { syncConversions } = require('./sync/cmg/bigbang/sync_conversions');
 const { syncAllConversionLogs } = require('./sync/cmg/bigbang/sync_conversion_logs');
+const { syncQcReports } = require('./sync/cmg/bigbang/sync_qc_reports');
 const { syncSessions } = require('./sync/cmg/bigbang/sync_sessions');
 const { initializeCursors } = require('./sync/cmg/bigbang/initialize_cursors');
 const { bootstrapProdUsers } = require('./sync/shared/bootstrap_prod_users');
@@ -474,26 +476,30 @@ async function main() {
 
     // 15. Convert conversion logs (filesystem - production only)
     if (options.skipConversionLogs) {
-      logger.info('[15/17] Skipping conversion logs (--skip-conversion-logs flag provided)');
+      logger.info('[15/19] Skipping conversion logs (--skip-conversion-logs flag provided)');
     } else {
-      logger.info('[15/17] Converting historic conversion logs...');
+      logger.info('[15/19] Converting historic conversion logs...');
       await syncAllConversionLogs(prisma, cmgDb);
     }
 
-    // 16. Convert sessions (optional)
+    // 16. Copy legacy QC/MultiQC reports to unified scratch location
+    logger.info('[16/19] Copying legacy QC/MultiQC reports...');
+    await syncQcReports(prisma);
+
+    // 17. Convert sessions (optional)
     if (options.skipSessions) {
-      logger.info('[16/17] Skipping sessions (--skip-sessions flag provided)');
+      logger.info('[17/19] Skipping sessions (--skip-sessions flag provided)');
     } else {
-      logger.info('[16/17] Converting genome browser sessions...');
+      logger.info('[17/19] Converting genome browser sessions...');
       await syncSessions(prisma, cmgDb);
     }
 
-    // 17. Initialize cursors
-    logger.info('[17/18] Initializing poller cursors...');
+    // 18. Initialize cursors
+    logger.info('[18/19] Initializing poller cursors...');
     await initializeCursors(prisma, cmgDb);
 
-    // 18. Bootstrap production users/roles (same source JSON as api init_prod_users.js)
-    logger.info('[18/18] Bootstrapping production users/roles from API JSON...');
+    // 19. Bootstrap production users/roles (same source JSON as api init_prod_users.js)
+    logger.info('[19/19] Bootstrapping production users/roles from API JSON...');
     await bootstrapProdUsers(prisma, logger, 'CMG');
 
     // Clear lock extender

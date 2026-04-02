@@ -120,7 +120,7 @@ echo "Press Ctrl+C to stop."
 echo ""
 
 # Run the Node.js poller script
-node src/poller_sync.js "$@"
+node src/poller_cmg_sync.js "$@"
 exit_code=$?
 
 echo ""

@@ -5,7 +5,7 @@
   "main": "src/bigbang_cmg_sync.js",
   "scripts": {
     "bigbang": "node src/bigbang_cmg_sync.js",
-    "poller": "node src/poller_sync.js",
+    "poller": "node src/poller_cmg_sync.js",
     "prisma:generate": "prisma generate --schema=/opt/sca/api/prisma/schema.prisma",
     "prisma:generate:xenium": "prisma generate --schema=prisma/xenium_source.prisma",
     "prisma:generate:all": "npm run prisma:generate && npm run prisma:generate:xenium",
@@ -25,10 +25,10 @@
     "config": "^3.3.9",
     "dotenv": "^16.3.1",
     "module-alias": "^2.2.3",
+    "mongodb": "^6.12.0",
     "winston": "^3.10.0"
   },
   "devDependencies": {
-    "mongodb": "^7.1.0",
     "prisma": "5.20.0"
   },
   "prisma": {
