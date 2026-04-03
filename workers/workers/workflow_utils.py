@@ -13,7 +13,7 @@ from sca_rhythm import WorkflowTask
 from sca_rhythm.progress import Progress
 
 from workers import sda, utils
-from workers.config import config
+from workers.config import app_env, config
 
 logger = logging.getLogger(__name__)
 
@@ -34,20 +34,26 @@ def get_wf_body(wf_name: str) -> dict:
     return wf_body
 
 
-# legacy_dataset: True if the dataset is a legacy dataset (i.e. from the legacy CMG application).
 def get_archive_dir(dataset_type: str,
-                    legacy_dataset: bool = False) -> str:
+                    legacy_dataset: bool = False,
+                    create: bool = True) -> str:
+    """Return the archive directory path for the given dataset type.
+
+    When create=True (default) the directory is created if it does not already
+    exist.  Pass create=False when only the path value is needed (e.g. to
+    compute an expected path in tests) without creating the directory as a
+    side effect.
+    """
     if legacy_dataset:
         dataset_type_archive_dir = config["paths"][dataset_type]["archive_legacy"]
     else:
         dataset_type_archive_dir = config["paths"][dataset_type]["archive"]
-    
-    # create the directory if it does not exist
-    if config.get('mode') != 'production':
-      _dataset_type_archive_dir = Path(dataset_type_archive_dir)
-      _dataset_type_archive_dir.mkdir(parents=True, exist_ok=True)
-    else:
-      sda.ensure_directory(dataset_type_archive_dir)
+
+    if create:
+        if app_env == 'docker':
+            Path(dataset_type_archive_dir).mkdir(parents=True, exist_ok=True)
+        else:
+            sda.ensure_directory(dataset_type_archive_dir)
 
     return dataset_type_archive_dir
 
@@ -181,7 +187,7 @@ def archive(local_file_path: Path, archive_path: str, *, celery_task: WorkflowTa
     @param celery_task: Celery task for progress tracking
     @return: The final archive path where the Dataset was stored
     """
-    if config.get('mode') != 'production':
+    if app_env == 'docker':
         archive_file_path = Path(archive_path)
         archive_file_path.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(local_file_path, archive_file_path)
@@ -202,8 +208,8 @@ def stage(archive_path: str, local_file_path: Path, *, celery_task: WorkflowTask
     @param celery_task: Celery task for progress tracking
     """
 
-    if config.get('mode') != 'production':
-        archive_file_path = Path(archive_path)        
+    if app_env == 'docker':
+        archive_file_path = Path(archive_path)
         local_file_path.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(archive_file_path, local_file_path)
     else:

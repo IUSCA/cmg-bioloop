@@ -13,12 +13,16 @@ const asyncHandler = require('./asyncHandler');
 
 function authenticate(req, res, next) {
   const authHeader = req.headers.authorization || '';
-  // console.log('authHeader', authHeader);
-  if (!authHeader) return next(createError.Unauthorized('Authentication failed. Token not found.'));
-
   const err = createError.Unauthorized('Authentication failed. Token is not valid.');
-  if (!authHeader.startsWith('Bearer ')) { return next(err); }
-  const token = authHeader.split(' ')[1];
+  let token = null;
+
+  if (authHeader) {
+    if (!authHeader.startsWith('Bearer ')) { return next(err); }
+    const [, bearerToken] = authHeader.split(' ');
+    token = bearerToken;
+  } else {
+    return next(createError.Unauthorized('Authentication failed. Token not found.'));
+  }
 
   const auth = authService.checkJWT(token);
   if (!auth) return next(err);

@@ -18,9 +18,9 @@ const datasetService = require('@/services/dataset');
 const { formatAnalysisType } = require('@/utils/sessionUtils');
 const authService = require('@/services/auth');
 const wfService = require('@/services/workflow');
-const legacyMigrationService = require('@/services/legacyMigration');
 const CONSTANTS = require('@/constants');
 const logger = require('@/services/logger');
+const legacyMigrationService = require('@/services/legacyMigration');
 
 const isPermittedTo = accessControl('datasets');
 const router = express.Router();
@@ -200,7 +200,25 @@ router.post(
   }),
 );
 
-// Get import logs for all users - operator/admin only
+async function enrichImportLogsWithWorkflows(importLogs) {
+  return Promise.all(
+    importLogs.map(async (log) => {
+      const { dataset } = log;
+      if (dataset.workflows && dataset.workflows.length > 0) {
+        try {
+          const workflow_ids = dataset.workflows.map((workflow) => workflow.id);
+          const wf_res = await wfService.getAll({ workflow_ids });
+          dataset.workflows = wf_res.data.results || [];
+        } catch (error) {
+          logger.warn(`Failed to fetch workflow details for dataset ${dataset.id}: ${error.message}`);
+          dataset.workflows = [];
+        }
+      }
+      return log;
+    }),
+  );
+}
+
 router.get(
   '/imports',
   validate([
@@ -209,113 +227,89 @@ router.get(
     query('offset').isInt({ min: 0 }).toInt().optional(),
   ]),
   isPermittedTo('read'),
-  asyncHandler(async (req, res, next) => {
+  asyncHandler(async (req, res) => {
     // #swagger.tags = ['datasets']
     // #swagger.summary = 'Get import history logs for all users'
 
-    try {
-      const {
-        dataset_name, offset, limit, sort_by = 'created_at', sort_order = 'desc',
-      } = req.query;
+    const {
+      dataset_name, offset, limit, sort_by = 'created_at', sort_order = 'desc',
+    } = req.query;
 
-      const orderBy = {
-        [sort_by]: sort_order,
+    const whereClause = {};
+    if (dataset_name) {
+      whereClause.dataset = {
+        name: {
+          contains: dataset_name,
+          mode: 'insensitive',
+        },
       };
+    }
 
-      const whereClause = {};
-      if (dataset_name) {
-        whereClause.dataset = {
-          name: {
-            contains: dataset_name,
-            mode: 'insensitive',
-          },
-        };
-      }
+    const orderBy = {
+      [sort_by]: sort_order,
+    };
 
-      const filter_query = {
-        skip: offset ?? Prisma.skip,
-        take: limit ?? Prisma.skip,
-        where: whereClause,
-        orderBy,
-      };
+    const filterQuery = {
+      skip: offset ?? Prisma.skip,
+      take: limit ?? Prisma.skip,
+      where: whereClause,
+      orderBy,
+    };
 
-      const [importLogs, count] = await prisma.$transaction([
-        prisma.dataset_import_log.findMany({
-          ...filter_query,
-          include: {
-            dataset: {
-              include: {
-                source_datasets: {
-                  include: {
-                    source_dataset: true,
-                  },
+    const [importLogs, count] = await prisma.$transaction([
+      prisma.dataset_import_log.findMany({
+        ...filterQuery,
+        include: {
+          dataset: {
+            include: {
+              source_datasets: {
+                include: {
+                  source_dataset: true,
                 },
-                workflows: {
-                  select: {
-                    id: true,
-                  },
+              },
+              workflows: {
+                select: {
+                  id: true,
                 },
-                genomic_details: {
-                  select: {
-                    genome_type: true,
-                    genome_value: true,
-                  },
-                },
-                analysis_type: true,
-                audit_logs: {
-                  include: {
-                    user: {
-                      select: {
-                        id: true,
-                        username: true,
-                        name: true,
-                        email: true,
-                      },
+              },
+              audit_logs: {
+                include: {
+                  user: {
+                    select: {
+                      id: true,
+                      username: true,
+                      name: true,
+                      email: true,
                     },
                   },
-                  where: {
-                    action: 'create',
-                  },
+                },
+                where: {
+                  action: 'create',
+                },
+              },
+              analysis_type: true,
+              genomic_details: {
+                select: {
+                  genome_type: true,
+                  genome_value: true,
                 },
               },
             },
           },
-        }),
-        prisma.dataset_import_log.count({ where: whereClause }),
-      ]);
+        },
+      }),
+      prisma.dataset_import_log.count({ where: whereClause }),
+    ]);
 
-      // Enrich workflow data from Rhythm
-      const enrichedImportLogs = await Promise.all(
-        importLogs.map(async (log) => {
-          const { dataset } = log;
-          if (dataset.workflows && dataset.workflows.length > 0) {
-            try {
-              const workflow_ids = dataset.workflows.map((x) => x.id);
-              const wf_res = await wfService.getAll({
-                workflow_ids,
-              });
-              dataset.workflows = wf_res.data.results || [];
-            } catch (error) {
-              logger.warn(`Failed to fetch workflow details for dataset ${dataset.id}: ${error.message}`);
-              dataset.workflows = [];
-            }
-          }
-          return log;
-        }),
-      );
+    const enrichedImportLogs = await enrichImportLogsWithWorkflows(importLogs);
 
-      res.json({
-        imports: enrichedImportLogs,
-        metadata: { count },
-      });
-    } catch (error) {
-      logger.error('Error fetching import logs:', error);
-      throw error;
-    }
+    res.json({
+      imports: enrichedImportLogs,
+      metadata: { count },
+    });
   }),
 );
 
-// Get import logs for specific user
 router.get(
   '/:username/imports',
   validate([
@@ -325,118 +319,95 @@ router.get(
     param('username').trim().notEmpty(),
   ]),
   isPermittedTo('read', { checkOwnership: true }),
-  asyncHandler(async (req, res, next) => {
+  asyncHandler(async (req, res) => {
     // #swagger.tags = ['datasets']
     // #swagger.summary = 'Get import history logs for specific user'
 
-    try {
-      const {
-        dataset_name, offset, limit, sort_by = 'created_at', sort_order = 'desc',
-      } = req.query;
+    const {
+      dataset_name, offset, limit, sort_by = 'created_at', sort_order = 'desc',
+    } = req.query;
 
-      const orderBy = {
-        [sort_by]: sort_order,
-      };
-
-      const whereClause = {
-        dataset: {
-          ...(dataset_name && {
-            name: {
-              contains: dataset_name,
-              mode: 'insensitive',
-            },
-          }),
-          audit_logs: {
-            some: {
-              action: 'create',
-              user: {
-                username: req.params.username,
-              },
+    const whereClause = {
+      dataset: {
+        ...(dataset_name && {
+          name: {
+            contains: dataset_name,
+            mode: 'insensitive',
+          },
+        }),
+        audit_logs: {
+          some: {
+            action: 'create',
+            user: {
+              username: req.params.username,
             },
           },
         },
-      };
+      },
+    };
 
-      const filter_query = {
-        skip: offset ?? Prisma.skip,
-        take: limit ?? Prisma.skip,
-        where: whereClause,
-        orderBy,
-      };
+    const orderBy = {
+      [sort_by]: sort_order,
+    };
 
-      const [importLogs, count] = await prisma.$transaction([
-        prisma.dataset_import_log.findMany({
-          ...filter_query,
-          include: {
-            dataset: {
-              include: {
-                source_datasets: {
-                  include: {
-                    source_dataset: true,
-                  },
-                },
-                workflows: {
-                  select: {
-                    id: true,
-                  },
-                },
-                genomic_details: {
-                  select: {
-                    genome_type: true,
-                    genome_value: true,
-                  },
-                },
-                analysis_type: true,
-                audit_logs: {
-                  include: {
-                    user: {
-                      select: {
-                        id: true,
-                        username: true,
-                        name: true,
-                        email: true,
-                      },
-                    },
-                  },
-                  where: {
-                    action: 'create',
-                  },
+    const filterQuery = {
+      skip: offset ?? Prisma.skip,
+      take: limit ?? Prisma.skip,
+      where: whereClause,
+      orderBy,
+    };
+
+    const [importLogs, count] = await prisma.$transaction([
+      prisma.dataset_import_log.findMany({
+        ...filterQuery,
+        include: {
+          dataset: {
+            include: {
+              source_datasets: {
+                include: {
+                  source_dataset: true,
                 },
               },
+              workflows: {
+                select: {
+                  id: true,
+                },
+              },
+              audit_logs: {
+                include: {
+                  user: {
+                    select: {
+                      id: true,
+                      username: true,
+                      name: true,
+                      email: true,
+                    },
+                  },
+                },
+                where: {
+                  action: 'create',
+                },
+              },
+              genomic_details: {
+                select: {
+                  genome_type: true,
+                  genome_value: true,
+                },
+              },
+              analysis_type: true,
             },
           },
-        }),
-        prisma.dataset_import_log.count({ where: whereClause }),
-      ]);
+        },
+      }),
+      prisma.dataset_import_log.count({ where: whereClause }),
+    ]);
 
-      // Enrich workflow data from Rhythm
-      const enrichedImportLogs = await Promise.all(
-        importLogs.map(async (log) => {
-          const { dataset } = log;
-          if (dataset.workflows && dataset.workflows.length > 0) {
-            try {
-              const workflow_ids = dataset.workflows.map((x) => x.id);
-              const wf_res = await wfService.getAll({
-                workflow_ids,
-              });
-              dataset.workflows = wf_res.data.results || [];
-            } catch (error) {
-              logger.warn(`Failed to fetch workflow details for dataset ${dataset.id}: ${error.message}`);
-              dataset.workflows = [];
-            }
-          }
-          return log;
-        }),
-      );
+    const enrichedImportLogs = await enrichImportLogsWithWorkflows(importLogs);
 
-      res.json({
-        imports: enrichedImportLogs,
-        metadata: { count },
-      });
-    } catch (error) {
-      logger.error(`Error fetching import logs for user ${req.params.username}:`, error);
-      throw error;
-    }
+    res.json({
+      imports: enrichedImportLogs,
+      metadata: { count },
+    });
   }),
 );
 

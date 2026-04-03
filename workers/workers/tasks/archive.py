@@ -7,14 +7,15 @@ from celery import Celery
 from celery.utils.log import get_task_logger
 from sca_rhythm import WorkflowTask
 
-import workers.sda as sda
 import workers.api as api
 import workers.cmd as cmd
 import workers.cmg_api as cmg_api
 import workers.config.celeryconfig as celeryconfig
+import workers.sda as sda
 import workers.utils as utils
 import workers.workflow_utils as wf_utils
 from workers.config import config
+from workers.dataset import get_archive_bundle_name
 from workers.legacy_migration import is_legacy_dataset
 
 app = Celery("tasks")
@@ -180,7 +181,7 @@ def archive(celery_task: WorkflowTask, dataset: dict, delete_local_file: bool = 
     )
 
     # Tar the dataset directory and compute checksum
-    bundle = Path(f'{config["paths"][dataset["type"]]["bundle"]["generate"]}/{dataset["name"]}.tar')
+    bundle = Path(config["paths"][dataset["type"]]["bundle"]["generate"]) / get_archive_bundle_name(dataset)
 
     # If dataset is legacy, it means the legacy CMG application is also archiving this
     #  dataset concurrently. Wait for CMG to complete archival

@@ -141,7 +141,9 @@ def populate_file_metadata(celery_task, dataset_id, **kwargs):
         raise exc.RetryableException(e)
 
 
-# Legacy Migration Tasks
+# ------------------------------------------------------------
+# Tasks related to staging a legacy dataset on-demand
+# ------------------------------------------------------------
 
 @app.task(base=WorkflowTask, bind=True, name='begin_migration',
           autoretry_for=(Exception,),
@@ -180,8 +182,9 @@ def end_migration(celery_task, dataset_id, **kwargs):
     from workers.tasks.end_migration import end_migration as task_body
     return task_body(celery_task, dataset_id, **kwargs)
 
-
-# Session Hydration Tasks
+# ------------------------------------------------------------
+# Tasks related to hydrating legacy Sessions
+# ------------------------------------------------------------
 
 @app.task(base=WorkflowTask, bind=True, name='hydrate_session_tracks',
           autoretry_for=(Exception,),
@@ -204,13 +207,17 @@ def finish_session_hydration(celery_task, session_id, **kwargs):
         finish_session_hydration as task_body
     return task_body(celery_task, session_id, **kwargs)
 
+# ------------------------------------------------------------
+# Xenium-specific tasks
+# ------------------------------------------------------------
 
 @app.task(base=WorkflowTask, bind=True, name='parse_analysis_data',
           autoretry_for=(Exception,),
           max_retries=2,
           default_retry_delay=60)
 def parse_analysis_data(celery_task, dataset_id, **kwargs):
-    from workers.tasks.parse_analysis_data import parse_analysis_data as task_body
+    from workers.tasks.parse_analysis_data import \
+        parse_analysis_data as task_body
     return task_body(celery_task, dataset_id, **kwargs)
 
 
@@ -219,7 +226,8 @@ def parse_analysis_data(celery_task, dataset_id, **kwargs):
           max_retries=2,
           default_retry_delay=60)
 def upload_static_content(celery_task, dataset_id, **kwargs):
-    from workers.tasks.upload_static_content import upload_static_content as task_body
+    from workers.tasks.upload_static_content import \
+        upload_static_content as task_body
     return task_body(celery_task, dataset_id, **kwargs)
 
 
@@ -228,21 +236,21 @@ def upload_static_content(celery_task, dataset_id, **kwargs):
           max_retries=1,
           default_retry_delay=300)
 def initiate_subdir_workflows(celery_task, dataset_id, **kwargs):
-    from workers.tasks.initiate_subdir_workflows import initiate_subdir_workflows as task_body
+    from workers.tasks.initiate_subdir_workflows import \
+        initiate_subdir_workflows as task_body
     return task_body(celery_task, dataset_id, **kwargs)
 
+# ------------------------------------------------------------
 
-# Standalone task (not WorkflowTask) for async upload verification
-@app.task(
-    bind=True,
-    name='verify_upload_integrity',
-    autoretry_for=(Exception,),
-    max_retries=3,
-    default_retry_delay=60,
-    time_limit=86400,  # 24 hours hard limit
-    soft_time_limit=43200,  # 12 hours soft limit - task continues if not caught
-)
-def verify_upload_integrity(self, dataset_id):
+# NOT a WorkflowTask — upload verification runs outside the workflow engine
+# so that it can be dispatched directly via .delay() without a workflow wrapper.
+@app.task(bind=True, name='verify_upload_integrity',
+          autoretry_for=(Exception,),
+          max_retries=3,
+          default_retry_delay=60,
+          time_limit=86400,
+          soft_time_limit=43200)
+def verify_upload_integrity(celery_task, dataset_id, **kwargs):
     from workers.tasks.verify_upload import \
         verify_upload_integrity as task_body
-    return task_body(self, dataset_id)
+    return task_body(celery_task, dataset_id)

@@ -15,6 +15,7 @@ const workflowService = require('./workflow');
 const projectService = require('./project');
 const featureService = require('./features');
 const logger = require('./logger');
+const { buildNotificationPayload } = require('./notifications/typeService');
 const conversionService = require('./conversion');
 const authService = require('./auth');
 
@@ -495,15 +496,27 @@ async function has_dataset_assoc({
 }
 
 /**
- * Gets the user who created the given dataset.
+ * Gets the user who created the given dataset by looking for a dataset_audit
+ * row with action='create'.
+ *
+ * Returns null in two situations that callers must handle gracefully:
+ *
+ *   1. No action='create' audit log exists.  The audit-log write was
+ *      introduced in this branch inside buildDatasetCreateQuery().  Datasets
+ *      that were created before this branch was deployed will not have such a
+ *      row.  Throwing here would make every ownership / access check on those
+ *      legacy datasets crash with a 500, so we return null instead and let
+ *      each call site decide the appropriate fallback behavior.
+ *
+ *   2. The audit log row exists but its user reference is null.  This can
+ *      happen when the user account that originally created the dataset was
+ *      subsequently deleted (the FK is SET NULL on delete).
  *
  * @param {Object} params - The parameters object.
  * @param {number} params.dataset_id - The ID of the dataset.
  *
- * @returns {Promise<Object>} A promise that resolves to the user object of the user who created the dataset.
- *
- * @throws {Error} If an audit log for the dataset's creation is not found.
- * @throws {Error} If the user who created the dataset cannot be determined.
+ * @returns {Promise<Object|null>} The user object ({ id, username }) of the
+ *   dataset creator, or null if the creator cannot be determined.
  */
 async function get_dataset_creator({ dataset_id }) {
   const dataset_creation_log = await prisma.dataset_audit.findFirst({
@@ -520,14 +533,12 @@ async function get_dataset_creator({ dataset_id }) {
       },
     },
     orderBy: {
-      timestamp: 'asc', // Get the first creation audit log
+      timestamp: 'asc',
     },
   });
-  if (!dataset_creation_log) {
-    throw new Error(`Expected to find an audit log for the creation of dataset ${dataset_id}, but found none.`);
-  }
-  if (!dataset_creation_log.user) {
-    throw new Error(`Could not find user who created dataset ${dataset_id}.`);
+
+  if (!dataset_creation_log || !dataset_creation_log.user) {
+    return null;
   }
 
   return dataset_creation_log.user;
@@ -577,11 +588,13 @@ async function has_workflow_access({ workflow, dataset_id, user_id }) {
 
   let user_has_workflow_access = false;
 
-  if ([CONSTANTS.WORKFLOWS.PROCESS_DATASET_UPLOAD,
-    CONSTANTS.WORKFLOWS.INTEGRATED]
-    .includes(workflow)) {
+  if (workflow === CONSTANTS.WORKFLOWS.INTEGRATED) {
     const dataset_creator = await get_dataset_creator({ dataset_id });
-    user_has_workflow_access = dataset_creator.id === user_id;
+    // dataset_creator is null when no action='create' audit log exists (legacy
+    // datasets pre-dating this branch) or when the creator account was deleted.
+    // Treat an indeterminate creator as "not the requester" — the user is
+    // denied unless an admin or operator (already returned true above).
+    user_has_workflow_access = !!dataset_creator && dataset_creator.id === user_id;
   } else {
     user_has_workflow_access = await has_dataset_assoc({
       dataset_id,
@@ -1011,7 +1024,11 @@ async function create({
     },
   });
   if (existingDataset) {
-    logger.info('Dataset already exists', { name: existingDataset.name, id: existingDataset.id });
+    logger.info('Dataset already exists; skipping create', {
+      existing_dataset_id: existingDataset.id,
+      requested_name: data.name,
+      requested_type: data.type,
+    });
     return;
   }
 
@@ -1030,6 +1047,49 @@ async function create({
       project_id,
       requester_id,
     });
+
+    if (featureService.isFeatureEnabled({ key: 'notifications' })) {
+      const operatorRole = await tx.role.findFirst({
+        where: { name: 'operator' },
+        select: { id: true },
+      });
+
+      if (operatorRole) {
+        const operatorUserIds = await tx.user_role.findMany({
+          where: {
+            role_id: operatorRole.id,
+          },
+          select: {
+            user_id: true,
+          },
+        });
+        const recipientRows = operatorUserIds.map((row) => ({
+          user_id: row.user_id,
+          delivery_type: 'ROLE_BROADCAST',
+          delivery_role_id: operatorRole.id,
+        }));
+        if (recipientRows.length > 0) {
+          const notificationPayload = buildNotificationPayload({
+            type: 'DATASET_CREATED',
+            context: {
+              dataset: created_dataset,
+            },
+          });
+
+          await tx.notification.create({
+            data: {
+              ...notificationPayload,
+              created_by_id: requester_id,
+              recipients: {
+                createMany: {
+                  data: recipientRows,
+                },
+              },
+            },
+          });
+        }
+      }
+    }
   } catch (e) {
     console.error('Error creating dataset:', e);
     throw e;
@@ -1342,10 +1402,8 @@ const buildDatasetCreateQuery = async (data) => {
 
   // gather non-null data to create a new dataset
   const create_query = _.flow([
-    _.pick([
-      'name', 'type', 'origin_path', 'du_size', 'size', 'bundle_size',
-      'metadata', 'description', 'create_method',
-    ]),
+    _.pick(['name', 'type', 'origin_path', 'du_size', 'size', 'bundle_size', 'metadata', 'description',
+      'create_method']),
     _.omitBy(_.isNil),
   ])(data);
 
@@ -1468,16 +1526,15 @@ const buildDatasetCreateQuery = async (data) => {
     ],
   };
 
-  const audit_log = {
-    action: 'create',
-    user_id: user_id ?? Prisma.skip,
-  };
-
   create_query.audit_logs = {
-    create: [audit_log],
+    create: [
+      {
+        action: 'create',
+        user_id: user_id ?? Prisma.skip,
+      },
+    ],
   };
 
-  // if this is an import, create import_log
   if (create_method === CONSTANTS.DATASET_CREATE_METHODS.IMPORT) {
     create_query.import_logs = {
       create: [{
@@ -1515,10 +1572,42 @@ const get_download_url = async ({ dataset, file = null } = {}) => {
   throw new Error('Dataset is not prepared for download');
 };
 
+/**
+ * Creates the Postgres `workflow` row that associates a workflow with a dataset.
+ *
+ * Unlike `create_workflow`, this function does NOT touch MongoDB / sca_rhythm.
+ * It is intended for use by callers that have already created and started the
+ * workflow externally (e.g. the upload-verification Celery worker) and only
+ * need to register the association in the relational DB.
+ *
+ * Accepts an optional `tx` parameter so it can participate in an existing
+ * `prisma.$transaction` call — if omitted it uses the global prisma client.
+ *
+ * @param {Object}  params
+ * @param {Object}  [params.tx]          Prisma transaction client (optional).
+ * @param {number}  params.datasetId     Dataset to associate.
+ * @param {string}  params.workflowId    sca_rhythm workflow _id.
+ * @param {number}  [params.initiatorId] User ID to record as initiator.
+ * @returns {Promise<Object>} The created workflow row.
+ */
+async function associateWorkflow({
+  tx, datasetId, workflowId, initiatorId,
+}) {
+  const client = tx || prisma;
+  return client.workflow.create({
+    data: {
+      id: workflowId,
+      dataset_id: datasetId,
+      ...(initiatorId && { initiator_id: initiatorId }),
+    },
+  });
+}
+
 module.exports = {
   soft_delete,
   get_dataset,
   create_workflow,
+  associateWorkflow,
   create_filetree,
   files_ls,
   search_files,

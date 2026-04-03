@@ -12,22 +12,21 @@ DOCUMENT "Genome Browser Sessions" AND "Genomic conversions" features in `docs/f
 ---
 what do the xenium/cmg-bioloop pollers poll?
 ---
-2026-03-31 23:58:51 warn: [BIGBANG] Unknown argument '--use-bases-mask' for program 1, treating as additional arg
----
-is bigbang/poller attempting to 'merge' data from the apps in any way?
----
 xenium concurrent archivals
 ---
 xenium legacy artifacts
+* expose them from UI
 ---
 ALL usages of cmg_id will need xenium_id incorporated
 ---
-inspect xenium's workflow steps
-* use separate wfs for xenium
----
-xenium custom wfs
+xenium custom wfs/steps
 ---
 add property for cmg-bioloop to be able to call xenium API for origin path
 ---
 document globus + slurm-conversions for karthiek
+---
+document UI custom behavior for legacy business objects. 
+---
+upload static content AND parse scripts: only in Xenium integrated wfs - watch script should run separte integrated wf for xenium
+* add observer for wf subdir_wf_initiator in cmg-bioloop watcher.
 ---

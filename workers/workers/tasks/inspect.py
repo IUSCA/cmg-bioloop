@@ -10,7 +10,8 @@ import workers.config.celeryconfig as celeryconfig
 import workers.utils as utils
 from workers import exceptions as exc
 from workers.config import config
-from workers.legacy_migration import get_retrieved_archive_extraction_path, is_legacy_dataset
+from workers.legacy_migration import (get_retrieved_archive_extraction_path,
+                                      is_legacy_dataset)
 
 app = Celery("tasks")
 app.config_from_object(celeryconfig)
@@ -74,6 +75,9 @@ def inspect_dataset(celery_task, dataset_id, **kwargs):
     if dataset is None:
         raise exc.RetryableException(f'Dataset {dataset_id} not found or API returned null')
 
+    if dataset.get('deleted'):
+        raise exc.InspectionFailed(f'Dataset {dataset_id} is already deleted; nothing to inspect.')
+
     dataset_name = dataset.get('name', dataset_id)
     logger.info(
         f'{dataset_name} - dataset fetched: type={dataset.get("type")}, '
@@ -81,6 +85,9 @@ def inspect_dataset(celery_task, dataset_id, **kwargs):
     )
     
     source = Path(dataset['origin_path']).resolve()
+    if not source.exists():
+        raise exc.InspectionFailed(f'origin_path does not exist: {source}')
+
     logger.info(f'{dataset_name} - inspecting dataset from origin path: {source}')
 
     du_size = cmd.total_size(source)

@@ -39,11 +39,17 @@
     </div>
 
     <!-- table -->
-    <va-data-table :items="pastUploads" :columns="columns" :loading="loading">
+    <va-data-table
+      :items="pastUploads"
+      :columns="columns"
+      :loading="loading"
+      data-testid="uploads-history-table"
+    >
       <template #cell(link)="{ rowData }">
         <router-link
           :to="`/datasets/uploads/${rowData.uploaded_dataset.id}`"
           class="va-link"
+          data-testid="upload-details-link"
         >
           <Icon icon="mdi:open-in-new" />
         </router-link>
@@ -140,7 +146,30 @@
           "
           class="flex justify-center"
         >
-          <va-popover message="Upload verification failed">
+          <va-popover
+            :message="
+              rowData.metadata?.failure_reason
+                ? `Verification failed: ${rowData.metadata.failure_reason}`
+                : 'Upload verification failed'
+            "
+          >
+            <va-icon name="error" color="danger" />
+          </va-popover>
+        </div>
+        <!-- Permanently failed -->
+        <div
+          v-else-if="
+            rowData.status === constants.UPLOAD_STATUSES.PERMANENTLY_FAILED
+          "
+          class="flex justify-center"
+        >
+          <va-popover
+            :message="
+              rowData.metadata?.failure_reason
+                ? `Permanently failed: ${rowData.metadata.failure_reason}`
+                : 'Upload permanently failed — all retries exhausted'
+            "
+          >
             <va-icon name="error" color="danger" />
           </va-popover>
         </div>
@@ -151,7 +180,13 @@
           "
           class="flex justify-center"
         >
-          <va-popover message="Processing failed">
+          <va-popover
+            :message="
+              rowData.metadata?.failure_reason
+                ? `Processing failed: ${rowData.metadata.failure_reason}`
+                : 'Processing failed'
+            "
+          >
             <va-icon name="error" color="danger" />
           </va-popover>
         </div>
@@ -183,7 +218,13 @@
           v-else-if="rowData.status === constants.UPLOAD_STATUSES.UPLOAD_FAILED"
           class="flex justify-center"
         >
-          <va-popover message="Upload failed">
+          <va-popover
+            :message="
+              rowData.metadata?.failure_reason
+                ? `Upload failed: ${rowData.metadata.failure_reason}`
+                : 'Upload failed'
+            "
+          >
             <va-icon name="error" color="danger" />
           </va-popover>
         </div>
@@ -209,11 +250,9 @@
       </template>
 
       <template #cell(uploaded_dataset_type)="{ value }">
-        <va-chip size="small" outline v-if="value">
-          {{ value }}
-        </va-chip>
+        <DatasetType v-if="value" :type="value" :show-icon="true" />
       </template>
-
+        
       <template #cell(file_type)="{ value }">
         <va-chip size="small" outline v-if="value">
           {{ value.toUpperCase() }}
@@ -268,19 +307,19 @@
 </template>
 
 <script setup>
+import DatasetType from "@/components/dataset/DatasetType.vue";
 import useSearchKeyShortcut from "@/composables/useSearchKeyShortcut";
+import config from "@/config";
+import constants from "@/constants";
+import datasetService from "@/services/dataset";
 import * as datetime from "@/services/datetime";
 import toast from "@/services/toast";
-import datasetService from "@/services/dataset";
-import wfService from "@/services/workflow";
 import { useAuthStore } from "@/stores/auth";
 import { useNavStore } from "@/stores/nav";
-import config from "@/config";
-import { HalfCircleSpinner } from "epic-spinners";
-import { useColors } from "vuestic-ui";
-import _ from "lodash";
-import constants from "@/constants";
 import { Icon } from "@iconify/vue";
+import { HalfCircleSpinner } from "epic-spinners";
+import _ from "lodash";
+import { useColors } from "vuestic-ui";
 
 const { colors } = useColors();
 const nav = useNavStore();
@@ -437,10 +476,10 @@ const getUploadLogs = async () => {
               ? uploaded_dataset.source_datasets[0].source_dataset
               : null,
           uploaded_dataset_type: uploaded_dataset.type,
+          integrated_status: status,
           file_type: uploaded_dataset.analysis_type?.name,
           genome_type: genomicDetails?.genome_type,
           genome_value: genomicDetails?.genome_value,
-          integrated_status: status,
         };
       });
       total_results.value = res.data.metadata.count;

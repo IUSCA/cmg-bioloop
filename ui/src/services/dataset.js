@@ -1,14 +1,14 @@
-import config from "@/config";
-import toast from "@/services/toast";
-import { useAuthStore } from "@/stores/auth";
-import qs from "qs";
-import api from "./api";
+import config from '@/config';
+import toast from '@/services/toast';
+import { useAuthStore } from '@/stores/auth';
+import qs from 'qs';
+import api from './api';
 
 const auth = useAuthStore();
 
 function cleanParams(params) {
   return Object.fromEntries(
-    Object.entries(params).filter(([_, v]) => v !== null && v !== undefined),
+    Object.entries(params).filter(([_, v]) => v !== null && v !== undefined)
   );
 }
 
@@ -32,9 +32,7 @@ class DatasetService {
    * @returns          Object containing matching datasets, and count of matching datasets
    */
   getAll(params) {
-    const url = !auth.canOperate
-      ? `/datasets/${auth.user.username}/all`
-      : "/datasets";
+    const url = !auth.canOperate ? `/datasets/${auth.user.username}/all` : '/datasets';
     // What qs.stringify does?
     // Before: /datasets?id[]=1&id[]=2&id[]=3
     // After: /datasets?id=1&id=2&id=3
@@ -42,8 +40,7 @@ class DatasetService {
     // so we need to clean the parameters (removes keys which have null/undefined value).
     return api.get(url, {
       params: cleanParams(params),
-      paramsSerializer: (params) =>
-        qs.stringify(params, { arrayFormat: "repeat" }),
+      paramsSerializer: (params) => qs.stringify(params, { arrayFormat: 'repeat' }),
     });
   }
 
@@ -80,18 +77,18 @@ class DatasetService {
     return api
       .post(`/datasets/${id}/workflow/stage`)
       .then(() => {
-        toast.success("A workflow has started to stage the dataset");
+        toast.success('A workflow has started to stage the dataset');
       })
       .catch((err) => {
-        console.error("unable to stage the dataset", err);
-        toast.error("Unable to stage the dataset");
+        console.error('unable to stage the dataset', err);
+        toast.error('Unable to stage the dataset');
         return Promise.reject(err);
       });
   }
 
   convert_dataset(id) {
     return api.post(`/datasets/${id}/workflow/conversion`).then(() => {
-      toast.success("A workflow has started to convert the dataset");
+      toast.success('A workflow has started to convert the dataset');
     });
   }
 
@@ -108,7 +105,7 @@ class DatasetService {
   }
 
   getStats({ type }) {
-    return api.get("/datasets/stats", {
+    return api.get('/datasets/stats', {
       params: {
         type,
       },
@@ -164,7 +161,7 @@ class DatasetService {
   }
 
   create_dataset(data) {
-    return api.post("/datasets", data);
+    return api.post('/datasets', data);
   }
 
   initiate_workflow_on_dataset({ dataset_id, workflow }) {
@@ -207,9 +204,7 @@ class DatasetService {
     offset = null,
     username = null,
   } = {}) {
-    const path = forSelf
-      ? `/datasets/uploads/${username}`
-      : `/datasets/uploads`;
+    const path = forSelf ? `/datasets/uploads/${username}` : `/datasets/uploads`;
     return api.get(path, {
       params: {
         status,
@@ -227,9 +222,7 @@ class DatasetService {
     offset = null,
     username = null,
   } = {}) {
-    const path = forSelf
-      ? `/datasets/${username}/imports`
-      : `/datasets/imports`;
+    const path = forSelf ? `/datasets/${username}/imports` : '/datasets/imports';
     return api.get(path, {
       params: {
         dataset_name,

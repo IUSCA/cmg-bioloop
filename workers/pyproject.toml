@@ -20,6 +20,7 @@ pymongo = "4.11.1"
 fabric = "^3.2.2"        # SSH connections for SLURM executor
 beautifulsoup4 = "^4.12.2"  # parse_analysis_data task: parse analysis_summary.html
 python-slugify = "^8.0.1"   # utility used in xenium worker code
+blake3 = "^1.0.8"
 
 [tool.poetry.group.dev.dependencies]
 jupyterlab = "^4.3.5"
@@ -27,7 +28,6 @@ diagrams = "^0.23.3"
 pytest = "^8.0.0"
 pytest-asyncio = "^0.23.0"
 pytest-timeout = "^2.2.0"
-blake3 = "^0.4.1"
 
 [build-system]
 requires = ["poetry-core"]

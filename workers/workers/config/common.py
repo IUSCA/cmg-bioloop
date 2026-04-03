@@ -4,7 +4,7 @@ import urllib.parse
 
 from dotenv import load_dotenv
 
-load_dotenv()  # take environment variables from .env.
+load_dotenv(override=True)  # .env takes precedence over .env.default values pre-loaded by Docker Compose env_file
 YEAR = datetime.datetime.now().year
 APP_API_TOKEN = os.environ['APP_API_TOKEN']
 API_BASE_URL = os.environ['API_BASE_URL']
@@ -68,6 +68,7 @@ config = {
     'paths': {
         'scratch': '/path/to/scratch',
         'RAW_DATA': {
+            'upload': '/path/to/uploads/raw_data',
             'archive': f'development/{YEAR}/raw_data',
             # archive_legacy: the legacy CMG application's archive path for Raw Data (Sequencing Runs).
             'archive_legacy': 'archive_raw',
@@ -82,6 +83,7 @@ config = {
             'qc': '/path/to/qc'
         },
         'DATA_PRODUCT': {
+            'upload': '/path/to/uploads/data_products',
             'archive': f'development/{YEAR}/data_products',
             # archive_legacy: the legacy CMG application's archive path for Data Products.
             'archive_legacy': 'archive_products',
@@ -199,11 +201,6 @@ config = {
                     'queue': FETCH_QUEUE
                 },
                 {
-                    'name': 'parse analysis data',
-                    'task': 'parse_analysis_data',
-                    'queue': XENIUM_FETCH_QUEUE
-                },
-                {
                     'name': 'run qc',
                     'task': 'generate_qc',
                     'queue': FETCH_QUEUE
@@ -228,11 +225,6 @@ config = {
                     'task': 'setup_dataset_download',
                     'queue': FETCH_QUEUE
                 },
-                {
-                    'name': 'upload static content',
-                    'task': 'upload_static_content',
-                    'queue': XENIUM_FETCH_QUEUE
-                },
             ]
         },
         'intake_integrated': {
@@ -247,11 +239,6 @@ config = {
                     'name': 'inspect',
                     'task': 'inspect_dataset',
                     'queue': ARCHIVE_QUEUE
-                },
-                {
-                    'name': 'parse analysis data',
-                    'task': 'parse_analysis_data',
-                    'queue': XENIUM_ARCHIVE_QUEUE
                 },
                 {
                     'name': 'archive',
@@ -272,11 +259,6 @@ config = {
                     'name': 'setup_download',
                     'task': 'setup_dataset_download',
                     'queue': FETCH_QUEUE
-                },
-                {
-                    'name': 'upload static content',
-                    'task': 'upload_static_content',
-                    'queue': XENIUM_FETCH_QUEUE
                 },
             ]
         },
@@ -309,11 +291,6 @@ config = {
                     'queue': XENIUM_ARCHIVE_QUEUE
                 },
                 {
-                    'name': 'parse analysis data',
-                    'task': 'parse_analysis_data',
-                    'queue': XENIUM_ARCHIVE_QUEUE
-                },
-                {
                     'name': 'stage',
                     'task': 'stage_dataset',
                     'queue': XENIUM_FETCH_QUEUE
@@ -326,11 +303,6 @@ config = {
                 {
                     'name': 'setup_download',
                     'task': 'setup_dataset_download',
-                    'queue': XENIUM_FETCH_QUEUE
-                },
-                {
-                    'name': 'upload static content',
-                    'task': 'upload_static_content',
                     'queue': XENIUM_FETCH_QUEUE
                 },
                 {
@@ -486,5 +458,6 @@ config = {
     },
     'enabled_features': {
         'platform_based_execution': False,
+        'notifications': False,
     }
 }

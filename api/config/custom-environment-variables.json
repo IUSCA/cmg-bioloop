@@ -51,7 +51,11 @@
     "base_url": "DOWNLOAD_SERVER_BASE_URL"
   },
   "upload": {
-    "path": "UPLOAD_HOST_DIR"
+    "host_path": "UPLOAD_HOST_DIR",
+    "max_file_size_bytes": {
+      "__name": "UPLOAD_MAX_FILE_SIZE_BYTES",
+      "__format": "number"
+    }
   },
   "conversion": {
     "output_dir": "CONVERSION_OUTPUT_DIR"
@@ -67,16 +71,6 @@
       "user": {
         "username": "E2E_USER"
       }
-    }
-  },
-  "filesystem": {
-    "base_dir": {
-      "slateScratch": "FILESYSTEM_BASE_DIR_SCRATCH",
-      "slateProject": "FILESYSTEM_BASE_DIR_PROJECT"
-    },
-    "mount_dir": {
-      "slateScratch": "FILESYSTEM_MOUNT_DIR_SCRATCH",
-      "slateProject": "FILESYSTEM_MOUNT_DIR_PROJECT"
     }
   }
 }

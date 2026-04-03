@@ -4,8 +4,10 @@ const { authenticate } = require('@/middleware/auth');
 /**
  * Handle failure simulation for testing TUS upload resume logic.
  *
- * TEST ONLY: Marks upload for mid-upload failure at FileStore level.
- * Configurable to fail N times before allowing success.
+ * Only active in non-production environments (NODE_ENV !== 'production').
+ * In production this function is a no-op regardless of any headers sent by
+ * the client, so the simulation surface cannot be triggered accidentally or
+ * maliciously on live data.
  *
  * Usage: Add header 'X-Simulate-Failure: mid-upload' to trigger failure after writing ~1MB
  * Optional: Add header 'X-Simulate-Failure-Count: N' to fail N times (default: 1)
@@ -14,20 +16,19 @@ const { authenticate } = require('@/middleware/auth');
  * @param {string} uploadId - TUS upload ID
  */
 function handleFailureSimulation(req, uploadId) {
-  // CRITICAL: Only count PATCH requests with Content-Length (actual data uploads, not HEAD/OPTIONS)
+  if (process.env.NODE_ENV === 'production') {
+    return;
+  }
+
   const hasUploadData = req.headers['content-length'] && parseInt(req.headers['content-length'], 10) > 0;
   const shouldSimulateFailure = req.headers['x-simulate-failure'] === 'mid-upload'
                                   && req.method === 'PATCH'
                                   && hasUploadData;
 
-  // Skip if simulation not requested OR if this is a new upload creation
-  // uploadId === 'files' means POST /uploads/files (creating new upload, no data transfer yet)
-  // We only want to fail during PATCH /uploads/files/{id} (actual data upload with specific ID)
-  if (!shouldSimulateFailure || uploadId === 'files') {
+  if (!shouldSimulateFailure) {
     return;
   }
 
-  // Initialize tracking maps
   if (!global.tusFailureSimulation) {
     global.tusFailureSimulation = new Map();
   }
@@ -35,39 +36,27 @@ function handleFailureSimulation(req, uploadId) {
     global.tusFailureSimulationCount = new Map();
   }
 
-  // Configuration: How many times should this upload fail?
-  // 1 = fail once, then succeed (tests resume)
-  // 6 = fail 6 times, exceeds 30s timeout (tests failure UI)
-  // 999 = fail forever (tests complete failure scenario)
   const MAX_FAILURES = parseInt(req.headers['x-simulate-failure-count'] || '1', 10);
-
   const currentFailCount = global.tusFailureSimulationCount.get(uploadId) || 0;
 
   if (currentFailCount < MAX_FAILURES) {
-    logger.warn(
-      `[TUS] Marking upload ${uploadId} for mid-upload failure simulation`
-      + ` (attempt ${currentFailCount + 1}/${MAX_FAILURES})`,
-      {
-        uploadId,
-        method: req.method,
-        contentLength: req.headers['content-length'],
-        failuresRemaining: MAX_FAILURES - currentFailCount,
-      },
-    );
+    logger.warn(`[TUS] Marking upload ${uploadId} for failure simulation `
+      + `(attempt ${currentFailCount + 1}/${MAX_FAILURES})`, {
+      uploadId,
+      method: req.method,
+      contentLength: req.headers['content-length'],
+      failuresRemaining: MAX_FAILURES - currentFailCount,
+    });
 
     global.tusFailureSimulation.set(uploadId, true);
     global.tusFailureSimulationCount.set(uploadId, currentFailCount + 1);
   } else {
-    logger.info(
-      `[TUS] Upload ${uploadId} has exhausted failure quota (${currentFailCount} failures), allowing retry to proceed`,
-      {
-        uploadId,
-        maxFailures: MAX_FAILURES,
-      },
-    );
+    logger.info(`[TUS] Upload ${uploadId} has exhausted failure quota `
+      + `(${currentFailCount} failures), allowing retry to proceed`, {
+      uploadId,
+      maxFailures: MAX_FAILURES,
+    });
   }
-
-  // Continue to TUS server - the FileStore will trigger the failure after writing data
 }
 
 /**
@@ -81,11 +70,11 @@ function handleFailureSimulation(req, uploadId) {
  */
 function createTusMiddleware(tusServer) {
   return (req, res, next) => {
-    // Check for both paths because TUS requests can arrive with or without /api prefix:
-    // 1. Browser client sends: POST /uploads/files (no prefix)
-    // 2. TUS Location headers may generate: PATCH /api/uploads/files/{id} (with prefix)
-    // The middleware normalizes both to /api/uploads/files before passing to TUS server.
-    // Without checking both, some requests would bypass authentication or fail routing.
+    // Two forms of the TUS path can arrive here:
+    // - '/uploads/files'      — request was forwarded by a reverse proxy (e.g. Nginx) that
+    //                           stripped the '/api' prefix before passing it to this Node process.
+    // - '/api/uploads/files'  — request reached Node directly (e.g. in local dev), with the
+    //                           full prefix intact.
     const isTusPath = req.path.startsWith('/uploads/files') || req.path.startsWith('/api/uploads/files');
 
     if (!isTusPath) {
@@ -96,66 +85,30 @@ function createTusMiddleware(tusServer) {
       return next();
     }
 
-    // Extract upload ID from path
-    const uploadId = req.path.split('/').pop();
+    const isNewUpload = req.method === 'POST';
+    const uploadId = isNewUpload ? null : req.path.split('/').pop();
 
-    logger.info(`[TUS] ${req.method} ${req.path}`, {
-      uploadId: uploadId !== 'files' ? uploadId : 'NEW',
-      contentLength: req.headers['content-length'],
-      contentType: req.headers['content-type'],
-      uploadOffset: req.headers['upload-offset'],
-      uploadLength: req.headers['upload-length'],
-      tusResumable: req.headers['tus-resumable'],
-    });
-
-    // Authenticate first
     authenticate(req, res, (err) => {
       if (err) {
         logger.error(`[TUS] Authentication failed for ${req.method} ${req.path}:`, {
           error: err.message,
-          uploadId: uploadId !== 'files' ? uploadId : 'NEW',
+          uploadId,
         });
         return next(err);
       }
 
-      logger.info(`[TUS] Authentication successful for user: ${req.user?.username || 'unknown'}`);
-
-      // Handle failure simulation for testing
-      //  (this will only run if the conditions required for simulating
-      //  failure in the middle of an upload are met)
+      // No-op in production. In non-production environments, an authenticated
+      // client can set X-Simulate-Failure: mid-upload to trigger server-side
+      // failure simulation for testing TUS resume logic.
       handleFailureSimulation(req, uploadId);
 
-      // Normalize URL to have /api prefix for TUS server
-      // TUS server is configured with path: '/api/uploads/files'
+      // True when the reverse proxy stripped '/api' before forwarding (see isTusPath comment above).
+      // The TUS server is registered at '/api/uploads/files', so the prefix must be restored
+      // before handing the request off, otherwise TUS won't match the path and will reject it.
       if (!req.url.startsWith('/api/uploads/files')) {
         req.url = `/api${req.url}`;
       }
 
-      // Intercept response to log completion/errors
-      const originalEnd = res.end;
-      const originalWriteHead = res.writeHead;
-      let statusCode = 200;
-
-      res.writeHead = function writeHead(...args) {
-        [statusCode] = args;
-        return originalWriteHead.apply(this, args);
-      };
-
-      res.end = function end(...args) {
-        const isSuccess = statusCode >= 200 && statusCode < 300;
-        const logLevel = isSuccess ? 'info' : 'error';
-
-        logger[logLevel](`[TUS] ${req.method} ${req.path} completed`, {
-          statusCode,
-          uploadId: uploadId !== 'files' ? uploadId : 'NEW',
-          user: req.user?.username,
-          success: isSuccess,
-        });
-
-        return originalEnd.apply(this, args);
-      };
-
-      // Hand off to TUS server - don't catch errors, let Express handle them
       return tusServer.handle(req, res);
     });
   };

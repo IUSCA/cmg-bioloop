@@ -100,12 +100,17 @@ const INCLUDE_DATASET_UPLOAD_LOG_RELATIONS = {
       },
       analysis_type: true,
       audit_logs: {
-        include: {
-          user: true,
-        },
         where: {
           action: 'create',
         },
+        select: {
+          user: true,
+          timestamp: true,
+        },
+        orderBy: {
+          timestamp: 'asc',
+        },
+        take: 1,
       },
     },
   },
@@ -123,13 +128,13 @@ const UPLOAD_STATUSES = {
   UPLOADING: 'UPLOADING',
   UPLOAD_FAILED: 'UPLOAD_FAILED',
   UPLOADED: 'UPLOADED',
-  VERIFYING: 'VERIFYING', // Integrity verification in progress (async Celery task)
-  VERIFIED: 'VERIFIED', // Integrity verified, ready to trigger workflow
-  VERIFICATION_FAILED: 'VERIFICATION_FAILED', // Integrity check failed before workflow
+  VERIFYING: 'VERIFYING',
+  VERIFIED: 'VERIFIED',
+  VERIFICATION_FAILED: 'VERIFICATION_FAILED',
   PROCESSING: 'PROCESSING',
   PROCESSING_FAILED: 'PROCESSING_FAILED',
   COMPLETE: 'COMPLETE',
-  PERMANENTLY_FAILED: 'PERMANENTLY_FAILED', // Max retries exceeded
+  PERMANENTLY_FAILED: 'PERMANENTLY_FAILED',
 };
 
 const DATA_REQUEST_STATUS = {
@@ -250,6 +255,10 @@ const BROWSER_COMPATIBLE_FORMATS = [
   'BED_GZ',
 ];
 
+const NOTIFICATION_TYPES = {
+  DATASET_CREATED: 'DATASET_CREATED',
+};
+
 module.exports = {
   INCLUDE_FILES,
   INCLUDE_STATES,
@@ -271,4 +280,5 @@ module.exports = {
   PRIMARY_TRACK_FORMATS,
   BROWSER_COMPATIBLE_FORMATS,
   DATA_REQUEST_STATUS,
+  NOTIFICATION_TYPES,
 };

@@ -137,7 +137,10 @@ def get_all_datasets(
         deleted=False,
         archived=None,
         bundle=False,
-        match_name_exact=False):
+        match_name_exact=False,
+        include_audit_logs=False,
+        limit=None,
+        offset=None):
     with APIServerSession() as s:
         payload = {
             'type': dataset_type,
@@ -148,28 +151,99 @@ def get_all_datasets(
             'bundle': bundle,
             'match_name_exact': match_name_exact,
         }
+        if limit is not None:
+            payload['limit'] = limit
+        if offset is not None:
+            payload['offset'] = offset
         r = s.get('datasets', params=payload)
         r.raise_for_status()
         datasets = r.json()['datasets']
         return [dataset_getter(dataset) for dataset in datasets]
 
 
-def get_dataset(dataset_id: str,
-                files: bool = False,
-                bundle: bool = False,
-                workflows: bool = False,
-                include_conversions: bool = False):
+def get_dataset(
+    dataset_id: str,
+    files: bool = False,
+    bundle: bool = False,
+    workflows: bool = False,
+    include_audit_logs: bool = False,
+    include_conversions: bool = False,
+):
     with APIServerSession() as s:
         payload = {
             'files': files,
             'bundle': bundle,
             'workflows': workflows,
+            'include_audit_logs': include_audit_logs,
             'include_conversions': include_conversions,
         }
         r = s.get(f'datasets/{dataset_id}', params=payload)
-
         r.raise_for_status()
-        return dataset_getter(r.json())
+        dataset = dataset_getter(r.json())
+
+        if include_audit_logs:
+            # Flatten create_method from the creation audit entry onto the dataset
+            # so callers can access dataset['create_method'] directly.
+            create_entry = next(
+                (log for log in (dataset.get('audit_logs') or []) if log.get('action') == 'create'),
+                None,
+            )
+            if create_entry:
+                dataset['create_method'] = create_entry.get('create_method')
+
+        return dataset
+
+
+def get_workflows_for_dataset(
+    dataset_id: int,
+    last_task_runs: bool = False,
+    prev_task_runs: bool = False,
+) -> dict[str, Any]:
+    """
+    Fetch all workflows linked to a dataset via GET /workflows?dataset_id=<id>.
+
+    Returns { metadata: { total: N, ... }, results: [...] }.
+
+    When total == 0 the API returns immediately from Postgres without calling
+    the Rhythm API.  When total > 0 each result is hydrated with live workflow
+    details from Rhythm; if Rhythm is unreachable the API returns a 5xx and
+    raise_for_status() will raise, failing loudly rather than returning stale data.
+    """
+    with APIServerSession() as s:
+        r = s.get(
+            'workflows',
+            params={
+                'dataset_id': dataset_id,
+                'last_task_runs': last_task_runs,
+                'prev_task_runs': prev_task_runs,
+            },
+        )
+        r.raise_for_status()
+        return r.json()
+
+
+def get_workflow(
+    workflow_id: str,
+    last_task_runs: bool = True,
+    prev_task_runs: bool = True,
+) -> dict[str, Any]:
+    """
+    Fetch a single workflow by ID via GET /workflows/<workflow_id>.
+
+    Returns the workflow document hydrated with live task-run details from
+    Rhythm, including per-step status and run history.  Raises HTTPError if
+    Rhythm is unreachable.
+    """
+    with APIServerSession() as s:
+        r = s.get(
+            f'workflows/{workflow_id}',
+            params={
+                'last_task_runs': last_task_runs,
+                'prev_task_runs': prev_task_runs,
+            },
+        )
+        r.raise_for_status()
+        return r.json()
 
 
 def get_workflows_for_dataset(
@@ -352,6 +426,91 @@ def update_dataset_upload(uploaded_dataset_id: int, log_data: dict):
     with APIServerSession() as s:
         r = s.patch(f'datasets/uploads/{uploaded_dataset_id}', json=log_data)
         r.raise_for_status()
+
+
+def get_stalled_uploads():
+    """Get uploads that are UPLOADED but workflow hasn't started (>30s)"""
+    with APIServerSession() as s:
+        r = s.get('datasets/uploads/stalled')
+        r.raise_for_status()
+        return r.json()
+
+
+def get_expired_uploads(status='UPLOADING', age_days=0.25):
+    """Get uploads that have been stuck in *status* for longer than *age_days*."""
+    with APIServerSession() as s:
+        r = s.get('datasets/uploads/expired', params={
+            'status': status,
+            'age_days': age_days,
+        })
+        r.raise_for_status()
+        return r.json()
+
+
+def get_failed_uploads(max_retry_count=2, max_age_hours=72):
+    """Get PROCESSING_FAILED uploads eligible for retry"""
+    with APIServerSession() as s:
+        r = s.get('datasets/uploads/failed', params={
+            'max_retry_count': max_retry_count,
+            'max_age_hours': max_age_hours,
+        })
+        r.raise_for_status()
+        return r.json()
+
+
+def update_upload_retry(upload_id: int, retry_count: int, status: str = None, failure_reason: str = None):
+    """Update upload retry count and status"""
+    with APIServerSession() as s:
+        data = {'retry_count': retry_count}
+        if status:
+            data['status'] = status
+        if failure_reason:
+            data['metadata'] = {'failure_reason': failure_reason}
+        r = s.patch(f'datasets/uploads/{upload_id}/upload-log', json=data)
+        r.raise_for_status()
+        return r.json()
+
+
+def get_dataset_upload_log(dataset_id: int) -> dict:
+    """Get upload log for a dataset"""
+    with APIServerSession() as s:
+        r = s.get(f'datasets/uploads/{dataset_id}/upload-log')
+        r.raise_for_status()
+        return r.json()
+
+
+def get_uploads_by_statuses(statuses: list[str]) -> list[dict]:
+    """Return upload rows for any of the given Prisma upload_status values.
+
+    Each item includes dataset_id, dataset_name, origin_path, status.
+    """
+    if not statuses:
+        return []
+    with APIServerSession() as s:
+        params = [('statuses', st) for st in statuses]
+        r = s.get('datasets/uploads/by-status', params=params)
+        r.raise_for_status()
+        return r.json().get('uploads', [])
+
+
+def update_dataset_upload_log(
+    dataset_id: int,
+    log_data: dict,
+    workflow_id: str | None = None,
+) -> dict:
+    """Update upload log metadata, status, and/or retry count.
+
+    If *workflow_id* is supplied it is sent to the API which will associate the
+    workflow with the dataset inside the same DB transaction as the upload-log
+    update, providing atomicity for the VERIFIED → COMPLETE transition.
+    """
+    body = dict(log_data)
+    if workflow_id is not None:
+        body['workflow_id'] = workflow_id
+    with APIServerSession() as s:
+        r = s.patch(f'datasets/uploads/{dataset_id}/upload-log', json=body)
+        r.raise_for_status()
+        return r.json()
 
 
 def create_notification(payload: dict):

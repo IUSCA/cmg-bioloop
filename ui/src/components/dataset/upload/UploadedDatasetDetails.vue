@@ -153,10 +153,10 @@
 </template>
 
 <script setup>
-import { useAuthStore } from "@/stores/auth";
 import OutlinedAlert from "@/components/utils/OutlinedAlert.vue";
-import { snakeCaseToTitleCase } from "@/services/utils";
 import { formatGenome } from "@/services/sessionUtils";
+import { snakeCaseToTitleCase } from "@/services/utils";
+import { useAuthStore } from "@/stores/auth";
 
 const props = defineProps({
   // `dataset`: Dataset to be uploaded

@@ -8,6 +8,7 @@ config = {
     'paths': {
         'scratch': '/opt/sca/data/scratch',
         'RAW_DATA': {
+            'upload': '/opt/sca/data/uploads/raw_data',
             'archive': f'/opt/sca/data/archive/{YEAR}/raw_data',
             'stage': '/opt/sca/data/staged/raw_data',
             'bundle': {
@@ -17,7 +18,7 @@ config = {
             'qc': '/opt/sca/data/qc/raw_data'
         },
         'DATA_PRODUCT': {
-            'upload': '/opt/sca/data/uploads',
+            'upload': '/opt/sca/data/uploads/data_products',
             'archive': f'/opt/sca/data/archive/{YEAR}/data_products',
             'stage': '/opt/sca/data/staged/data_products',
             'bundle': {
@@ -34,11 +35,15 @@ config = {
     'registration': {
         'RAW_DATA': {
             'source_dir': '/opt/sca/data/origin/raw_data',
+            # Directories that should never be auto-registered as datasets.
+            'rejects': ['.snapshots', '_testObservedPath_*'],
         },
         'DATA_PRODUCT': {
             'source_dir': '/opt/sca/data/origin/data_products',
+            'rejects': ['.snapshots', '_testObservedPath_*'],
         },
-        'recency_threshold_seconds': 5,  # 5 seconds (fast enough for docker dev without being instant)
+        'recency_threshold_seconds': 300,
+        'wait_between_stability_checks_seconds': 5,  # poll frequently in docker dev
         'minimum_dataset_size': TEN_MEGABYTES,
     },
     'register_ondemand': {

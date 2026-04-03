@@ -9,7 +9,6 @@
 
   <div v-else>
     <div class="flex mb-3 gap-3">
-      <!-- search bar -->
       <div class="flex-1">
         <va-input
           v-model="filterInput"
@@ -25,7 +24,6 @@
         </va-input>
       </div>
 
-      <!-- create button -->
       <div class="flex-none">
         <va-button
           icon="add"
@@ -64,7 +62,6 @@
             />
           </va-popover>
         </div>
-        <!-- Integrated workflow succeeded -->
         <div
           v-else-if="rowData.integrated_status === 'SUCCESS'"
           class="flex justify-center"
@@ -73,7 +70,6 @@
             <va-icon name="check_circle" color="success" />
           </va-popover>
         </div>
-        <!-- Integrated workflow failed -->
         <div
           v-else-if="rowData.integrated_status === 'FAILURE'"
           class="flex justify-center"
@@ -160,16 +156,17 @@
 
 <script setup>
 import useSearchKeyShortcut from "@/composables/useSearchKeyShortcut";
+import config from "@/config";
 import datasetService from "@/services/dataset";
 import * as datetime from "@/services/datetime";
 import toast from "@/services/toast";
 import wfService from "@/services/workflow";
 import { useAuthStore } from "@/stores/auth";
 import { useNavStore } from "@/stores/nav";
-import config from "@/config";
+import { Icon } from "@iconify/vue";
 import { HalfCircleSpinner } from "epic-spinners";
-import { useColors } from "vuestic-ui";
 import _ from "lodash";
+import { useColors } from "vuestic-ui";
 
 const { colors } = useColors();
 const nav = useNavStore();
@@ -184,7 +181,7 @@ const PAGE_SIZE_OPTIONS = [10, 20, 50];
 
 const filterInput = ref("");
 const pastImports = ref([]);
-const _datasets = ref({}); // Mapping of dataset_id to dataset object for polling
+const _datasets = ref({});
 
 const currentPageIndex = ref(1);
 const pageSize = ref(10);
@@ -288,12 +285,12 @@ const getImportLogs = async () => {
     .getDatasetImportLogs(filter_query.value)
     .then((res) => {
       pastImports.value = res.data.imports.map((e) => {
-        let imported_dataset = e.dataset;
+        const imported_dataset = e.dataset;
         const status = wfService.get_integrated_workflow_status(
           imported_dataset.workflows,
         );
         const genomicDetails = imported_dataset.genomic_details;
-        // Get user from create audit log (filtered by action='create', only one exists)
+
         const createAuditLog = imported_dataset.audit_logs?.[0];
         return {
           ...e,
@@ -305,10 +302,12 @@ const getImportLogs = async () => {
               ? imported_dataset.source_datasets[0].source_dataset
               : null,
           imported_dataset_type: imported_dataset.type,
-          file_type: imported_dataset.analysis_type?.name,
+          file_type:
+            imported_dataset.analysis_type?.name ||
+            imported_dataset.metadata?.analysis_type,
+          integrated_status: status,
           genome_type: genomicDetails?.genome_type,
           genome_value: genomicDetails?.genome_value,
-          integrated_status: status,
         };
       });
       total_results.value = res.data.metadata.count;
@@ -322,8 +321,6 @@ const getImportLogs = async () => {
     });
 };
 
-// _datasets is a mapping of dataset_ids to dataset objects. While polling one
-// or more datasets, this object is updated with latest dataset values.
 watch(
   pastImports,
   () => {
@@ -337,20 +334,17 @@ watch(
   },
 );
 
-// Track datasets that have active integrated workflows
 const tracking = computed(() => {
   return pastImports.value
     .filter((imp) => imp.integrated_status === "ACTIVE")
     .map((imp) => imp.imported_dataset.id);
 });
 
-// Fetch and update a single dataset's workflow status
 function fetch_and_update_dataset(id) {
   datasetService
     .getById({ id, include_projects: false, bundle: true })
     .then((res) => {
       _datasets.value[id] = res.data;
-      // Update the corresponding import in pastImports
       const importIndex = pastImports.value.findIndex(
         (imp) => imp.imported_dataset.id === id,
       );
@@ -365,12 +359,10 @@ function fetch_and_update_dataset(id) {
     });
 }
 
-// Poll datasets with pending workflows
 function poll_datasets() {
   tracking.value.forEach(fetch_and_update_dataset);
 }
 
-// Set up polling interval
 const poll = useIntervalFn(
   () => {
     poll_datasets();
@@ -381,7 +373,6 @@ const poll = useIntervalFn(
   },
 );
 
-// Start/stop polling based on whether there are datasets to track
 watch(tracking, () => {
   if (tracking.value.length > 0) {
     poll.resume();

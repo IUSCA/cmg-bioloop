@@ -1,6 +1,7 @@
 /* eslint-disable no-console */
 require('module-alias/register');
 const path = require('path');
+const { spawnSync } = require('child_process');
 
 global.__basedir = path.join(__dirname, '..');
 const { PrismaClient } = require('@prisma/client');
@@ -26,7 +27,7 @@ const prisma = new PrismaClient();
 
 if (['production'].includes(config.get('mode'))) {
   // exit if in production mode
-  console.error('Seed script should not be run in production mode. Run node src/convert/init_prod_users.js instead.');
+  console.error('Seed script should not be run in production mode. Run node src/scripts/init_prod_data.js instead.');
   process.exit(1);
 }
 
@@ -96,12 +97,57 @@ function createRandomUsers(num) {
   }));
 }
 
+function runNotificationSeedScript(usernames) {
+  const scriptPath = path.join(global.__basedir, 'prisma', 'seed_data', 'seed-notifications.js');
+  usernames.forEach((username) => {
+    const result = spawnSync(
+      process.execPath,
+      [scriptPath, '--user', username, '--stable-only', '--force'],
+      {
+        cwd: global.__basedir,
+        env: process.env,
+        stdio: 'inherit',
+      },
+    );
+
+    if (result.status !== 0) {
+      throw new Error(`seed-notifications.js failed for user '${username}'`);
+    }
+  });
+}
+
 async function main() {
   await Promise.allSettled(data.roles.map((role) => prisma.role.upsert({
     where: { id: role.id },
     create: role,
     update: role,
   })));
+
+  // Seed import sources for non-production environments.
+  // These paths match the directories created by workers/bin/init_dirs.sh.
+  const importSources = [
+    {
+      path: '/opt/sca/data/imports/genomics_lab_instrument_drop',
+      label: 'Genomics Lab',
+      description: 'Drop location for genomics lab instrument output',
+      sort_order: 1,
+    },
+    {
+      path: '/opt/sca/data/imports/proteomics_lab_instrument_drop',
+      label: 'Proteomics Lab',
+      description: 'Drop location for proteomics lab instrument output',
+      sort_order: 2,
+    },
+  ];
+  await Promise.all(
+    importSources.map((source) => prisma.import_source.upsert({
+      where: { path: source.path },
+      create: source,
+      update: { label: source.label, description: source.description, sort_order: source.sort_order },
+    })),
+  );
+  // eslint-disable-next-line no-console
+  console.log(`seeded ${importSources.length} import sources`);
 
   // Create default admins
   const additional_admins = readUsersFromJSON('admins.json');
@@ -394,35 +440,13 @@ async function main() {
     data: argumentDataWithPrograms,
   });
 
-  // Seed import sources for non-production environments
-  const importSources = [
-    {
-      path: '/opt/sca/data/imports/entrypoint',
-      label: 'Imports',
-      description: 'Default import source for docker/dev environment',
-      sort_order: 1,
-    },
-    {
-      path: '/opt/sca/data/project/entrypoint',
-      label: 'Project',
-      description: 'Project filesystem import source for docker/dev environment',
-      sort_order: 2,
-    },
-  ];
-  await Promise.all(
-    importSources.map((source) => prisma.import_source.upsert({
-      where: { path: source.path },
-      create: source,
-      update: { label: source.label, description: source.description, sort_order: source.sort_order },
-    })),
-  );
-  console.log(`seeded ${importSources.length} import sources`);
-
   // Create tracks and sessions for testing
   console.log('\n=== Creating Tracks and Sessions ===');
   // eslint-disable-next-line global-require
   const { main: createTracksAndSessions } = require('../src/scripts/insert_mock_tracks');
   await createTracksAndSessions();
+  // Seed notification fixtures for E2E roles.
+  runNotificationSeedScript(['e2eAdmin', 'e2eOperator', 'e2eUser']);
 }
 
 main()

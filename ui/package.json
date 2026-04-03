@@ -42,7 +42,7 @@
     "regex-username": "^2.0.0",
     "the-big-username-blacklist": "^1.5.2",
     "turndown": "^7.1.2",
-    "tus-js-client": "^4.1.0",
+    "tus-js-client": "^4.3.1",
     "vue": "^3.3.4",
     "vue-echarts": "^7.0.3",
     "vue-router": "^4.2.5",

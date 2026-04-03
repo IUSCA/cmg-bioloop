@@ -72,6 +72,9 @@ const grantsObject = {
     fs: {
       'read:any': ['*'],
     },
+    import_sources: {
+      'read:any': ['*'],
+    },
     upload: {
       'create:any': ['*'],
     },
@@ -104,9 +107,6 @@ const grantsObject = {
       'read:any': ['*'],
       'update:any': ['*'],
       'delete:any': ['*'],
-    },
-    import_sources: {
-      'read:any': ['*'],
     },
   },
 
@@ -166,8 +166,9 @@ const grantsObject = {
     alerts: {
       'read:any': ['*'],
     },
-    import_sources: {
-      'read:any': ['*'],
+    notifications: {
+      'read:own': ['*'],
+      'update:own': ['*'],
     },
   },
 
@@ -225,11 +226,15 @@ const grantsObject = {
       'delete:any': ['*'],
     },
     notifications: {
+      'create:any': ['*'],
       'read:any': ['*'],
       'update:any': ['*'],
       'delete:any': ['*'],
     },
     fs: {
+      'read:any': ['*'],
+    },
+    import_sources: {
       'read:any': ['*'],
     },
     upload: {
@@ -263,9 +268,6 @@ const grantsObject = {
       'create:any': ['*'],
       'read:any': ['*'],
       'update:any': ['*'],
-    },
-    import_sources: {
-      'read:any': ['*'],
     },
   },
 };

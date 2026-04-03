@@ -8,6 +8,8 @@ ai_agent_bypass_folder/
 *nginx.key
 
 .idea
+.DS_Store
+**/.DS_Store
 
 ui/node_modules
 ui/dist
@@ -25,6 +27,7 @@ api/yarn-error.log
 api/.vscode
 api/node_modules
 api/.env
+api/.db_seeded
 
 api/config/auth*
 
@@ -99,7 +102,10 @@ cmg_convert.log
 
 *.log
 curl_cmds
-.cursorrules
+
+# .ai/
+# .cursor/
+# .cursorrules
 
 backup_*
 

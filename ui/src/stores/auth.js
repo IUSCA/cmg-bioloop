@@ -1,24 +1,25 @@
-import config from "@/config";
-import constants from "@/constants";
-import authService from "@/services/auth";
-import * as utils from "@/services/utils";
-import { jwtDecode } from "jwt-decode";
-import { acceptHMRUpdate, defineStore } from "pinia";
-import { ref } from "vue";
+import config from '@/config';
+import constants from '@/constants';
+import authService from '@/services/auth';
+import * as utils from '@/services/utils';
+import { useNotificationStore } from '@/stores/notification';
+import { jwtDecode } from 'jwt-decode';
+import { acceptHMRUpdate, defineStore } from 'pinia';
+import { ref } from 'vue';
 
-export const useAuthStore = defineStore("auth", () => {
-  const env = ref("");
-  const user = ref(useLocalStorage("user", {}));
-  const token = ref(useLocalStorage("token", ""));
+export const useAuthStore = defineStore('auth', () => {
+  const env = ref('');
+  const user = ref(useLocalStorage('user', {}));
+  const token = ref(useLocalStorage('token', ''));
   const loggedIn = ref(false);
-  const signupToken = ref(useLocalStorage("signup_token", ""));
-  const signupEmail = ref("");
+  const signupToken = ref(useLocalStorage('signup_token', ''));
+  const signupEmail = ref('');
   let refreshTokenTimer = null;
   const canOperate = computed(() => {
-    return hasRole("operator") || hasRole("admin");
+    return hasRole('operator') || hasRole('admin');
   });
   const canAdmin = computed(() => {
-    return hasRole("admin");
+    return hasRole('admin');
   });
 
   function initialize() {
@@ -32,13 +33,15 @@ export const useAuthStore = defineStore("auth", () => {
     user.value = data.profile;
     token.value = data.token;
     loggedIn.value = true;
+    useNotificationStore().resetSession();
     refreshTokenBeforeExpiry();
   }
 
   function onLogout() {
     loggedIn.value = false;
     user.value = {};
-    token.value = "";
+    token.value = '';
+    useNotificationStore().resetSession();
   }
 
   /**
@@ -61,38 +64,30 @@ export const useAuthStore = defineStore("auth", () => {
       return apiFn(...args)
         .then((res) => {
           if (res.data) {
-            if (
-              res.data.status === constants.auth.verify.response.status.SUCCESS
-            ) {
+            if (res.data.status === constants.auth.verify.response.status.SUCCESS) {
               // handle successful login
               onLogin(res.data);
               return res.data.status;
             }
-            if (
-              res.data.status ===
-              constants.auth.verify.response.status.SIGNUP_REQUIRED
-            ) {
+            if (res.data.status === constants.auth.verify.response.status.SIGNUP_REQUIRED) {
               // set token in local storage
               signupToken.value = res.data.signup_token;
               // set email in store
               signupEmail.value = res.data.email;
               return res.data.status;
             }
-            if (
-              res.data.status ===
-              constants.auth.verify.response.status.NOT_A_USER
-            ) {
+            if (res.data.status === constants.auth.verify.response.status.NOT_A_USER) {
               return res.data.status;
             }
           }
           // not an expected response
-          console.error("Unexpected response from the verify API", res);
+          console.error('Unexpected response from the verify API', res);
           onLogout();
           return Promise.reject();
         })
         .catch((error) => {
           // handle all other errors as is
-          console.error("Login failed", error);
+          console.error('Login failed', error);
           onLogout();
           return Promise.reject();
         });
@@ -100,8 +95,8 @@ export const useAuthStore = defineStore("auth", () => {
   }
 
   function clearSignupData() {
-    signupToken.value = "";
-    signupEmail.value = "";
+    signupToken.value = '';
+    signupEmail.value = '';
   }
 
   function logout() {
@@ -118,18 +113,12 @@ export const useAuthStore = defineStore("auth", () => {
         const now = new Date();
         if (now < expiresAt) {
           // token is still alive
-          const delay =
-            expiresAt - now - config.refreshTokenTMinusSeconds.appToken * 1000;
-          console.log(
-            "auth store: refreshTokenBeforeExpiry: triggering refreshToken in ",
-            delay / 1000,
-            "seconds",
-          );
+          const delay = expiresAt - now - config.refreshTokenTMinusSeconds.appToken * 1000;
           refreshTokenTimer = setTimeout(refreshToken, delay);
         }
         // else - do nothing, navigation guard will redirect to /auth
       } catch (err) {
-        console.error("Errored trying to decode access token", err);
+        console.error('Errored trying to decode access token', err);
       }
     }
   }
@@ -142,29 +131,27 @@ export const useAuthStore = defineStore("auth", () => {
         if (res.data) onLogin(res.data);
       })
       .catch((err) => {
-        console.error("Unable to refresh token", err);
+        console.error('Unable to refresh token', err);
       });
   }
 
   // Check for roles
   function hasRole(role) {
     return (
-      "roles" in user.value &&
+      'roles' in user.value &&
       user.value.roles.map((s) => s.toLowerCase()).includes(role.toLowerCase())
     );
   }
 
   function saveSettings(data) {
-    return authService
-      .saveSettings(data)
-      .then((res) => (user.value.settings = res.data.settings));
+    return authService.saveSettings(data).then((res) => (user.value.settings = res.data.settings));
   }
 
   function spoof(username) {
     return authService.spoof(username).then((res) => {
       onLogin(res.data);
       // reload entire app to reload all components
-      window.location.href = "/";
+      window.location.href = '/';
     });
   }
 
@@ -184,6 +171,7 @@ export const useAuthStore = defineStore("auth", () => {
 
   return {
     user,
+    token,
     loggedIn,
     initialize,
     logout,
@@ -205,5 +193,4 @@ export const useAuthStore = defineStore("auth", () => {
   };
 });
 
-if (import.meta.hot)
-  import.meta.hot.accept(acceptHMRUpdate(useAuthStore, import.meta.hot));
+if (import.meta.hot) import.meta.hot.accept(acceptHMRUpdate(useAuthStore, import.meta.hot));
