@@ -16,7 +16,7 @@ import workers.utils as utils
 import workers.workflow_utils as wf_utils
 from workers.config import config
 from workers.dataset import get_archive_bundle_name
-from workers.legacy_migration import is_legacy_dataset
+from workers.legacy_migration.xenium import is_dataset_archived_in_xenium
 
 app = Celery("tasks")
 app.config_from_object(celeryconfig)
@@ -30,6 +30,10 @@ def _is_legacy_source_active(source_name: str) -> bool:
     if isinstance(cfg, dict):
         return bool(cfg.get(source_name, False))
     return False
+
+
+def _get_dataset_origin(dataset: dict) -> str | None:
+    return (dataset.get('metadata') or {}).get('origin')
 
 
 def make_tarfile(celery_task: WorkflowTask, tar_path: Path, source_dir: str, source_size: int):
@@ -134,14 +138,72 @@ def wait_for_cmg_archival(dataset_name: str, origin_path: str, dataset_type: str
         time.sleep(poll_interval_seconds)
 
 
+def wait_for_xenium_archival(
+    origin_path: str,
+    dataset_name: str,
+    *,
+    celery_task: WorkflowTask | None = None,
+    poll_interval_seconds: int = 300,
+    timeout_seconds: int = 86400,
+) -> None:
+    """
+    Wait for Xenium to complete archival by polling Xenium API state.
+    """
+    logger.info(f'{dataset_name} - waiting for XENIUM archival completion')
+    logger.info(f'{dataset_name} - origin_path: {origin_path}')
+    logger.info(f'{dataset_name} - poll interval: {poll_interval_seconds}s, timeout: {timeout_seconds}s')
+
+    start_time = time.time()
+    poll_count = 0
+    while True:
+        elapsed_time = time.time() - start_time
+        poll_count += 1
+
+        if elapsed_time > timeout_seconds:
+            error_msg = (
+                f'{dataset_name} - timeout waiting for XENIUM archival completion '
+                f'(elapsed: {int(elapsed_time)}s / timeout: {timeout_seconds}s, polls: {poll_count})'
+            )
+            logger.error(error_msg)
+            raise TimeoutError(error_msg)
+
+        try:
+            is_archived = is_dataset_archived_in_xenium(origin_path)
+            if is_archived:
+                logger.info(
+                    f'{dataset_name} - XENIUM archival completed '
+                    f'(elapsed: {int(elapsed_time)}s, polls: {poll_count})'
+                )
+                return
+            logger.info(
+                f'{dataset_name} - XENIUM archival not yet complete '
+                f'(elapsed: {int(elapsed_time)}s / timeout: {timeout_seconds}s, poll #{poll_count})'
+            )
+        except Exception as e:
+            logger.warning(
+                f'{dataset_name} - error checking XENIUM archival status '
+                f'(poll #{poll_count}): {e}'
+            )
+
+        if celery_task:
+            time_remaining_sec = max(0, timeout_seconds - elapsed_time)
+            progress_obj = {
+                'name': f'Waiting for XENIUM archival (poll #{poll_count})',
+                'time_remaining_sec': time_remaining_sec,
+            }
+            celery_task.update_progress(progress_obj)
+
+        time.sleep(poll_interval_seconds)
+
+
 def archive(celery_task: WorkflowTask, dataset: dict, delete_local_file: bool = False):
     """
     Archive a dataset by creating a tar bundle and uploading to SDA.
 
     Handles two scenarios:
-    1. Concurrent CMG/Bioloop registration (cmg_id exists):
-       - Verifies dataset exists in CMG API (STRICT: fails if not found when legacy_migration enabled)
-       - Waits for CMG to complete archival
+    1. Concurrent legacy-source archival (CMG or Xenium origin with source still active):
+       - For CMG-origin datasets: verifies dataset exists in CMG API (STRICT) and waits for CMG archival
+       - For Xenium-origin datasets: waits for Xenium API archival completion by origin_path
        - Retrieves bundle metadata (hash, size) from SDA/HSI
        - STRICT: Fails if archive cannot be found or hash cannot be retrieved from HSI
        - Saves bundle metadata to database (md5 from HSI)
@@ -164,9 +226,16 @@ def archive(celery_task: WorkflowTask, dataset: dict, delete_local_file: bool = 
         Exception: If legacy_migration enabled and CMG validation fails
         Exception: If SDA archive cannot be verified or hash cannot be retrieved
     """
-    # Check if this is a legacy dataset and if the legacy CMG application is still active
-    is_legacy = is_legacy_dataset(dataset)
-    legacy_application_active = _is_legacy_source_active('cmg')
+    dataset_origin = _get_dataset_origin(dataset)
+    is_legacy_cmg_dataset = dataset_origin == 'legacy'
+    is_legacy_xenium_dataset = dataset_origin == 'legacy_xenium'
+    is_legacy_dataset_origin = is_legacy_cmg_dataset or is_legacy_xenium_dataset
+    legacy_cmg_active = _is_legacy_source_active('cmg')
+    legacy_xenium_active = _is_legacy_source_active('xenium')
+    defer_to_external_archival = (
+        (is_legacy_cmg_dataset and legacy_cmg_active)
+        or (is_legacy_xenium_dataset and legacy_xenium_active)
+    )
 
     # Check if dataset has a CMG ID (was registered in CMG concurrently)
     cmg_id = dataset.get('cmg_id')
@@ -175,24 +244,32 @@ def archive(celery_task: WorkflowTask, dataset: dict, delete_local_file: bool = 
     origin_path = dataset.get('origin_path')
 
     logger.info(
-        f'{dataset_name} - archive called: is_legacy={is_legacy}, '
-        f'legacy_application_active={legacy_application_active}, '
+        f'{dataset_name} - archive called: origin={dataset_origin}, '
+        f'is_legacy_dataset_origin={is_legacy_dataset_origin}, '
+        f'legacy_cmg_active={legacy_cmg_active}, '
+        f'legacy_xenium_active={legacy_xenium_active}, '
+        f'defer_to_external_archival={defer_to_external_archival}, '
         f'cmg_id={cmg_id}, dataset_type={dataset_type}, origin_path={origin_path}'
     )
 
     # Tar the dataset directory and compute checksum
     bundle = Path(config["paths"][dataset["type"]]["bundle"]["generate"]) / get_archive_bundle_name(dataset)
 
-    # If dataset is legacy, it means the legacy CMG application is also archiving this
-    #  dataset concurrently. Wait for CMG to complete archival
-    if is_legacy:
-        logger.info(f'{dataset_name} - detected CMG ID: {cmg_id}')
+    # If dataset originates from an active legacy source app, that app performs archival.
+    # CMG-Bioloop should not upload a second copy to SDA.
+    if defer_to_external_archival:
+        source_label = 'CMG' if is_legacy_cmg_dataset else 'XENIUM'
+        logger.info(f'{dataset_name} - {source_label} source archival detected; skipping local tar/upload')
 
-        # STRICT VALIDATION: If legacy_migration is enabled, we MUST be able to verify CMG's archival
-        if legacy_application_active:
-            logger.info(f'{dataset_name} - legacy_migration is enabled, strict validation required')
+        # Expected SDA location where the legacy source app uploads the archive.
+        dataset_type_archive_dir = wf_utils.get_archive_dir(
+            dataset['type'],
+            legacy_dataset=is_legacy_dataset_origin,
+        )
+        dataset_bundle_path = f'{dataset_type_archive_dir}/{bundle.name}'
 
-            # Verify we can find the dataset in CMG
+        if is_legacy_cmg_dataset:
+            # STRICT VALIDATION: when CMG is active, we must be able to verify the dataset exists in CMG API.
             try:
                 if dataset_type == 'RAW_DATA':
                     cmg_entity = cmg_api.get_dataset_by_origin_path(origin_path)
@@ -214,26 +291,28 @@ def archive(celery_task: WorkflowTask, dataset: dict, delete_local_file: bool = 
             except Exception as e:
                 error_msg = (
                     f'{dataset_name} - FATAL: failed to verify dataset in CMG API: {e}. '
-                    f'Cannot proceed with archival when legacy_migration is enabled.'
+                    f'Cannot proceed with archival when CMG legacy source is active.'
                 )
                 logger.error(error_msg)
                 raise Exception(error_msg)
 
-        logger.info(f'{dataset_name} - waiting for CMG to complete archival to avoid concurrent SDA uploads')
+            logger.info(f'{dataset_name} - waiting for CMG to complete archival to avoid concurrent SDA uploads')
+            wait_for_cmg_archival(
+                dataset_name=dataset_name,
+                origin_path=origin_path,
+                dataset_type=dataset_type,
+                celery_task=celery_task,
+            )
+        else:
+            # STRICT VALIDATION: when Xenium is active, we must be able to verify the dataset exists in Xenium API.
+            logger.info(f'{dataset_name} - waiting for XENIUM to complete archival to avoid concurrent SDA uploads')
+            wait_for_xenium_archival(
+                origin_path=origin_path,
+                dataset_name=dataset_name,
+                celery_task=celery_task,
+            )
 
-        # Wait for CMG archival to complete
-        wait_for_cmg_archival(
-            dataset_name=dataset_name,
-            origin_path=origin_path,
-            dataset_type=dataset_type,
-            celery_task=celery_task
-        )
-
-        # Get the SDA path where CMG uploaded the archive
-        dataset_type_archive_dir = wf_utils.get_archive_dir(dataset['type'], legacy_dataset=is_legacy)
-        dataset_bundle_path = f'{dataset_type_archive_dir}/{bundle.name}'
-
-        logger.info(f'{dataset_name} - CMG archival completed, verifying archive in SDA')
+        logger.info(f'{dataset_name} - {source_label} archival completed, verifying archive in SDA')
 
         # STRICT VALIDATION: Verify the archive exists in SDA and get its hash
         try:
@@ -241,7 +320,7 @@ def archive(celery_task: WorkflowTask, dataset: dict, delete_local_file: bool = 
             if not sda.exists(dataset_bundle_path):
                 error_msg = (
                     f'{dataset_name} - FATAL: archive path does not exist in SDA: {dataset_bundle_path}. '
-                    f'CMG reported archival complete but file not found.'
+                    f'{source_label} reported archival complete but file not found.'
                 )
                 logger.error(error_msg)
                 raise Exception(error_msg)
@@ -272,7 +351,7 @@ def archive(celery_task: WorkflowTask, dataset: dict, delete_local_file: bool = 
                 'md5': bundle_checksum,  # Hash retrieved from HSI/SDA
             }
 
-            logger.info(f'{dataset_name} - successfully verified CMG archive with bundle metadata from SDA')
+            logger.info(f'{dataset_name} - successfully verified {source_label} archive with bundle metadata from SDA')
             logger.info(f'{dataset_name} - bundle will be saved: size={bundle_size}, md5={bundle_checksum}')
         except Exception as e:
             error_msg = (
@@ -287,7 +366,7 @@ def archive(celery_task: WorkflowTask, dataset: dict, delete_local_file: bool = 
         
         if cmg_id:
             logger.warning(
-                f'{dataset_name} - cmg_id={cmg_id} is set but is_legacy=False; '
+                f'{dataset_name} - cmg_id={cmg_id} is set but origin={dataset_origin!r} is not an active CMG legacy source; '
                 f'proceeding with standard Bioloop archival (no CMG coordination). '
                 f'Verify this dataset is not being archived concurrently by CMG.'
             )
@@ -341,7 +420,10 @@ def archive(celery_task: WorkflowTask, dataset: dict, delete_local_file: bool = 
             'md5': bundle_checksum,
         }
 
-        dataset_type_archive_dir = wf_utils.get_archive_dir(dataset['type'], legacy_dataset=is_legacy)
+        dataset_type_archive_dir = wf_utils.get_archive_dir(
+            dataset['type'],
+            legacy_dataset=is_legacy_dataset_origin,
+        )
         dataset_bundle_path = f'{dataset_type_archive_dir}/{bundle.name}'
 
         logger.info(f'{dataset_name} - uploading bundle to SDA at: {dataset_bundle_path}')

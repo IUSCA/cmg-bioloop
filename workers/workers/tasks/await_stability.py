@@ -10,6 +10,7 @@ from celery.utils.log import get_task_logger
 import workers.api as api
 import workers.cmg_api as cmg_api
 import workers.config.celeryconfig as celeryconfig
+import workers.xenium_api as xenium_api
 from workers.config import config
 from workers.dataset import is_nanopore_dataset
 
@@ -189,30 +190,49 @@ def await_stability(celery_task, dataset_id, wait_seconds: int = None, recency_t
             f'{dataset_name} - origin path disappeared during or before stability check: {origin_path}'
         )
 
-    # Check if dataset already exists in CMG and persist CMG ID
-    # This allows the archive step to coordinate with CMG's archival process
-    logger.info(f'{dataset_name} - checking if dataset exists in CMG by origin_path')
-    try:
-        if dataset_type == 'RAW_DATA':
-            cmg_entity = cmg_api.get_dataset_by_origin_path(origin_path_str)
-        elif dataset_type == 'DATA_PRODUCT':
-            cmg_entity = cmg_api.get_dataproduct_by_origin_path(origin_path_str)
-        else:
-            logger.info(f'{dataset_name} - unknown dataset type {dataset_type}, skipping CMG check')
-            cmg_entity = None
-        
-        if cmg_entity:
-            cmg_id = cmg_entity.get('_id')
-            if cmg_id:
-                logger.info(f'{dataset_name} - found in CMG with ID: {cmg_id}, persisting to database')
-                api.update_dataset(dataset_id=dataset_id, update_data={'cmg_id': str(cmg_id)})
+    dataset_origin = (dataset.get('metadata') or {}).get('origin')
+    if dataset_origin == 'legacy_xenium':
+        # Check if dataset already exists in Xenium and persist Xenium ID.
+        logger.info(f'{dataset_name} - origin=legacy_xenium; checking if dataset exists in Xenium by origin_path')
+        try:
+            xenium_entity = xenium_api.get_dataset_by_origin_path(origin_path_str)
+            if xenium_entity:
+                xenium_id = xenium_entity.get('id', xenium_entity.get('_id'))
+                if xenium_id:
+                    logger.info(f'{dataset_name} - found in Xenium with ID: {xenium_id}, persisting to database')
+                    api.update_dataset(dataset_id=dataset_id, update_data={'xenium_id': str(xenium_id)})
+                else:
+                    logger.warning(f'{dataset_name} - found in Xenium but no id field present')
             else:
-                logger.warning(f'{dataset_name} - found in CMG but no _id field present')
-        else:
-            logger.info(f'{dataset_name} - not found in CMG, will proceed with standard archival')
-    except Exception as e:
-        # Don't fail the workflow if CMG check fails - just log and continue
-        logger.warning(f'{dataset_name} - error checking CMG, will proceed with standard archival: {e}')
+                logger.info(f'{dataset_name} - not found in Xenium, will proceed with standard archival')
+        except Exception as e:
+            # Don't fail the workflow if Xenium check fails - just log and continue
+            logger.warning(f'{dataset_name} - error checking Xenium, will proceed with standard archival: {e}')
+    else:
+        # Check if dataset already exists in CMG and persist CMG ID.
+        # This allows the archive step to coordinate with CMG's archival process.
+        logger.info(f'{dataset_name} - checking if dataset exists in CMG by origin_path')
+        try:
+            if dataset_type == 'RAW_DATA':
+                cmg_entity = cmg_api.get_dataset_by_origin_path(origin_path_str)
+            elif dataset_type == 'DATA_PRODUCT':
+                cmg_entity = cmg_api.get_dataproduct_by_origin_path(origin_path_str)
+            else:
+                logger.info(f'{dataset_name} - unknown dataset type {dataset_type}, skipping CMG check')
+                cmg_entity = None
+
+            if cmg_entity:
+                cmg_id = cmg_entity.get('_id')
+                if cmg_id:
+                    logger.info(f'{dataset_name} - found in CMG with ID: {cmg_id}, persisting to database')
+                    api.update_dataset(dataset_id=dataset_id, update_data={'cmg_id': str(cmg_id)})
+                else:
+                    logger.warning(f'{dataset_name} - found in CMG but no _id field present')
+            else:
+                logger.info(f'{dataset_name} - not found in CMG, will proceed with standard archival')
+        except Exception as e:
+            # Don't fail the workflow if CMG check fails - just log and continue
+            logger.warning(f'{dataset_name} - error checking CMG, will proceed with standard archival: {e}')
 
     api.add_state_to_dataset(dataset_id=dataset_id, state='READY')
     return dataset_id,

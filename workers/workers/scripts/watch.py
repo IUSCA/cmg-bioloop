@@ -17,20 +17,28 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-# _LEGACY_APP_SOURCE_DIR_KEYS: Config keys for the source directories watched by the
-#  legacy CMG application for the appearance of new Datasets.
+# _LEGACY_CMG_SOURCE_DIR_KEYS: Config keys for the source directories watched by
+# the legacy CMG application for the appearance of new datasets.
 # 
 # - Datasets found under these paths originate from (i.e. were registered by) the
 #  legacy CMG application, not CMG-Bioloop, and are therefore tagged with
 #  metadata.origin='legacy' in CMG-Bioloop.
-_LEGACY_APP_SOURCE_DIR_KEYS = [
+_LEGACY_CMG_SOURCE_DIR_KEYS = [
+    # ** Note: ** LEGACY CMG APPLICATION SOURCE DIRECTORIES:
+    # - These paths are watched by the legacy CMG application for the appearance of new datasets.
     'source_dir_ns2000',        # obs6  - k2 NS2000
     'source_dir_miseq',         # obs7  - k3 MiSeq
     'source_dir_novaseq2',      # obs8  - k3 NovaSeq2
     'source_dir_ns6000',        # obs9  - k3 NS6000
     'source_dir_novaseqx1',     # obs10 - k4 NovaSeqX1
     'source_dir_nanopore_p2solo', # obs11 - Nanopore P2Solo
-    'source_dir_nanopore_p24',    # obs12 - Nanopore P24
+]
+
+# _LEGACY_XENIUM_SOURCE_DIR_KEYS: Config keys for source directories watched by
+# the legacy Xenium application.
+_LEGACY_XENIUM_SOURCE_DIR_KEYS = [
+    'source_dir_nanopore_p24',   # obs12 - Nanopore P24
+    'source_dir_xenium',         # obs_xenium - Xenium source
 ]
 
 
@@ -50,10 +58,10 @@ def _is_legacy_source_active(source_name: str) -> bool:
     return False
 
 
-def _get_legacy_app_source_dirs() -> list[Path]:
-    """Return the filesystem directories that the legacy CMG application watches for the appearance of new datasets."""
+def _get_legacy_source_dirs(source_keys: list[str]) -> list[Path]:
+    """Return configured source directories for a legacy source application."""
     raw_data_reg = config['registration'].get('RAW_DATA', {})
-    return [Path(raw_data_reg[k]) for k in _LEGACY_APP_SOURCE_DIR_KEYS if k in raw_data_reg]
+    return [Path(raw_data_reg[k]) for k in source_keys if k in raw_data_reg]
 
 
 def _compute_dataset_origin(candidate: Path) -> str | None:
@@ -72,18 +80,20 @@ def _compute_dataset_origin(candidate: Path) -> str | None:
     if not _is_legacy_source_active('cmg') and not _is_legacy_source_active('xenium'):
         return None
 
-    # Xenium source tagging: when xenium source is active and the path is under
-    # source_dir_xenium, preserve source provenance for migration-aware flows.
-    xenium_source_dir = config.get('registration', {}).get('RAW_DATA', {}).get('source_dir_xenium')
-    if _is_legacy_source_active('xenium') and xenium_source_dir:
-        try:
-            candidate_resolved = candidate.resolve()
-            if candidate_resolved.is_relative_to(Path(xenium_source_dir)):
-                return 'legacy_xenium'
-        except ValueError:
-            pass
-    legacy_dirs = _get_legacy_app_source_dirs()
     candidate_resolved = candidate.resolve()
+    # Xenium source tagging: when xenium source is active and the path is under
+    # one of Xenium's watched source directories, preserve Xenium provenance.
+    if _is_legacy_source_active('xenium'):
+        xenium_dirs = _get_legacy_source_dirs(_LEGACY_XENIUM_SOURCE_DIR_KEYS)
+        for xenium_dir in xenium_dirs:
+            try:
+                if candidate_resolved.is_relative_to(xenium_dir):
+                    return 'legacy_xenium'
+            except ValueError:
+                pass
+
+    legacy_dirs = _get_legacy_source_dirs(_LEGACY_CMG_SOURCE_DIR_KEYS)
+
     for legacy_dir in legacy_dirs:
         try:
             if candidate_resolved.is_relative_to(legacy_dir):
@@ -185,6 +195,7 @@ class Register:
         }
         # add metadata to the dataset payload
         # - origin: 'legacy' if the dataset originates from the legacy CMG application
+        # - origin: 'legacy_xenium' if the dataset originates from the legacy Xenium application
         # - other metadata from the watch script configuration
         payload_metadata = dict(self.metadata) if self.metadata else {}
         origin = _compute_dataset_origin(candidate)
@@ -219,6 +230,7 @@ class Register:
             }
             # add metadata to the dataset payload
             # - origin: 'legacy' if the dataset originates from the legacy CMG application
+            # - origin: 'legacy_xenium' if the dataset originates from the legacy Xenium application
             # - other metadata from the watch script configuration
             payload_metadata = dict(self.metadata) if self.metadata else {}
             origin = _compute_dataset_origin(candidate)
@@ -285,10 +297,7 @@ class RegisterDataProduct(Register):
 
 if __name__ == "__main__":
     # Create dataset-observers for filesystem-spaces which are not watched by the legacy CMG application for the appearance of new Datasets.
-    # At the moment, these filesystem-spaces are:
-    # - Slate-scratch
-    # - Slate-project
-    
+
     # 1. Create dataset-observers for Slate-scratch
     obs1 = Observer(
         name='raw_data_obs---slate_scratch',
@@ -392,6 +401,7 @@ if __name__ == "__main__":
         interval=config['registration']['poll_interval_seconds'],
         full_scan_every_n_scans=config['registration']['full_scan_every_n_scans']
     )
+
     obs12 = Observer(
         name='raw_data_obs---nanopore--p24',
         dir_path=config['registration']['RAW_DATA']['source_dir_nanopore_p24'],

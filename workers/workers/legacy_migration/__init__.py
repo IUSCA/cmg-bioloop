@@ -20,6 +20,7 @@ from workers.legacy_migration.cmg import (
     get_retrieved_archive_retrieval_path,
     get_retrieved_archive_extraction_path,
 )
+from workers.legacy_migration.xenium import is_dataset_archived_in_xenium
 
 __all__ = [
     'has_reached_state',
@@ -30,4 +31,5 @@ __all__ = [
     'get_migration_status',
     'get_retrieved_archive_retrieval_path',
     'get_retrieved_archive_extraction_path',
+    'is_dataset_archived_in_xenium',
 ]

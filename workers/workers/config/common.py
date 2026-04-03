@@ -11,6 +11,9 @@ API_BASE_URL = os.environ['API_BASE_URL']
 # CMG_API_* vars refer to the legacy CMG application's API
 CMG_API_BASE_URL = os.environ.get('CMG_API_BASE_URL', '')
 CMG_API_TOKEN = os.environ.get('CMG_API_TOKEN', '')
+# XENIUM_API_* vars refer to the legacy Xenium application's API
+XENIUM_API_BASE_URL = os.environ.get('XENIUM_API_BASE_URL', '')
+XENIUM_API_TOKEN = os.environ.get('XENIUM_API_TOKEN', '')
 
 QUEUE_URL = os.environ['QUEUE_URL']
 QUEUE_USER = os.environ['QUEUE_USER']
@@ -62,6 +65,13 @@ config = {
     'cmg_api': {
         'base_url': CMG_API_BASE_URL,
         'auth_token': CMG_API_TOKEN,
+        'conn_timeout': 5,  # seconds
+        'read_timeout': 30  # seconds
+    },
+    # Legacy Xenium application's API connection details
+    'xenium_api': {
+        'base_url': XENIUM_API_BASE_URL,
+        'auth_token': XENIUM_API_TOKEN,
         'conn_timeout': 5,  # seconds
         'read_timeout': 30  # seconds
     },

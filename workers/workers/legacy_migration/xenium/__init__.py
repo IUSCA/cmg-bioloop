@@ -7,11 +7,16 @@ Handles datasets migrated from the Xenium PostgreSQL database (origin: 'legacy_x
 Xenium does not have Sessions, Conversions, or Tracks features.
 """
 
+import logging
+import os
 from pathlib import Path
 from typing import Dict
 
 import workers.api as api
 from workers.config import config
+import workers.xenium_api as xenium_api
+
+logger = logging.getLogger(__name__)
 
 
 def is_legacy_xenium_dataset(dataset: Dict) -> bool:
@@ -25,6 +30,41 @@ def is_legacy_xenium_dataset(dataset: Dict) -> bool:
         True if metadata.origin == 'legacy_xenium', False otherwise
     """
     return (dataset.get('metadata') or {}).get('origin') == 'legacy_xenium'
+
+
+def _normalize_path(path_value: str) -> str:
+    return os.path.normpath(path_value.strip())
+
+
+def is_dataset_archived_in_xenium(
+    origin_path: str,
+    use_auth: bool = True,
+) -> bool:
+    """
+    Check archival completion in Xenium by origin_path lookup.
+
+    Returns True only when:
+    - Xenium finds the dataset by origin_path
+    - Returned dataset.origin_path matches the queried origin_path (normalized)
+    - Returned dataset.archive_path is present and non-empty
+    """
+    dataset = xenium_api.get_dataset_by_origin_path(origin_path, use_auth=use_auth)
+    if not dataset:
+        return False
+
+    dataset_origin_path = dataset.get('origin_path')
+    if not dataset_origin_path:
+        logger.warning('Xenium dataset found but origin_path missing in response')
+        return False
+
+    if _normalize_path(dataset_origin_path) != _normalize_path(origin_path):
+        logger.warning(
+            f'Xenium origin_path mismatch: expected={origin_path!r}, got={dataset_origin_path!r}'
+        )
+        return False
+
+    archive_path = dataset.get('archive_path')
+    return bool(archive_path and str(archive_path).strip())
 
 
 def has_reached_state(dataset_id: int, state: str) -> bool:

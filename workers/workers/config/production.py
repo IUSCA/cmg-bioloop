@@ -68,19 +68,19 @@ config = {
             # K4 (Compbio) host's Origin paths
             'source_dir_novaseqx1': '/zpool/novaseqx/novaseqx1',
             
-            # Nanopore Origin paths
-            # NOTE: Bioloop workers use the below dict's keys to detect whether or not a Dataset should be
-            # considered a 'nanopore' dataset. If these keys are changed, the behavior of method
-            # ``is_nanopore_dataset()`` in ``dataset.py`` will need to be updated accordingly.
+            # Nanopore dataset Origin paths
             'source_dir_nanopore_p2solo': '/data/p2solo',
+            # The following two paths are also watched by the legacy Xenium app.
+            # - `/zpool/p24/data`: Nanopore P24 instrument output. 
+            #    Workflow 'intake_integrated' is triggered for new datasets.
+            # - `/zpool/xenium`: Xenium instrument output. Workflow 'subdir_wf_initiator' 
+            #    is triggered for new datasets.
             'source_dir_nanopore_p24': '/zpool/p24/data',
+            'source_dir_xenium': '/zpool/xenium',
         },
         'DATA_PRODUCT': {
             'source_dir_scratch': '/N/scratch/cmguser/cmg-bioloop/origin/data_products',
             'source_dir_project': '/N/project/CMG-SCA/cmg-bioloop/origin/data_products',
-
-            # K2 (Compbio) host's Origin paths
-            # 'source_dir_test': '/home/cmguser/cmg-bioloop-ingestion-test/origin/data_products',
         },
         'recency_threshold_seconds': 0,  # 1 minute for standard Illumina datasets
         'recency_threshold_seconds_nanopore': 21600,  # 6 hours for nanopore datasets
