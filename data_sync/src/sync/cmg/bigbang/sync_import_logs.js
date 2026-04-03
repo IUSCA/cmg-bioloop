@@ -130,8 +130,7 @@ async function syncImportLogs(prisma, cmgDb, cmgUserId) {
             continue;
           }
           
-          // Ensure dataset has create_method set to IMPORT
-          // This will be transferred from audit log during migration, but for new syncs we set it directly
+          // Ensure dataset.create_method is set to IMPORT for import-created datasets
           if (!bioloopDataset.create_method) {
             await prisma.dataset.update({
               where: { id: bioloopDataset.id },

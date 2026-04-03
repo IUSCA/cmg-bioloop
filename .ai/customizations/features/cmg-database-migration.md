@@ -765,6 +765,12 @@ The following poller scripts must be updated to set `metadata.origin` on rows th
 
 ---
 
+## 2026-04-03
+
+- Clarification: CMG bigbang import-log sync only reads/writes `dataset.create_method`; no `dataset_audit.create_method` fallback remains in bigbang code.
+
+---
+
 ## Future Entries
 
 Add entries here as decisions are made, changes are implemented, or issues are resolved.
@@ -781,5 +787,5 @@ Format:
 
 ---
 
-**Last Updated:** 2026-04-01
+**Last Updated:** 2026-04-03
 

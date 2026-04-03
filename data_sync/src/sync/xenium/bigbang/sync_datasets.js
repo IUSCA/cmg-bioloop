@@ -90,6 +90,7 @@ async function syncAllDatasets(prisma, xeniumPrisma) {
       id: true,
       name: true,
       type: true,
+      create_method: true,
       is_deleted: true,
       description: true,
       num_directories: true,

@@ -389,4 +389,10 @@ These instructions are mandatory for continuation chats and should be treated as
 
 ---
 
-**Last Updated:** 2026-04-01
+## 2026-04-03
+
+- Fix: Xenium bigbang dataset sync now selects `create_method` from the source `dataset` table and persists it to target `dataset.create_method` during create/update operations (no audit-table-based path).
+
+---
+
+**Last Updated:** 2026-04-03
