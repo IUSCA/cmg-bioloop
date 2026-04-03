@@ -7,7 +7,6 @@ WORKFLOWS = {
     'SUBDIR_WF_INITIATOR': 'subdir_wf_initiator',
     'STAGE_MIGRATED_XENIUM': 'stage_migrated_xenium',
     # Shared
-    'FILE_INFO_POPULATION': 'file_info_population',
     'HYDRATE_SESSION': 'hydrate_session',
 }
 

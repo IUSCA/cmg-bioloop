@@ -379,15 +379,6 @@
         }
       ]
     },
-    "file_info_population": {
-      "name": "File Info Population",
-      "steps": [
-        {
-          "name": "populate file metadata",
-          "task": "populate_file_metadata"
-        }
-      ]
-    },
     "hydrate_session": {
       "name": "Hydrate Session",
       "description": "Hydrate legacy CMG Session with Tracks",

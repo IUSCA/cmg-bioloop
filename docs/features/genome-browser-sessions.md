@@ -255,7 +255,7 @@ The API datahub endpoint returns different JSON shapes for each browser (control
 
 ### Supporting models
 
-- **`dataset_file`** — `path` (relative within dataset), `metadata` JSON (carries `format` and `role` fields populated by the `file_info_population` workflow).
+- **`dataset_file`** — `path` (relative within dataset), `metadata` JSON (carries derived `format` and `role` fields for browser-aware file handling).
 - **`dataset_genomic_attributes`** — 1:1 with `dataset`; holds `genome_type` and `genome_value`.
 - **`dataset_file_hierarchy`** — parent/child relationships between files; used to associate primary files with their index files (e.g. BAM → BAI).
 
@@ -270,7 +270,7 @@ The Pinia stores automatically route list requests to the correct endpoint: `GET
 
 ## Feature Flag
 
-The feature is gated by `enabled_features.genome_browser` in `api/config/default.json` (default `true`). When enabled, track listing endpoints filter to files with `metadata.role = 'PRIMARY'` — only files classified by the `file_info_population` workflow as primary data files, not index files, appear in track selection.
+The feature is gated by `enabled_features.genome_browser` in `api/config/default.json` (default `true`). When enabled, track listing endpoints filter to files with `metadata.role = 'PRIMARY'` — only files classified as primary data files, not index files, appear in track selection.
 
 Sidebar items for Sessions and Tracks are in the `user_items` array in `ui/src/constants.js`, gated on `feature_key: 'genome_browser'`.
 

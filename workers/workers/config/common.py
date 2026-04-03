@@ -343,31 +343,6 @@ config = {
             }
           ]
         },
-        "file_info_population": {
-          "name": "File Info Population",
-          "steps": [
-            {
-              "name": "populate file metadata",
-              "task": "populate_file_metadata"
-            },
-            # {
-            #   "name": "archive",
-            #   "task": "archive_dataset"
-            # },
-            # {
-            #   "name": "stage",
-            #   "task": "stage_dataset"
-            # },
-            # {
-            #   "name": "validate",
-            #   "task": "validate_dataset"
-            # },
-            # {
-            #   "name": "delete_source",
-            #   "task": "delete_source"
-            # }
-          ]
-        },
         "hydrate_session": {
           "name": "Hydrate Session",
           "description": "Hydrate legacy CMG Session with Tracks",
@@ -403,7 +378,7 @@ config = {
     },
     'workflow': {
         'purge': {
-            'types': ['integrated', 'intake_integrated', 'stage', 'delete', 'conversion', 'file_info_population'],
+            'types': ['integrated', 'intake_integrated', 'stage', 'delete', 'conversion'],
             'age_threshold_seconds': 86400,
             'max_purge_count': 10
         }
@@ -425,15 +400,6 @@ config = {
         'qc': {
             'enabled': True,  # Set to False to skip QC generation (requires fastqc and multiqc)
         }
-    },
-    'file_info_population': {
-        'batch_size': 10,
-        'max_download_size_tb': 10,
-        'download_dir': '/opt/sca/data/file_info_downloads',
-        'state_file': '/opt/sca/data/file_info_population_state.json',
-        'skip_sda_upload': True,  # Skip SDA upload in archive step
-        'poll_interval_seconds': 300,  # 5 minutes between batch completion checks
-        'max_retries_per_dataset': 3
     },
     'execution_platform': {
         # 'KUBERNETES': { },
