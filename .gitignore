@@ -1,7 +1,5 @@
 .env
 
-ai_agent_bypass_folder/
-
 *node_modules*
 
 *nginx.crt
@@ -56,11 +54,6 @@ workers/venv/
 workers/venv/*
 workers/.env
 workers/core*
-workers/test_logs/
-workers/tests/fixtures/temp_uploads/
-workers/tests/watch/fixtures/
-
-data_sync/core*
 
 docs/.vitepress/cache/*
 
@@ -73,21 +66,13 @@ backup
 !db/backups
 db/backups/*.sql
 db/backups/*.psql
-db/backups/*.dump
 db/db_postgres
-db/postgres/data
+db/postgres/data/
 db/mongo/data
-db/db/backups
-db/db/postgres
-db/db/db_postgres
-db/prod/db_postgres
-
+db/db/db_postgres/
+db/db/backups/
 
 todo.md
-
-# Backup files
-*.sql.gz
-backup_*.sql.gz
 
 .pm2
 
@@ -96,21 +81,8 @@ rhythm/rhythm_api
 
 signet/signet
 
-cmg_data/dump/
+.ai/
+.cursor/
+.cursorrules
+
 cmg_data/data/
-cmg_convert.log
-
-*.log
-curl_cmds
-todos*.md
-
-# .ai/
-# .cursor/
-# .cursorrules
-
-backup_*
-
-startup_output.md
-
-# Conversion tools binaries (installed by workers/bin/install_conversion_pipelines_production.sh)
-conversion_tools/
