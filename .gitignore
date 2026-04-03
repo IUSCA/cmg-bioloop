@@ -102,6 +102,7 @@ cmg_convert.log
 
 *.log
 curl_cmds
+todos*.md
 
 # .ai/
 # .cursor/
