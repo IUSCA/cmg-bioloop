@@ -297,6 +297,46 @@ def get_workflow(
         return r.json()
 
 
+def list_workflows(
+    workflow_name: str | None = None,
+    workflow_status: str | None = None,
+    limit: int = 200,
+    skip: int = 0,
+    last_task_runs: bool = True,
+    prev_task_runs: bool = True,
+) -> dict[str, Any]:
+    """
+    List workflows from GET /workflows with optional filters.
+    """
+    with APIServerSession() as s:
+        params: dict[str, Any] = {
+            'limit': limit,
+            'skip': skip,
+            'last_task_runs': last_task_runs,
+            'prev_task_runs': prev_task_runs,
+        }
+        if workflow_name:
+            params['workflow_name'] = workflow_name
+        if workflow_status:
+            params['status'] = workflow_status
+
+        r = s.get('workflows', params=params)
+        r.raise_for_status()
+        return r.json()
+
+
+def resume_workflow(
+    workflow_id: str,
+) -> dict[str, Any]:
+    """
+    Resume a workflow via POST /workflows/:id/resume.
+    """
+    with APIServerSession() as s:
+        r = s.post(f'workflows/{workflow_id}/resume')
+        r.raise_for_status()
+        return r.json()
+
+
 class DatasetAlreadyExistsError(Exception):
     pass
 
