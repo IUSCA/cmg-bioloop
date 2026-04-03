@@ -25,12 +25,14 @@ model dataset {
   staged_path     String?
   is_deleted      Boolean  @default(false)
   is_staged       Boolean  @default(false)
+  create_method   DATASET_CREATE_METHOD?
   metadata        Json?
 }
 
 model dataset_hierarchy {
   source_id  Int
   derived_id Int
+  assigned_at DateTime @default(now()) @db.Timestamp(6)
   metadata   Json?
 
   @@id([source_id, derived_id])
@@ -39,6 +41,7 @@ model dataset_hierarchy {
 model dataset_audit {
   id         Int       @id @default(autoincrement())
   action     String
+  updated_at DateTime  @default(now()) @updatedAt @db.Timestamp(6)
   timestamp  DateTime  @default(now())
   old_data   Json?
   new_data   Json?
@@ -62,6 +65,7 @@ model user {
   name       String?    @db.VarChar(100)
   email      String     @unique @db.VarChar(100)
   cas_id     String?    @unique @db.VarChar(100)
+  notes      String?
   created_at DateTime   @default(now()) @db.Timestamp(6)
   updated_at DateTime   @default(now()) @updatedAt @db.Timestamp(6)
   is_deleted Boolean    @default(false)
@@ -81,6 +85,7 @@ model roles {
 model user_role {
   user_id Int
   role_id Int
+  assigned_at DateTime @default(now())
   user    user  @relation(fields: [user_id], references: [id], onDelete: Cascade)
   roles   roles @relation(fields: [role_id], references: [id], onDelete: Cascade)
 
@@ -89,6 +94,7 @@ model user_role {
 
 model project {
   id              String  @id @default(uuid())
+  slug            String  @unique
   name            String
   description     String?
   funding         String?
@@ -102,6 +108,8 @@ model project {
 model project_user {
   project_id String
   user_id    Int
+  assigned_at DateTime @default(now()) @db.Timestamp(6)
+  assignor_id Int?
 
   @@id([project_id, user_id])
 }
@@ -109,6 +117,15 @@ model project_user {
 model project_dataset {
   project_id String
   dataset_id Int
+  assignor_id Int?
+  assigned_at DateTime @default(now()) @db.Timestamp(6)
 
   @@id([project_id, dataset_id])
+}
+
+enum DATASET_CREATE_METHOD {
+  UPLOAD
+  IMPORT
+  SCAN
+  ON_DEMAND
 }

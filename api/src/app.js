@@ -7,7 +7,6 @@ const compression = require('compression');
 const swaggerUi = require('swagger-ui-express');
 const config = require('config');
 
-const createTusMiddleware = require('@/middleware/tus');
 const indexRouter = require('./routes/index');
 const {
   notFound,

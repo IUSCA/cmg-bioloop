@@ -768,6 +768,9 @@ The following poller scripts must be updated to set `metadata.origin` on rows th
 ## 2026-04-03
 
 - Clarification: CMG bigbang import-log sync only reads/writes `dataset.create_method`; no `dataset_audit.create_method` fallback remains in bigbang code.
+- Fix: Removed duplicate `worker_process_workflow_id_fkey` creation from `api/prisma/migrations/20260402180200_platform_based_executions/migration.sql`. Root cause: the same FK was already created in `20260311000000_upload_rewrite`, which caused Prisma shadow-database migration failure (`P3006`) during clean replay. Affected: platform-based executions migration chain and `prisma migrate deploy`/`prisma migrate dev` execution.
+- Fix: Aligned Xenium source schema and Xenium bigbang dataset sync for `create_method`: added `dataset.create_method` and `DATASET_CREATE_METHOD` enum to `data_sync/prisma/xenium_source.prisma`, and retained `create_method` read/write mapping in `data_sync/src/sync/xenium/bigbang/sync_datasets.js`. Root cause: schema drift between source-of-truth Xenium schema and local Xenium Prisma projection.
+- Change: Added additional missing Xenium fields to `data_sync/prisma/xenium_source.prisma` to reduce source-projection drift: `dataset_hierarchy.assigned_at`, `dataset_audit.updated_at`, `user.notes`, `user_role.assigned_at`, `project.slug`, `project_user.assigned_at`, `project_user.assignor_id`, `project_dataset.assigned_at`, and `project_dataset.assignor_id`.
 
 ---
 

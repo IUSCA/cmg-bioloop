@@ -36,11 +36,6 @@ CREATE TABLE "process_artifact" (
     CONSTRAINT "process_artifact_pkey" PRIMARY KEY ("id")
 );
 
-ALTER TABLE "worker_process"
-ADD CONSTRAINT "worker_process_workflow_id_fkey"
-FOREIGN KEY ("workflow_id") REFERENCES "workflow"("id")
-ON DELETE SET NULL ON UPDATE CASCADE;
-
 ALTER TABLE "process_request"
 ADD CONSTRAINT "process_request_conversion_id_fkey"
 FOREIGN KEY ("conversion_id") REFERENCES "conversion"("id")
